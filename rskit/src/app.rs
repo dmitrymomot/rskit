@@ -1,18 +1,28 @@
-use crate::config::AppConfig;
-use crate::router::RouteRegistration;
+use crate::config::{AppConfig, Environment};
+use crate::router::{ModuleRegistration, RouteRegistration};
 use axum::Router;
+use axum::extract::FromRef;
+use axum_extra::extract::cookie::Key;
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tracing::info;
+use tower::{Layer, Service};
+use tracing::{info, warn};
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: Option<DatabaseConnection>,
     pub services: ServiceRegistry,
     pub config: AppConfig,
+    pub cookie_key: Key,
+}
+
+impl FromRef<AppState> for Key {
+    fn from_ref(state: &AppState) -> Self {
+        state.cookie_key.clone()
+    }
 }
 
 #[derive(Clone, Default)]
@@ -34,9 +44,12 @@ impl ServiceRegistry {
     }
 }
 
+type LayerFn = Box<dyn FnOnce(Router<AppState>) -> Router<AppState> + Send>;
+
 pub struct AppBuilder {
     config: AppConfig,
     services: HashMap<TypeId, Arc<dyn Any + Send + Sync>>,
+    layers: Vec<LayerFn>,
 }
 
 impl AppBuilder {
@@ -44,11 +57,28 @@ impl AppBuilder {
         Self {
             config,
             services: HashMap::new(),
+            layers: Vec::new(),
         }
     }
 
     pub fn service<T: Send + Sync + 'static>(mut self, svc: T) -> Self {
         self.services.insert(TypeId::of::<T>(), Arc::new(svc));
+        self
+    }
+
+    /// Add a global Tower layer applied outermost (after module and handler middleware).
+    pub fn layer<L>(mut self, layer: L) -> Self
+    where
+        L: Layer<axum::routing::Route> + Clone + Send + Sync + 'static,
+        L::Service: Service<axum::http::Request<axum::body::Body>> + Clone + Send + Sync + 'static,
+        <L::Service as Service<axum::http::Request<axum::body::Body>>>::Response:
+            axum::response::IntoResponse + 'static,
+        <L::Service as Service<axum::http::Request<axum::body::Body>>>::Error:
+            Into<std::convert::Infallible> + 'static,
+        <L::Service as Service<axum::http::Request<axum::body::Body>>>::Future: Send + 'static,
+    {
+        self.layers
+            .push(Box::new(move |r: Router<AppState>| r.layer(layer)));
         self
     }
 
@@ -69,19 +99,89 @@ impl AppBuilder {
             None
         };
 
+        let cookie_key = if self.config.secret_key.is_empty() {
+            if self.config.environment == Environment::Production {
+                warn!(
+                    "RSKIT_SECRET_KEY is empty in production! Generating random key — cookies will not survive restarts"
+                );
+            } else {
+                warn!("RSKIT_SECRET_KEY is empty — generating random key");
+            }
+            Key::generate()
+        } else {
+            Key::derive_from(self.config.secret_key.as_bytes())
+        };
+
         let state = AppState {
             db,
             services: ServiceRegistry {
                 services: Arc::new(self.services),
             },
             config: self.config.clone(),
+            cookie_key,
         };
 
-        let mut router = Router::new();
+        // Collect module registrations into a lookup by name
+        let modules: HashMap<&str, &ModuleRegistration> = inventory::iter::<ModuleRegistration>
+            .into_iter()
+            .map(|m| (m.name, m))
+            .collect();
+
+        // Group route registrations by module
+        let mut root_routes: Vec<&RouteRegistration> = Vec::new();
+        let mut module_routes: HashMap<&str, Vec<&RouteRegistration>> = HashMap::new();
+
         for reg in inventory::iter::<RouteRegistration> {
-            let method_router = (reg.handler)();
+            match reg.module {
+                Some(name) => module_routes.entry(name).or_default().push(reg),
+                None => root_routes.push(reg),
+            }
+        }
+
+        let mut router = Router::new();
+
+        // Add module-less routes with handler middleware
+        for reg in &root_routes {
+            let mut method_router = (reg.handler)();
+            // Apply handler middleware in reverse order (last declared = innermost)
+            for mw in reg.middleware.iter().rev() {
+                method_router = mw(method_router);
+            }
             router = router.route(reg.path, method_router);
             info!("Registered route: {:?} {}", reg.method, reg.path);
+        }
+
+        // Add module routes grouped under their prefix with module middleware
+        for (mod_name, routes) in &module_routes {
+            let mut sub_router = Router::new();
+            for reg in routes {
+                let mut method_router = (reg.handler)();
+                for mw in reg.middleware.iter().rev() {
+                    method_router = mw(method_router);
+                }
+                sub_router = sub_router.route(reg.path, method_router);
+                info!(
+                    "Registered route: {:?} {} (module: {})",
+                    reg.method, reg.path, mod_name
+                );
+            }
+
+            // Apply module-level middleware (reverse order: last = innermost)
+            if let Some(module_reg) = modules.get(mod_name) {
+                for mw in module_reg.middleware.iter().rev() {
+                    sub_router = mw(sub_router);
+                }
+                router = router.nest(module_reg.prefix, sub_router);
+                info!("Registered module: {} at {}", mod_name, module_reg.prefix);
+            } else {
+                // Module routes without a ModuleRegistration — nest at root
+                router = router.merge(sub_router);
+            }
+        }
+
+        // Apply global layers outermost
+        for layer_fn in self.layers {
+            router = layer_fn(router);
         }
 
         let app = router.with_state(state);

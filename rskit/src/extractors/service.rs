@@ -23,15 +23,11 @@ impl<T: Send + Sync + 'static> FromRequestParts<AppState> for Service<T> {
         _parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        state
-            .services
-            .get::<T>()
-            .map(Service)
-            .ok_or_else(|| {
-                RskitError::internal(format!(
-                    "Service not registered: {}",
-                    std::any::type_name::<T>()
-                ))
-            })
+        state.services.get::<T>().map(Service).ok_or_else(|| {
+            RskitError::internal(format!(
+                "Service not registered: {}",
+                std::any::type_name::<T>()
+            ))
+        })
     }
 }
