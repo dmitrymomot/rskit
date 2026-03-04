@@ -1,3 +1,6 @@
 [workspace]
 resolver = "2"
 members = ["rskit", "rskit-macros"]
+
+[workspace.package]
+license = "Apache-2.0"
