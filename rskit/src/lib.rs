@@ -6,6 +6,7 @@ pub mod error;
 pub mod extractors;
 pub mod middleware;
 pub mod router;
+pub mod session;
 pub mod templates;
 
 // Re-exports for use in macro-generated code
