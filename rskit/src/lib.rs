@@ -1,4 +1,4 @@
-pub use rskit_macros::{handler, main, module};
+pub use rskit_macros::{context, handler, main, module};
 
 pub mod app;
 pub mod config;
