@@ -11,4 +11,5 @@ pub use axum;
 pub use inventory;
 pub use tokio;
 pub use tracing;
+pub use tracing_subscriber;
 pub use sea_orm;
