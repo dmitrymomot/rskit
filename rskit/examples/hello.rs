@@ -16,6 +16,6 @@ async fn error_example() -> Result<&'static str, RskitError> {
 }
 
 #[rskit::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main(app: rskit::app::AppBuilder) -> Result<(), Box<dyn std::error::Error>> {
     app.run().await
 }
