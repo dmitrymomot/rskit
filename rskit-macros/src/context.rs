@@ -135,12 +135,11 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 fn extract_option_inner(ty: &syn::Type) -> Option<syn::Type> {
     if let syn::Type::Path(type_path) = ty {
         let segment = type_path.path.segments.last()?;
-        if segment.ident == "Option" {
-            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                    return Some(inner.clone());
-                }
-            }
+        if segment.ident == "Option"
+            && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+            && let Some(syn::GenericArgument::Type(inner)) = args.args.first()
+        {
+            return Some(inner.clone());
         }
     }
     None
