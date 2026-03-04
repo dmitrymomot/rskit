@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse2, FnArg, ItemFn, Pat, Result};
+use syn::{FnArg, ItemFn, Pat, Result, parse2};
 
 pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     let func: ItemFn = parse2(item)?;
@@ -14,7 +14,7 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     if func.sig.asyncness.is_none() {
         return Err(syn::Error::new_spanned(
-            &func.sig.fn_token,
+            func.sig.fn_token,
             "#[rskit::main] requires an async function",
         ));
     }

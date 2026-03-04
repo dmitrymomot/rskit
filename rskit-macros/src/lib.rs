@@ -18,3 +18,13 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 mod handler;
 mod main_macro;
+mod middleware;
+mod module;
+
+/// Attribute macro for declaring route modules with shared prefix and middleware.
+#[proc_macro_attribute]
+pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
+    module::expand(attr.into(), item.into())
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
+}
