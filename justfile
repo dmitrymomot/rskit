@@ -1,3 +1,7 @@
+# List available recipes
+default:
+    @just --list
+
 # Format all code
 fmt:
     cargo fmt --all
