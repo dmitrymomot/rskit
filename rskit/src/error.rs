@@ -2,6 +2,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde_json::json;
+use tracing;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RskitError {
@@ -47,7 +48,18 @@ impl RskitError {
 impl IntoResponse for RskitError {
     fn into_response(self) -> Response {
         let status = self.status_code();
-        let message = self.to_string();
+
+        let message = match &self {
+            Self::Internal(e) => {
+                tracing::error!("Internal error: {e:#}");
+                "Internal server error".to_string()
+            }
+            Self::Database(e) => {
+                tracing::error!("Database error: {e}");
+                "Internal server error".to_string()
+            }
+            other => other.to_string(),
+        };
 
         let body = Json(json!({
             "error": message,
