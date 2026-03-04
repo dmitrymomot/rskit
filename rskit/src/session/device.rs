@@ -43,12 +43,20 @@ fn parse_os(ua: &str) -> &str {
         "iPhone"
     } else if ua.contains("iPad") {
         "iPad"
+    } else if ua.contains("HarmonyOS") {
+        "HarmonyOS"
     } else if ua.contains("Android") {
         "Android"
-    } else if ua.contains("Mac OS X") || ua.contains("Macintosh") {
+    } else if ua.contains("CrOS") {
+        "ChromeOS"
+    } else if ua.contains("Mac OS X") || ua.contains("Macintosh") || ua.contains("OS X") {
         "macOS"
     } else if ua.contains("Windows") {
         "Windows"
+    } else if ua.contains("FreeBSD") {
+        "FreeBSD"
+    } else if ua.contains("OpenBSD") {
+        "OpenBSD"
     } else if ua.contains("Linux") {
         "Linux"
     } else {
@@ -92,6 +100,27 @@ mod tests {
     fn edge_on_windows() {
         let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0";
         assert_eq!(parse_device_name(ua), "Edge on Windows");
+        assert_eq!(parse_device_type(ua), "desktop");
+    }
+
+    #[test]
+    fn chrome_on_chromeos() {
+        let ua = "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+        assert_eq!(parse_device_name(ua), "Chrome on ChromeOS");
+        assert_eq!(parse_device_type(ua), "desktop");
+    }
+
+    #[test]
+    fn firefox_on_freebsd() {
+        let ua = "Mozilla/5.0 (X11; FreeBSD amd64; rv:120.0) Gecko/20100101 Firefox/120.0";
+        assert_eq!(parse_device_name(ua), "Firefox on FreeBSD");
+        assert_eq!(parse_device_type(ua), "desktop");
+    }
+
+    #[test]
+    fn chrome_on_harmonyos() {
+        let ua = "Mozilla/5.0 (Linux; HarmonyOS; HUAWEIMate60) AppleWebKit/537.36 Chrome/99.0.0.0 Safari/537.36";
+        assert_eq!(parse_device_name(ua), "Chrome on HarmonyOS");
         assert_eq!(parse_device_type(ua), "desktop");
     }
 
