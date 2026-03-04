@@ -20,6 +20,7 @@ fn build_test_router() -> axum::Router {
         db: None,
         services: Default::default(),
         config: rskit::config::AppConfig::default(),
+        cookie_key: axum_extra::extract::cookie::Key::generate(),
     };
 
     let mut router = axum::Router::new();

@@ -5,13 +5,19 @@ use rskit::error::RskitError;
 #[test]
 fn test_error_status_codes() {
     assert_eq!(RskitError::NotFound.status_code(), StatusCode::NOT_FOUND);
-    assert_eq!(RskitError::Unauthorized.status_code(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        RskitError::Unauthorized.status_code(),
+        StatusCode::UNAUTHORIZED
+    );
     assert_eq!(RskitError::Forbidden.status_code(), StatusCode::FORBIDDEN);
     assert_eq!(
         RskitError::BadRequest("test".into()).status_code(),
         StatusCode::BAD_REQUEST,
     );
-    assert_eq!(RskitError::RateLimited.status_code(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(
+        RskitError::RateLimited.status_code(),
+        StatusCode::TOO_MANY_REQUESTS
+    );
     assert_eq!(
         RskitError::internal("oops").status_code(),
         StatusCode::INTERNAL_SERVER_ERROR,
