@@ -1,4 +1,5 @@
 use std::env;
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct AppConfig {
@@ -9,6 +10,11 @@ pub struct AppConfig {
     pub log_level: String,
     pub sentry_dsn: Option<String>,
     pub sentry_log_level: String,
+    pub session_ttl: Duration,
+    pub session_max_per_user: usize,
+    pub session_cookie_name: String,
+    pub session_validate_fingerprint: bool,
+    pub session_touch_interval: Duration,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +34,11 @@ impl Default for AppConfig {
             log_level: "info".to_string(),
             sentry_dsn: None,
             sentry_log_level: "error".to_string(),
+            session_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
+            session_max_per_user: 5,
+            session_cookie_name: "_rskit_session".to_string(),
+            session_validate_fingerprint: true,
+            session_touch_interval: Duration::from_secs(5 * 60), // 5 minutes
         }
     }
 }
@@ -57,6 +68,27 @@ impl AppConfig {
             sentry_dsn: env::var("RSKIT_SENTRY_DSN").ok().filter(|s| !s.is_empty()),
             sentry_log_level: env::var("RSKIT_SENTRY_LOG_LEVEL")
                 .unwrap_or_else(|_| "error".to_string()),
+            session_ttl: Duration::from_secs(
+                env::var("RSKIT_SESSION_TTL")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(30 * 24 * 60 * 60),
+            ),
+            session_max_per_user: env::var("RSKIT_SESSION_MAX_PER_USER")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(5),
+            session_cookie_name: env::var("RSKIT_SESSION_COOKIE_NAME")
+                .unwrap_or_else(|_| "_rskit_session".to_string()),
+            session_validate_fingerprint: env::var("RSKIT_SESSION_VALIDATE_FINGERPRINT")
+                .map(|v| v != "false" && v != "0")
+                .unwrap_or(true),
+            session_touch_interval: Duration::from_secs(
+                env::var("RSKIT_SESSION_TOUCH_INTERVAL")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(5 * 60),
+            ),
         }
     }
 }
