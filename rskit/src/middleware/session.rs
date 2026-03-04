@@ -80,9 +80,7 @@ pub async fn session(
     let response = next.run(request).await;
 
     // Touch session after response (non-blocking on failure)
-    if should_touch
-        && let Err(e) = session_store.touch(&session.id).await
-    {
+    if should_touch && let Err(e) = session_store.touch(&session.id).await {
         tracing::error!("Failed to touch session: {e}");
     }
 
