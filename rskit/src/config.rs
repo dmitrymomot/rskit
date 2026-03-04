@@ -7,6 +7,8 @@ pub struct AppConfig {
     pub secret_key: String,
     pub environment: Environment,
     pub log_level: String,
+    pub sentry_dsn: Option<String>,
+    pub sentry_log_level: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +26,8 @@ impl Default for AppConfig {
             secret_key: String::new(),
             environment: Environment::Development,
             log_level: "info".to_string(),
+            sentry_dsn: None,
+            sentry_log_level: "error".to_string(),
         }
     }
 }
@@ -50,6 +54,9 @@ impl AppConfig {
             secret_key: env::var("RSKIT_SECRET_KEY").unwrap_or_default(),
             environment,
             log_level: env::var("RSKIT_LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
+            sentry_dsn: env::var("RSKIT_SENTRY_DSN").ok().filter(|s| !s.is_empty()),
+            sentry_log_level: env::var("RSKIT_SENTRY_LOG_LEVEL")
+                .unwrap_or_else(|_| "error".to_string()),
         }
     }
 }
