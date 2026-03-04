@@ -8,12 +8,17 @@ rskit-macros = { path = "../rskit-macros" }
 
 # Core
 axum = "0.8"
+axum-extra = { version = "0.10", features = ["cookie-signed"] }
 tokio = { version = "1", features = ["full"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 inventory = "0.3"
+
+# Templates (optional)
+askama = { version = "0.13", optional = true }
+askama_web = { version = "0.14", features = ["axum-0.8"], optional = true }
 
 # Database
 sea-orm = { version = "2.0.0-rc", features = ["sqlx-sqlite", "runtime-tokio-native-tls", "macros"] }
@@ -30,8 +35,18 @@ sentry = { version = "0.46", features = ["tracing"] }
 # Config
 dotenvy = "0.15"
 
+# Cookies (key derivation)
+cookie = { version = "0.18", features = ["key-expansion"] }
+
+# CSRF + misc
+rand = "0.9"
+
 # Misc
 chrono = { version = "0.4", features = ["serde"] }
+
+[features]
+default = []
+templates = ["dep:askama", "dep:askama_web"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
