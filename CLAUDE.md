@@ -1,23 +1,42 @@
 # modo
 
-Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-time magic.
+Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB support.
+
+## NEXT SESSION: Major Refactor (2026-03-07)
+
+**IMPORTANT: Read `docs/plans/2026-03-06-crate-split-design.md` before doing anything.**
+
+Plan: Move ALL current code into `_legacy/` subfolder, then rebuild the framework feature-by-feature from that reference. Extract cleanly into separate crates instead of moving files around in-place. This avoids dragging old coupling into the new structure.
+
+Refactor strategy:
+1. `git mv modo/ _legacy/modo/` and `git mv modo-macros/ _legacy/modo-macros/`
+2. Create fresh `modo/` (core: HTTP, cookies, services — NO DB)
+3. Pull code feature-by-feature from `_legacy/` into new crates
+4. Follow implementation order in the ADR: modo-db → modo-session → modo-auth → modo-jobs → modo-templates → modo-csrf
+5. Build example apps after each extraction to validate
+6. Delete `_legacy/` when done
 
 ## Stack
 
 - axum 0.8 (HTTP)
 - SeaORM v2 RC (database) — use v2 only, not v1.x
-- Askama (templates, Phase 2)
+- Askama (templates)
 - inventory (auto-discovery, not linkme)
 - tokio (async runtime)
 
 ## Architecture
 
-- `modo/` — main library crate
-- `modo-macros/` — proc macro crate
-- `modo/src/middleware/` — middleware functions (csrf, etc.)
-- `modo/src/templates/` — HTMX, flash, BaseContext extractors
-- Design doc: `docs/plans/2026-03-04-modo-architecture-design.md`
-- Phase 1 plan: `docs/plans/2026-03-04-phase1-foundation.md`
+**Target structure (post-refactor):**
+- `modo/` — core crate (HTTP, cookies, services — no DB)
+- `modo-macros/` — core proc macros
+- `modo-db/` — database layer (features: sqlite, postgres)
+- `modo-session/` — session management
+- `modo-auth/` — authentication
+- `modo-jobs/` — background jobs
+- `modo-templates/` — Askama + HTMX + flash
+- `modo-csrf/` — CSRF protection
+- ADR: `docs/plans/2026-03-06-crate-split-design.md`
+- Original design doc: `docs/plans/2026-03-04-modo-architecture-design.md`
 
 ## Commands
 
@@ -54,7 +73,7 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 ## Key Decisions
 
 - "Full magic" — proc macros for everything, auto-discovery, zero runtime cost
-- SQLite only — WAL mode, no Postgres/Redis
+- Multi-DB — SQLite (default, WAL mode) + Postgres via modo-db feature flags
 - Cron jobs: in-memory only (tokio timers), errors logged via tracing
 - Multi-tenancy: shared-DB strategy (Phase 3); per-DB deferred to Phase 5
 - Auth: layered traits with swappable defaults
