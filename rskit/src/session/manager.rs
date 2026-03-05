@@ -116,13 +116,18 @@ impl SessionManager {
     }
 
     /// Replace the entire data blob for the current session.
-    pub async fn update_data(&self, data: serde_json::Value) -> Result<(), RskitError> {
+    pub async fn update_data(&mut self, data: serde_json::Value) -> Result<(), RskitError> {
         let session = self
             .state
             .current_session
             .as_ref()
             .ok_or_else(|| RskitError::internal("no active session"))?;
-        self.state.store.update_data(&session.id, data).await
+        self.state
+            .store
+            .update_data(&session.id, data.clone())
+            .await?;
+        self.state.current_session.as_mut().unwrap().data = data;
+        Ok(())
     }
 
     /// Get a typed value from the session data by key.
@@ -135,7 +140,7 @@ impl SessionManager {
     }
 
     /// Set a single key in the session data (read-modify-write via store).
-    pub async fn set(&self, key: &str, value: impl Serialize) -> Result<(), RskitError> {
+    pub async fn set(&mut self, key: &str, value: impl Serialize) -> Result<(), RskitError> {
         let session = self
             .state
             .current_session
@@ -153,11 +158,16 @@ impl SessionManager {
                     .map_err(|e| RskitError::internal(format!("serialize session value: {e}")))?,
             );
         }
-        self.state.store.update_data(&session.id, data).await
+        self.state
+            .store
+            .update_data(&session.id, data.clone())
+            .await?;
+        self.state.current_session.as_mut().unwrap().data = data;
+        Ok(())
     }
 
     /// Remove a key from the session data.
-    pub async fn remove_key(&self, key: &str) -> Result<(), RskitError> {
+    pub async fn remove_key(&mut self, key: &str) -> Result<(), RskitError> {
         let session = self
             .state
             .current_session
@@ -171,7 +181,12 @@ impl SessionManager {
         if let serde_json::Value::Object(ref mut map) = data {
             map.remove(key);
         }
-        self.state.store.update_data(&session.id, data).await
+        self.state
+            .store
+            .update_data(&session.id, data.clone())
+            .await?;
+        self.state.current_session.as_mut().unwrap().data = data;
+        Ok(())
     }
 }
 

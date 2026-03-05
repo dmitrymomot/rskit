@@ -127,7 +127,7 @@ pub async fn session(
         SessionAction::None => {
             // Touch session if interval elapsed, re-issue cookie with fresh max_age
             if should_touch && let Some(ref session) = current_session {
-                if let Err(e) = session_store.touch(&session.id).await {
+                if let Err(e) = session_store.touch(&session.id, state.config.session_ttl).await {
                     tracing::error!("Failed to touch session: {e}");
                 } else {
                     // Re-issue cookie with fresh max_age so it doesn't expire

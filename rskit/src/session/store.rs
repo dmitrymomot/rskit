@@ -26,7 +26,12 @@ pub trait SessionStore: Send + Sync + 'static {
         id: &SessionId,
     ) -> impl Future<Output = Result<Option<SessionData>, RskitError>> + Send;
 
-    fn touch(&self, id: &SessionId) -> impl Future<Output = Result<(), RskitError>> + Send;
+    /// Update `last_active_at` and extend `expires_at` by `ttl` for sliding session expiry.
+    fn touch(
+        &self,
+        id: &SessionId,
+        ttl: std::time::Duration,
+    ) -> impl Future<Output = Result<(), RskitError>> + Send;
 
     fn update_data(
         &self,
@@ -66,9 +71,11 @@ pub trait SessionStoreDyn: Send + Sync + 'static {
         id: &'a SessionId,
     ) -> Pin<Box<dyn Future<Output = Result<Option<SessionData>, RskitError>> + Send + 'a>>;
 
+    /// Update `last_active_at` and extend `expires_at` by `ttl` for sliding session expiry.
     fn touch<'a>(
         &'a self,
         id: &'a SessionId,
+        ttl: std::time::Duration,
     ) -> Pin<Box<dyn Future<Output = Result<(), RskitError>> + Send + 'a>>;
 
     fn update_data<'a>(
@@ -117,8 +124,9 @@ impl<T: SessionStore> SessionStoreDyn for T {
     fn touch<'a>(
         &'a self,
         id: &'a SessionId,
+        ttl: std::time::Duration,
     ) -> Pin<Box<dyn Future<Output = Result<(), RskitError>> + Send + 'a>> {
-        Box::pin(SessionStore::touch(self, id))
+        Box::pin(SessionStore::touch(self, id, ttl))
     }
 
     fn update_data<'a>(
