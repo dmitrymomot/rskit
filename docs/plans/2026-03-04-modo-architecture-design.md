@@ -43,7 +43,7 @@ modo/
       extractors/
         mod.rs
         db.rs               # Db extractor
-        tenant_db.rs        # TenantDb extractor
+        tenant.rs           # TenantId, TenantResolver, TenantScoped
         auth.rs             # Auth<User>, OptionalAuth<User>
         service.rs          # Service<T> extractor
         htmx.rs             # HtmxRequest extractor
@@ -54,8 +54,7 @@ modo/
         migrations.rs       # Migration runner, auto-sync
         transaction.rs      # Transaction helpers
       tenancy/
-        mod.rs              # TenantStrategy enum, TenantResolver trait
-        per_database.rs     # PerDatabase LRU pool manager
+        mod.rs              # TenantResolver trait, TenantScoped extension
         shared.rs           # SharedDatabase tenant_id scoping
       auth/
         mod.rs              # Traits: Authenticator, SessionStore, UserProvider
@@ -107,8 +106,7 @@ templates = ["dep:askama"]
 jobs = []
 sessions = []
 db = ["dep:sea-orm"]
-tenancy-per-db = ["db"]
-tenancy-shared = ["db"]
+tenancy = ["db"]
 email = ["dep:lettre", "templates", "jobs"]
 sse = []
 webhooks = ["jobs"]
@@ -312,7 +310,6 @@ pub struct AppState {
     pub services: ServiceRegistry,
     pub job_queue: JobQueue,
     pub config: AppConfig,
-    pub tenant_pool: Option<Arc<dyn TenantPoolManager>>,
     pub session_store: Option<Arc<dyn SessionStore>>,
 }
 ```
@@ -357,20 +354,9 @@ SeaORM v2 auto-sync in development, explicit migrations in production.
 
 ---
 
-## 7. Multi-Tenancy
+## 7. Multi-Tenancy (Shared Database)
 
-Both strategies, user chooses:
-
-```rust
-pub enum TenantStrategy {
-    PerDatabase {
-        data_dir: PathBuf,
-        max_cached_connections: usize,
-        sharded_dirs: bool,           // /ab/cd/tenant_id.db
-    },
-    SharedDatabase,
-}
-```
+Shared-database strategy only. Per-database tenancy (LRU pool of separate SQLite files) deferred to Phase 5 as an advanced module.
 
 ### Tenant Resolution
 
@@ -381,22 +367,17 @@ pub trait TenantResolver: Send + Sync + 'static {
 // Built-in: SubdomainResolver, PathPrefixResolver, HeaderResolver, UserTenantResolver
 ```
 
-### PerDatabase Pool Manager
-
-LRU cache of `DatabaseConnection`. When at capacity, evicts least-recently-used. Lazy migration on first connect per tenant. Sharded directory structure optional (`/ab/cd/abcdef.db`).
-
 ### SharedDatabase Scoping
 
-Extension trait `TenantScoped` auto-adds `WHERE tenant_id = ?` to SeaORM queries.
+Extension trait `TenantScoped` auto-adds `WHERE tenant_id = ?` to SeaORM queries. Tenant ID injected into request extensions by middleware, accessible via `TenantId` extractor.
 
-### TenantDb Extractor
+### TenantId Extractor
 
 ```rust
-pub struct TenantDb(pub DatabaseConnection);
-// Resolves tenant from request, gets correct DB connection. Handlers don't know about tenancy.
+pub struct TenantId(pub String);
+// Extracted from request extensions (set by tenant resolution middleware).
+// Handlers use this to scope queries via TenantScoped trait.
 ```
-
-System DB always accessible via `SystemDb` extractor for tenant registry, jobs, global config.
 
 ---
 
@@ -659,15 +640,14 @@ Features: in-memory SQLite, fake auth, request builders, CSS selector assertions
 
 **Milestone:** Login/register flow with HTMX partial rendering and CSRF protection.
 
-### Phase 3: Jobs, Multi-Tenancy
+### Phase 3: Jobs, Shared-DB Multi-Tenancy
 
 - SQLite job queue: schema, polling, retries, cron, dedup, transactional enqueue
 - `#[job]` macro
-- `TenantStrategy::PerDatabase` + `TenantStrategy::SharedDatabase`
-- `TenantDb` extractor, tenant resolver
-- Cross-tenant migration runner
+- Shared-database multi-tenancy: `TenantResolver` trait, `TenantId` extractor, `TenantScoped` query extension
+- Tenant resolution middleware
 
-**Milestone:** Job enqueued in a transaction executes after commit. Tenant switching works with config change.
+**Milestone:** Job enqueued in a transaction executes after commit. Tenant-scoped queries work transparently.
 
 ### Phase 4: Email, Testing, DX
 
@@ -681,6 +661,7 @@ Features: in-memory SQLite, fake auth, request builders, CSS selector assertions
 ### Phase 5: Advanced Modules
 
 - SSE, webhooks, file storage, i18n, JWT, TOTP, OAuth client, HTML sanitization
+- Per-database multi-tenancy (LRU connection pool, sharded dirs, cross-tenant migrations)
 - Documentation and example apps
 - Optional CLI scaffolding tool
 
@@ -741,7 +722,7 @@ scraper = "0.21"         # test HTML assertions
 | Job queue         | Custom over Apalis            | Tighter transactional enqueue + multi-tenancy integration         |
 | Middleware model  | Plain async functions         | Much simpler than Tower Layer+Service for 90% case                |
 | Error handling    | Derive macro with `#[status]` | Declarative, auto content negotiation                             |
-| Multi-tenant pool | LRU cache with lazy init      | SQLite connections cheap; LRU bounds memory                       |
+| Multi-tenancy     | Shared-DB first, per-DB later | Simpler to operate/backup; per-DB deferred to Phase 5             |
 | Template context  | `BaseContext` extractor       | Auto HTMX/flash/CSRF injection                                    |
 | Session backend   | SQLite only                   | Single-binary philosophy                                          |
 | Test approach     | In-memory SQLite              | Fast, isolated, real DB behavior                                  |

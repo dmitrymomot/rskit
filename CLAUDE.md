@@ -56,7 +56,7 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 - "Full magic" — proc macros for everything, auto-discovery, zero runtime cost
 - SQLite only — WAL mode, no Postgres/Redis
 - Cron jobs: in-memory only (tokio timers), errors logged via tracing
-- Multi-tenancy: both per-DB and shared-DB strategies supported
+- Multi-tenancy: shared-DB strategy (Phase 3); per-DB deferred to Phase 5
 - Auth: layered traits with swappable defaults
 - Cookie-based flash (not session) — no DB dependency
 - CSRF via double-submit signed cookie — ~130 lines, no external crate
