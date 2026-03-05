@@ -50,7 +50,15 @@ pub async fn sync_and_migrate(db: &DatabaseConnection) -> Result<(), Error> {
     // 4. Run extra SQL (composite indices, partial unique indices, etc.)
     for reg in inventory::iter::<EntityRegistration> {
         for sql in reg.extra_sql {
-            db.execute_unprepared(sql).await.ok();
+            if let Err(e) = db.execute_unprepared(sql).await {
+                tracing::error!(
+                    table = reg.table_name,
+                    sql = sql,
+                    error = %e,
+                    "Failed to execute extra SQL for entity"
+                );
+                return Err(e.into());
+            }
         }
     }
 
@@ -77,7 +85,10 @@ async fn run_pending_migrations(db: &DatabaseConnection) -> Result<(), Error> {
     let mut seen = HashSet::new();
     for m in &migrations {
         if !seen.insert(m.version) {
-            panic!("Duplicate migration version: {}", m.version);
+            return Err(Error::internal(format!(
+                "Duplicate migration version: {}",
+                m.version
+            )));
         }
     }
 
@@ -100,8 +111,15 @@ async fn run_pending_migrations(db: &DatabaseConnection) -> Result<(), Error> {
         (migration.handler)(db).await?;
 
         // Record migration as executed
+        let version_i64 = i64::try_from(migration.version).map_err(|_| {
+            Error::internal(format!(
+                "Migration version {} exceeds maximum ({})",
+                migration.version,
+                i64::MAX
+            ))
+        })?;
         let record = migration_entity::ActiveModel {
-            version: sea_orm::Set(migration.version as i64),
+            version: sea_orm::Set(version_i64),
             description: sea_orm::Set(migration.description.to_string()),
             executed_at: sea_orm::Set(chrono::Utc::now().to_rfc3339()),
         };

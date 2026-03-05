@@ -1,4 +1,4 @@
-/// Generate a new ULID as a lowercase string (26 chars).
+/// Generate a new ULID string (26 chars, Crockford Base32).
 pub fn generate_ulid() -> String {
     ulid::Ulid::new().to_string()
 }

@@ -8,9 +8,14 @@ use syn::{Fields, Ident, ItemStruct, Lit, LitStr, Result, Token, Type, parse2};
 
 fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
-    for (i, ch) in s.chars().enumerate() {
+    let chars: Vec<char> = s.chars().collect();
+    for (i, &ch) in chars.iter().enumerate() {
         if ch.is_uppercase() && i > 0 {
-            result.push('_');
+            let prev_upper = chars[i - 1].is_uppercase();
+            let next_lower = chars.get(i + 1).is_some_and(|c| c.is_lowercase());
+            if !prev_upper || next_lower {
+                result.push('_');
+            }
         }
         result.push(ch.to_ascii_lowercase());
     }
@@ -131,14 +136,14 @@ fn parse_struct_attrs(input: &mut ItemStruct) -> Result<StructAttrs> {
     let mut timestamps = false;
     let mut soft_delete = false;
     let mut indices = Vec::new();
+    let mut parse_errors: Vec<syn::Error> = Vec::new();
 
     input.attrs.retain(|attr| {
         if !attr.path().is_ident("entity") {
             return true; // keep non-entity attrs
         }
 
-        // Try to parse the inner tokens
-        let _ = attr.parse_nested_meta(|meta| {
+        if let Err(e) = attr.parse_nested_meta(|meta| {
             if meta.path.is_ident("timestamps") {
                 timestamps = true;
                 Ok(())
@@ -175,10 +180,19 @@ fn parse_struct_attrs(input: &mut ItemStruct) -> Result<StructAttrs> {
             } else {
                 Err(meta.error("expected `timestamps`, `soft_delete`, or `index(...)`"))
             }
-        });
+        }) {
+            parse_errors.push(e);
+        }
 
         false // remove all #[entity(...)] struct-level attrs
     });
+
+    if let Some(first) = parse_errors.into_iter().reduce(|mut a, b| {
+        a.combine(b);
+        a
+    }) {
+        return Err(first);
+    }
 
     Ok(StructAttrs {
         timestamps,
@@ -193,13 +207,14 @@ fn parse_struct_attrs(input: &mut ItemStruct) -> Result<StructAttrs> {
 
 fn parse_field_attrs(field: &mut syn::Field) -> Result<FieldAttrs> {
     let mut attrs = FieldAttrs::default();
+    let mut parse_errors: Vec<syn::Error> = Vec::new();
 
     field.attrs.retain(|attr| {
         if !attr.path().is_ident("entity") {
             return true; // keep non-entity attrs
         }
 
-        let _ = attr.parse_nested_meta(|meta| {
+        if let Err(e) = attr.parse_nested_meta(|meta| {
             let name = meta
                 .path
                 .get_ident()
@@ -262,10 +277,19 @@ fn parse_field_attrs(field: &mut syn::Field) -> Result<FieldAttrs> {
                 }
             }
             Ok(())
-        });
+        }) {
+            parse_errors.push(e);
+        }
 
         false // remove all #[entity(...)] field attrs
     });
+
+    if let Some(first) = parse_errors.into_iter().reduce(|mut a, b| {
+        a.combine(b);
+        a
+    }) {
+        return Err(first);
+    }
 
     Ok(attrs)
 }
