@@ -630,49 +630,50 @@ Features: in-memory SQLite, fake auth, request builders, CSS selector assertions
 
 ## 14. Implementation Phases
 
-### Phase 1: Foundation
+### Phase 1: Foundation — COMPLETE
 
-- `modo-macros`: `#[handler]`, `#[modo::main]`
-- `inventory`-based auto-discovery
-- `AppBuilder` with config, graceful shutdown
-- `Db` extractor, SeaORM v2 + SQLite + WAL mode
-- `Error` with content negotiation
-- `Service<T>` extractor
+- ~~`modo-macros`: `#[handler]`, `#[modo::main]`~~
+- ~~`inventory`-based auto-discovery~~
+- ~~`AppBuilder` with config, graceful shutdown~~
+- ~~`Db` extractor, SeaORM v2 + SQLite + WAL mode~~
+- ~~`Error` with content negotiation~~
+- ~~`Service<T>` extractor~~
 
-**Milestone:** `#[handler(GET, "/")] async fn index() -> &'static str { "Hello modo" }` works with `#[modo::main]`.
+**Milestone:** Achieved. `#[handler(GET, "/")] async fn index() -> &'static str { "Hello modo" }` works with `#[modo::main]`.
 
-### Phase 2: Auth, Sessions, Templates
+### Phase 2: Auth, Sessions, Templates — COMPLETE
 
-- `SqliteSessionStore`, auth traits + default impls
-- `Auth<User>`, `OptionalAuth<User>` extractors
-- Askama + `BaseContext` + HTMX auto-detection
-- Flash messages, CSRF middleware
-- `#[middleware]` and `#[module]` macros
+- ~~`SqliteSessionStore` with `SessionManager`, fingerprinting, token rotation, touch interval~~
+- ~~`Auth<User>`, `OptionalAuth<User>` extractors, `UserProvider` trait~~
+- ~~Askama + `BaseContext` + HTMX auto-detection~~
+- ~~Flash messages (cookie-based), CSRF middleware (double-submit signed cookie)~~
+- ~~`#[middleware]`, `#[module]`, `#[context]` macros~~
 
-**Milestone:** Login/register flow with HTMX partial rendering and CSRF protection.
+**Milestone:** Achieved. Login/register flow with HTMX partial rendering and CSRF protection.
 
-### Phase 3: Jobs, Shared-DB Multi-Tenancy
+### Phase 3: Jobs, Entity-First Migrations — IN PROGRESS
 
-- SQLite job queue: schema, polling, retries, cron, dedup, transactional enqueue
-- `#[job]` macro
-- Shared-database multi-tenancy: `TenantResolver` trait, `TenantId` extractor, `TenantScoped` query extension
-- Tenant resolution middleware
+- ~~SQLite job queue: schema, polling, retries, cron, dedup, transactional enqueue~~ ✅
+- ~~`#[job]` macro~~ ✅
+- Entity-first migrations: **NOT STARTED** — design doc at `docs/plans/2026-03-05-entity-first-migrations-design.md`; pending items: `#[modo::entity]` macro, `EntityRegistration`, schema-sync on startup, `#[modo::migration]` escape hatch
+- Multi-tenancy: **DEFERRED** to Phase 5
 
-**Milestone:** Job enqueued in a transaction executes after commit. Tenant-scoped queries work transparently.
+**Milestone:** Jobs complete. Entity-first migration system is next.
 
-### Phase 4: Email, Testing, DX
+### Phase 4: Email, Testing, DX — NOT STARTED
 
 - Mailer + Askama-templated emails + queue via jobs
 - `TestApp` builder, fake auth, request builders, HTML assertions
-- `#[derive(Entity)]` wrapper, `Validated<T>` extractor
+- `Validated<T>` extractor
 - Rate limiting middleware
 
 **Milestone:** Full integration test with auth, templates, jobs, and email in one test.
 
-### Phase 5: Advanced Modules
+### Phase 5: Advanced Modules — NOT STARTED
 
-- SSE, webhooks, file storage, i18n, JWT, TOTP, OAuth client, HTML sanitization
+- Shared-database multi-tenancy: `TenantResolver` trait, `TenantId` extractor, `TenantScoped` query extension, tenant resolution middleware
 - Per-database multi-tenancy (LRU connection pool, sharded dirs, cross-tenant migrations)
+- SSE, webhooks, file storage, i18n, JWT, TOTP, OAuth client, HTML sanitization
 - Documentation and example apps
 - Optional CLI scaffolding tool
 
