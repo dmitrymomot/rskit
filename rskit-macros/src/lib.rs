@@ -16,6 +16,7 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into()
 }
 
+mod context;
 mod handler;
 mod main_macro;
 mod middleware;
@@ -25,6 +26,14 @@ mod module;
 #[proc_macro_attribute]
 pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     module::expand(attr.into(), item.into())
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
+}
+
+/// Derive macro for typed template context with `#[base]`, `#[user]`, and `#[session]` fields.
+#[proc_macro_attribute]
+pub fn context(attr: TokenStream, item: TokenStream) -> TokenStream {
+    context::expand(attr.into(), item.into())
         .unwrap_or_else(|e| e.to_compile_error())
         .into()
 }

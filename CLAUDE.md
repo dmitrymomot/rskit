@@ -44,6 +44,12 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 - Middleware: plain async functions, attached via `#[middleware(fn_name(params))]`
 - Middleware stacking order: Global (outermost) → Module → Handler (innermost)
 - Services: manually constructed, registered via `.service(instance)`
+- Sessions: `app.session_store(my_store)` to register, `SessionManager` in handlers
+- SessionManager: `authenticate()` / `logout()` / `logout_all()` / `logout_other()` / `rotate()` — handles cookies automatically
+- SessionManager data: `data()` / `get::<T>()` / `set()` / `update_data()` / `remove_key()` — immediate store writes
+- Auth: implement `UserProvider` trait, use `Auth<User>` / `OptionalAuth<User>` extractors
+- Template context: `#[rskit::context]` with `#[base]` + `#[user]` + `#[session]` fields
+- BaseContext: includes request_id, is_htmx, current_url, flash_messages, csrf_token, locale
 
 ## Key Decisions
 
@@ -56,6 +62,14 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 - CSRF via double-submit signed cookie — ~130 lines, no external crate
 - `axum-extra` SignedCookieJar for all cookie ops
 - Use official documentation only when researching dependencies
+- Session IDs: ULID (no UUID anywhere)
+- Session cookies: PrivateCookieJar (AES-encrypted), store token (not session ID); token is rotatable
+- `SessionToken` newtype for cookie tokens (mirrors `SessionId`); use `SessionToken::generate()` not free functions
+- Session fingerprint: SHA256(user_agent + accept_language + accept_encoding), configurable validation
+- Session touch: only updates last_active_at when touch_interval elapses (default 5min)
+- Session fingerprint uses `\x00` separator between hash inputs to prevent ambiguity
+- `SessionStore` and `SessionStoreDyn` must have identical method sets (10 methods each)
+- `cleanup_expired` lives on concrete store types, not in the trait
 
 ## Gotchas
 

@@ -5,11 +5,11 @@ use axum::http::request::Parts;
 
 /// Common context for templates. Gathers HTMX state, flash messages, CSRF token, etc.
 pub struct BaseContext {
+    pub request_id: String,
     pub is_htmx: bool,
     pub current_url: String,
     pub flash_messages: Vec<FlashMessage>,
     pub csrf_token: String,
-    pub current_user: Option<serde_json::Value>,
     pub locale: String,
 }
 
@@ -20,6 +20,14 @@ impl FromRequestParts<AppState> for BaseContext {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
+        // request_id: prefer X-Request-Id header, fallback to generated ULID
+        let request_id = parts
+            .headers
+            .get("x-request-id")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| ulid::Ulid::new().to_string());
+
         // is_htmx
         let is_htmx = parts
             .headers
@@ -45,9 +53,6 @@ impl FromRequestParts<AppState> for BaseContext {
             .map(|t| t.0.clone())
             .unwrap_or_default();
 
-        // current_user from extensions (set by auth middleware in Phase 2b)
-        let current_user = parts.extensions.get::<serde_json::Value>().cloned();
-
         // locale from Accept-Language header
         let locale = parts
             .headers
@@ -59,11 +64,11 @@ impl FromRequestParts<AppState> for BaseContext {
             .unwrap_or_else(|| "en".to_string());
 
         Ok(BaseContext {
+            request_id,
             is_htmx,
             current_url,
             flash_messages,
             csrf_token,
-            current_user,
             locale,
         })
     }

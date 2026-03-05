@@ -9,7 +9,7 @@ rskit-macros = { path = "../rskit-macros" }
 
 # Core
 axum = "0.8"
-axum-extra = { version = "0.10", features = ["cookie-signed"] }
+axum-extra = { version = "0.10", features = ["cookie-signed", "cookie-private"] }
 tokio = { version = "1", features = ["full"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors"] }
@@ -42,8 +42,15 @@ cookie = { version = "0.18", features = ["key-expansion"] }
 # CSRF + misc
 rand = "0.9"
 
+# Session IDs and request IDs
+ulid = "1"
+
+# Fingerprint hashing
+sha2 = "0.10"
+
 # Misc
 chrono = { version = "0.4", features = ["serde"] }
+ipnet = "2"
 
 [features]
 default = []

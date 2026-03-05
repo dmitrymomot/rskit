@@ -1,5 +1,6 @@
 use crate::config::{AppConfig, Environment};
 use crate::router::{ModuleRegistration, RouteRegistration};
+use crate::session::{SessionStore, SessionStoreDyn};
 use axum::Router;
 use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
@@ -17,6 +18,7 @@ pub struct AppState {
     pub services: ServiceRegistry,
     pub config: AppConfig,
     pub cookie_key: Key,
+    pub session_store: Option<Arc<dyn SessionStoreDyn>>,
 }
 
 impl FromRef<AppState> for Key {
@@ -37,6 +39,14 @@ impl ServiceRegistry {
         }
     }
 
+    /// Insert a service into the registry (builder pattern, before sharing).
+    pub fn with<T: Send + Sync + 'static>(mut self, svc: T) -> Self {
+        Arc::get_mut(&mut self.services)
+            .expect("ServiceRegistry::with called after Arc was shared")
+            .insert(TypeId::of::<T>(), Arc::new(svc));
+        self
+    }
+
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
         self.services
             .get(&TypeId::of::<T>())
@@ -50,6 +60,7 @@ pub struct AppBuilder {
     config: AppConfig,
     services: HashMap<TypeId, Arc<dyn Any + Send + Sync>>,
     layers: Vec<LayerFn>,
+    session_store: Option<Arc<dyn SessionStoreDyn>>,
 }
 
 impl AppBuilder {
@@ -58,7 +69,17 @@ impl AppBuilder {
             config,
             services: HashMap::new(),
             layers: Vec::new(),
+            session_store: None,
         }
+    }
+
+    /// Register a user-provided session store.
+    ///
+    /// The store must implement [`SessionStore`]. It will be type-erased and
+    /// stored in `AppState` for use by the session middleware and auth extractors.
+    pub fn session_store<S: SessionStore>(mut self, store: S) -> Self {
+        self.session_store = Some(Arc::new(store));
+        self
     }
 
     pub fn service<T: Send + Sync + 'static>(mut self, svc: T) -> Self {
@@ -112,6 +133,11 @@ impl AppBuilder {
             Key::derive_from(self.config.secret_key.as_bytes())
         };
 
+        let session_store = self.session_store;
+        if session_store.is_some() {
+            info!("Session store registered");
+        }
+
         let state = AppState {
             db,
             services: ServiceRegistry {
@@ -119,6 +145,7 @@ impl AppBuilder {
             },
             config: self.config.clone(),
             cookie_key,
+            session_store,
         };
 
         // Collect module registrations into a lookup by name
@@ -189,9 +216,12 @@ impl AppBuilder {
         let listener = TcpListener::bind(&self.config.bind_address).await?;
         info!("Listening on {}", self.config.bind_address);
 
-        axum::serve(listener, app)
-            .with_graceful_shutdown(shutdown_signal())
-            .await?;
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
         info!("Server shut down gracefully");
         Ok(())
