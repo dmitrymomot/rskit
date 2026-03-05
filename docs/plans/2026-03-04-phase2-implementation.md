@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build session storage, session middleware, auth extractors, and `#[rskit::context]` macro so rskit apps can authenticate users with cookie-based sessions.
+**Goal:** Build session storage, session middleware, auth extractors, and `#[modo::context]` macro so modo apps can authenticate users with cookie-based sessions.
 
-**Architecture:** SQLite-backed sessions with ULID IDs, encrypted cookies (PrivateCookieJar), server-side fingerprinting. Session middleware loads session into request extensions. `Auth<U>` extractor loads user via `UserProvider` trait. `#[rskit::context]` macro generates typed template context.
+**Architecture:** SQLite-backed sessions with ULID IDs, encrypted cookies (PrivateCookieJar), server-side fingerprinting. Session middleware loads session into request extensions. `Auth<U>` extractor loads user via `UserProvider` trait. `#[modo::context]` macro generates typed template context.
 
 **Tech Stack:** axum-extra (PrivateCookieJar), ulid, sha2, chrono, SeaORM raw queries
 
@@ -16,11 +16,11 @@
 
 **Files:**
 
-- Modify: `rskit/Cargo.toml`
+- Modify: `modo/Cargo.toml`
 
 **Step 1: Add new dependencies**
 
-In `rskit/Cargo.toml`, add/update:
+In `modo/Cargo.toml`, add/update:
 
 ```toml
 # Update axum-extra to add cookie-private feature
@@ -41,7 +41,7 @@ Expected: Compiles with no errors
 **Step 3: Commit**
 
 ```bash
-git add rskit/Cargo.toml
+git add modo/Cargo.toml
 git commit -m "chore(deps): add ulid, sha2, and cookie-private for session support"
 ```
 
@@ -51,11 +51,11 @@ git commit -m "chore(deps): add ulid, sha2, and cookie-private for session suppo
 
 **Files:**
 
-- Create: `rskit/src/session/mod.rs`
-- Create: `rskit/src/session/types.rs`
-- Modify: `rskit/src/lib.rs`
+- Create: `modo/src/session/mod.rs`
+- Create: `modo/src/session/types.rs`
+- Modify: `modo/src/lib.rs`
 
-**Step 1: Create `rskit/src/session/types.rs` with SessionId and SessionData**
+**Step 1: Create `modo/src/session/types.rs` with SessionId and SessionData**
 
 ```rust
 use chrono::{DateTime, Utc};
@@ -132,7 +132,7 @@ mod tests {
 }
 ```
 
-**Step 2: Create `rskit/src/session/mod.rs`**
+**Step 2: Create `modo/src/session/mod.rs`**
 
 ```rust
 mod types;
@@ -140,7 +140,7 @@ mod types;
 pub use types::{SessionData, SessionId};
 ```
 
-**Step 3: Add session module to `rskit/src/lib.rs`**
+**Step 3: Add session module to `modo/src/lib.rs`**
 
 Add `pub mod session;` after the existing module declarations:
 
@@ -156,7 +156,7 @@ Expected: All 3 tests PASS
 **Step 5: Commit**
 
 ```bash
-git add rskit/src/session/ rskit/src/lib.rs
+git add modo/src/session/ modo/src/lib.rs
 git commit -m "feat(session): add SessionId and SessionData types"
 ```
 
@@ -166,12 +166,12 @@ git commit -m "feat(session): add SessionId and SessionData types"
 
 **Files:**
 
-- Modify: `rskit/src/config.rs`
-- Modify: `rskit/tests/integration.rs`
+- Modify: `modo/src/config.rs`
+- Modify: `modo/tests/integration.rs`
 
 **Step 1: Add session fields to AppConfig**
 
-In `rskit/src/config.rs`, add to the `AppConfig` struct:
+In `modo/src/config.rs`, add to the `AppConfig` struct:
 
 ```rust
 use std::time::Duration;
@@ -194,7 +194,7 @@ Add defaults:
 ```rust
     session_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
     session_max_per_user: 5,
-    session_cookie_name: "_rskit_session".to_string(),
+    session_cookie_name: "_session".to_string(),
     session_validate_fingerprint: true,
     session_touch_interval: Duration::from_secs(5 * 60), // 5 minutes
 ```
@@ -205,29 +205,29 @@ Add env var parsing after the existing fields:
 
 ```rust
     session_ttl: Duration::from_secs(
-        env::var("RSKIT_SESSION_TTL")
+        env::var("MODO_SESSION_TTL")
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(30 * 24 * 60 * 60),
     ),
-    session_max_per_user: env::var("RSKIT_SESSION_MAX_PER_USER")
+    session_max_per_user: env::var("MODO_SESSION_MAX_PER_USER")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(5),
-    session_cookie_name: env::var("RSKIT_SESSION_COOKIE_NAME")
-        .unwrap_or_else(|_| "_rskit_session".to_string()),
-    session_validate_fingerprint: env::var("RSKIT_SESSION_VALIDATE_FINGERPRINT")
+    session_cookie_name: env::var("MODO_SESSION_COOKIE_NAME")
+        .unwrap_or_else(|_| "_session".to_string()),
+    session_validate_fingerprint: env::var("MODO_SESSION_VALIDATE_FINGERPRINT")
         .map(|v| v != "false" && v != "0")
         .unwrap_or(true),
     session_touch_interval: Duration::from_secs(
-        env::var("RSKIT_SESSION_TOUCH_INTERVAL")
+        env::var("MODO_SESSION_TOUCH_INTERVAL")
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(5 * 60),
     ),
 ```
 
-**Step 4: Update `rskit/tests/integration.rs`**
+**Step 4: Update `modo/tests/integration.rs`**
 
 The `build_test_router()` function constructs `AppState` directly with `AppConfig::default()`. Since we added new fields with defaults, this should still work. Verify by running:
 
@@ -237,7 +237,7 @@ Expected: PASS (Default impl provides all new fields)
 **Step 5: Commit**
 
 ```bash
-git add rskit/src/config.rs
+git add modo/src/config.rs
 git commit -m "feat(config): add session configuration fields to AppConfig"
 ```
 
@@ -247,13 +247,13 @@ git commit -m "feat(config): add session configuration fields to AppConfig"
 
 **Files:**
 
-- Create: `rskit/src/session/fingerprint.rs`
-- Create: `rskit/src/session/device.rs`
-- Modify: `rskit/src/session/mod.rs`
+- Create: `modo/src/session/fingerprint.rs`
+- Create: `modo/src/session/device.rs`
+- Modify: `modo/src/session/mod.rs`
 
 **Step 1: Write tests and implement fingerprint helper**
 
-Create `rskit/src/session/fingerprint.rs`:
+Create `modo/src/session/fingerprint.rs`:
 
 ```rust
 use sha2::{Digest, Sha256};
@@ -311,7 +311,7 @@ mod tests {
 
 **Step 2: Write tests and implement device parsing helper**
 
-Create `rskit/src/session/device.rs`:
+Create `modo/src/session/device.rs`:
 
 ```rust
 /// Parse a human-readable device name from User-Agent string.
@@ -416,7 +416,7 @@ mod tests {
 }
 ```
 
-**Step 3: Update `rskit/src/session/mod.rs`**
+**Step 3: Update `modo/src/session/mod.rs`**
 
 ```rust
 mod device;
@@ -436,7 +436,7 @@ Expected: All tests PASS
 **Step 5: Commit**
 
 ```bash
-git add rskit/src/session/
+git add modo/src/session/
 git commit -m "feat(session): add fingerprint hashing and device parsing helpers"
 ```
 
@@ -446,12 +446,12 @@ git commit -m "feat(session): add fingerprint hashing and device parsing helpers
 
 **Files:**
 
-- Create: `rskit/src/session/meta.rs`
-- Modify: `rskit/src/session/mod.rs`
+- Create: `modo/src/session/meta.rs`
+- Modify: `modo/src/session/mod.rs`
 
 **Step 1: Implement SessionMeta**
 
-Create `rskit/src/session/meta.rs`:
+Create `modo/src/session/meta.rs`:
 
 ```rust
 use crate::app::AppState;
@@ -472,7 +472,7 @@ use axum::http::HeaderMap;
 ///     meta: SessionMeta,
 ///     Form(input): Form<LoginInput>,
 ///     session_store: Service<SqliteSessionStore>,
-/// ) -> Result<impl IntoResponse, RskitError> {
+/// ) -> Result<impl IntoResponse, Error> {
 ///     let session_id = session_store.create(&user.id, &meta).await?;
 ///     // ...
 /// }
@@ -606,7 +606,7 @@ mod tests {
 }
 ```
 
-**Step 2: Update `rskit/src/session/mod.rs`**
+**Step 2: Update `modo/src/session/mod.rs`**
 
 Add the meta module and re-export:
 
@@ -630,7 +630,7 @@ Expected: All tests PASS
 **Step 4: Commit**
 
 ```bash
-git add rskit/src/session/
+git add modo/src/session/
 git commit -m "feat(session): add SessionMeta extractor for request metadata"
 ```
 
@@ -640,15 +640,15 @@ git commit -m "feat(session): add SessionMeta extractor for request metadata"
 
 **Files:**
 
-- Create: `rskit/src/session/store.rs`
-- Modify: `rskit/src/session/mod.rs`
+- Create: `modo/src/session/store.rs`
+- Modify: `modo/src/session/mod.rs`
 
 **Step 1: Implement the trait and SQLite store**
 
-Create `rskit/src/session/store.rs`:
+Create `modo/src/session/store.rs`:
 
 ```rust
-use crate::error::RskitError;
+use crate::error::Error;
 use crate::session::{SessionData, SessionId, SessionMeta};
 use chrono::Utc;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
@@ -661,44 +661,44 @@ pub trait SessionStore: Send + Sync + 'static {
         &self,
         user_id: &str,
         meta: &SessionMeta,
-    ) -> impl std::future::Future<Output = Result<SessionId, RskitError>> + Send;
+    ) -> impl std::future::Future<Output = Result<SessionId, Error>> + Send;
 
     fn create_with<T: Serialize + Send>(
         &self,
         user_id: &str,
         meta: &SessionMeta,
         data: T,
-    ) -> impl std::future::Future<Output = Result<SessionId, RskitError>> + Send;
+    ) -> impl std::future::Future<Output = Result<SessionId, Error>> + Send;
 
     fn read(
         &self,
         id: &SessionId,
-    ) -> impl std::future::Future<Output = Result<Option<SessionData>, RskitError>> + Send;
+    ) -> impl std::future::Future<Output = Result<Option<SessionData>, Error>> + Send;
 
     fn touch(
         &self,
         id: &SessionId,
-    ) -> impl std::future::Future<Output = Result<(), RskitError>> + Send;
+    ) -> impl std::future::Future<Output = Result<(), Error>> + Send;
 
     fn update_data(
         &self,
         id: &SessionId,
         data: serde_json::Value,
-    ) -> impl std::future::Future<Output = Result<(), RskitError>> + Send;
+    ) -> impl std::future::Future<Output = Result<(), Error>> + Send;
 
     fn destroy(
         &self,
         id: &SessionId,
-    ) -> impl std::future::Future<Output = Result<(), RskitError>> + Send;
+    ) -> impl std::future::Future<Output = Result<(), Error>> + Send;
 
     fn destroy_all_for_user(
         &self,
         user_id: &str,
-    ) -> impl std::future::Future<Output = Result<(), RskitError>> + Send;
+    ) -> impl std::future::Future<Output = Result<(), Error>> + Send;
 
     fn cleanup_expired(
         &self,
-    ) -> impl std::future::Future<Output = Result<u64, RskitError>> + Send;
+    ) -> impl std::future::Future<Output = Result<u64, Error>> + Send;
 }
 
 /// SQLite-backed session store.
@@ -718,10 +718,10 @@ impl SqliteSessionStore {
     }
 
     /// Create the sessions table if it doesn't exist.
-    pub async fn initialize(&self) -> Result<(), RskitError> {
+    pub async fn initialize(&self) -> Result<(), Error> {
         self.db
             .execute_unprepared(
-                "CREATE TABLE IF NOT EXISTS rskit_sessions (
+                "CREATE TABLE IF NOT EXISTS modo_sessions (
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     ip_address TEXT NOT NULL,
@@ -738,12 +738,12 @@ impl SqliteSessionStore {
             .await?;
         self.db
             .execute_unprepared(
-                "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON rskit_sessions(user_id)",
+                "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON modo_sessions(user_id)",
             )
             .await?;
         self.db
             .execute_unprepared(
-                "CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON rskit_sessions(expires_at)",
+                "CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON modo_sessions(expires_at)",
             )
             .await?;
         Ok(())
@@ -754,7 +754,7 @@ impl SqliteSessionStore {
         user_id: &str,
         meta: &SessionMeta,
         data: serde_json::Value,
-    ) -> Result<SessionId, RskitError> {
+    ) -> Result<SessionId, Error> {
         let id = SessionId::new();
         let now = Utc::now();
         let expires_at = now + chrono::Duration::from_std(self.ttl).unwrap_or(chrono::Duration::days(30));
@@ -764,7 +764,7 @@ impl SqliteSessionStore {
 
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Sqlite,
-            "INSERT INTO rskit_sessions (id, user_id, ip_address, user_agent, device_name, device_type, fingerprint, data, created_at, last_active_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+            "INSERT INTO modo_sessions (id, user_id, ip_address, user_agent, device_name, device_type, fingerprint, data, created_at, last_active_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
             [
                 id.as_str().into(),
                 user_id.into(),
@@ -787,10 +787,10 @@ impl SqliteSessionStore {
         Ok(id)
     }
 
-    async fn evict_excess_sessions(&self, user_id: &str) -> Result<(), RskitError> {
+    async fn evict_excess_sessions(&self, user_id: &str) -> Result<(), Error> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Sqlite,
-            "DELETE FROM rskit_sessions WHERE user_id = $1 AND id NOT IN (SELECT id FROM rskit_sessions WHERE user_id = $2 ORDER BY created_at DESC LIMIT $3)",
+            "DELETE FROM modo_sessions WHERE user_id = $1 AND id NOT IN (SELECT id FROM modo_sessions WHERE user_id = $2 ORDER BY created_at DESC LIMIT $3)",
             [
                 user_id.into(),
                 user_id.into(),
@@ -803,19 +803,19 @@ impl SqliteSessionStore {
 
     fn row_to_session_data(
         row: &sea_orm::QueryResult,
-    ) -> Result<SessionData, RskitError> {
+    ) -> Result<SessionData, Error> {
         use sea_orm::TryGetable;
-        let id: String = row.try_get("", "id").map_err(|e| RskitError::internal(e.to_string()))?;
-        let user_id: String = row.try_get("", "user_id").map_err(|e| RskitError::internal(e.to_string()))?;
-        let ip_address: String = row.try_get("", "ip_address").map_err(|e| RskitError::internal(e.to_string()))?;
-        let user_agent: String = row.try_get("", "user_agent").map_err(|e| RskitError::internal(e.to_string()))?;
-        let device_name: String = row.try_get("", "device_name").map_err(|e| RskitError::internal(e.to_string()))?;
-        let device_type: String = row.try_get("", "device_type").map_err(|e| RskitError::internal(e.to_string()))?;
-        let fingerprint: String = row.try_get("", "fingerprint").map_err(|e| RskitError::internal(e.to_string()))?;
-        let data_str: String = row.try_get("", "data").map_err(|e| RskitError::internal(e.to_string()))?;
-        let created_at_str: String = row.try_get("", "created_at").map_err(|e| RskitError::internal(e.to_string()))?;
-        let last_active_at_str: String = row.try_get("", "last_active_at").map_err(|e| RskitError::internal(e.to_string()))?;
-        let expires_at_str: String = row.try_get("", "expires_at").map_err(|e| RskitError::internal(e.to_string()))?;
+        let id: String = row.try_get("", "id").map_err(|e| Error::internal(e.to_string()))?;
+        let user_id: String = row.try_get("", "user_id").map_err(|e| Error::internal(e.to_string()))?;
+        let ip_address: String = row.try_get("", "ip_address").map_err(|e| Error::internal(e.to_string()))?;
+        let user_agent: String = row.try_get("", "user_agent").map_err(|e| Error::internal(e.to_string()))?;
+        let device_name: String = row.try_get("", "device_name").map_err(|e| Error::internal(e.to_string()))?;
+        let device_type: String = row.try_get("", "device_type").map_err(|e| Error::internal(e.to_string()))?;
+        let fingerprint: String = row.try_get("", "fingerprint").map_err(|e| Error::internal(e.to_string()))?;
+        let data_str: String = row.try_get("", "data").map_err(|e| Error::internal(e.to_string()))?;
+        let created_at_str: String = row.try_get("", "created_at").map_err(|e| Error::internal(e.to_string()))?;
+        let last_active_at_str: String = row.try_get("", "last_active_at").map_err(|e| Error::internal(e.to_string()))?;
+        let expires_at_str: String = row.try_get("", "expires_at").map_err(|e| Error::internal(e.to_string()))?;
 
         Ok(SessionData {
             id: SessionId::from(id),
@@ -840,7 +840,7 @@ impl SqliteSessionStore {
 }
 
 impl SessionStore for SqliteSessionStore {
-    async fn create(&self, user_id: &str, meta: &SessionMeta) -> Result<SessionId, RskitError> {
+    async fn create(&self, user_id: &str, meta: &SessionMeta) -> Result<SessionId, Error> {
         self.insert_session(user_id, meta, serde_json::json!({}))
             .await
     }
@@ -850,17 +850,17 @@ impl SessionStore for SqliteSessionStore {
         user_id: &str,
         meta: &SessionMeta,
         data: T,
-    ) -> Result<SessionId, RskitError> {
+    ) -> Result<SessionId, Error> {
         let value = serde_json::to_value(data)
-            .map_err(|e| RskitError::internal(format!("Failed to serialize session data: {e}")))?;
+            .map_err(|e| Error::internal(format!("Failed to serialize session data: {e}")))?;
         self.insert_session(user_id, meta, value).await
     }
 
-    async fn read(&self, id: &SessionId) -> Result<Option<SessionData>, RskitError> {
+    async fn read(&self, id: &SessionId) -> Result<Option<SessionData>, Error> {
         let now = Utc::now().to_rfc3339();
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Sqlite,
-            "SELECT * FROM rskit_sessions WHERE id = $1 AND expires_at > $2",
+            "SELECT * FROM modo_sessions WHERE id = $1 AND expires_at > $2",
             [id.as_str().into(), now.into()],
         );
         let row = self.db.query_one(stmt).await?;
@@ -870,11 +870,11 @@ impl SessionStore for SqliteSessionStore {
         }
     }
 
-    async fn touch(&self, id: &SessionId) -> Result<(), RskitError> {
+    async fn touch(&self, id: &SessionId) -> Result<(), Error> {
         let now = Utc::now().to_rfc3339();
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Sqlite,
-            "UPDATE rskit_sessions SET last_active_at = $1 WHERE id = $2",
+            "UPDATE modo_sessions SET last_active_at = $1 WHERE id = $2",
             [now.into(), id.as_str().into()],
         );
         self.db.execute(stmt).await?;
@@ -885,42 +885,42 @@ impl SessionStore for SqliteSessionStore {
         &self,
         id: &SessionId,
         data: serde_json::Value,
-    ) -> Result<(), RskitError> {
+    ) -> Result<(), Error> {
         let data_str = serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string());
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Sqlite,
-            "UPDATE rskit_sessions SET data = $1 WHERE id = $2",
+            "UPDATE modo_sessions SET data = $1 WHERE id = $2",
             [data_str.into(), id.as_str().into()],
         );
         self.db.execute(stmt).await?;
         Ok(())
     }
 
-    async fn destroy(&self, id: &SessionId) -> Result<(), RskitError> {
+    async fn destroy(&self, id: &SessionId) -> Result<(), Error> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Sqlite,
-            "DELETE FROM rskit_sessions WHERE id = $1",
+            "DELETE FROM modo_sessions WHERE id = $1",
             [id.as_str().into()],
         );
         self.db.execute(stmt).await?;
         Ok(())
     }
 
-    async fn destroy_all_for_user(&self, user_id: &str) -> Result<(), RskitError> {
+    async fn destroy_all_for_user(&self, user_id: &str) -> Result<(), Error> {
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Sqlite,
-            "DELETE FROM rskit_sessions WHERE user_id = $1",
+            "DELETE FROM modo_sessions WHERE user_id = $1",
             [user_id.into()],
         );
         self.db.execute(stmt).await?;
         Ok(())
     }
 
-    async fn cleanup_expired(&self) -> Result<u64, RskitError> {
+    async fn cleanup_expired(&self) -> Result<u64, Error> {
         let now = Utc::now().to_rfc3339();
         let stmt = Statement::from_sql_and_values(
             DatabaseBackend::Sqlite,
-            "DELETE FROM rskit_sessions WHERE expires_at <= $1",
+            "DELETE FROM modo_sessions WHERE expires_at <= $1",
             [now.into()],
         );
         let result = self.db.execute(stmt).await?;
@@ -1056,7 +1056,7 @@ mod tests {
 }
 ```
 
-**Step 2: Update `rskit/src/session/mod.rs`**
+**Step 2: Update `modo/src/session/mod.rs`**
 
 ```rust
 mod device;
@@ -1080,7 +1080,7 @@ Expected: All tests PASS
 **Step 4: Commit**
 
 ```bash
-git add rskit/src/session/
+git add modo/src/session/
 git commit -m "feat(session): add SessionStore trait and SqliteSessionStore implementation"
 ```
 
@@ -1090,12 +1090,12 @@ git commit -m "feat(session): add SessionStore trait and SqliteSessionStore impl
 
 **Files:**
 
-- Create: `rskit/src/session/cookie.rs`
-- Modify: `rskit/src/session/mod.rs`
+- Create: `modo/src/session/cookie.rs`
+- Modify: `modo/src/session/mod.rs`
 
 **Step 1: Implement SessionCookie**
 
-Create `rskit/src/session/cookie.rs`:
+Create `modo/src/session/cookie.rs`:
 
 ```rust
 use crate::app::AppState;
@@ -1113,13 +1113,13 @@ use cookie::Cookie;
 /// # Usage
 /// ```rust,ignore
 /// #[handler(POST, "/login")]
-/// async fn login(cookie: SessionCookie, ...) -> Result<(SessionCookie, Redirect), RskitError> {
+/// async fn login(cookie: SessionCookie, ...) -> Result<(SessionCookie, Redirect), Error> {
 ///     let session_id = session_store.create(&user.id, &meta).await?;
 ///     Ok((cookie.set(session_id), Redirect::to("/")))
 /// }
 ///
 /// #[handler(POST, "/logout")]
-/// async fn logout(cookie: SessionCookie, ...) -> Result<SessionCookie, RskitError> {
+/// async fn logout(cookie: SessionCookie, ...) -> Result<SessionCookie, Error> {
 ///     session_store.destroy(&auth.0.session.id).await?;
 ///     Ok(cookie.remove())
 /// }
@@ -1177,7 +1177,7 @@ impl IntoResponseParts for SessionCookie {
 }
 ```
 
-**Step 2: Update `rskit/src/session/mod.rs`**
+**Step 2: Update `modo/src/session/mod.rs`**
 
 Add the cookie module and re-export:
 
@@ -1205,7 +1205,7 @@ Expected: Compiles
 **Step 4: Commit**
 
 ```bash
-git add rskit/src/session/
+git add modo/src/session/
 git commit -m "feat(session): add SessionCookie helper for encrypted cookie management"
 ```
 
@@ -1215,12 +1215,12 @@ git commit -m "feat(session): add SessionCookie helper for encrypted cookie mana
 
 **Files:**
 
-- Create: `rskit/src/middleware/session.rs`
-- Modify: `rskit/src/middleware/mod.rs`
+- Create: `modo/src/middleware/session.rs`
+- Modify: `modo/src/middleware/mod.rs`
 
 **Step 1: Implement session middleware**
 
-Create `rskit/src/middleware/session.rs`:
+Create `modo/src/middleware/session.rs`:
 
 ```rust
 use crate::app::AppState;
@@ -1315,7 +1315,7 @@ pub async fn session(
 }
 ```
 
-**Step 2: Update `rskit/src/middleware/mod.rs`**
+**Step 2: Update `modo/src/middleware/mod.rs`**
 
 ```rust
 pub mod csrf;
@@ -1333,7 +1333,7 @@ Expected: Compiles
 **Step 4: Commit**
 
 ```bash
-git add rskit/src/middleware/
+git add modo/src/middleware/
 git commit -m "feat(middleware): add session middleware with fingerprint validation"
 ```
 
@@ -1343,12 +1343,12 @@ git commit -m "feat(middleware): add session middleware with fingerprint validat
 
 **Files:**
 
-- Modify: `rskit/src/app.rs`
-- Modify: `rskit/tests/integration.rs`
+- Modify: `modo/src/app.rs`
+- Modify: `modo/tests/integration.rs`
 
 **Step 1: Add session_store to AppState**
 
-In `rskit/src/app.rs`, add to AppState:
+In `modo/src/app.rs`, add to AppState:
 
 ```rust
 use crate::session::SqliteSessionStore;
@@ -1421,7 +1421,7 @@ In the `run()` method, after the DB connection is established and before buildin
 
 Update the AppState construction to include `session_store`.
 
-**Step 4: Update `rskit/tests/integration.rs`**
+**Step 4: Update `modo/tests/integration.rs`**
 
 Add `session_store: None` to the `AppState` construction in `build_test_router()`:
 
@@ -1429,7 +1429,7 @@ Add `session_store: None` to the `AppState` construction in `build_test_router()
     let state = AppState {
         db: None,
         services: Default::default(),
-        config: rskit::config::AppConfig::default(),
+        config: modo::config::AppConfig::default(),
         cookie_key: axum_extra::extract::cookie::Key::generate(),
         session_store: None,
     };
@@ -1443,7 +1443,7 @@ Expected: All existing tests PASS
 **Step 6: Commit**
 
 ```bash
-git add rskit/src/app.rs rskit/tests/integration.rs
+git add modo/src/app.rs modo/tests/integration.rs
 git commit -m "feat(app): add session store to AppState and .sessions() builder method"
 ```
 
@@ -1453,16 +1453,16 @@ git commit -m "feat(app): add session store to AppState and .sessions() builder 
 
 **Files:**
 
-- Create: `rskit/src/extractors/auth.rs`
-- Modify: `rskit/src/extractors/mod.rs`
+- Create: `modo/src/extractors/auth.rs`
+- Modify: `modo/src/extractors/mod.rs`
 
 **Step 1: Implement UserProvider, Auth, OptionalAuth**
 
-Create `rskit/src/extractors/auth.rs`:
+Create `modo/src/extractors/auth.rs`:
 
 ```rust
 use crate::app::AppState;
-use crate::error::RskitError;
+use crate::error::Error;
 use crate::session::SessionData;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
@@ -1479,7 +1479,7 @@ use std::sync::Arc;
 ///
 /// impl UserProvider for MyUserProvider {
 ///     type User = User;
-///     async fn find_by_id(&self, id: &str) -> Result<Option<User>, RskitError> {
+///     async fn find_by_id(&self, id: &str) -> Result<Option<User>, Error> {
 ///         // load from DB
 ///     }
 /// }
@@ -1490,7 +1490,7 @@ pub trait UserProvider: Send + Sync + 'static {
     fn find_by_id(
         &self,
         id: &str,
-    ) -> impl std::future::Future<Output = Result<Option<Self::User>, RskitError>> + Send;
+    ) -> impl std::future::Future<Output = Result<Option<Self::User>, Error>> + Send;
 }
 
 /// Authenticated user + session data.
@@ -1533,7 +1533,7 @@ where
     U: Clone + Send + Sync + 'static,
     P: UserProvider<User = U>,
 {
-    type Rejection = RskitError;
+    type Rejection = Error;
 
     async fn from_request_parts(
         parts: &mut Parts,
@@ -1543,12 +1543,12 @@ where
             .extensions
             .get::<SessionData>()
             .cloned()
-            .ok_or(RskitError::Unauthorized)?;
+            .ok_or(Error::Unauthorized)?;
 
         let provider: Arc<P> = state
             .services
             .get::<P>()
-            .ok_or(RskitError::internal("UserProvider not registered"))?;
+            .ok_or(Error::internal("UserProvider not registered"))?;
 
         let user = provider
             .find_by_id(&session.user_id)
@@ -1560,7 +1560,7 @@ where
                     user_id = session.user_id,
                     "Session references nonexistent user"
                 );
-                RskitError::Unauthorized
+                Error::Unauthorized
             })?;
 
         Ok(Auth(AuthData { user, session }))
@@ -1598,7 +1598,7 @@ where
 
 **Note:** The generic `P: UserProvider` parameter is a design challenge. In practice, axum extractors need all generic params resolvable from the handler signature. This may require the user to specify the provider type. An alternative is to store the UserProvider as a type-erased service and use a wrapper. If the generic approach proves too cumbersome during implementation, simplify by having the extractors look up a concrete `Box<dyn ErasedUserProvider>` from the service registry. **Evaluate during implementation and adjust.**
 
-**Step 2: Update `rskit/src/extractors/mod.rs`**
+**Step 2: Update `modo/src/extractors/mod.rs`**
 
 ```rust
 pub mod auth;
@@ -1614,7 +1614,7 @@ Expected: Compiles
 **Step 4: Commit**
 
 ```bash
-git add rskit/src/extractors/
+git add modo/src/extractors/
 git commit -m "feat(extractors): add UserProvider trait, Auth<U>, and OptionalAuth<U> extractors"
 ```
 
@@ -1624,16 +1624,16 @@ git commit -m "feat(extractors): add UserProvider trait, Auth<U>, and OptionalAu
 
 **Files:**
 
-- Modify: `rskit/src/templates/context.rs`
+- Modify: `modo/src/templates/context.rs`
 
 **Step 1: Add request_id and remove current_user**
 
-In `rskit/src/templates/context.rs`:
+In `modo/src/templates/context.rs`:
 
 Replace the `BaseContext` struct and its `FromRequestParts` impl:
 
 - Add `request_id: String` field (ULID, or from `X-Request-Id` header)
-- Remove `current_user: Option<serde_json::Value>` field (moved to user-defined context via `#[rskit::context]`)
+- Remove `current_user: Option<serde_json::Value>` field (moved to user-defined context via `#[modo::context]`)
 
 ```rust
 use crate::app::AppState;
@@ -1715,29 +1715,29 @@ Expected: All tests PASS (no existing tests depend on `current_user` field)
 **Step 3: Commit**
 
 ```bash
-git add rskit/src/templates/context.rs
+git add modo/src/templates/context.rs
 git commit -m "feat(templates): add request_id to BaseContext, remove current_user"
 ```
 
 ---
 
-### Task 12: `#[rskit::context]` Proc Macro
+### Task 12: `#[modo::context]` Proc Macro
 
 **Files:**
 
-- Create: `rskit-macros/src/context.rs`
-- Modify: `rskit-macros/src/lib.rs`
-- Test: `rskit/tests/context_macro.rs`
+- Create: `modo-macros/src/context.rs`
+- Modify: `modo-macros/src/lib.rs`
+- Test: `modo/tests/context_macro.rs`
 
 **Step 1: Write the test**
 
-Create `rskit/tests/context_macro.rs`:
+Create `modo/tests/context_macro.rs`:
 
 ```rust
 // Verify the macro compiles and generates the expected struct.
 // Full integration testing requires a running app (covered in Task 13).
 
-use rskit::templates::BaseContext;
+use modo::templates::BaseContext;
 
 #[derive(Clone)]
 struct TestUser {
@@ -1745,7 +1745,7 @@ struct TestUser {
     pub name: String,
 }
 
-#[rskit::context]
+#[modo::context]
 pub struct AppContext {
     #[base]
     pub base: BaseContext,
@@ -1766,11 +1766,11 @@ fn context_struct_has_expected_fields() {
 **Step 2: Run test to verify it fails**
 
 Run: `cargo test --test context_macro`
-Expected: FAIL — `rskit::context` attribute doesn't exist yet
+Expected: FAIL — `modo::context` attribute doesn't exist yet
 
 **Step 3: Implement the macro**
 
-Create `rskit-macros/src/context.rs`:
+Create `modo-macros/src/context.rs`:
 
 ```rust
 use proc_macro2::TokenStream;
@@ -1788,7 +1788,7 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         _ => {
             return Err(syn::Error::new_spanned(
                 &input,
-                "#[rskit::context] requires a struct with named fields",
+                "#[modo::context] requires a struct with named fields",
             ))
         }
     };
@@ -1849,24 +1849,24 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     }
 
     let base_name = base_field.ok_or_else(|| {
-        syn::Error::new_spanned(&input, "#[rskit::context] requires exactly one #[base] field")
+        syn::Error::new_spanned(&input, "#[modo::context] requires exactly one #[base] field")
     })?;
 
     // Generate FromRequestParts impl
     let from_request_impl = if let (Some(auth_name), Some(inner_ty)) = (&auth_field, &auth_inner_type) {
         quote! {
-            impl rskit::axum::extract::FromRequestParts<rskit::app::AppState> for #struct_name {
+            impl modo::axum::extract::FromRequestParts<modo::app::AppState> for #struct_name {
                 type Rejection = std::convert::Infallible;
 
                 async fn from_request_parts(
-                    parts: &mut rskit::axum::http::request::Parts,
-                    state: &rskit::app::AppState,
+                    parts: &mut modo::axum::http::request::Parts,
+                    state: &modo::app::AppState,
                 ) -> std::result::Result<Self, Self::Rejection> {
-                    let #base_name = rskit::templates::BaseContext::from_request_parts(parts, state).await?;
+                    let #base_name = modo::templates::BaseContext::from_request_parts(parts, state).await?;
 
                     let #auth_name = parts
                         .extensions
-                        .get::<rskit::session::SessionData>()
+                        .get::<modo::session::SessionData>()
                         .and_then(|session| {
                             // Try to get the user from extensions (set by auth middleware or handler)
                             parts.extensions.get::<#inner_ty>().cloned()
@@ -1878,14 +1878,14 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         }
     } else {
         quote! {
-            impl rskit::axum::extract::FromRequestParts<rskit::app::AppState> for #struct_name {
+            impl modo::axum::extract::FromRequestParts<modo::app::AppState> for #struct_name {
                 type Rejection = std::convert::Infallible;
 
                 async fn from_request_parts(
-                    parts: &mut rskit::axum::http::request::Parts,
-                    state: &rskit::app::AppState,
+                    parts: &mut modo::axum::http::request::Parts,
+                    state: &modo::app::AppState,
                 ) -> std::result::Result<Self, Self::Rejection> {
-                    let #base_name = rskit::templates::BaseContext::from_request_parts(parts, state).await?;
+                    let #base_name = modo::templates::BaseContext::from_request_parts(parts, state).await?;
                     Ok(Self { #base_name })
                 }
             }
@@ -1918,7 +1918,7 @@ fn extract_option_inner(ty: &syn::Type) -> Option<syn::Type> {
 }
 ```
 
-**Step 4: Register the macro in `rskit-macros/src/lib.rs`**
+**Step 4: Register the macro in `modo-macros/src/lib.rs`**
 
 Add:
 
@@ -1942,8 +1942,8 @@ Expected: PASS
 **Step 6: Commit**
 
 ```bash
-git add rskit-macros/src/context.rs rskit-macros/src/lib.rs rskit/tests/context_macro.rs
-git commit -m "feat(macros): add #[rskit::context] macro for typed template context"
+git add modo-macros/src/context.rs modo-macros/src/lib.rs modo/tests/context_macro.rs
+git commit -m "feat(macros): add #[modo::context] macro for typed template context"
 ```
 
 ---
@@ -1952,17 +1952,17 @@ git commit -m "feat(macros): add #[rskit::context] macro for typed template cont
 
 **Files:**
 
-- Create: `rskit/tests/session_integration.rs`
+- Create: `modo/tests/session_integration.rs`
 
 **Step 1: Write end-to-end session test**
 
-Create `rskit/tests/session_integration.rs`:
+Create `modo/tests/session_integration.rs`:
 
 ```rust
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use rskit::app::AppState;
-use rskit::session::{SessionMeta, SqliteSessionStore, SessionStore};
+use modo::app::AppState;
+use modo::session::{SessionMeta, SqliteSessionStore, SessionStore};
 use sea_orm::Database;
 use std::sync::Arc;
 use std::time::Duration;
@@ -1974,7 +1974,7 @@ async fn setup() -> (axum::Router, Arc<SqliteSessionStore>) {
     use sea_orm::ConnectionTrait;
     db.execute_unprepared("PRAGMA journal_mode=WAL").await.unwrap();
 
-    let mut config = rskit::config::AppConfig::default();
+    let mut config = modo::config::AppConfig::default();
     config.session_ttl = Duration::from_secs(3600);
     config.session_max_per_user = 5;
     config.session_validate_fingerprint = false; // simplify test
@@ -2070,7 +2070,7 @@ Expected: All pass (fmt, lint, test)
 **Step 4: Commit**
 
 ```bash
-git add rskit/tests/session_integration.rs
+git add modo/tests/session_integration.rs
 git commit -m "test: add session integration tests"
 ```
 
@@ -2081,14 +2081,14 @@ git commit -m "test: add session integration tests"
 **Files:**
 
 - Modify: `CLAUDE.md`
-- Modify: `rskit/src/lib.rs`
+- Modify: `modo/src/lib.rs`
 
 **Step 1: Update lib.rs re-exports**
 
-Ensure `rskit/src/lib.rs` exports the `context` macro:
+Ensure `modo/src/lib.rs` exports the `context` macro:
 
 ```rust
-pub use rskit_macros::{context, handler, main, module};
+pub use modo_macros::{context, handler, main, module};
 ```
 
 Also add `pub use ulid;` for macro-generated code.
@@ -2100,7 +2100,7 @@ Add to the Conventions section:
 ```markdown
 - Sessions: `app.sessions()` to enable, `SessionMeta` + `SessionCookie` in handlers
 - Auth: implement `UserProvider` trait, use `Auth<User>` / `OptionalAuth<User>` extractors
-- Template context: `#[rskit::context]` with `#[base]` + `#[auth]` fields
+- Template context: `#[modo::context]` with `#[base]` + `#[auth]` fields
 - BaseContext: includes request_id, is_htmx, current_url, flash_messages, csrf_token, locale
 ```
 
@@ -2121,7 +2121,7 @@ Expected: All pass
 **Step 4: Commit**
 
 ```bash
-git add CLAUDE.md rskit/src/lib.rs
+git add CLAUDE.md modo/src/lib.rs
 git commit -m "docs: update CLAUDE.md with session/auth conventions and decisions"
 ```
 
@@ -2142,6 +2142,6 @@ git commit -m "docs: update CLAUDE.md with session/auth conventions and decision
 | 9 | AppBuilder | .sessions() method, session_store in AppState |
 | 10 | Auth extractors | UserProvider trait, Auth<U>, OptionalAuth<U> |
 | 11 | BaseContext | Add request_id, remove current_user |
-| 12 | Context macro | #[rskit::context] with #[base] + #[auth] |
+| 12 | Context macro | #[modo::context] with #[base] + #[auth] |
 | 13 | Integration test | End-to-end session lifecycle tests |
 | 14 | CLAUDE.md | Updated conventions and decisions |

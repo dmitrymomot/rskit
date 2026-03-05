@@ -2,7 +2,7 @@
 
 ## Scope
 
-Build the session and authentication infrastructure for rskit. Users handle login/register logic themselves — the framework provides session storage, session middleware, user loading, and auth extractors.
+Build the session and authentication infrastructure for modo. Users handle login/register logic themselves — the framework provides session storage, session middleware, user loading, and auth extractors.
 
 **Not in scope:** Authenticator trait, PasswordAuthenticator, OAuth, TOTP — deferred to later phases.
 
@@ -13,7 +13,7 @@ Build the session and authentication infrastructure for rskit. Users handle logi
 ### SQLite Schema
 
 ```sql
-CREATE TABLE IF NOT EXISTS rskit_sessions (
+CREATE TABLE IF NOT EXISTS modo_sessions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     ip_address TEXT NOT NULL,
@@ -26,8 +26,8 @@ CREATE TABLE IF NOT EXISTS rskit_sessions (
     last_active_at TEXT NOT NULL,
     expires_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON rskit_sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON rskit_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON modo_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON modo_sessions(expires_at);
 ```
 
 ### IDs
@@ -48,14 +48,14 @@ IP is excluded because it changes on mobile networks (wifi/5G switching). IP is 
 
 ```rust
 pub trait SessionStore: Send + Sync + 'static {
-    async fn create(&self, user_id: &str, request: &Request) -> Result<SessionId, RskitError>;
-    async fn create_with(&self, user_id: &str, request: &Request, data: impl Serialize + Send) -> Result<SessionId, RskitError>;
-    async fn read(&self, id: &SessionId) -> Result<Option<SessionData>, RskitError>;
-    async fn touch(&self, id: &SessionId) -> Result<(), RskitError>;
-    async fn update_data(&self, id: &SessionId, data: serde_json::Value) -> Result<(), RskitError>;
-    async fn destroy(&self, id: &SessionId) -> Result<(), RskitError>;
-    async fn destroy_all_for_user(&self, user_id: &str) -> Result<(), RskitError>;
-    async fn cleanup_expired(&self) -> Result<u64, RskitError>;
+    async fn create(&self, user_id: &str, request: &Request) -> Result<SessionId, Error>;
+    async fn create_with(&self, user_id: &str, request: &Request, data: impl Serialize + Send) -> Result<SessionId, Error>;
+    async fn read(&self, id: &SessionId) -> Result<Option<SessionData>, Error>;
+    async fn touch(&self, id: &SessionId) -> Result<(), Error>;
+    async fn update_data(&self, id: &SessionId, data: serde_json::Value) -> Result<(), Error>;
+    async fn destroy(&self, id: &SessionId) -> Result<(), Error>;
+    async fn destroy_all_for_user(&self, user_id: &str) -> Result<(), Error>;
+    async fn cleanup_expired(&self) -> Result<u64, Error>;
 }
 ```
 
@@ -95,11 +95,11 @@ Implements `SessionStore` using raw SeaORM queries (no entity — framework-inte
 
 ```rust
 // Added to AppConfig
-pub session_ttl: Duration,              // RSKIT_SESSION_TTL, default 30 days
-pub session_max_per_user: usize,        // RSKIT_SESSION_MAX_PER_USER, default 5
-pub session_cookie_name: String,        // RSKIT_SESSION_COOKIE_NAME, default "_rskit_session"
-pub session_validate_fingerprint: bool, // RSKIT_SESSION_VALIDATE_FINGERPRINT, default true
-pub session_touch_interval: Duration,   // RSKIT_SESSION_TOUCH_INTERVAL, default 5 minutes
+pub session_ttl: Duration,              // MODO_SESSION_TTL, default 30 days
+pub session_max_per_user: usize,        // MODO_SESSION_MAX_PER_USER, default 5
+pub session_cookie_name: String,        // MODO_SESSION_COOKIE_NAME, default "_session"
+pub session_validate_fingerprint: bool, // MODO_SESSION_VALIDATE_FINGERPRINT, default true
+pub session_touch_interval: Duration,   // MODO_SESSION_TOUCH_INTERVAL, default 5 minutes
 ```
 
 ### Cookie Transport
@@ -126,8 +126,8 @@ Request arrives
 
 The session middleware is opt-in. Users apply it where needed:
 
-- `app.layer(rskit::middleware::session)` — global
-- `#[middleware(rskit::middleware::session)]` — per module or handler
+- `app.layer(modo::middleware::session)` — global
+- `#[middleware(modo::middleware::session)]` — per module or handler
 
 This way public-only apps or API-only routes don't pay the cost.
 
@@ -145,7 +145,7 @@ The middleware only reads/validates existing sessions. Session creation happens 
 pub trait UserProvider: Send + Sync + 'static {
     type User: Clone + Send + Sync + 'static;
 
-    async fn find_by_id(&self, id: &str) -> Result<Option<Self::User>, RskitError>;
+    async fn find_by_id(&self, id: &str) -> Result<Option<Self::User>, Error>;
 }
 ```
 
@@ -194,12 +194,12 @@ async fn home(auth: OptionalAuth<User>) -> impl IntoResponse {
 
 ## 4. Context Macro
 
-### `#[rskit::context]`
+### `#[modo::context]`
 
 Generates `FromRequestParts` impl for template context structs.
 
 ```rust
-#[rskit::context]
+#[modo::context]
 pub struct AppContext {
     #[base]
     pub base: BaseContext,
@@ -251,7 +251,7 @@ pub struct BaseContext {
 }
 ```
 
-Remove `current_user` from `BaseContext` — it moves to user-defined context via `#[rskit::context]`.
+Remove `current_user` from `BaseContext` — it moves to user-defined context via `#[modo::context]`.
 
 ---
 
@@ -279,7 +279,7 @@ impl AppBuilder {
 ```
 
 When `.sessions()` is called, `AppBuilder::run()`:
-1. Creates `rskit_sessions` table (IF NOT EXISTS)
+1. Creates `modo_sessions` table (IF NOT EXISTS)
 2. Instantiates `SqliteSessionStore` with config from `AppConfig`
 3. Stores it in `AppState.session_store`
 4. Also registers it as a service (accessible via `Service<SqliteSessionStore>` for login handlers)
@@ -336,7 +336,7 @@ async fn logout(
 | `UserProvider` trait | App-defined user loading from session user_id |
 | `Auth<U>` | Extractor — 401 if not authenticated |
 | `OptionalAuth<U>` | Extractor — None if not authenticated |
-| `#[rskit::context]` | Proc macro for typed template context with `#[base]` + `#[auth]` |
+| `#[modo::context]` | Proc macro for typed template context with `#[base]` + `#[auth]` |
 | `BaseContext` update | Add request_id (ULID), remove current_user |
 | `SessionCookie` | Helper for set/remove encrypted session cookie |
 | `AppConfig` additions | session_ttl, max_per_user, cookie_name, validate_fingerprint, touch_interval |

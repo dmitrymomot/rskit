@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build the minimal rskit framework — `#[handler(GET, "/")]` + `#[rskit::main]` that auto-discovers routes, connects to SQLite, and serves HTTP with graceful shutdown.
+**Goal:** Build the minimal modo framework — `#[handler(GET, "/")]` + `#[modo::main]` that auto-discovers routes, connects to SQLite, and serves HTTP with graceful shutdown.
 
-**Architecture:** Workspace with two crates: `rskit` (main library) and `rskit-macros` (proc macros). Proc macros generate `inventory::submit!` blocks for auto-discovery. `#[rskit::main]` collects routes at startup and builds an axum Router. AppState holds DB connection and service registry.
+**Architecture:** Workspace with two crates: `modo` (main library) and `modo-macros` (proc macros). Proc macros generate `inventory::submit!` blocks for auto-discovery. `#[modo::main]` collects routes at startup and builds an axum Router. AppState holds DB connection and service registry.
 
 **Tech Stack:** axum 0.8, SeaORM v2 (2.0.0-rc), inventory 0.3, tokio 1, tower-http 0.6, thiserror 2, serde, tracing
 
@@ -15,24 +15,24 @@
 **Files:**
 
 - Create: `Cargo.toml` (workspace root)
-- Create: `rskit/Cargo.toml`
-- Create: `rskit/src/lib.rs`
-- Create: `rskit-macros/Cargo.toml`
-- Create: `rskit-macros/src/lib.rs`
+- Create: `modo/Cargo.toml`
+- Create: `modo/src/lib.rs`
+- Create: `modo-macros/Cargo.toml`
+- Create: `modo-macros/src/lib.rs`
 
 **Step 1: Create workspace root Cargo.toml**
 
 ```toml
 [workspace]
 resolver = "2"
-members = ["rskit", "rskit-macros"]
+members = ["modo", "modo-macros"]
 ```
 
-**Step 2: Create rskit-macros/Cargo.toml**
+**Step 2: Create modo-macros/Cargo.toml**
 
 ```toml
 [package]
-name = "rskit-macros"
+name = "modo-macros"
 version = "0.1.0"
 edition = "2024"
 
@@ -45,7 +45,7 @@ quote = "1"
 proc-macro2 = "1"
 ```
 
-**Step 3: Create rskit-macros/src/lib.rs**
+**Step 3: Create modo-macros/src/lib.rs**
 
 ````rust
 use proc_macro::TokenStream;
@@ -56,7 +56,7 @@ use proc_macro::TokenStream;
 /// ```rust
 /// #[handler(GET, "/")]
 /// async fn index() -> &'static str {
-///     "Hello rskit"
+///     "Hello modo"
 /// }
 /// ```
 #[proc_macro_attribute]
@@ -66,7 +66,7 @@ pub fn handler(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Entry point macro that wires the entire rskit application.
+/// Entry point macro that wires the entire modo application.
 ///
 /// Collects all auto-discovered routes, jobs, and modules via `inventory`,
 /// builds the axum Router, and starts the server with graceful shutdown.
@@ -81,7 +81,7 @@ mod handler;
 mod main_macro;
 ````
 
-**Step 4: Create stub handler module: rskit-macros/src/handler.rs**
+**Step 4: Create stub handler module: modo-macros/src/handler.rs**
 
 ```rust
 use proc_macro2::TokenStream;
@@ -93,7 +93,7 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 }
 ```
 
-**Step 5: Create stub main module: rskit-macros/src/main_macro.rs**
+**Step 5: Create stub main module: modo-macros/src/main_macro.rs**
 
 ```rust
 use proc_macro2::TokenStream;
@@ -105,16 +105,16 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 }
 ```
 
-**Step 6: Create rskit/Cargo.toml**
+**Step 6: Create modo/Cargo.toml**
 
 ```toml
 [package]
-name = "rskit"
+name = "modo"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rskit-macros = { path = "../rskit-macros" }
+modo-macros = { path = "../modo-macros" }
 
 # Core
 axum = "0.8"
@@ -147,10 +147,10 @@ tokio = { version = "1", features = ["full", "test-util"] }
 reqwest = { version = "0.12", features = ["json"] }
 ```
 
-**Step 7: Create rskit/src/lib.rs**
+**Step 7: Create modo/src/lib.rs**
 
 ```rust
-pub use rskit_macros::{handler, main};
+pub use modo_macros::{handler, main};
 
 pub mod app;
 pub mod config;
@@ -170,44 +170,44 @@ pub use sea_orm;
 
 Create these files with placeholder contents:
 
-`rskit/src/app.rs`:
+`modo/src/app.rs`:
 
 ```rust
 // App builder — implemented in Task 5
 ```
 
-`rskit/src/config.rs`:
+`modo/src/config.rs`:
 
 ```rust
 // AppConfig — implemented in Task 5
 ```
 
-`rskit/src/error.rs`:
+`modo/src/error.rs`:
 
 ```rust
-// RskitError — implemented in Task 6
+// Error — implemented in Task 6
 ```
 
-`rskit/src/router.rs`:
+`modo/src/router.rs`:
 
 ```rust
 // RouteRegistration — implemented in Task 2
 ```
 
-`rskit/src/extractors/mod.rs`:
+`modo/src/extractors/mod.rs`:
 
 ```rust
 pub mod db;
 pub mod service;
 ```
 
-`rskit/src/extractors/db.rs`:
+`modo/src/extractors/db.rs`:
 
 ```rust
 // Db extractor — implemented in Task 7
 ```
 
-`rskit/src/extractors/service.rs`:
+`modo/src/extractors/service.rs`:
 
 ```rust
 // Service<T> extractor — implemented in Task 8
@@ -223,7 +223,7 @@ Expected: Compiles with no errors (may have warnings about unused imports)
 ```bash
 git init
 git add -A
-git commit -m "chore: scaffold rskit workspace with rskit and rskit-macros crates"
+git commit -m "chore: scaffold modo workspace with modo and modo-macros crates"
 ```
 
 ---
@@ -232,23 +232,23 @@ git commit -m "chore: scaffold rskit workspace with rskit and rskit-macros crate
 
 **Files:**
 
-- Modify: `rskit/src/router.rs`
-- Modify: `rskit/src/lib.rs`
-- Test: `rskit/tests/route_registration.rs`
+- Modify: `modo/src/router.rs`
+- Modify: `modo/src/lib.rs`
+- Test: `modo/tests/route_registration.rs`
 
 **Step 1: Write the test**
 
-Create `rskit/tests/route_registration.rs`:
+Create `modo/tests/route_registration.rs`:
 
 ```rust
-use rskit::router::RouteRegistration;
+use modo::router::RouteRegistration;
 
 // Verify that RouteRegistration can be submitted to and read from inventory
 inventory::submit! {
     RouteRegistration {
-        method: rskit::router::Method::GET,
+        method: modo::router::Method::GET,
         path: "/test",
-        handler: || rskit::axum::routing::get(|| async { "test" }),
+        handler: || modo::axum::routing::get(|| async { "test" }),
         middleware: vec![],
         module: None,
     }
@@ -268,7 +268,7 @@ Expected: FAIL — `RouteRegistration` doesn't exist yet
 
 **Step 3: Implement RouteRegistration**
 
-`rskit/src/router.rs`:
+`modo/src/router.rs`:
 
 ```rust
 use axum::routing::MethodRouter;
@@ -313,10 +313,10 @@ pub fn build_router() -> axum::Router {
 
 **Step 4: Update lib.rs to export router types**
 
-In `rskit/src/lib.rs`, the router module is already declared. Update it to also re-export:
+In `modo/src/lib.rs`, the router module is already declared. Update it to also re-export:
 
 ```rust
-pub use rskit_macros::{handler, main};
+pub use modo_macros::{handler, main};
 
 pub mod app;
 pub mod config;
@@ -340,7 +340,7 @@ Expected: PASS
 **Step 6: Commit**
 
 ```bash
-git add rskit/src/router.rs rskit/src/lib.rs rskit/tests/route_registration.rs
+git add modo/src/router.rs modo/src/lib.rs modo/tests/route_registration.rs
 git commit -m "feat: add RouteRegistration type with inventory collection"
 ```
 
@@ -350,22 +350,22 @@ git commit -m "feat: add RouteRegistration type with inventory collection"
 
 **Files:**
 
-- Modify: `rskit-macros/src/handler.rs`
-- Test: `rskit/tests/handler_macro.rs`
+- Modify: `modo-macros/src/handler.rs`
+- Test: `modo/tests/handler_macro.rs`
 
 **Step 1: Write the test**
 
-Create `rskit/tests/handler_macro.rs`:
+Create `modo/tests/handler_macro.rs`:
 
 ```rust
-use rskit::router::RouteRegistration;
+use modo::router::RouteRegistration;
 
-#[rskit::handler(GET, "/hello")]
+#[modo::handler(GET, "/hello")]
 async fn hello() -> &'static str {
-    "Hello rskit"
+    "Hello modo"
 }
 
-#[rskit::handler(POST, "/echo")]
+#[modo::handler(POST, "/echo")]
 async fn echo(body: String) -> String {
     body
 }
@@ -382,10 +382,10 @@ fn test_handler_macro_registers_routes() {
 fn test_handler_macro_correct_methods() {
     let routes: Vec<&RouteRegistration> = inventory::iter::<RouteRegistration>.collect();
     let hello = routes.iter().find(|r| r.path == "/hello").unwrap();
-    assert_eq!(hello.method, rskit::router::Method::GET);
+    assert_eq!(hello.method, modo::router::Method::GET);
 
     let echo = routes.iter().find(|r| r.path == "/echo").unwrap();
-    assert_eq!(echo.method, rskit::router::Method::POST);
+    assert_eq!(echo.method, modo::router::Method::POST);
 }
 ```
 
@@ -396,7 +396,7 @@ Expected: FAIL — macro doesn't generate inventory submissions yet
 
 **Step 3: Implement the handler proc macro**
 
-`rskit-macros/src/handler.rs`:
+`modo-macros/src/handler.rs`:
 
 ```rust
 use proc_macro2::TokenStream;
@@ -425,16 +425,16 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     let method_ident = &args.method;
     let path = &args.path;
 
-    // Map method name to rskit::router::Method and axum routing function
+    // Map method name to modo::router::Method and axum routing function
     let method_str = method_ident.to_string().to_uppercase();
-    let rskit_method = match method_str.as_str() {
-        "GET" => quote! { rskit::router::Method::GET },
-        "POST" => quote! { rskit::router::Method::POST },
-        "PUT" => quote! { rskit::router::Method::PUT },
-        "PATCH" => quote! { rskit::router::Method::PATCH },
-        "DELETE" => quote! { rskit::router::Method::DELETE },
-        "HEAD" => quote! { rskit::router::Method::HEAD },
-        "OPTIONS" => quote! { rskit::router::Method::OPTIONS },
+    let modo_method = match method_str.as_str() {
+        "GET" => quote! { modo::router::Method::GET },
+        "POST" => quote! { modo::router::Method::POST },
+        "PUT" => quote! { modo::router::Method::PUT },
+        "PATCH" => quote! { modo::router::Method::PATCH },
+        "DELETE" => quote! { modo::router::Method::DELETE },
+        "HEAD" => quote! { modo::router::Method::HEAD },
+        "OPTIONS" => quote! { modo::router::Method::OPTIONS },
         _ => {
             return Err(syn::Error::new_spanned(
                 method_ident,
@@ -444,22 +444,22 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     };
 
     let axum_method = match method_str.as_str() {
-        "GET" => quote! { rskit::axum::routing::get },
-        "POST" => quote! { rskit::axum::routing::post },
-        "PUT" => quote! { rskit::axum::routing::put },
-        "PATCH" => quote! { rskit::axum::routing::patch },
-        "DELETE" => quote! { rskit::axum::routing::delete },
-        "HEAD" => quote! { rskit::axum::routing::head },
-        "OPTIONS" => quote! { rskit::axum::routing::options },
+        "GET" => quote! { modo::axum::routing::get },
+        "POST" => quote! { modo::axum::routing::post },
+        "PUT" => quote! { modo::axum::routing::put },
+        "PATCH" => quote! { modo::axum::routing::patch },
+        "DELETE" => quote! { modo::axum::routing::delete },
+        "HEAD" => quote! { modo::axum::routing::head },
+        "OPTIONS" => quote! { modo::axum::routing::options },
         _ => unreachable!(),
     };
 
     Ok(quote! {
         #func
 
-        rskit::inventory::submit! {
-            rskit::router::RouteRegistration {
-                method: #rskit_method,
+        modo::inventory::submit! {
+            modo::router::RouteRegistration {
+                method: #modo_method,
                 path: #path,
                 handler: || #axum_method(#func_name),
                 middleware: vec![],
@@ -478,21 +478,21 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add rskit-macros/src/handler.rs rskit/tests/handler_macro.rs
+git add modo-macros/src/handler.rs modo/tests/handler_macro.rs
 git commit -m "feat: implement #[handler] proc macro with inventory auto-registration"
 ```
 
 ---
 
-### Task 4: `#[rskit::main]` Proc Macro
+### Task 4: `#[modo::main]` Proc Macro
 
 **Files:**
 
-- Modify: `rskit-macros/src/main_macro.rs`
+- Modify: `modo-macros/src/main_macro.rs`
 
 **Step 1: Implement the main proc macro**
 
-`rskit-macros/src/main_macro.rs`:
+`modo-macros/src/main_macro.rs`:
 
 ```rust
 use proc_macro2::TokenStream;
@@ -507,33 +507,33 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     Ok(quote! {
         #func_vis fn main() {
-            rskit::tokio::runtime::Builder::new_multi_thread()
+            modo::tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .expect("failed to build tokio runtime")
                 .block_on(async {
                     // Initialize tracing
-                    rskit::tracing_subscriber::fmt()
+                    modo::tracing_subscriber::fmt()
                         .with_env_filter(
-                            rskit::tracing_subscriber::EnvFilter::try_from_default_env()
-                                .unwrap_or_else(|_| rskit::tracing_subscriber::EnvFilter::new("info"))
+                            modo::tracing_subscriber::EnvFilter::try_from_default_env()
+                                .unwrap_or_else(|_| modo::tracing_subscriber::EnvFilter::new("info"))
                         )
                         .init();
 
                     // Load config
-                    let config = rskit::config::AppConfig::from_env();
+                    let config = modo::config::AppConfig::from_env();
 
                     // Build app with auto-discovered routes
-                    let app = rskit::app::AppBuilder::new(config);
+                    let app = modo::app::AppBuilder::new(config);
 
                     // Run user's body — they call app.run().await
-                    let __rskit_app = app;
-                    let __rskit_result: Result<(), Box<dyn std::error::Error>> = async {
+                    let __modo_app = app;
+                    let __modo_result: Result<(), Box<dyn std::error::Error>> = async {
                         #func_body
                     }.await;
 
-                    if let Err(e) = __rskit_result {
-                        rskit::tracing::error!("Application error: {e}");
+                    if let Err(e) = __modo_result {
+                        modo::tracing::error!("Application error: {e}");
                         std::process::exit(1);
                     }
                 });
@@ -550,8 +550,8 @@ Expected: Compiles (we'll test it end-to-end in Task 9)
 **Step 3: Commit**
 
 ```bash
-git add rskit-macros/src/main_macro.rs
-git commit -m "feat: implement #[rskit::main] proc macro with tracing init and config loading"
+git add modo-macros/src/main_macro.rs
+git commit -m "feat: implement #[modo::main] proc macro with tracing init and config loading"
 ```
 
 ---
@@ -560,18 +560,18 @@ git commit -m "feat: implement #[rskit::main] proc macro with tracing init and c
 
 **Files:**
 
-- Modify: `rskit/src/config.rs`
-- Modify: `rskit/src/app.rs`
-- Modify: `rskit/src/lib.rs`
-- Test: `rskit/tests/app_builder.rs`
+- Modify: `modo/src/config.rs`
+- Modify: `modo/src/app.rs`
+- Modify: `modo/src/lib.rs`
+- Test: `modo/tests/app_builder.rs`
 
 **Step 1: Write the test**
 
-Create `rskit/tests/app_builder.rs`:
+Create `modo/tests/app_builder.rs`:
 
 ```rust
-use rskit::config::AppConfig;
-use rskit::app::AppBuilder;
+use modo::config::AppConfig;
+use modo::app::AppBuilder;
 
 #[test]
 fn test_default_config() {
@@ -596,25 +596,25 @@ Expected: FAIL
 
 **Step 3: Implement AppConfig**
 
-`rskit/src/config.rs`:
+`modo/src/config.rs`:
 
 ```rust
 use std::env;
 
 /// Application configuration, loaded from environment variables.
 ///
-/// All env vars use the `RSKIT_` prefix.
+/// All env vars use the `MODO_` prefix.
 #[derive(Debug, Clone)]
 pub struct AppConfig {
-    /// Server bind address. Env: `RSKIT_BIND_ADDRESS`. Default: `0.0.0.0:3000`
+    /// Server bind address. Env: `MODO_BIND_ADDRESS`. Default: `0.0.0.0:3000`
     pub bind_address: String,
-    /// SQLite database URL. Env: `RSKIT_DATABASE_URL`. Default: `sqlite://data.db?mode=rwc`
+    /// SQLite database URL. Env: `MODO_DATABASE_URL`. Default: `sqlite://data.db?mode=rwc`
     pub database_url: String,
-    /// Secret key for sessions/CSRF. Env: `RSKIT_SECRET_KEY`. Default: random (dev only).
+    /// Secret key for sessions/CSRF. Env: `MODO_SECRET_KEY`. Default: random (dev only).
     pub secret_key: String,
-    /// Environment. Env: `RSKIT_ENV`. Default: `development`
+    /// Environment. Env: `MODO_ENV`. Default: `development`
     pub environment: Environment,
-    /// Log level. Env: `RSKIT_LOG_LEVEL`. Default: `info`
+    /// Log level. Env: `MODO_LOG_LEVEL`. Default: `info`
     pub log_level: String,
 }
 
@@ -638,13 +638,13 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
-    /// Load config from environment variables with `RSKIT_` prefix.
+    /// Load config from environment variables with `MODO_` prefix.
     /// Falls back to defaults for unset variables.
     pub fn from_env() -> Self {
         // Load .env file if present (ignore errors)
         let _ = dotenvy::dotenv();
 
-        let environment = match env::var("RSKIT_ENV")
+        let environment = match env::var("MODO_ENV")
             .unwrap_or_else(|_| "development".to_string())
             .to_lowercase()
             .as_str()
@@ -655,13 +655,13 @@ impl AppConfig {
         };
 
         Self {
-            bind_address: env::var("RSKIT_BIND_ADDRESS")
+            bind_address: env::var("MODO_BIND_ADDRESS")
                 .unwrap_or_else(|_| "0.0.0.0:3000".to_string()),
-            database_url: env::var("RSKIT_DATABASE_URL")
+            database_url: env::var("MODO_DATABASE_URL")
                 .unwrap_or_else(|_| "sqlite://data.db?mode=rwc".to_string()),
-            secret_key: env::var("RSKIT_SECRET_KEY").unwrap_or_default(),
+            secret_key: env::var("MODO_SECRET_KEY").unwrap_or_default(),
             environment,
-            log_level: env::var("RSKIT_LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
+            log_level: env::var("MODO_LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
         }
     }
 }
@@ -669,7 +669,7 @@ impl AppConfig {
 
 **Step 4: Implement AppBuilder**
 
-`rskit/src/app.rs`:
+`modo/src/app.rs`:
 
 ```rust
 use crate::config::AppConfig;
@@ -711,7 +711,7 @@ impl ServiceRegistry {
     }
 }
 
-/// Builder for constructing and running an rskit application.
+/// Builder for constructing and running an modo application.
 pub struct AppBuilder {
     config: AppConfig,
     services: HashMap<TypeId, Arc<dyn Any + Send + Sync>>,
@@ -812,7 +812,7 @@ async fn shutdown_signal() {
 
 **Step 5: Update router.rs to accept state**
 
-Replace the `middleware` field type in `rskit/src/router.rs` to avoid the complex generic. Simplify for Phase 1 (no per-handler middleware yet):
+Replace the `middleware` field type in `modo/src/router.rs` to avoid the complex generic. Simplify for Phase 1 (no per-handler middleware yet):
 
 ```rust
 use axum::routing::MethodRouter;
@@ -842,10 +842,10 @@ inventory::collect!(RouteRegistration);
 
 **Step 6: Update lib.rs re-exports**
 
-`rskit/src/lib.rs`:
+`modo/src/lib.rs`:
 
 ```rust
-pub use rskit_macros::{handler, main};
+pub use modo_macros::{handler, main};
 
 pub mod app;
 pub mod config;
@@ -870,42 +870,42 @@ Expected: PASS
 **Step 8: Commit**
 
 ```bash
-git add rskit/src/config.rs rskit/src/app.rs rskit/src/router.rs rskit/src/lib.rs rskit/tests/app_builder.rs
+git add modo/src/config.rs modo/src/app.rs modo/src/router.rs modo/src/lib.rs modo/tests/app_builder.rs
 git commit -m "feat: add AppConfig, AppBuilder, ServiceRegistry with SQLite WAL mode"
 ```
 
 ---
 
-### Task 6: RskitError with Content Negotiation
+### Task 6: Error with Content Negotiation
 
 **Files:**
 
-- Modify: `rskit/src/error.rs`
-- Test: `rskit/tests/error_handling.rs`
+- Modify: `modo/src/error.rs`
+- Test: `modo/tests/error_handling.rs`
 
 **Step 1: Write the test**
 
-Create `rskit/tests/error_handling.rs`:
+Create `modo/tests/error_handling.rs`:
 
 ```rust
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use rskit::error::RskitError;
+use modo::error::Error;
 
 #[test]
 fn test_error_status_codes() {
-    assert_eq!(RskitError::NotFound.status_code(), StatusCode::NOT_FOUND);
-    assert_eq!(RskitError::Unauthorized.status_code(), StatusCode::UNAUTHORIZED);
-    assert_eq!(RskitError::Forbidden.status_code(), StatusCode::FORBIDDEN);
+    assert_eq!(Error::NotFound.status_code(), StatusCode::NOT_FOUND);
+    assert_eq!(Error::Unauthorized.status_code(), StatusCode::UNAUTHORIZED);
+    assert_eq!(Error::Forbidden.status_code(), StatusCode::FORBIDDEN);
     assert_eq!(
-        RskitError::BadRequest("test".into()).status_code(),
+        Error::BadRequest("test".into()).status_code(),
         StatusCode::BAD_REQUEST
     );
 }
 
 #[tokio::test]
 async fn test_error_json_response() {
-    let err = RskitError::NotFound;
+    let err = Error::NotFound;
     let response = err.into_response();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
@@ -916,9 +916,9 @@ async fn test_error_json_response() {
 Run: `cargo test --test error_handling`
 Expected: FAIL
 
-**Step 3: Implement RskitError**
+**Step 3: Implement Error**
 
-`rskit/src/error.rs`:
+`modo/src/error.rs`:
 
 ```rust
 use axum::http::StatusCode;
@@ -930,7 +930,7 @@ use serde_json::json;
 ///
 /// Automatically converts to appropriate HTTP responses with content negotiation.
 #[derive(Debug, thiserror::Error)]
-pub enum RskitError {
+pub enum Error {
     #[error("Not found")]
     NotFound,
 
@@ -953,7 +953,7 @@ pub enum RskitError {
     Database(#[from] sea_orm::DbErr),
 }
 
-impl RskitError {
+impl Error {
     pub fn status_code(&self) -> StatusCode {
         match self {
             Self::NotFound => StatusCode::NOT_FOUND,
@@ -970,7 +970,7 @@ impl RskitError {
     }
 }
 
-impl IntoResponse for RskitError {
+impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let status = self.status_code();
         let message = self.to_string();
@@ -985,8 +985,8 @@ impl IntoResponse for RskitError {
     }
 }
 
-// Allow `?` to convert anyhow::Error into RskitError
-impl From<anyhow::Error> for RskitError {
+// Allow `?` to convert anyhow::Error into Error
+impl From<anyhow::Error> for Error {
     fn from(err: anyhow::Error) -> Self {
         Self::Internal(err)
     }
@@ -1001,8 +1001,8 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add rskit/src/error.rs rskit/tests/error_handling.rs
-git commit -m "feat: add RskitError with status codes and JSON IntoResponse"
+git add modo/src/error.rs modo/tests/error_handling.rs
+git commit -m "feat: add Error with status codes and JSON IntoResponse"
 ```
 
 ---
@@ -1011,15 +1011,15 @@ git commit -m "feat: add RskitError with status codes and JSON IntoResponse"
 
 **Files:**
 
-- Modify: `rskit/src/extractors/db.rs`
-- Test: `rskit/tests/db_extractor.rs`
+- Modify: `modo/src/extractors/db.rs`
+- Test: `modo/tests/db_extractor.rs`
 
 **Step 1: Write the test**
 
-Create `rskit/tests/db_extractor.rs`:
+Create `modo/tests/db_extractor.rs`:
 
 ```rust
-use rskit::extractors::db::Db;
+use modo::extractors::db::Db;
 
 #[test]
 fn test_db_extractor_type_exists() {
@@ -1039,11 +1039,11 @@ Expected: FAIL
 
 **Step 3: Implement Db extractor**
 
-`rskit/src/extractors/db.rs`:
+`modo/src/extractors/db.rs`:
 
 ````rust
 use crate::app::AppState;
-use crate::error::RskitError;
+use crate::error::Error;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use sea_orm::DatabaseConnection;
@@ -1053,7 +1053,7 @@ use sea_orm::DatabaseConnection;
 /// # Usage
 /// ```rust,ignore
 /// #[handler(GET, "/users")]
-/// async fn list_users(Db(db): Db) -> Result<Json<Vec<User>>, RskitError> {
+/// async fn list_users(Db(db): Db) -> Result<Json<Vec<User>>, Error> {
 ///     // use db...
 /// }
 /// ```
@@ -1061,7 +1061,7 @@ use sea_orm::DatabaseConnection;
 pub struct Db(pub DatabaseConnection);
 
 impl FromRequestParts<AppState> for Db {
-    type Rejection = RskitError;
+    type Rejection = Error;
 
     async fn from_request_parts(
         _parts: &mut Parts,
@@ -1071,7 +1071,7 @@ impl FromRequestParts<AppState> for Db {
             .db
             .clone()
             .map(Db)
-            .ok_or_else(|| RskitError::internal("Database not configured"))
+            .ok_or_else(|| Error::internal("Database not configured"))
     }
 }
 ````
@@ -1084,7 +1084,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add rskit/src/extractors/db.rs rskit/tests/db_extractor.rs
+git add modo/src/extractors/db.rs modo/tests/db_extractor.rs
 git commit -m "feat: add Db extractor for database connection from AppState"
 ```
 
@@ -1094,15 +1094,15 @@ git commit -m "feat: add Db extractor for database connection from AppState"
 
 **Files:**
 
-- Modify: `rskit/src/extractors/service.rs`
-- Test: `rskit/tests/service_extractor.rs`
+- Modify: `modo/src/extractors/service.rs`
+- Test: `modo/tests/service_extractor.rs`
 
 **Step 1: Write the test**
 
-Create `rskit/tests/service_extractor.rs`:
+Create `modo/tests/service_extractor.rs`:
 
 ```rust
-use rskit::extractors::service::Service;
+use modo::extractors::service::Service;
 
 struct MyService {
     value: String,
@@ -1124,11 +1124,11 @@ Expected: FAIL
 
 **Step 3: Implement Service<T> extractor**
 
-`rskit/src/extractors/service.rs`:
+`modo/src/extractors/service.rs`:
 
 ````rust
 use crate::app::AppState;
-use crate::error::RskitError;
+use crate::error::Error;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use std::ops::Deref;
@@ -1141,7 +1141,7 @@ use std::sync::Arc;
 /// # Usage
 /// ```rust,ignore
 /// #[handler(GET, "/send")]
-/// async fn send_email(mailer: Service<Mailer>) -> Result<(), RskitError> {
+/// async fn send_email(mailer: Service<Mailer>) -> Result<(), Error> {
 ///     mailer.send("hello").await
 /// }
 /// ```
@@ -1157,7 +1157,7 @@ impl<T: Send + Sync + 'static> Deref for Service<T> {
 }
 
 impl<T: Send + Sync + 'static> FromRequestParts<AppState> for Service<T> {
-    type Rejection = RskitError;
+    type Rejection = Error;
 
     async fn from_request_parts(
         _parts: &mut Parts,
@@ -1168,7 +1168,7 @@ impl<T: Send + Sync + 'static> FromRequestParts<AppState> for Service<T> {
             .get::<T>()
             .map(Service)
             .ok_or_else(|| {
-                RskitError::internal(format!(
+                Error::internal(format!(
                     "Service not registered: {}",
                     std::any::type_name::<T>()
                 ))
@@ -1185,24 +1185,24 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add rskit/src/extractors/service.rs rskit/tests/service_extractor.rs
+git add modo/src/extractors/service.rs modo/tests/service_extractor.rs
 git commit -m "feat: add Service<T> extractor for dependency injection"
 ```
 
 ---
 
-### Task 9: Update `#[rskit::main]` and Handler Macros for AppState
+### Task 9: Update `#[modo::main]` and Handler Macros for AppState
 
 **Files:**
 
-- Modify: `rskit-macros/src/main_macro.rs`
-- Modify: `rskit-macros/src/handler.rs`
+- Modify: `modo-macros/src/main_macro.rs`
+- Modify: `modo-macros/src/handler.rs`
 
-The `#[rskit::main]` macro needs to pass `AppBuilder` to the user's function body so they can call `.service()` and `.run()`. The handler macro needs to generate code that matches the `AppState` type.
+The `#[modo::main]` macro needs to pass `AppBuilder` to the user's function body so they can call `.service()` and `.run()`. The handler macro needs to generate code that matches the `AppState` type.
 
 **Step 1: Refine the main macro**
 
-`rskit-macros/src/main_macro.rs`:
+`modo-macros/src/main_macro.rs`:
 
 ```rust
 use proc_macro2::TokenStream;
@@ -1217,32 +1217,32 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     Ok(quote! {
         fn main() {
-            rskit::tokio::runtime::Builder::new_multi_thread()
+            modo::tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .expect("failed to build tokio runtime")
                 .block_on(async {
                     // Initialize tracing
-                    rskit::tracing_subscriber::fmt()
+                    modo::tracing_subscriber::fmt()
                         .with_env_filter(
-                            rskit::tracing_subscriber::EnvFilter::try_from_default_env()
-                                .unwrap_or_else(|_| rskit::tracing_subscriber::EnvFilter::new("info"))
+                            modo::tracing_subscriber::EnvFilter::try_from_default_env()
+                                .unwrap_or_else(|_| modo::tracing_subscriber::EnvFilter::new("info"))
                         )
                         .init();
 
                     // Load config
-                    let config = rskit::config::AppConfig::from_env();
+                    let config = modo::config::AppConfig::from_env();
 
                     // Build app — user's code gets `app` binding
-                    let app = rskit::app::AppBuilder::new(config);
+                    let app = modo::app::AppBuilder::new(config);
 
-                    let __rskit_result: std::result::Result<(), Box<dyn std::error::Error>> = {
+                    let __modo_result: std::result::Result<(), Box<dyn std::error::Error>> = {
                         let app = app;
                         async move #func_body
                     }.await;
 
-                    if let Err(e) = __rskit_result {
-                        rskit::tracing::error!("Application error: {e}");
+                    if let Err(e) = __modo_result {
+                        modo::tracing::error!("Application error: {e}");
                         std::process::exit(1);
                     }
                 });
@@ -1259,8 +1259,8 @@ Expected: Compiles
 **Step 3: Commit**
 
 ```bash
-git add rskit-macros/src/main_macro.rs rskit-macros/src/handler.rs
-git commit -m "refine: update #[rskit::main] to pass AppBuilder to user code"
+git add modo-macros/src/main_macro.rs modo-macros/src/handler.rs
+git commit -m "refine: update #[modo::main] to pass AppBuilder to user code"
 ```
 
 ---
@@ -1269,32 +1269,32 @@ git commit -m "refine: update #[rskit::main] to pass AppBuilder to user code"
 
 **Files:**
 
-- Create: `rskit/examples/hello.rs`
-- Create: `rskit/tests/integration.rs`
+- Create: `modo/examples/hello.rs`
+- Create: `modo/tests/integration.rs`
 
 **Step 1: Create the hello example**
 
-`rskit/examples/hello.rs`:
+`modo/examples/hello.rs`:
 
 ```rust
-use rskit::error::RskitError;
+use modo::error::Error;
 
-#[rskit::handler(GET, "/")]
+#[modo::handler(GET, "/")]
 async fn index() -> &'static str {
-    "Hello rskit!"
+    "Hello modo!"
 }
 
-#[rskit::handler(GET, "/health")]
+#[modo::handler(GET, "/health")]
 async fn health() -> &'static str {
     "ok"
 }
 
-#[rskit::handler(GET, "/error")]
-async fn error_example() -> Result<&'static str, RskitError> {
-    Err(RskitError::NotFound)
+#[modo::handler(GET, "/error")]
+async fn error_example() -> Result<&'static str, Error> {
+    Err(Error::NotFound)
 }
 
-#[rskit::main]
+#[modo::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.run().await
 }
@@ -1307,32 +1307,32 @@ Expected: Compiles successfully
 
 **Step 3: Create the integration test**
 
-`rskit/tests/integration.rs`:
+`modo/tests/integration.rs`:
 
 ```rust
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use rskit::app::{AppBuilder, AppState};
-use rskit::error::RskitError;
-use rskit::router::RouteRegistration;
+use modo::app::{AppBuilder, AppState};
+use modo::error::Error;
+use modo::router::RouteRegistration;
 use tower::ServiceExt;
 
 // Register test handlers
-#[rskit::handler(GET, "/test")]
+#[modo::handler(GET, "/test")]
 async fn test_handler() -> &'static str {
     "test response"
 }
 
-#[rskit::handler(GET, "/test/error")]
-async fn test_error() -> Result<&'static str, RskitError> {
-    Err(RskitError::NotFound)
+#[modo::handler(GET, "/test/error")]
+async fn test_error() -> Result<&'static str, Error> {
+    Err(Error::NotFound)
 }
 
 fn build_test_router() -> axum::Router {
     let state = AppState {
         db: None,
         services: Default::default(),
-        config: rskit::config::AppConfig::default(),
+        config: modo::config::AppConfig::default(),
     };
 
     let mut router = axum::Router::new();
@@ -1411,14 +1411,14 @@ Expected: All tests PASS
 
 **Step 5: Run the hello example manually (smoke test)**
 
-Run: `RSKIT_DATABASE_URL="" cargo run --example hello`
+Run: `MODO_DATABASE_URL="" cargo run --example hello`
 Expected: Server starts, logs "Listening on 0.0.0.0:3000". Ctrl+C stops it gracefully.
 
 In another terminal:
 
 ```bash
 curl http://localhost:3000/
-# Expected: Hello rskit!
+# Expected: Hello modo!
 
 curl http://localhost:3000/health
 # Expected: ok
@@ -1430,7 +1430,7 @@ curl http://localhost:3000/error
 **Step 6: Commit**
 
 ```bash
-git add rskit/examples/hello.rs rskit/tests/integration.rs
+git add modo/examples/hello.rs modo/tests/integration.rs
 git commit -m "feat: add hello example and integration tests for Phase 1 milestone"
 ```
 
@@ -1457,7 +1457,7 @@ git commit -m "feat: add hello example and integration tests for Phase 1 milesto
 **Step 2: Create CLAUDE.md**
 
 ```markdown
-# rskit
+# modo
 
 Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-time magic.
 
@@ -1470,9 +1470,9 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 
 ## Architecture
 
-- `rskit/` — main library crate
-- `rskit-macros/` — proc macro crate (handler, main)
-- Design doc: `docs/plans/2026-03-04-rskit-architecture-design.md`
+- `modo/` — main library crate
+- `modo-macros/` — proc macro crate (handler, main)
+- Design doc: `docs/plans/2026-03-04-modo-architecture-design.md`
 
 ## Commands
 
@@ -1483,12 +1483,12 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 
 ## Conventions
 
-- Handlers declared with `#[rskit::handler(METHOD, "/path")]`
-- Entry point with `#[rskit::main]`
+- Handlers declared with `#[modo::handler(METHOD, "/path")]`
+- Entry point with `#[modo::main]`
 - Routes auto-discovered via `inventory` crate
 - DB extractor: `Db(db): Db`
 - Service extractor: `Service<MyType>`
-- Errors: return `Result<T, RskitError>`
+- Errors: return `Result<T, Error>`
 ```
 
 **Step 3: Commit**
@@ -1504,12 +1504,12 @@ git commit -m "chore: add CLAUDE.md and .gitignore"
 
 | #   | Task                   | What it delivers                                 |
 | --- | ---------------------- | ------------------------------------------------ |
-| 1   | Workspace scaffolding  | Cargo workspace with rskit + rskit-macros        |
+| 1   | Workspace scaffolding  | Cargo workspace with modo + modo-macros        |
 | 2   | RouteRegistration      | Core type for inventory-based route collection   |
 | 3   | `#[handler]` macro     | Proc macro that generates inventory submissions  |
-| 4   | `#[rskit::main]` macro | Entry point that wires everything together       |
+| 4   | `#[modo::main]` macro | Entry point that wires everything together       |
 | 5   | AppConfig + AppBuilder | Config loading, service registry, server startup |
-| 6   | RskitError             | Error enum with status codes and JSON responses  |
+| 6   | Error             | Error enum with status codes and JSON responses  |
 | 7   | Db extractor           | Database connection from AppState                |
 | 8   | Service<T> extractor   | DI via type-safe extractor                       |
 | 9   | Macro refinement       | Ensure macros work with AppState                 |
