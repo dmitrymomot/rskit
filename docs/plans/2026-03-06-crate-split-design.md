@@ -118,3 +118,27 @@ Extension crates integrate via the existing service registry + middleware + extr
 4. Extract `modo-templates`
 5. Extract `modo-csrf`
 6. Clean up core — remove all feature flags for extracted modules
+
+## Example Apps
+
+Build after each extraction step to validate the framework works end-to-end. Each example lives in `examples/<name>/` as a standalone binary with its own `Cargo.toml` (workspace member).
+
+| # | Example | Validates | Built after |
+|---|---|---|---|
+| 1 | `hello` | Routes, error handling, core only | Step 6 (core cleanup) |
+| 2 | `todo-api` | JSON REST CRUD, DB entities, migrations, `Db` extractor, `Service<T>` | Step 6 (core cleanup) |
+| 3 | `blog` | Templates, flash messages, CSRF forms, HTML rendering | Steps 4-5 (templates + csrf) |
+| 4 | `auth-app` | Signup/login/logout, sessions, protected routes, password hashing | Steps 1-2 (session + auth) |
+| 5 | `saas-starter` | Full stack: auth + DB + jobs + templates + CSRF — the "real app" smoke test | Step 5 (all extracted) |
+
+### Example Descriptions
+
+**hello** — Bare minimum. A few GET routes, a JSON error route. Proves core works standalone with zero extensions.
+
+**todo-api** — JSON REST API. CRUD for todos with SQLite. Entity-first migrations. No auth, no templates. Validates that core DB + extractors + error handling work without any extension crate.
+
+**blog** — Server-rendered blog with Askama templates. Create/edit/delete posts via HTML forms with CSRF protection. Flash messages for success/error feedback. Validates modo-templates + modo-csrf integration.
+
+**auth-app** — Login/signup/logout with session-based auth. Protected dashboard route. Session listing and revocation. Validates modo-session + modo-auth working together.
+
+**saas-starter** — Realistic micro-SaaS skeleton. User auth, a DB-backed resource (e.g., projects), background jobs (e.g., email on signup), server-rendered UI, CSRF. The ultimate integration test — if this works cleanly, the framework is ready.
