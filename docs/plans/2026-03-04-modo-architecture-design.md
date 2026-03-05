@@ -152,7 +152,7 @@ impl AppBuilder {
 
 1. `#[modo::main]` expands, collects all auto-discovered routes/jobs/modules via `inventory`
 2. User calls `.service()`, `.layer()`, etc.
-3. `.run()`: init DB (WAL mode) -> run migrations -> build Router from inventory -> apply middleware -> start job workers -> execute startup hooks -> serve with graceful shutdown
+3. `.run()`: init DB (WAL mode) -> schema sync (framework + user entities) -> run pending migrations -> build Router from inventory -> apply middleware -> start job workers -> execute startup hooks -> serve with graceful shutdown
 
 ### Configuration
 
@@ -348,9 +348,20 @@ where F: FnOnce(DatabaseTransaction) -> Fut, Fut: Future<Output = Result<T>>
 }
 ```
 
-### Migrations
+### Migrations — Entity-First with Auto-Sync
 
-SeaORM v2 auto-sync in development, explicit migrations in production.
+**Full design:** `docs/plans/2026-03-05-entity-first-migrations-design.md`
+
+**Approach:** Entity-first — define Rust structs with `#[modo::entity]`, framework auto-syncs schema on startup. Hybrid escape hatches via `#[modo::migration]` for destructive changes and data migrations.
+
+**Key points:**
+- `#[modo::entity]` replaces `DeriveEntityModel` — generates SeaORM derives, relations, indices, and `inventory` registration in one macro
+- Extended attributes beyond SeaORM: `on_delete`, `on_update`, composite `index(columns = [...])`, `renamed_from`
+- SeaORM v2 `schema-sync` runs on every startup (all environments) — addition-only, never drops tables/columns
+- Framework entities (`_modo_sessions`, `_modo_jobs`, etc.) merge with user entities in a single sync pass
+- Framework tables are `pub` and queryable but framework-owned
+- `#[modo::migration(version = N)]` for data migrations, auto-discovered via `inventory`
+- Migration history tracked in `_modo_migrations` table
 
 ---
 
