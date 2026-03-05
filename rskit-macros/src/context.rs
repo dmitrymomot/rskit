@@ -77,6 +77,13 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             session_field = Some(field_name.clone());
         }
 
+        if !has_base && !has_user && !has_session {
+            return Err(syn::Error::new_spanned(
+                field_name,
+                "#[rskit::context] structs may only contain #[base], #[user], and #[session] fields",
+            ));
+        }
+
         // Strip #[base], #[user], and #[session] attributes from output
         let clean_attrs: Vec<_> = field
             .attrs
