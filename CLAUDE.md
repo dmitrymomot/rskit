@@ -63,3 +63,5 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 - `cookie` crate needs `key-expansion` feature for `Key::derive_from()`
 - Always run `just fmt` before `just check` — format diffs fail the check early
 - When adding fields to `AppState`, update `rskit/tests/integration.rs` (constructs AppState directly)
+- `-D warnings` means dead code is a build error — remove unused code, don't just make it `pub(crate)`
+- Clippy enforces `collapsible_if` — collapse nested `if`/`if let` with `&&`
