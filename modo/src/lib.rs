@@ -17,6 +17,7 @@ pub use axum_extra;
 pub use chrono;
 pub use inventory;
 pub use sea_orm;
+#[cfg(feature = "sentry")]
 pub use sentry;
 pub use serde_json;
 pub use tokio;

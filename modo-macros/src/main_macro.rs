@@ -54,6 +54,7 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
                     let stdout_filter = modo::tracing_subscriber::EnvFilter::try_from_default_env()
                         .unwrap_or_else(|_| modo::tracing_subscriber::EnvFilter::new(&config.log_level));
 
+                    #[cfg(feature = "sentry")]
                     let _sentry_guard = config.sentry_dsn.as_deref().map(|dsn| {
                         modo::sentry::init((dsn, modo::sentry::ClientOptions {
                             traces_sample_rate: match config.environment {
@@ -70,6 +71,7 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
                         }))
                     });
 
+                    #[cfg(feature = "sentry")]
                     if _sentry_guard.is_some() {
                         use modo::tracing_subscriber::prelude::*;
                         let sentry_filter = modo::tracing_subscriber::EnvFilter::new(&config.sentry_log_level);
@@ -79,6 +81,13 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
                             .init();
                         modo::tracing::info!("Sentry initialized");
                     } else {
+                        modo::tracing_subscriber::fmt()
+                            .with_env_filter(stdout_filter)
+                            .init();
+                    }
+
+                    #[cfg(not(feature = "sentry"))]
+                    {
                         modo::tracing_subscriber::fmt()
                             .with_env_filter(stdout_filter)
                             .init();

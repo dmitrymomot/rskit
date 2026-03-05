@@ -8,7 +8,9 @@ pub struct AppConfig {
     pub secret_key: String,
     pub environment: Environment,
     pub log_level: String,
+    #[cfg(feature = "sentry")]
     pub sentry_dsn: Option<String>,
+    #[cfg(feature = "sentry")]
     pub sentry_log_level: String,
     pub session_ttl: Duration,
     pub session_cookie_name: String,
@@ -36,7 +38,9 @@ impl Default for AppConfig {
             secret_key: String::new(),
             environment: Environment::Development,
             log_level: "info".to_string(),
+            #[cfg(feature = "sentry")]
             sentry_dsn: None,
+            #[cfg(feature = "sentry")]
             sentry_log_level: "error".to_string(),
             session_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
             session_cookie_name: "_session".to_string(),
@@ -73,7 +77,9 @@ impl AppConfig {
             secret_key: env::var("MODO_SECRET_KEY").unwrap_or_default(),
             environment,
             log_level: env::var("MODO_LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
+            #[cfg(feature = "sentry")]
             sentry_dsn: env::var("MODO_SENTRY_DSN").ok().filter(|s| !s.is_empty()),
+            #[cfg(feature = "sentry")]
             sentry_log_level: env::var("MODO_SENTRY_LOG_LEVEL")
                 .unwrap_or_else(|_| "error".to_string()),
             session_ttl: Duration::from_secs({

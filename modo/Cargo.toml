@@ -31,7 +31,7 @@ anyhow = "1"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
-sentry = { version = "0.46", features = ["tracing"] }
+sentry = { version = "0.46", features = ["tracing"], optional = true }
 
 # Config
 dotenvy = "0.15"
@@ -59,6 +59,7 @@ cron = { version = "0.15", optional = true }
 [features]
 default = ["jobs"]
 jobs = ["dep:tokio-util", "dep:cron"]
+sentry = ["dep:sentry"]
 templates = ["dep:askama", "dep:askama_web"]
 
 [dev-dependencies]
