@@ -18,6 +18,7 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 mod context;
 mod handler;
+mod job;
 mod main_macro;
 mod middleware;
 mod module;
@@ -34,6 +35,14 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn context(attr: TokenStream, item: TokenStream) -> TokenStream {
     context::expand(attr.into(), item.into())
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
+}
+
+/// Attribute macro for declaring background jobs with auto-registration.
+#[proc_macro_attribute]
+pub fn job(attr: TokenStream, item: TokenStream) -> TokenStream {
+    job::expand(attr.into(), item.into())
         .unwrap_or_else(|e| e.to_compile_error())
         .into()
 }
