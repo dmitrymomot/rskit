@@ -100,21 +100,21 @@ fn extract_ip(
     // Connection from trusted proxy (or no ConnectInfo / no trusted_proxies configured)
     // — parse proxy headers
 
-    // X-Forwarded-For: client, proxy1, proxy2 — take first
+    // X-Forwarded-For: client, proxy1, proxy2 — take first valid IP
     if let Some(forwarded) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok())
         && let Some(first) = forwarded.split(',').next()
     {
-        let ip = first.trim();
-        if !ip.is_empty() {
-            return ip.to_string();
+        let candidate = first.trim();
+        if candidate.parse::<IpAddr>().is_ok() {
+            return candidate.to_string();
         }
     }
 
     // X-Real-IP: single IP from reverse proxy
     if let Some(real_ip) = headers.get("x-real-ip").and_then(|v| v.to_str().ok()) {
-        let ip = real_ip.trim();
-        if !ip.is_empty() {
-            return ip.to_string();
+        let candidate = real_ip.trim();
+        if candidate.parse::<IpAddr>().is_ok() {
+            return candidate.to_string();
         }
     }
 

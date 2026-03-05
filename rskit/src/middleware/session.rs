@@ -43,10 +43,10 @@ pub async fn session(
         .map(|c| SessionId::from(c.value().to_string()));
     let had_cookie = session_id.is_some();
 
-    // Load session from store
+    // Load session from store, filtering expired records
     let current_session = if let Some(ref id) = session_id {
         match session_store.read(id).await {
-            Ok(session) => session,
+            Ok(session) => session.filter(|s| s.expires_at > Utc::now()),
             Err(e) => {
                 tracing::error!("Failed to read session: {e}");
                 None
@@ -119,19 +119,35 @@ pub async fn session(
             ));
             jar.add(cookie)
         }
-        SessionAction::Remove => jar.remove(Cookie::from(cookie_name.to_string())),
+        SessionAction::Remove => {
+            let mut c = Cookie::new(cookie_name.clone(), "");
+            c.set_path("/");
+            jar.remove(c)
+        }
         SessionAction::None => {
-            // Touch session if interval elapsed
-            if should_touch
-                && let Some(ref session) = current_session
-                && let Err(e) = session_store.touch(&session.id).await
-            {
-                tracing::error!("Failed to touch session: {e}");
+            // Touch session if interval elapsed, re-issue cookie with fresh max_age
+            if should_touch && let Some(ref session) = current_session {
+                if let Err(e) = session_store.touch(&session.id).await {
+                    tracing::error!("Failed to touch session: {e}");
+                } else {
+                    // Re-issue cookie with fresh max_age so it doesn't expire
+                    let mut cookie = Cookie::new(cookie_name.clone(), session.id.to_string());
+                    cookie.set_http_only(true);
+                    cookie.set_same_site(cookie::SameSite::Lax);
+                    cookie.set_path("/");
+                    cookie.set_secure(state.config.environment == Environment::Production);
+                    cookie.set_max_age(cookie::time::Duration::seconds(
+                        state.config.session_ttl.as_secs() as i64,
+                    ));
+                    return (jar.add(cookie), response).into_response();
+                }
             }
 
             // Remove stale cookie if session_id was in cookie but session not found
             if had_cookie && current_session.is_none() {
-                jar.remove(Cookie::from(cookie_name.to_string()))
+                let mut c = Cookie::new(cookie_name.clone(), "");
+                c.set_path("/");
+                jar.remove(c)
             } else {
                 jar
             }

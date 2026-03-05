@@ -143,6 +143,9 @@ impl SessionManager {
             .ok_or_else(|| RskitError::internal("no active session"))?;
 
         let mut data = session.data.clone();
+        if !data.is_object() {
+            data = serde_json::Value::Object(Default::default());
+        }
         if let serde_json::Value::Object(ref mut map) = data {
             map.insert(
                 key.to_string(),
@@ -162,6 +165,9 @@ impl SessionManager {
             .ok_or_else(|| RskitError::internal("no active session"))?;
 
         let mut data = session.data.clone();
+        if !data.is_object() {
+            data = serde_json::Value::Object(Default::default());
+        }
         if let serde_json::Value::Object(ref mut map) = data {
             map.remove(key);
         }
