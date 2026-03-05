@@ -22,6 +22,8 @@ fn build_test_router() -> axum::Router {
         config: modo::config::AppConfig::default(),
         cookie_key: axum_extra::extract::cookie::Key::generate(),
         session_store: None,
+        #[cfg(feature = "jobs")]
+        job_queue: None,
     };
 
     let mut router = axum::Router::new();
@@ -366,6 +368,8 @@ mod session_integration {
             config,
             cookie_key: axum_extra::extract::cookie::Key::generate(),
             session_store: Some(store),
+            #[cfg(feature = "jobs")]
+            job_queue: None,
         };
 
         let router = axum::Router::new()
@@ -602,6 +606,8 @@ mod session_integration {
             config,
             cookie_key: axum_extra::extract::cookie::Key::generate(),
             session_store: Some(store),
+            #[cfg(feature = "jobs")]
+            job_queue: None,
         };
 
         // We need to create an encrypted cookie value. To do this, we'll
