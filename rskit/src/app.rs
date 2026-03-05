@@ -39,6 +39,14 @@ impl ServiceRegistry {
         }
     }
 
+    /// Insert a service into the registry (builder pattern, before sharing).
+    pub fn with<T: Send + Sync + 'static>(mut self, svc: T) -> Self {
+        Arc::get_mut(&mut self.services)
+            .expect("ServiceRegistry::with called after Arc was shared")
+            .insert(TypeId::of::<T>(), Arc::new(svc));
+        self
+    }
+
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
         self.services
             .get(&TypeId::of::<T>())
