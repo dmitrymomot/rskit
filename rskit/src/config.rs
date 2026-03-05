@@ -68,23 +68,33 @@ impl AppConfig {
             sentry_dsn: env::var("RSKIT_SENTRY_DSN").ok().filter(|s| !s.is_empty()),
             sentry_log_level: env::var("RSKIT_SENTRY_LOG_LEVEL")
                 .unwrap_or_else(|_| "error".to_string()),
-            session_ttl: Duration::from_secs(
-                env::var("RSKIT_SESSION_TTL")
-                    .ok()
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or(30 * 24 * 60 * 60),
-            ),
+            session_ttl: Duration::from_secs({
+                let default = 30 * 24 * 60 * 60;
+                match env::var("RSKIT_SESSION_TTL") {
+                    Ok(v) => v.parse().unwrap_or_else(|e| {
+                        tracing::warn!("Invalid RSKIT_SESSION_TTL='{v}': {e}, using default");
+                        default
+                    }),
+                    Err(_) => default,
+                }
+            }),
             session_cookie_name: env::var("RSKIT_SESSION_COOKIE_NAME")
                 .unwrap_or_else(|_| "_rskit_session".to_string()),
             session_validate_fingerprint: env::var("RSKIT_SESSION_VALIDATE_FINGERPRINT")
                 .map(|v| v != "false" && v != "0")
                 .unwrap_or(true),
-            session_touch_interval: Duration::from_secs(
-                env::var("RSKIT_SESSION_TOUCH_INTERVAL")
-                    .ok()
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or(5 * 60),
-            ),
+            session_touch_interval: Duration::from_secs({
+                let default = 5 * 60;
+                match env::var("RSKIT_SESSION_TOUCH_INTERVAL") {
+                    Ok(v) => v.parse().unwrap_or_else(|e| {
+                        tracing::warn!(
+                            "Invalid RSKIT_SESSION_TOUCH_INTERVAL='{v}': {e}, using default"
+                        );
+                        default
+                    }),
+                    Err(_) => default,
+                }
+            }),
             trusted_proxies: env::var("RSKIT_TRUSTED_PROXIES")
                 .unwrap_or_default()
                 .split(',')
@@ -93,6 +103,9 @@ impl AppConfig {
                     let s = s.trim();
                     s.parse::<ipnet::IpNet>()
                         .or_else(|_| s.parse::<std::net::IpAddr>().map(ipnet::IpNet::from))
+                        .map_err(|e| {
+                            tracing::warn!("Ignoring invalid trusted_proxies entry '{s}': {e}");
+                        })
                         .ok()
                 })
                 .collect(),
