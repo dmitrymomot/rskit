@@ -48,13 +48,14 @@ impl SessionManager {
     /// Destroys any existing session first (fixation prevention).
     /// The session cookie is set automatically on the response.
     pub async fn authenticate(&mut self, user_id: &str) -> Result<(), RskitError> {
-        if let Some(ref session) = self.state.current_session
-            && let Err(e) = self.state.store.destroy(&session.id).await
-        {
-            tracing::error!(
-                session_id = session.id.as_str(),
-                "Failed to destroy previous session: {e}"
-            );
+        if let Some(ref session) = self.state.current_session {
+            self.state.store.destroy(&session.id).await.map_err(|e| {
+                tracing::error!(
+                    session_id = session.id.as_str(),
+                    "Failed to destroy previous session during authentication: {e}"
+                );
+                RskitError::internal(format!("failed to invalidate previous session: {e}"))
+            })?;
         }
 
         let session_id = self.state.store.create(user_id, &self.state.meta).await?;
@@ -78,13 +79,14 @@ impl SessionManager {
         user_id: &str,
         data: serde_json::Value,
     ) -> Result<(), RskitError> {
-        if let Some(ref session) = self.state.current_session
-            && let Err(e) = self.state.store.destroy(&session.id).await
-        {
-            tracing::error!(
-                session_id = session.id.as_str(),
-                "Failed to destroy previous session: {e}"
-            );
+        if let Some(ref session) = self.state.current_session {
+            self.state.store.destroy(&session.id).await.map_err(|e| {
+                tracing::error!(
+                    session_id = session.id.as_str(),
+                    "Failed to destroy previous session during authentication: {e}"
+                );
+                RskitError::internal(format!("failed to invalidate previous session: {e}"))
+            })?;
         }
 
         let session_id = self
@@ -208,7 +210,7 @@ impl SessionManager {
             .and_then(|v| {
                 serde_json::from_value(v.clone())
                     .map_err(|e| {
-                        tracing::debug!(key, error = %e, "Failed to deserialize session data key");
+                        tracing::warn!(key, error = %e, "Failed to deserialize session data key — possible type mismatch");
                     })
                     .ok()
             })
@@ -337,11 +339,31 @@ mod tests {
 
         async fn create_with(
             &self,
-            _user_id: &str,
-            _meta: &SessionMeta,
-            _data: serde_json::Value,
+            user_id: &str,
+            meta: &SessionMeta,
+            data: serde_json::Value,
         ) -> Result<SessionId, RskitError> {
-            unimplemented!()
+            let id = SessionId::new();
+            let token = SessionToken::generate();
+            let session = SessionData {
+                id: id.clone(),
+                token,
+                user_id: user_id.to_string(),
+                ip_address: meta.ip_address.clone(),
+                user_agent: meta.user_agent.clone(),
+                device_name: meta.device_name.clone(),
+                device_type: meta.device_type.clone(),
+                fingerprint: meta.fingerprint.clone(),
+                data,
+                created_at: chrono::Utc::now(),
+                last_active_at: chrono::Utc::now(),
+                expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            };
+            self.sessions
+                .lock()
+                .unwrap()
+                .insert(id.as_str().to_string(), session);
+            Ok(id)
         }
 
         async fn read(&self, id: &SessionId) -> Result<Option<SessionData>, RskitError> {
@@ -358,9 +380,14 @@ mod tests {
 
         async fn update_data(
             &self,
-            _id: &SessionId,
-            _data: serde_json::Value,
+            id: &SessionId,
+            data: serde_json::Value,
         ) -> Result<(), RskitError> {
+            let mut sessions = self.sessions.lock().unwrap();
+            let session = sessions
+                .get_mut(id.as_str())
+                .ok_or_else(|| RskitError::internal("session not found"))?;
+            session.data = data;
             Ok(())
         }
 
@@ -617,6 +644,261 @@ mod tests {
         assert!(
             matches!(action, SessionAction::None),
             "logout_other should not change SessionAction"
+        );
+    }
+
+    // --- 3.2: Session fixation prevention ---
+
+    #[tokio::test]
+    async fn authenticate_destroys_old_session() {
+        let store = Arc::new(MemoryStore::new()) as Arc<dyn SessionStoreDyn>;
+        let mut mgr = make_manager(store.clone());
+
+        // Authenticate as user1
+        mgr.authenticate("user1").await.unwrap();
+        let old_session_id = mgr.current().unwrap().id.clone();
+
+        // Authenticate as user2 on same manager
+        mgr.authenticate("user2").await.unwrap();
+        let new_session_id = mgr.current().unwrap().id.clone();
+
+        assert_ne!(old_session_id, new_session_id);
+        // Old session must be destroyed in store
+        assert!(
+            store.read(&old_session_id).await.unwrap().is_none(),
+            "old session should be destroyed after re-authenticate"
+        );
+        // New session belongs to user2
+        assert_eq!(mgr.current().unwrap().user_id, "user2");
+    }
+
+    // --- 3.3: authenticate_with ---
+
+    #[tokio::test]
+    async fn authenticate_with_creates_session_with_data() {
+        let store = Arc::new(MemoryStore::new()) as Arc<dyn SessionStoreDyn>;
+        let mut mgr = make_manager(store);
+
+        mgr.authenticate_with("user1", serde_json::json!({"role": "admin"}))
+            .await
+            .unwrap();
+
+        let session = mgr.current().unwrap();
+        assert_eq!(session.user_id, "user1");
+        assert_eq!(session.data["role"], "admin");
+    }
+
+    // --- 3.4: Data methods ---
+
+    #[tokio::test]
+    async fn set_persists_to_store_and_in_memory() {
+        let store = Arc::new(MemoryStore::new()) as Arc<dyn SessionStoreDyn>;
+        let mut mgr = make_manager(store.clone());
+
+        mgr.authenticate("user1").await.unwrap();
+        let session_id = mgr.current().unwrap().id.clone();
+
+        mgr.set("theme", "dark").await.unwrap();
+
+        // In-memory
+        assert_eq!(mgr.get::<String>("theme").unwrap(), "dark");
+        // In store
+        let stored = store.read(&session_id).await.unwrap().unwrap();
+        assert_eq!(stored.data["theme"], "dark");
+    }
+
+    #[tokio::test]
+    async fn remove_key_removes_from_store_and_in_memory() {
+        let store = Arc::new(MemoryStore::new()) as Arc<dyn SessionStoreDyn>;
+        let mut mgr = make_manager(store.clone());
+
+        mgr.authenticate("user1").await.unwrap();
+        let session_id = mgr.current().unwrap().id.clone();
+
+        mgr.set("theme", "dark").await.unwrap();
+        mgr.remove_key("theme").await.unwrap();
+
+        // In-memory
+        assert!(mgr.get::<String>("theme").is_none());
+        // In store
+        let stored = store.read(&session_id).await.unwrap().unwrap();
+        assert!(stored.data.get("theme").is_none());
+    }
+
+    #[tokio::test]
+    async fn update_data_replaces_blob() {
+        let store = Arc::new(MemoryStore::new()) as Arc<dyn SessionStoreDyn>;
+        let mut mgr = make_manager(store.clone());
+
+        mgr.authenticate("user1").await.unwrap();
+        let session_id = mgr.current().unwrap().id.clone();
+
+        mgr.set("old_key", "value").await.unwrap();
+        let new_data = serde_json::json!({"new_key": 42});
+        mgr.update_data(new_data.clone()).await.unwrap();
+
+        // In-memory: old_key gone, new_key present
+        assert!(mgr.get::<String>("old_key").is_none());
+        assert_eq!(mgr.get::<i64>("new_key").unwrap(), 42);
+        // In store
+        let stored = store.read(&session_id).await.unwrap().unwrap();
+        assert_eq!(stored.data, new_data);
+    }
+
+    #[tokio::test]
+    async fn get_returns_none_on_type_mismatch() {
+        let store = Arc::new(MemoryStore::new()) as Arc<dyn SessionStoreDyn>;
+        let mut mgr = make_manager(store);
+
+        mgr.authenticate("user1").await.unwrap();
+        mgr.set("count", 42i64).await.unwrap();
+
+        // Deserializing an i64 as a Vec<String> should return None
+        assert!(mgr.get::<Vec<String>>("count").is_none());
+        // Correct type works
+        assert_eq!(mgr.get::<i64>("count").unwrap(), 42);
+    }
+
+    // --- 3.5: Verify store destruction in logout/logout_all ---
+
+    #[tokio::test]
+    async fn logout_destroys_session_in_store() {
+        let store = Arc::new(MemoryStore::new()) as Arc<dyn SessionStoreDyn>;
+        let mut mgr = make_manager(store.clone());
+
+        mgr.authenticate("user1").await.unwrap();
+        let session_id = mgr.current().unwrap().id.clone();
+
+        mgr.logout().await.unwrap();
+
+        assert!(
+            store.read(&session_id).await.unwrap().is_none(),
+            "session should be removed from store after logout"
+        );
+    }
+
+    #[tokio::test]
+    async fn logout_all_destroys_all_user_sessions_in_store() {
+        let store = Arc::new(MemoryStore::new()) as Arc<dyn SessionStoreDyn>;
+
+        // Create two sessions for the same user
+        let mut mgr1 = make_manager(store.clone());
+        mgr1.authenticate("user1").await.unwrap();
+        let session1_id = mgr1.current().unwrap().id.clone();
+
+        let mut mgr2 = make_manager(store.clone());
+        mgr2.authenticate("user1").await.unwrap();
+        let session2_id = mgr2.current().unwrap().id.clone();
+
+        // logout_all from mgr1
+        mgr1.logout_all().await.unwrap();
+
+        assert!(
+            store.read(&session1_id).await.unwrap().is_none(),
+            "session1 should be removed from store"
+        );
+        assert!(
+            store.read(&session2_id).await.unwrap().is_none(),
+            "session2 should be removed from store"
+        );
+    }
+
+    // --- 3.6: Hard-fail on destroy error ---
+
+    struct FailingDestroyStore {
+        inner: MemoryStore,
+    }
+
+    impl FailingDestroyStore {
+        fn new() -> Self {
+            Self {
+                inner: MemoryStore::new(),
+            }
+        }
+    }
+
+    impl SessionStore for FailingDestroyStore {
+        async fn create(&self, user_id: &str, meta: &SessionMeta) -> Result<SessionId, RskitError> {
+            SessionStore::create(&self.inner, user_id, meta).await
+        }
+
+        async fn create_with(
+            &self,
+            user_id: &str,
+            meta: &SessionMeta,
+            data: serde_json::Value,
+        ) -> Result<SessionId, RskitError> {
+            SessionStore::create_with(&self.inner, user_id, meta, data).await
+        }
+
+        async fn read(&self, id: &SessionId) -> Result<Option<SessionData>, RskitError> {
+            SessionStore::read(&self.inner, id).await
+        }
+
+        async fn touch(&self, id: &SessionId, ttl: std::time::Duration) -> Result<(), RskitError> {
+            SessionStore::touch(&self.inner, id, ttl).await
+        }
+
+        async fn update_data(
+            &self,
+            id: &SessionId,
+            data: serde_json::Value,
+        ) -> Result<(), RskitError> {
+            SessionStore::update_data(&self.inner, id, data).await
+        }
+
+        async fn destroy(&self, _id: &SessionId) -> Result<(), RskitError> {
+            Err(RskitError::internal("simulated destroy failure"))
+        }
+
+        async fn destroy_all_for_user(&self, user_id: &str) -> Result<(), RskitError> {
+            SessionStore::destroy_all_for_user(&self.inner, user_id).await
+        }
+
+        async fn read_by_token(
+            &self,
+            token: &SessionToken,
+        ) -> Result<Option<SessionData>, RskitError> {
+            SessionStore::read_by_token(&self.inner, token).await
+        }
+
+        async fn update_token(
+            &self,
+            id: &SessionId,
+            new_token: &SessionToken,
+        ) -> Result<(), RskitError> {
+            SessionStore::update_token(&self.inner, id, new_token).await
+        }
+
+        async fn destroy_all_except(
+            &self,
+            user_id: &str,
+            except_id: &SessionId,
+        ) -> Result<(), RskitError> {
+            SessionStore::destroy_all_except(&self.inner, user_id, except_id).await
+        }
+    }
+
+    #[tokio::test]
+    async fn authenticate_hard_fails_on_destroy_error() {
+        let store = Arc::new(FailingDestroyStore::new()) as Arc<dyn SessionStoreDyn>;
+        let mut mgr = make_manager(store.clone());
+
+        // First authenticate succeeds (no prior session to destroy)
+        mgr.authenticate("user1").await.unwrap();
+        let old_session_id = mgr.current().unwrap().id.clone();
+
+        // Second authenticate should fail because destroy returns error
+        let result = mgr.authenticate("user2").await;
+        assert!(
+            result.is_err(),
+            "authenticate should fail when old session destroy fails"
+        );
+
+        // Old session should still exist (destroy failed, so it was NOT removed)
+        assert!(
+            store.read(&old_session_id).await.unwrap().is_some(),
+            "old session should still exist since destroy failed"
         );
     }
 }
