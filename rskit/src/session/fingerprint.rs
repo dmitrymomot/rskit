@@ -24,7 +24,7 @@ mod hex_encode {
         let bytes = bytes.as_ref();
         let mut s = String::with_capacity(bytes.len() * 2);
         for b in bytes {
-            let _ = write!(s, "{b:02x}");
+            write!(s, "{b:02x}").expect("writing to String cannot fail");
         }
         s
     }

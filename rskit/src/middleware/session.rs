@@ -44,16 +44,16 @@ pub async fn session(
     let had_cookie = session_token.is_some();
 
     // Load session from store by token, filtering expired records
-    let current_session = if let Some(ref token) = session_token {
+    let (current_session, read_failed) = if let Some(ref token) = session_token {
         match session_store.read_by_token(token).await {
-            Ok(session) => session.filter(|s| s.expires_at > Utc::now()),
+            Ok(session) => (session.filter(|s| s.expires_at > Utc::now()), false),
             Err(e) => {
                 tracing::error!("Failed to read session: {e}");
-                None
+                (None, true)
             }
         }
     } else {
-        None
+        (None, false)
     };
 
     // Build SessionMeta (used for fingerprint validation and SessionManagerState)
@@ -86,7 +86,7 @@ pub async fn session(
     let should_touch = current_session.as_ref().is_some_and(|s| {
         let elapsed = Utc::now() - s.last_active_at;
         let interval = chrono::Duration::from_std(state.config.session_touch_interval)
-            .unwrap_or(chrono::Duration::minutes(5));
+            .expect("session_touch_interval overflows chrono::Duration");
         elapsed >= interval
     });
 
@@ -114,7 +114,7 @@ pub async fn session(
 
     let jar = match session_action {
         SessionAction::Set(token) => {
-            let mut cookie = Cookie::new(cookie_name.clone(), token.to_string());
+            let mut cookie = Cookie::new(cookie_name.clone(), token.as_str().to_owned());
             cookie.set_http_only(true);
             cookie.set_same_site(cookie::SameSite::Lax);
             cookie.set_path("/");
@@ -136,10 +136,14 @@ pub async fn session(
                     .touch(&session.id, state.config.session_ttl)
                     .await
                 {
-                    tracing::error!("Failed to touch session: {e}");
+                    tracing::error!(
+                        session_id = session.id.as_str(),
+                        "Failed to touch session: {e}"
+                    );
                 } else {
                     // Re-issue cookie with fresh max_age so it doesn't expire
-                    let mut cookie = Cookie::new(cookie_name.clone(), session.token.to_string());
+                    let mut cookie =
+                        Cookie::new(cookie_name.clone(), session.token.as_str().to_owned());
                     cookie.set_http_only(true);
                     cookie.set_same_site(cookie::SameSite::Lax);
                     cookie.set_path("/");
@@ -152,7 +156,8 @@ pub async fn session(
             }
 
             // Remove stale cookie if session token was in cookie but session not found
-            if had_cookie && current_session.is_none() {
+            // (skip if the read itself failed — don't clear cookie on transient DB error)
+            if had_cookie && current_session.is_none() && !read_failed {
                 let mut c = Cookie::new(cookie_name.clone(), "");
                 c.set_path("/");
                 jar.remove(c)

@@ -30,15 +30,9 @@ impl fmt::Display for SessionId {
     }
 }
 
-impl From<String> for SessionId {
-    fn from(s: String) -> Self {
-        Self(s)
-    }
-}
-
 /// Opaque session token (32 random bytes, hex-encoded).
 /// This is the value stored in the encrypted cookie — rotatable independently of SessionId.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SessionToken(String);
 
 impl SessionToken {
@@ -47,7 +41,7 @@ impl SessionToken {
         let bytes: [u8; 32] = rand::rng().random();
         let mut s = String::with_capacity(64);
         for b in bytes {
-            let _ = write!(s, "{b:02x}");
+            write!(s, "{b:02x}").expect("writing to String cannot fail");
         }
         Self(s)
     }
@@ -62,9 +56,23 @@ impl SessionToken {
     }
 }
 
+impl fmt::Debug for SessionToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.len() >= 4 {
+            write!(f, "SessionToken(****...{})", &self.0[self.0.len() - 4..])
+        } else {
+            write!(f, "SessionToken(****)")
+        }
+    }
+}
+
 impl fmt::Display for SessionToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        if self.0.len() >= 4 {
+            write!(f, "****...{}", &self.0[self.0.len() - 4..])
+        } else {
+            f.write_str("****")
+        }
     }
 }
 
@@ -105,9 +113,10 @@ mod tests {
     }
 
     #[test]
-    fn session_id_from_string() {
-        let id = SessionId::from("test123".to_string());
-        assert_eq!(id.as_str(), "test123");
+    fn session_id_as_str() {
+        let id = SessionId::new();
+        assert!(!id.as_str().is_empty());
+        assert_eq!(id.as_str().len(), 26); // ULID
     }
 
     #[test]
