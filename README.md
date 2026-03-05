@@ -1,16 +1,17 @@
-# rskit
+# modo
 
-Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-time magic.
+> **modo** (Latin: "way, method") — *the way* to build micro-SaaS with Rust.
+> Single binary, SQLite-only, compile-time magic.
 
-[![CI](https://github.com/dmitrymomot/rskit/actions/workflows/ci.yml/badge.svg)](https://github.com/dmitrymomot/rskit/actions/workflows/ci.yml)
+[![CI](https://github.com/dmitrymomot/modo/actions/workflows/ci.yml/badge.svg)](https://github.com/dmitrymomot/modo/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
 
 ## Features
 
-- **Proc-macro driven** — `#[rskit::handler]` and `#[rskit::main]` for zero-boilerplate routing
+- **Proc-macro driven** — `#[modo::handler]` and `#[modo::main]` for zero-boilerplate routing
 - **Auto-discovery** — handlers register themselves via `inventory`, no manual router wiring
-- **Module system** — group routes with shared prefixes and middleware via `#[rskit::module]`
+- **Module system** — group routes with shared prefixes and middleware via `#[modo::module]`
 - **SQLite-only** — WAL mode, single file, no external DB servers
 - **SeaORM v2** — async database access with the `Db` extractor
 - **CSRF protection** — double-submit signed cookie, built-in middleware
@@ -21,25 +22,25 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 ## Quick Start
 
 ```rust
-use rskit::error::RskitError;
+use modo::error::Error;
 
-#[rskit::handler(GET, "/")]
+#[modo::handler(GET, "/")]
 async fn index() -> &'static str {
-    "Hello rskit!"
+    "Hello modo!"
 }
 
-#[rskit::handler(GET, "/health")]
+#[modo::handler(GET, "/health")]
 async fn health() -> &'static str {
     "ok"
 }
 
-#[rskit::handler(GET, "/error")]
-async fn error_example() -> Result<&'static str, RskitError> {
-    Err(RskitError::NotFound)
+#[modo::handler(GET, "/error")]
+async fn error_example() -> Result<&'static str, Error> {
+    Err(Error::NotFound)
 }
 
-#[rskit::main]
-async fn main(app: rskit::app::AppBuilder) -> Result<(), Box<dyn std::error::Error>> {
+#[modo::main]
+async fn main(app: modo::app::AppBuilder) -> Result<(), Box<dyn std::error::Error>> {
     app.run().await
 }
 ```

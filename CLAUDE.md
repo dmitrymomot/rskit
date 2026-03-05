@@ -1,4 +1,4 @@
-# rskit
+# modo
 
 Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-time magic.
 
@@ -12,11 +12,11 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 
 ## Architecture
 
-- `rskit/` — main library crate
-- `rskit-macros/` — proc macro crate
-- `rskit/src/middleware/` — middleware functions (csrf, etc.)
-- `rskit/src/templates/` — HTMX, flash, BaseContext extractors
-- Design doc: `docs/plans/2026-03-04-rskit-architecture-design.md`
+- `modo/` — main library crate
+- `modo-macros/` — proc macro crate
+- `modo/src/middleware/` — middleware functions (csrf, etc.)
+- `modo/src/templates/` — HTMX, flash, BaseContext extractors
+- Design doc: `docs/plans/2026-03-04-modo-architecture-design.md`
 - Phase 1 plan: `docs/plans/2026-03-04-phase1-foundation.md`
 
 ## Commands
@@ -31,14 +31,14 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 
 ## Conventions
 
-- Handlers: `#[rskit::handler(METHOD, "/path")]`
-- Entry point: `#[rskit::main]`
+- Handlers: `#[modo::handler(METHOD, "/path")]`
+- Entry point: `#[modo::main]`
 - Routes auto-discovered via `inventory` crate
 - DB extractor: `Db(db): Db`
 - Service extractor: `Service<MyType>`
-- Errors: `Result<T, RskitError>`
-- Modules: `#[rskit::module(prefix = "/path", middleware = [...])]`
-- CSRF: `#[middleware(rskit::middleware::csrf_protection)]` — uses double-submit cookie
+- Errors: `Result<T, Error>`
+- Modules: `#[modo::module(prefix = "/path", middleware = [...])]`
+- CSRF: `#[middleware(modo::middleware::csrf_protection)]` — uses double-submit cookie
 - Flash messages: `Flash` (write) / `FlashMessages` (read) — cookie-based, one-shot
 - Template context: `BaseContext` extractor — auto-gathers HTMX, flash, CSRF, locale
 - Middleware: plain async functions, attached via `#[middleware(fn_name(params))]`
@@ -48,7 +48,7 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 - SessionManager: `authenticate()` / `logout()` / `logout_all()` / `logout_other()` / `rotate()` — handles cookies automatically
 - SessionManager data: `data()` / `get::<T>()` / `set()` / `update_data()` / `remove_key()` — immediate store writes
 - Auth: implement `UserProvider` trait, use `Auth<User>` / `OptionalAuth<User>` extractors
-- Template context: `#[rskit::context]` with `#[base]` + `#[user]` + `#[session]` fields
+- Template context: `#[modo::context]` with `#[base]` + `#[user]` + `#[session]` fields
 - BaseContext: includes request_id, is_htmx, current_url, flash_messages, csrf_token, locale
 
 ## Key Decisions
@@ -76,6 +76,6 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 - `SignedCookieJar` needs explicit `Key` type: `SignedCookieJar::<Key>::from_request_parts(...)`
 - `cookie` crate needs `key-expansion` feature for `Key::derive_from()`
 - Always run `just fmt` before `just check` — format diffs fail the check early
-- When adding fields to `AppState`, update `rskit/tests/integration.rs` (constructs AppState directly)
+- When adding fields to `AppState`, update `modo/tests/integration.rs` (constructs AppState directly)
 - `-D warnings` means dead code is a build error — remove unused code, don't just make it `pub(crate)`
 - Clippy enforces `collapsible_if` — collapse nested `if`/`if let` with `&&`
