@@ -73,6 +73,8 @@ Rust web framework for micro-SaaS. Single binary, SQLite-only, maximum compile-t
 
 ## Gotchas
 
+- Feature flags: optional deps use `dep:name` syntax; gate fields with `#[cfg(feature = "...")]` in struct, Default, and from_env()
+- Proc macros can't check `cfg` flags — emit both `#[cfg(feature = "x")]` / `#[cfg(not(feature = "x"))]` branches in generated code
 - `SignedCookieJar` needs explicit `Key` type: `SignedCookieJar::<Key>::from_request_parts(...)`
 - `cookie` crate needs `key-expansion` feature for `Key::derive_from()`
 - Always run `just fmt` before `just check` — format diffs fail the check early
