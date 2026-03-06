@@ -420,14 +420,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         }
 
         if let Some(ref lit) = f.attrs.default_value {
-            let val_str = match lit {
-                Lit::Int(i) => i.to_string(),
-                Lit::Float(f) => f.to_string(),
-                Lit::Str(s) => s.value(),
-                Lit::Bool(b) => b.value.to_string(),
-                _ => quote!(#lit).to_string(),
-            };
-            sea_orm_attrs.push(quote! { default_value = #val_str });
+            sea_orm_attrs.push(quote! { default_value = #lit });
         }
 
         if let Some(ref expr) = f.attrs.default_expr {
