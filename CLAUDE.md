@@ -51,6 +51,8 @@ Refactor strategy:
 ## Conventions
 
 - Handlers: `#[modo::handler(METHOD, "/path")]`
+- Path params: plain `id: String` in handler fn auto-extracted from `{id}` in route path — no need for `Path(id): Path<String>`
+- Path params: partial extraction supported — declare only the params you need, others ignored via `..`
 - Entry point: `#[modo::main]`
 - Routes auto-discovered via `inventory` crate
 - DB extractor: `Db(db): Db`
@@ -100,3 +102,5 @@ Refactor strategy:
 - When adding fields to `AppState`, update `modo/tests/integration.rs` (constructs AppState directly)
 - `-D warnings` means dead code is a build error — remove unused code, don't just make it `pub(crate)`
 - Clippy enforces `collapsible_if` — collapse nested `if`/`if let` with `&&`
+- In handler macro: `func_name` must be cloned (`func.sig.ident.clone()`) before mutating `func` — otherwise borrow checker blocks `&mut func`
+- Re-exports in `modo/src/lib.rs` must be alphabetically sorted (`cargo fmt` enforces this)
