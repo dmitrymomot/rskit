@@ -25,8 +25,10 @@ pub struct Todo {
 
 // --- DTOs ---
 
-#[derive(Deserialize)]
+#[derive(Deserialize, modo::Sanitize, modo::Validate)]
 struct CreateTodo {
+    #[clean(trim, strip_html)]
+    #[validate(required(message = "title is required"), min_length = 5(message = "title must be at least 5 characters"), max_length = 500(message = "title must be at most 500 characters"))]
     title: String,
 }
 
@@ -64,11 +66,12 @@ async fn list_todos(Db(db): Db) -> Result<modo::axum::Json<Vec<TodoResponse>>, m
 #[modo::handler(POST, "/todos")]
 async fn create_todo(
     Db(db): Db,
-    modo::axum::Json(input): modo::axum::Json<CreateTodo>,
+    input: modo::validate::Json<CreateTodo>,
 ) -> Result<modo::axum::Json<TodoResponse>, modo::Error> {
+    input.validate()?;
     use modo_db::sea_orm::{ActiveModelTrait, Set};
     let model = todo::ActiveModel {
-        title: Set(input.title),
+        title: Set(input.title.clone()),
         ..Default::default()
     };
     let result = model
@@ -78,7 +81,7 @@ async fn create_todo(
     Ok(modo::axum::Json(TodoResponse::from(result)))
 }
 
-#[modo::handler(DELETE, "/todos/:id")]
+#[modo::handler(DELETE, "/todos/{id}")]
 async fn delete_todo(
     Db(db): Db,
     modo::axum::extract::Path(id): modo::axum::extract::Path<String>,
