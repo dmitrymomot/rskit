@@ -1,11 +1,13 @@
 use modo::error::HttpError;
 use modo::extractors::ValidatedForm;
 
-#[derive(serde::Deserialize, modo::Validate)]
+#[derive(serde::Deserialize, modo::Sanitize, modo::Validate)]
 struct ContactForm {
+    #[clean(trim, normalize_email)]
     #[validate(required, email)]
     email: String,
 
+    #[clean(trim, strip_html)]
     #[validate(required, min_length = 5, max_length = 1000)]
     message: String,
 }
