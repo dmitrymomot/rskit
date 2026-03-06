@@ -26,9 +26,7 @@ pub async fn connect(config: &DatabaseConfig) -> Result<DbPool, modo::Error> {
 }
 
 #[cfg(feature = "sqlite")]
-async fn apply_sqlite_pragmas(
-    conn: &sea_orm::DatabaseConnection,
-) -> Result<(), modo::Error> {
+async fn apply_sqlite_pragmas(conn: &sea_orm::DatabaseConnection) -> Result<(), modo::Error> {
     use sea_orm::ConnectionTrait;
 
     conn.execute_unprepared("PRAGMA journal_mode=WAL")
@@ -47,9 +45,7 @@ async fn apply_sqlite_pragmas(
 }
 
 #[cfg(not(feature = "sqlite"))]
-async fn apply_sqlite_pragmas(
-    _conn: &sea_orm::DatabaseConnection,
-) -> Result<(), modo::Error> {
+async fn apply_sqlite_pragmas(_conn: &sea_orm::DatabaseConnection) -> Result<(), modo::Error> {
     Err(modo::Error::internal(
         "SQLite URL provided but `sqlite` feature is not enabled",
     ))
@@ -57,12 +53,12 @@ async fn apply_sqlite_pragmas(
 
 /// Redact credentials from database URL for logging.
 fn redact_url(url: &str) -> String {
-    if let Some(at_pos) = url.find('@') {
-        if let Some(scheme_end) = url.find("://") {
-            let prefix = &url[..scheme_end + 3];
-            let suffix = &url[at_pos..];
-            return format!("{prefix}***{suffix}");
-        }
+    if let Some(at_pos) = url.find('@')
+        && let Some(scheme_end) = url.find("://")
+    {
+        let prefix = &url[..scheme_end + 3];
+        let suffix = &url[at_pos..];
+        return format!("{prefix}***{suffix}");
     }
     url.to_string()
 }

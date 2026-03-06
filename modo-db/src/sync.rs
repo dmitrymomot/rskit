@@ -73,23 +73,20 @@ async fn create_table(
     let mut stmt: TableCreateStatement = (reg.create_table)(backend);
     stmt.if_not_exists();
     let built = backend.build(&stmt);
-    conn.execute(built)
-        .await
-        .map_err(|e| modo::Error::internal(format!("Schema sync for {} failed: {e}", reg.table_name)))?;
+    conn.execute(built).await.map_err(|e| {
+        modo::Error::internal(format!("Schema sync for {} failed: {e}", reg.table_name))
+    })?;
     Ok(())
 }
 
-async fn run_pending_migrations(
-    db: &sea_orm::DatabaseConnection,
-) -> Result<(), modo::Error> {
+async fn run_pending_migrations(db: &sea_orm::DatabaseConnection) -> Result<(), modo::Error> {
     use crate::migration::migration_entity;
     use sea_orm::EntityTrait;
     use std::collections::HashSet;
 
-    let mut migrations: Vec<&MigrationRegistration> =
-        inventory::iter::<MigrationRegistration>
-            .into_iter()
-            .collect();
+    let mut migrations: Vec<&MigrationRegistration> = inventory::iter::<MigrationRegistration>
+        .into_iter()
+        .collect();
 
     if migrations.is_empty() {
         return Ok(());
@@ -109,13 +106,11 @@ async fn run_pending_migrations(
     migrations.sort_by_key(|m| m.version);
 
     // Query already-executed versions
-    let executed: Vec<migration_entity::Model> =
-        migration_entity::Entity::find()
-            .all(db)
-            .await
-            .map_err(|e| modo::Error::internal(format!("Failed to query migrations: {e}")))?;
-    let executed_versions: HashSet<u64> =
-        executed.iter().map(|m| m.version as u64).collect();
+    let executed: Vec<migration_entity::Model> = migration_entity::Entity::find()
+        .all(db)
+        .await
+        .map_err(|e| modo::Error::internal(format!("Failed to query migrations: {e}")))?;
+    let executed_versions: HashSet<u64> = executed.iter().map(|m| m.version as u64).collect();
 
     // Run pending
     for migration in &migrations {

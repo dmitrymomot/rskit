@@ -21,10 +21,9 @@ pub(crate) mod migration_entity {
 }
 
 /// Type alias for migration handler functions.
-pub type MigrationFn =
-    fn(
-        &sea_orm::DatabaseConnection,
-    ) -> Pin<Box<dyn Future<Output = Result<(), modo::Error>> + Send + '_>>;
+pub type MigrationFn = fn(
+    &sea_orm::DatabaseConnection,
+) -> Pin<Box<dyn Future<Output = Result<(), modo::Error>> + Send + '_>>;
 
 /// Registration info for a migration, collected via `inventory`.
 pub struct MigrationRegistration {

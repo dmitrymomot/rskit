@@ -1,7 +1,7 @@
 use crate::pool::DbPool;
+use modo::app::AppState;
 use modo::axum::extract::FromRequestParts;
 use modo::axum::http::request::Parts;
-use modo::app::AppState;
 use modo::error::Error;
 
 /// Axum extractor for the database connection pool.
@@ -24,9 +24,7 @@ impl FromRequestParts<AppState> for Db {
             .get::<DbPool>()
             .map(|pool| Db(DbPool(pool.connection().clone())))
             .ok_or_else(|| {
-                Error::internal(
-                    "Database not configured. Register DbPool via app.service(db).",
-                )
+                Error::internal("Database not configured. Register DbPool via app.service(db).")
             })
     }
 }
