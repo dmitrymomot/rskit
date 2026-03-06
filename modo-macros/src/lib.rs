@@ -5,6 +5,7 @@ mod handler;
 mod main_macro;
 mod middleware;
 mod module;
+mod sanitize;
 mod validate;
 
 /// Attribute macro for declaring HTTP handlers with auto-registration.
@@ -35,6 +36,14 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn error_handler(attr: TokenStream, item: TokenStream) -> TokenStream {
     error_handler::expand(attr.into(), item.into())
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
+}
+
+/// Derive macro for struct field sanitization via `#[sanitize(...)]` attributes.
+#[proc_macro_derive(Sanitize, attributes(clean))]
+pub fn derive_sanitize(input: TokenStream) -> TokenStream {
+    sanitize::expand(input.into())
         .unwrap_or_else(|e| e.to_compile_error())
         .into()
 }

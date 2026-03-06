@@ -1,4 +1,4 @@
-pub use modo_macros::{Validate, error_handler, handler, main, module};
+pub use modo_macros::{Sanitize, Validate, error_handler, handler, main, module};
 
 pub mod app;
 pub mod config;
@@ -10,6 +10,7 @@ pub mod logging;
 pub mod middleware;
 pub mod request_id;
 pub mod router;
+pub mod sanitize;
 pub mod validate;
 
 pub use config::{HttpConfig, RateLimitConfig, SecurityHeadersConfig, TrailingSlash};
