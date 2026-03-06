@@ -38,10 +38,7 @@ inventory::collect!(MigrationRegistration);
 inventory::submit! {
     crate::EntityRegistration {
         table_name: "_modo_migrations",
-        create_table: |backend| {
-            let schema = sea_orm::Schema::new(backend);
-            schema.create_table_from_entity(migration_entity::Entity)
-        },
+        register_fn: |sb| sb.register(migration_entity::Entity),
         is_framework: true,
         extra_sql: &[],
     }

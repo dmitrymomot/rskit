@@ -1,3 +1,5 @@
+use sea_orm::schema::SchemaBuilder;
+
 /// Registration info for a SeaORM entity, collected via `inventory`.
 ///
 /// The `#[modo_db::entity]` macro generates an `inventory::submit!` block
@@ -5,7 +7,7 @@
 /// register themselves identically with `is_framework: true`.
 pub struct EntityRegistration {
     pub table_name: &'static str,
-    pub create_table: fn(sea_orm::DbBackend) -> sea_orm::sea_query::TableCreateStatement,
+    pub register_fn: fn(SchemaBuilder) -> SchemaBuilder,
     pub is_framework: bool,
     pub extra_sql: &'static [&'static str],
 }

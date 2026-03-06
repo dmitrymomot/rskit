@@ -13,9 +13,10 @@ postgres = ["sea-orm/sqlx-postgres"]
 modo = { path = "../modo" }
 modo-db-macros = { path = "../modo-db-macros" }
 
-sea-orm = { version = "1", features = [
+sea-orm = { version = "2.0.0-rc", features = [
     "runtime-tokio-native-tls",
     "macros",
+    "schema-sync",
 ] }
 
 inventory = "0.3"

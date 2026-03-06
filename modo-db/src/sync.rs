@@ -1,19 +1,19 @@
 use crate::entity::EntityRegistration;
 use crate::migration::MigrationRegistration;
 use crate::pool::DbPool;
-use sea_orm::ConnectionTrait;
+use sea_orm::{ConnectionTrait, Schema};
 use tracing::info;
 
 /// Synchronize database schema from registered entities, then run pending migrations.
 ///
 /// 1. Bootstrap `_modo_migrations` table (must exist before schema sync)
 /// 2. Collect all `EntityRegistration` entries from `inventory`
-/// 3. Create tables (IF NOT EXISTS) — framework entities first, then user entities
-/// 4. Execute extra SQL (composite indices, partial unique indices)
-/// 5. Run pending migrations (version-ordered, tracked in `_modo_migrations`)
+/// 3. Register framework entities first, then user entities
+/// 4. Run `SchemaBuilder::sync()` (addition-only, topo-sorted by SeaORM)
+/// 5. Execute extra SQL (composite indices, partial unique indices)
+/// 6. Run pending migrations (version-ordered, tracked in `_modo_migrations`)
 pub async fn sync_and_migrate(db: &DbPool) -> Result<(), modo::Error> {
     let conn = db.connection();
-    let backend = conn.get_database_backend();
 
     // 1. Bootstrap _modo_migrations
     conn.execute_unprepared(
@@ -26,20 +26,31 @@ pub async fn sync_and_migrate(db: &DbPool) -> Result<(), modo::Error> {
     .await
     .map_err(|e| modo::Error::internal(format!("Failed to bootstrap migrations table: {e}")))?;
 
-    // 2. Create tables — framework entities first, then user entities
+    // 2. Collect and register all entities
+    let backend = conn.get_database_backend();
+    let schema = Schema::new(backend);
+    let mut builder = schema.builder();
+
+    // Framework entities first, then user entities
     for reg in inventory::iter::<EntityRegistration> {
         if reg.is_framework {
-            create_table(conn, backend, reg).await?;
+            builder = (reg.register_fn)(builder);
         }
     }
     for reg in inventory::iter::<EntityRegistration> {
         if !reg.is_framework {
-            create_table(conn, backend, reg).await?;
+            builder = (reg.register_fn)(builder);
         }
     }
+
+    // 3. Sync (addition-only — SeaORM handles topo sort)
+    builder
+        .sync(conn)
+        .await
+        .map_err(|e| modo::Error::internal(format!("Schema sync failed: {e}")))?;
     info!("Schema sync complete");
 
-    // 3. Run extra SQL
+    // 4. Run extra SQL (composite indices, partial unique indices, etc.)
     for reg in inventory::iter::<EntityRegistration> {
         for sql in reg.extra_sql {
             if let Err(e) = conn.execute_unprepared(sql).await {
@@ -57,25 +68,9 @@ pub async fn sync_and_migrate(db: &DbPool) -> Result<(), modo::Error> {
         }
     }
 
-    // 4. Run pending migrations
+    // 5. Run pending migrations
     run_pending_migrations(conn).await?;
 
-    Ok(())
-}
-
-async fn create_table(
-    conn: &sea_orm::DatabaseConnection,
-    backend: sea_orm::DbBackend,
-    reg: &EntityRegistration,
-) -> Result<(), modo::Error> {
-    use sea_orm::sea_query::TableCreateStatement;
-
-    let mut stmt: TableCreateStatement = (reg.create_table)(backend);
-    stmt.if_not_exists();
-    let built = backend.build(&stmt);
-    conn.execute(built).await.map_err(|e| {
-        modo::Error::internal(format!("Schema sync for {} failed: {e}", reg.table_name))
-    })?;
     Ok(())
 }
 

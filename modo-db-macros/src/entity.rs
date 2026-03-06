@@ -709,10 +709,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         modo_db::inventory::submit! {
             modo_db::EntityRegistration {
                 table_name: #table_name,
-                create_table: |backend| {
-                    let schema = modo_db::sea_orm::Schema::new(backend);
-                    schema.create_table_from_entity(#mod_name::Entity)
-                },
+                register_fn: |sb| sb.register(#mod_name::Entity),
                 is_framework: false,
                 extra_sql: #extra_sql_tokens,
             }
