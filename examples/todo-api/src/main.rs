@@ -84,7 +84,7 @@ async fn create_todo(
 #[modo::handler(DELETE, "/todos/{id}")]
 async fn delete_todo(
     Db(db): Db,
-    modo::axum::extract::Path(id): modo::axum::extract::Path<String>,
+    id: String,
 ) -> Result<modo::axum::Json<modo::serde_json::Value>, modo::Error> {
     use modo_db::sea_orm::{EntityTrait, ModelTrait};
     let todo = todo::Entity::find_by_id(&id)
