@@ -1,5 +1,5 @@
 use modo::error::HttpError;
-use modo::extractors::ValidatedForm;
+use modo::extractors::Form;
 
 #[derive(serde::Deserialize, modo::Sanitize, modo::Validate)]
 struct ContactForm {
@@ -28,8 +28,9 @@ async fn error_example() -> Result<&'static str, HttpError> {
 }
 
 #[modo::handler(POST, "/contact")]
-async fn contact(ValidatedForm(_form): ValidatedForm<ContactForm>) -> &'static str {
-    "Thanks for your message!"
+async fn contact(form: Form<ContactForm>) -> Result<&'static str, modo::Error> {
+    form.validate()?;
+    Ok("Thanks for your message!")
 }
 
 #[modo::main]
