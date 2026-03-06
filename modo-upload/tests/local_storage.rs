@@ -53,3 +53,46 @@ async fn exists_returns_false_for_missing() {
     let storage = LocalStorage::new(dir.path());
     assert!(!storage.exists("nonexistent/file.txt").await.unwrap());
 }
+
+#[tokio::test]
+async fn delete_path_traversal_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = LocalStorage::new(dir.path());
+    assert!(storage.delete("../../etc/passwd").await.is_err());
+}
+
+#[tokio::test]
+async fn exists_absolute_path_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = LocalStorage::new(dir.path());
+    assert!(storage.exists("/etc/passwd").await.is_err());
+}
+
+#[tokio::test]
+async fn store_path_traversal_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = LocalStorage::new(dir.path());
+    let file = make_file("f", "test.txt", "text/plain", b"data");
+    assert!(storage.store("../escape", &file).await.is_err());
+}
+
+#[tokio::test]
+async fn store_stream_writes_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = LocalStorage::new(dir.path());
+
+    let mut stream = modo_upload::UploadStream::__test_new(
+        "file",
+        "test.txt",
+        "text/plain",
+        vec![bytes::Bytes::from("hello "), bytes::Bytes::from("world")],
+    );
+    let stored = storage.store_stream("docs", &mut stream).await.unwrap();
+
+    assert!(stored.path.starts_with("docs/"));
+    assert_eq!(stored.size, 11);
+
+    let full_path = dir.path().join(&stored.path);
+    let contents = tokio::fs::read_to_string(&full_path).await.unwrap();
+    assert_eq!(contents, "hello world");
+}
