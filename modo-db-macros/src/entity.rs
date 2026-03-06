@@ -688,6 +688,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     Ok(quote! {
         pub mod #mod_name {
+            use modo_db::sea_orm;
             use modo_db::sea_orm::entity::prelude::*;
 
             #[derive(Clone, Debug, PartialEq, Eq, modo_db::sea_orm::DeriveEntityModel)]
