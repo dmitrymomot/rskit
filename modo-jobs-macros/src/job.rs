@@ -113,15 +113,24 @@ fn parse_duration_secs(s: &str) -> Result<u64> {
     let s = s.trim();
     if let Some(num) = s.strip_suffix('s') {
         num.parse::<u64>().map_err(|_| {
-            syn::Error::new(proc_macro2::Span::call_site(), format!("invalid timeout: {s}"))
+            syn::Error::new(
+                proc_macro2::Span::call_site(),
+                format!("invalid timeout: {s}"),
+            )
         })
     } else if let Some(num) = s.strip_suffix('m') {
         num.parse::<u64>().map(|n| n * 60).map_err(|_| {
-            syn::Error::new(proc_macro2::Span::call_site(), format!("invalid timeout: {s}"))
+            syn::Error::new(
+                proc_macro2::Span::call_site(),
+                format!("invalid timeout: {s}"),
+            )
         })
     } else if let Some(num) = s.strip_suffix('h') {
         num.parse::<u64>().map(|n| n * 3600).map_err(|_| {
-            syn::Error::new(proc_macro2::Span::call_site(), format!("invalid timeout: {s}"))
+            syn::Error::new(
+                proc_macro2::Span::call_site(),
+                format!("invalid timeout: {s}"),
+            )
         })
     } else {
         Err(syn::Error::new(
@@ -149,27 +158,25 @@ fn classify_param(arg: &FnArg) -> Result<Option<ParamKind>> {
     let ty = &*pat_type.ty;
 
     // Check for Db(db): Db pattern
-    if let Pat::TupleStruct(ps) = &*pat_type.pat {
-        if let Some(last_seg) = ps.path.segments.last() {
-            if last_seg.ident == "Db" {
-                return Ok(Some(ParamKind::Db));
-            }
-        }
+    if let Pat::TupleStruct(ps) = &*pat_type.pat
+        && let Some(last_seg) = ps.path.segments.last()
+        && last_seg.ident == "Db"
+    {
+        return Ok(Some(ParamKind::Db));
     }
 
     // Check type path for Service<T> or Db
-    if let Type::Path(type_path) = ty {
-        if let Some(last_seg) = type_path.path.segments.last() {
-            if last_seg.ident == "Db" {
-                return Ok(Some(ParamKind::Db));
-            }
-            if last_seg.ident == "Service" {
-                if let syn::PathArguments::AngleBracketed(ref args) = last_seg.arguments {
-                    if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                        return Ok(Some(ParamKind::Service(inner.clone())));
-                    }
-                }
-            }
+    if let Type::Path(type_path) = ty
+        && let Some(last_seg) = type_path.path.segments.last()
+    {
+        if last_seg.ident == "Db" {
+            return Ok(Some(ParamKind::Db));
+        }
+        if last_seg.ident == "Service"
+            && let syn::PathArguments::AngleBracketed(ref args) = last_seg.arguments
+            && let Some(syn::GenericArgument::Type(inner)) = args.args.first()
+        {
+            return Ok(Some(ParamKind::Service(inner.clone())));
         }
     }
 

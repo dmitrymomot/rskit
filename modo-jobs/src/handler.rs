@@ -19,9 +19,8 @@ pub struct JobContext {
 impl JobContext {
     /// Deserialize the job payload from JSON.
     pub fn payload<T: serde::de::DeserializeOwned>(&self) -> Result<T, modo::Error> {
-        serde_json::from_str(&self.payload_json).map_err(|e| {
-            modo::Error::internal(format!("Failed to deserialize job payload: {e}"))
-        })
+        serde_json::from_str(&self.payload_json)
+            .map_err(|e| modo::Error::internal(format!("Failed to deserialize job payload: {e}")))
     }
 
     /// Retrieve a service from the registry.

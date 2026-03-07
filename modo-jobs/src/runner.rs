@@ -143,6 +143,7 @@ pub async fn start(
     Ok(JobsHandle { queue, cancel })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn poll_loop(
     db: &modo_db::sea_orm::DatabaseConnection,
     cancel: CancellationToken,
@@ -291,7 +292,8 @@ async fn execute_job(
         payload_json: job.payload.clone(),
     };
 
-    let result = tokio::time::timeout(Duration::from_secs(timeout_secs), handler.run_dyn(ctx)).await;
+    let result =
+        tokio::time::timeout(Duration::from_secs(timeout_secs), handler.run_dyn(ctx)).await;
 
     match result {
         Ok(Ok(())) => {

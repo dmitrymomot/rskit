@@ -39,9 +39,7 @@ impl JobQueue {
         let reg = inventory::iter::<JobRegistration>
             .into_iter()
             .find(|r| r.name == name)
-            .ok_or_else(|| {
-                modo::Error::internal(format!("No job registered with name: {name}"))
-            })?;
+            .ok_or_else(|| modo::Error::internal(format!("No job registered with name: {name}")))?;
 
         let payload_json = serde_json::to_string(payload)
             .map_err(|e| modo::Error::internal(format!("Failed to serialize job payload: {e}")))?;

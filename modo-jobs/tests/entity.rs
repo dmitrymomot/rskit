@@ -57,9 +57,7 @@ async fn test_entity_table_created() {
         .find(|r| r.table_name == "modo_jobs")
         .unwrap();
     for sql in reg.extra_sql {
-        db.execute_unprepared(sql)
-            .await
-            .expect("Extra SQL failed");
+        db.execute_unprepared(sql).await.expect("Extra SQL failed");
     }
 
     // Verify table exists by querying
