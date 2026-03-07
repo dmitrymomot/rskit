@@ -202,50 +202,58 @@ async fn claim_next(
     let now = Utc::now();
     let backend = db.get_database_backend();
 
-    let sql = match backend {
-        DatabaseBackend::Sqlite => {
-            format!(
-                "UPDATE modo_jobs \
-                 SET state = 'running', locked_by = '{worker_id}', \
-                     locked_at = '{now_str}', attempts = attempts + 1, \
-                     updated_at = '{now_str}' \
-                 WHERE id = ( \
-                     SELECT id FROM modo_jobs \
-                     WHERE state = 'pending' AND queue = '{queue}' AND run_at <= '{now_str}' \
-                     ORDER BY priority DESC, run_at ASC \
-                     LIMIT 1 \
-                 ) \
-                 RETURNING *",
-                worker_id = worker_id,
-                queue = queue,
-                now_str = now.format("%Y-%m-%d %H:%M:%S"),
-            )
-        }
-        DatabaseBackend::Postgres => {
-            format!(
-                "UPDATE modo_jobs \
-                 SET state = 'running', locked_by = '{worker_id}', \
-                     locked_at = '{now_str}', attempts = attempts + 1, \
-                     updated_at = '{now_str}' \
-                 WHERE id = ( \
-                     SELECT id FROM modo_jobs \
-                     WHERE state = 'pending' AND queue = '{queue}' AND run_at <= '{now_str}' \
-                     ORDER BY priority DESC, run_at ASC \
-                     LIMIT 1 \
-                     FOR UPDATE SKIP LOCKED \
-                 ) \
-                 RETURNING *",
-                worker_id = worker_id,
-                queue = queue,
-                now_str = now.format("%Y-%m-%dT%H:%M:%S+00:00"),
-            )
-        }
+    // Raw SQL is required here because SeaORM doesn't support the atomic
+    // UPDATE...WHERE id = (SELECT...) RETURNING * pattern. This single-statement
+    // approach claims a job atomically without race conditions between workers.
+    let (sql, values) = match backend {
+        DatabaseBackend::Sqlite => (
+            "UPDATE modo_jobs \
+             SET state = 'running', locked_by = $1, \
+                 locked_at = $2, attempts = attempts + 1, \
+                 updated_at = $3 \
+             WHERE id = ( \
+                 SELECT id FROM modo_jobs \
+                 WHERE state = 'pending' AND queue = $4 AND run_at <= $5 \
+                 ORDER BY priority DESC, run_at ASC \
+                 LIMIT 1 \
+             ) \
+             RETURNING *",
+            vec![
+                worker_id.into(),
+                now.into(),
+                now.into(),
+                queue.into(),
+                now.into(),
+            ],
+        ),
+        DatabaseBackend::Postgres => (
+            "UPDATE modo_jobs \
+             SET state = 'running', locked_by = $1, \
+                 locked_at = $2, attempts = attempts + 1, \
+                 updated_at = $3 \
+             WHERE id = ( \
+                 SELECT id FROM modo_jobs \
+                 WHERE state = 'pending' AND queue = $4 AND run_at <= $5 \
+                 ORDER BY priority DESC, run_at ASC \
+                 LIMIT 1 \
+                 FOR UPDATE SKIP LOCKED \
+             ) \
+             RETURNING *",
+            vec![
+                worker_id.into(),
+                now.into(),
+                now.into(),
+                queue.into(),
+                now.into(),
+            ],
+        ),
         _ => {
             return Err(modo::Error::internal("Unsupported database backend"));
         }
     };
 
-    let result = job::Model::find_by_statement(Statement::from_string(backend, sql))
+    let stmt = Statement::from_sql_and_values(backend, sql, values);
+    let result = job::Model::find_by_statement(stmt)
         .one(db)
         .await
         .map_err(|e| modo::Error::internal(format!("Claim query failed: {e}")))?;
