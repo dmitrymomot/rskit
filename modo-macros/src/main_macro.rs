@@ -50,7 +50,7 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
                 .expect("failed to build tokio runtime")
                 .block_on(async {
                     let stdout_filter = modo::tracing_subscriber::EnvFilter::try_from_default_env()
-                        .unwrap_or_else(|_| modo::tracing_subscriber::EnvFilter::new("info"));
+                        .unwrap_or_else(|_| modo::tracing_subscriber::EnvFilter::new("info,sqlx::query=warn"));
 
                     modo::tracing_subscriber::fmt()
                         .with_env_filter(stdout_filter)
