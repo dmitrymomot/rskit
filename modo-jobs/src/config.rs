@@ -1,3 +1,4 @@
+use crate::types::JobState;
 use serde::Deserialize;
 
 /// Top-level jobs configuration, deserialized from YAML.
@@ -49,7 +50,7 @@ pub struct CleanupConfig {
     /// Jobs older than this are eligible for cleanup (seconds).
     pub retention_secs: u64,
     /// Which job states to clean up.
-    pub statuses: Vec<String>,
+    pub statuses: Vec<JobState>,
 }
 
 impl Default for CleanupConfig {
@@ -57,7 +58,7 @@ impl Default for CleanupConfig {
         Self {
             interval_secs: 3600,
             retention_secs: 86400,
-            statuses: vec!["completed".to_string(), "dead".to_string()],
+            statuses: vec![JobState::Completed, JobState::Dead, JobState::Cancelled],
         }
     }
 }

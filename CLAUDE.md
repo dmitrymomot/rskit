@@ -75,19 +75,22 @@ Refactor strategy:
 
 ## Jobs (modo-jobs)
 
-- Define jobs: `#[modo_jobs::job(queue = "...", priority = N, max_retries = N, timeout = "5m")]`
+- Define jobs: `#[modo_jobs::job(queue = "...", priority = N, max_attempts = N, timeout = "5m")]`
 - Cron jobs: `#[modo_jobs::job(cron = "0 0 * * * *", timeout = "5m")]` — in-memory only
-- Cron + queue/priority/max_retries = compile error (mutually exclusive)
+- Cron + queue/priority/max_attempts = compile error (mutually exclusive)
 - Job params: `payload: T` (Serialize/Deserialize), `Service<T>`, `Db(db): Db`
 - Enqueue: `MyJob::enqueue(&queue, &payload).await?` or `MyJob::enqueue_at(&queue, &payload, run_at).await?`
 - Extractor: `queue: JobQueue` in handlers (requires `JobsHandle` registered as service)
 - Start runner: `let jobs = modo_jobs::start(&db, &config.jobs, services).await?;`
 - `start()` takes `ServiceRegistry` as third arg for DI in job handlers
-- Cancel: `queue.cancel(&job_id).await?`
+- Cancel: `queue.cancel(&job_id).await?` — sets state to `cancelled` (distinct from `dead`)
 - Entity: `modo_jobs` table with `is_framework: true` — auto-created by `sync_and_migrate`
+- Job states: `pending`, `running`, `completed`, `dead`, `cancelled` (no `failed` state)
 - Retry backoff: `5s * 2^(attempt-1)`, capped at 1h
-- Stale reaper: resets stuck `running` jobs older than `stale_threshold_secs` back to `pending`
-- Cleanup: auto-purges `completed`/`dead` jobs older than `retention_secs`
+- Stale reaper: resets stuck `running` jobs older than `stale_threshold_secs` back to `pending`, decrements attempts
+- Cleanup: auto-purges `completed`/`dead`/`cancelled` jobs older than `retention_secs`
+- Shutdown: `jobs.shutdown().await` — signals cancel + waits up to `drain_timeout_secs` for in-flight jobs
+- Cron failures: consecutive failure counter warns after 5 failures in a row
 - Design doc: `docs/plans/2026-03-07-modo-jobs-design.md`
 
 ## Key Decisions

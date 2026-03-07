@@ -68,7 +68,7 @@ pub struct JobRegistration {
     pub name: &'static str,
     pub queue: &'static str,
     pub priority: i32,
-    pub max_retries: u32,
+    pub max_attempts: u32,
     pub timeout_secs: u64,
     pub cron: Option<&'static str>,
     pub handler_factory: fn() -> Box<dyn JobHandlerDyn>,

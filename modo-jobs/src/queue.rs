@@ -55,7 +55,7 @@ impl JobQueue {
                 .filter(job::Column::State.eq(JobState::Pending.as_str()))
                 .col_expr(
                     job::Column::State,
-                    modo_db::sea_orm::sea_query::Expr::value(JobState::Dead.as_str()),
+                    modo_db::sea_orm::sea_query::Expr::value(JobState::Cancelled.as_str()),
                 )
                 .col_expr(
                     job::Column::UpdatedAt,
@@ -92,9 +92,9 @@ impl JobQueue {
             state: ActiveValue::Set(JobState::Pending.as_str().to_string()),
             priority: ActiveValue::Set(reg.priority),
             attempts: ActiveValue::Set(0),
-            max_retries: ActiveValue::Set(reg.max_retries as i32),
+            max_attempts: ActiveValue::Set(reg.max_attempts.min(i32::MAX as u32) as i32),
             run_at: ActiveValue::Set(run_at),
-            timeout_secs: ActiveValue::Set(reg.timeout_secs as i32),
+            timeout_secs: ActiveValue::Set(reg.timeout_secs.min(i32::MAX as u64) as i32),
             locked_by: ActiveValue::Set(None),
             locked_at: ActiveValue::Set(None),
             created_at: ActiveValue::Set(Utc::now()),

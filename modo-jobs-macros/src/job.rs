@@ -9,7 +9,7 @@ use syn::{FnArg, Ident, ItemFn, Lit, LitStr, Pat, Result, Token, Type, parse2};
 struct JobArgs {
     queue: String,
     priority: i32,
-    max_retries: u32,
+    max_attempts: u32,
     timeout: String,
     cron: Option<String>,
 }
@@ -19,7 +19,7 @@ impl Default for JobArgs {
         Self {
             queue: "default".to_string(),
             priority: 0,
-            max_retries: 3,
+            max_attempts: 3,
             timeout: "5m".to_string(),
             cron: None,
         }
@@ -31,7 +31,7 @@ impl syn::parse::Parse for JobArgs {
         let mut args = JobArgs::default();
         let mut has_queue = false;
         let mut has_priority = false;
-        let mut has_max_retries = false;
+        let mut has_max_attempts = false;
 
         while !input.is_empty() {
             let ident: Ident = input.parse()?;
@@ -51,13 +51,13 @@ impl syn::parse::Parse for JobArgs {
                     };
                     has_priority = true;
                 }
-                "max_retries" => {
+                "max_attempts" => {
                     let val: Lit = input.parse()?;
-                    args.max_retries = match val {
+                    args.max_attempts = match val {
                         Lit::Int(i) => i.base10_parse()?,
                         _ => return Err(syn::Error::new_spanned(val, "expected integer")),
                     };
-                    has_max_retries = true;
+                    has_max_attempts = true;
                 }
                 "timeout" => {
                     let val: LitStr = input.parse()?;
@@ -80,11 +80,11 @@ impl syn::parse::Parse for JobArgs {
             }
         }
 
-        // Mutual exclusion: cron + queue/priority/max_retries
-        if args.cron.is_some() && (has_queue || has_priority || has_max_retries) {
+        // Mutual exclusion: cron + queue/priority/max_attempts
+        if args.cron.is_some() && (has_queue || has_priority || has_max_attempts) {
             return Err(syn::Error::new(
                 proc_macro2::Span::call_site(),
-                "cron jobs cannot have queue, priority, or max_retries attributes",
+                "cron jobs cannot have queue, priority, or max_attempts attributes",
             ));
         }
 
@@ -200,7 +200,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     let timeout_secs = parse_duration_secs(&args.timeout)?;
     let queue = &args.queue;
     let priority = args.priority;
-    let max_retries = args.max_retries;
+    let max_attempts = args.max_attempts;
     let is_cron = args.cron.is_some();
 
     let cron_expr = match &args.cron {
@@ -315,7 +315,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
                 name: #func_name_str,
                 queue: #queue,
                 priority: #priority,
-                max_retries: #max_retries,
+                max_attempts: #max_attempts,
                 timeout_secs: #timeout_secs,
                 cron: #cron_expr,
                 handler_factory: || Box::new(#struct_name),

@@ -7,7 +7,7 @@ use chrono::Utc;
 use modo::app::ServiceRegistry;
 use modo_db::pool::DbPool;
 use modo_db::sea_orm::{
-    ColumnTrait, DatabaseBackend, EntityTrait, FromQueryResult, QueryFilter, Statement,
+    ColumnTrait, DatabaseBackend, EntityTrait, ExprTrait, FromQueryResult, QueryFilter, Statement,
 };
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -24,12 +24,26 @@ use tracing::{error, info, warn};
 pub struct JobsHandle {
     queue: JobQueue,
     cancel: CancellationToken,
+    semaphores: Vec<(Arc<Semaphore>, usize)>,
+    drain_timeout_secs: u64,
 }
 
 impl JobsHandle {
     /// Signal all background tasks to stop and wait for in-flight jobs to drain.
-    pub fn shutdown(&self) {
+    ///
+    /// Waits up to `drain_timeout_secs` for running jobs to complete.
+    pub async fn shutdown(&self) {
         self.cancel.cancel();
+        let deadline = Duration::from_secs(self.drain_timeout_secs);
+        let drain = async {
+            for (sem, capacity) in &self.semaphores {
+                // Wait until all permits are returned (= all slots idle)
+                let _permits = sem.acquire_many(*capacity as u32).await;
+            }
+        };
+        if tokio::time::timeout(deadline, drain).await.is_err() {
+            warn!("Drain timeout expired, some jobs may still be running");
+        }
     }
 
     /// Get a reference to the cancellation token.
@@ -44,6 +58,17 @@ impl Deref for JobsHandle {
     fn deref(&self) -> &Self::Target {
         &self.queue
     }
+}
+
+/// Shared context for a poll loop, replacing many individual parameters.
+struct PollContext {
+    db: modo_db::sea_orm::DatabaseConnection,
+    services: ServiceRegistry,
+    semaphore: Arc<Semaphore>,
+    notify: Arc<Notify>,
+    queue_name: String,
+    worker_id: String,
+    poll_interval: Duration,
 }
 
 /// Start the job runner: spawns poll loops, stale reaper, cleanup, and cron scheduler.
@@ -78,32 +103,26 @@ pub async fn start(
     let cancel = CancellationToken::new();
     let queue = JobQueue::new(db);
     let worker_id = ulid::Ulid::new().to_string();
+    let mut semaphores = Vec::new();
 
     // Spawn per-queue poll loops
     for queue_config in &config.queues {
-        let db = db.connection().clone();
-        let cancel = cancel.clone();
-        let services = services.clone();
-        let poll_interval = Duration::from_secs(config.poll_interval_secs);
         let semaphore = Arc::new(Semaphore::new(queue_config.concurrency));
-        let notify = Arc::new(Notify::new());
-        let queue_name = queue_config.name.clone();
-        let worker_id = worker_id.clone();
-        let db_pool_opt = services.get::<DbPool>();
+        semaphores.push((semaphore.clone(), queue_config.concurrency));
+
+        let ctx = PollContext {
+            db: db.connection().clone(),
+            services: services.clone(),
+            semaphore,
+            notify: Arc::new(Notify::new()),
+            queue_name: queue_config.name.clone(),
+            worker_id: worker_id.clone(),
+            poll_interval: Duration::from_secs(config.poll_interval_secs),
+        };
+        let cancel = cancel.clone();
 
         tokio::spawn(async move {
-            poll_loop(
-                &db,
-                cancel,
-                services,
-                db_pool_opt,
-                semaphore,
-                notify,
-                &queue_name,
-                &worker_id,
-                poll_interval,
-            )
-            .await;
+            poll_loop(cancel, &ctx).await;
         });
     }
 
@@ -133,64 +152,56 @@ pub async fn start(
     {
         let cancel = cancel.clone();
         let services = services.clone();
-        let db_pool_opt = services.get::<DbPool>();
 
         tokio::spawn(async move {
-            crate::cron::start_cron_jobs(cancel, services, db_pool_opt).await;
+            crate::cron::start_cron_jobs(cancel, services).await;
         });
     }
 
     info!("Job runner started (worker_id={worker_id})");
 
-    Ok(JobsHandle { queue, cancel })
+    Ok(JobsHandle {
+        queue,
+        cancel,
+        semaphores,
+        drain_timeout_secs: config.drain_timeout_secs,
+    })
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn poll_loop(
-    db: &modo_db::sea_orm::DatabaseConnection,
-    cancel: CancellationToken,
-    services: ServiceRegistry,
-    db_pool: Option<Arc<DbPool>>,
-    semaphore: Arc<Semaphore>,
-    notify: Arc<Notify>,
-    queue_name: &str,
-    worker_id: &str,
-    poll_interval: Duration,
-) {
-    let mut interval = tokio::time::interval(poll_interval);
+async fn poll_loop(cancel: CancellationToken, ctx: &PollContext) {
+    let mut interval = tokio::time::interval(ctx.poll_interval);
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut queue_empty = false;
 
     loop {
         tokio::select! {
             _ = cancel.cancelled() => {
-                info!(queue = queue_name, "Poll loop shutting down");
+                info!(queue = %ctx.queue_name, "Poll loop shutting down");
                 break;
             }
             _ = interval.tick() => {
                 queue_empty = false; // reset on tick — always re-check
             }
-            _ = notify.notified(), if !queue_empty => {
+            _ = ctx.notify.notified(), if !queue_empty => {
                 // job completed, slot freed — try to refill
             }
         }
 
         // Inner loop: fill all available concurrency slots
         loop {
-            let permit = match semaphore.clone().try_acquire_owned() {
+            let permit = match ctx.semaphore.clone().try_acquire_owned() {
                 Ok(p) => p,
                 Err(_) => break, // all slots full
             };
 
-            match claim_next(db, queue_name, worker_id).await {
+            match claim_next(&ctx.db, &ctx.queue_name, &ctx.worker_id).await {
                 Ok(Some(job)) => {
-                    let services = services.clone();
-                    let db_pool = db_pool.clone();
-                    let db_clone = db.clone();
-                    let notify = notify.clone();
+                    let services = ctx.services.clone();
+                    let db_clone = ctx.db.clone();
+                    let notify = ctx.notify.clone();
 
                     tokio::spawn(async move {
-                        execute_job(&db_clone, job, services, db_pool).await;
+                        execute_job(&db_clone, job, services).await;
                         drop(permit);
                         notify.notify_one();
                     });
@@ -202,7 +213,7 @@ async fn poll_loop(
                 }
                 Err(e) => {
                     drop(permit);
-                    error!(queue = queue_name, error = %e, "Failed to claim job");
+                    error!(queue = %ctx.queue_name, error = %e, "Failed to claim job");
                     break; // don't hammer DB on errors
                 }
             }
@@ -210,7 +221,8 @@ async fn poll_loop(
     }
 }
 
-async fn claim_next(
+#[doc(hidden)]
+pub async fn claim_next(
     db: &modo_db::sea_orm::DatabaseConnection,
     queue: &str,
     worker_id: &str,
@@ -281,14 +293,13 @@ async fn execute_job(
     db: &modo_db::sea_orm::DatabaseConnection,
     job: job::Model,
     services: ServiceRegistry,
-    db_pool: Option<Arc<DbPool>>,
 ) {
     let job_id = JobId::from_raw(&job.id);
     let job_name = job.name.clone();
     let queue = job.queue.clone();
     let attempt = job.attempts;
-    let max_retries = job.max_retries;
-    let timeout_secs = job.timeout_secs as u64;
+    let max_attempts = job.max_attempts;
+    let timeout_secs = Ord::max(job.timeout_secs, 1) as u64;
 
     // Find handler
     let handler: Option<Box<dyn JobHandlerDyn>> = inventory::iter::<JobRegistration>
@@ -306,6 +317,7 @@ async fn execute_job(
         return;
     };
 
+    let db_pool = services.get::<DbPool>();
     let ctx = JobContext {
         job_id: job_id.clone(),
         name: job_name.clone(),
@@ -329,7 +341,7 @@ async fn execute_job(
                 job_name = %job_name,
                 queue = %queue,
                 attempt = attempt,
-                max_retries = max_retries,
+                max_attempts = max_attempts,
                 error = %e,
                 "Job failed"
             );
@@ -341,7 +353,7 @@ async fn execute_job(
                 job_name = %job_name,
                 queue = %queue,
                 attempt = attempt,
-                max_retries = max_retries,
+                max_attempts = max_attempts,
                 "Job timed out"
             );
             handle_failure(db, &job).await;
@@ -349,15 +361,17 @@ async fn execute_job(
     }
 }
 
-async fn handle_failure(db: &modo_db::sea_orm::DatabaseConnection, job: &job::Model) {
-    if job.attempts < job.max_retries {
+#[doc(hidden)]
+pub async fn handle_failure(db: &modo_db::sea_orm::DatabaseConnection, job: &job::Model) {
+    if job.attempts < job.max_attempts {
         mark_failed(db, job).await;
     } else {
         mark_dead(db, &job.id).await;
     }
 }
 
-async fn mark_completed(db: &modo_db::sea_orm::DatabaseConnection, id: &str) {
+#[doc(hidden)]
+pub async fn mark_completed(db: &modo_db::sea_orm::DatabaseConnection, id: &str) {
     let now = Utc::now();
     if let Err(e) = job::Entity::update_many()
         .filter(job::Column::Id.eq(id))
@@ -376,7 +390,8 @@ async fn mark_completed(db: &modo_db::sea_orm::DatabaseConnection, id: &str) {
     }
 }
 
-async fn mark_failed(db: &modo_db::sea_orm::DatabaseConnection, job: &job::Model) {
+#[doc(hidden)]
+pub async fn mark_failed(db: &modo_db::sea_orm::DatabaseConnection, job: &job::Model) {
     let now = Utc::now();
     // Exponential backoff: 5s * 2^(attempt-1), capped at 1h
     let backoff_secs = std::cmp::min(5u64 * 2u64.pow((job.attempts - 1) as u32), 3600);
@@ -411,7 +426,8 @@ async fn mark_failed(db: &modo_db::sea_orm::DatabaseConnection, job: &job::Model
     }
 }
 
-async fn mark_dead(db: &modo_db::sea_orm::DatabaseConnection, id: &str) {
+#[doc(hidden)]
+pub async fn mark_dead(db: &modo_db::sea_orm::DatabaseConnection, id: &str) {
     let now = Utc::now();
     if let Err(e) = job::Entity::update_many()
         .filter(job::Column::Id.eq(id))
@@ -462,6 +478,10 @@ async fn reap_stale_loop(
                         modo_db::sea_orm::sea_query::Expr::value(Option::<chrono::DateTime<chrono::Utc>>::None),
                     )
                     .col_expr(
+                        job::Column::Attempts,
+                        modo_db::sea_orm::sea_query::Expr::col(job::Column::Attempts).sub(1),
+                    )
+                    .col_expr(
                         job::Column::UpdatedAt,
                         modo_db::sea_orm::sea_query::Expr::value(Utc::now()),
                     )
@@ -489,7 +509,11 @@ async fn cleanup_loop(
     let mut interval = tokio::time::interval(Duration::from_secs(cleanup.interval_secs));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-    let statuses = cleanup.statuses.clone();
+    let status_strs: Vec<String> = cleanup
+        .statuses
+        .iter()
+        .map(|s| s.as_str().to_string())
+        .collect();
     let retention_secs = cleanup.retention_secs;
 
     loop {
@@ -501,7 +525,7 @@ async fn cleanup_loop(
             _ = interval.tick() => {
                 let cutoff = Utc::now() - chrono::Duration::seconds(retention_secs as i64);
                 match job::Entity::delete_many()
-                    .filter(job::Column::State.is_in(&statuses))
+                    .filter(job::Column::State.is_in(&status_strs))
                     .filter(job::Column::UpdatedAt.lt(cutoff))
                     .exec(db)
                     .await

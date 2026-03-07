@@ -11,7 +11,7 @@ pub struct Job {
     pub state: String,
     pub priority: i32,
     pub attempts: i32,
-    pub max_retries: i32,
+    pub max_attempts: i32,
     pub run_at: modo_db::chrono::DateTime<modo_db::chrono::Utc>,
     pub timeout_secs: i32,
     pub locked_by: Option<String>,

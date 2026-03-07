@@ -4,14 +4,10 @@ use modo::app::ServiceRegistry;
 use modo_db::pool::DbPool;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 /// Spawn in-memory cron job tasks for all registered cron jobs.
-pub(crate) async fn start_cron_jobs(
-    cancel: CancellationToken,
-    services: ServiceRegistry,
-    db_pool: Option<Arc<DbPool>>,
-) {
+pub(crate) async fn start_cron_jobs(cancel: CancellationToken, services: ServiceRegistry) {
     for reg in inventory::iter::<JobRegistration> {
         let Some(cron_expr) = reg.cron else {
             continue;
@@ -26,7 +22,6 @@ pub(crate) async fn start_cron_jobs(
 
         let cancel = cancel.clone();
         let services = services.clone();
-        let db_pool = db_pool.clone();
         let name = reg.name;
         let timeout_secs = reg.timeout_secs;
         let handler_factory = reg.handler_factory;
@@ -35,7 +30,6 @@ pub(crate) async fn start_cron_jobs(
             run_cron_loop(
                 cancel,
                 services,
-                db_pool,
                 name,
                 timeout_secs,
                 handler_factory,
@@ -51,12 +45,14 @@ pub(crate) async fn start_cron_jobs(
 async fn run_cron_loop(
     cancel: CancellationToken,
     services: ServiceRegistry,
-    db_pool: Option<Arc<DbPool>>,
     name: &'static str,
     timeout_secs: u64,
     handler_factory: fn() -> Box<dyn crate::handler::JobHandlerDyn>,
     schedule: cron::Schedule,
 ) {
+    let db_pool: Option<Arc<DbPool>> = services.get::<DbPool>();
+    let mut consecutive_failures: u32 = 0;
+
     loop {
         // Calculate time until next fire
         let now = chrono::Utc::now();
@@ -95,13 +91,30 @@ async fn run_cron_loop(
 
                 match result {
                     Ok(Ok(())) => {
+                        consecutive_failures = 0;
                         info!(job = name, "Cron job completed");
                     }
                     Ok(Err(e)) => {
+                        consecutive_failures += 1;
                         error!(job = name, error = %e, "Cron job failed");
+                        if consecutive_failures >= 5 {
+                            warn!(
+                                job = name,
+                                consecutive_failures,
+                                "Cron job has failed {consecutive_failures} consecutive times, investigate"
+                            );
+                        }
                     }
                     Err(_) => {
+                        consecutive_failures += 1;
                         error!(job = name, "Cron job timed out");
+                        if consecutive_failures >= 5 {
+                            warn!(
+                                job = name,
+                                consecutive_failures,
+                                "Cron job has failed {consecutive_failures} consecutive times, investigate"
+                            );
+                        }
                     }
                 }
             }

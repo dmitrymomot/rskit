@@ -36,7 +36,7 @@ async fn test_insert_and_query_job() {
         state: ActiveValue::Set(JobState::Pending.as_str().to_string()),
         priority: ActiveValue::Set(0),
         attempts: ActiveValue::Set(0),
-        max_retries: ActiveValue::Set(3),
+        max_attempts: ActiveValue::Set(3),
         run_at: ActiveValue::Set(now),
         timeout_secs: ActiveValue::Set(300),
         locked_by: ActiveValue::Set(None),
@@ -57,7 +57,7 @@ async fn test_insert_and_query_job() {
     assert_eq!(found.queue, "default");
     assert_eq!(found.state, "pending");
     assert_eq!(found.attempts, 0);
-    assert_eq!(found.max_retries, 3);
+    assert_eq!(found.max_attempts, 3);
 }
 
 #[tokio::test]
@@ -76,7 +76,7 @@ async fn test_cancel_pending_job() {
         state: ActiveValue::Set(JobState::Pending.as_str().to_string()),
         priority: ActiveValue::Set(0),
         attempts: ActiveValue::Set(0),
-        max_retries: ActiveValue::Set(3),
+        max_attempts: ActiveValue::Set(3),
         run_at: ActiveValue::Set(now),
         timeout_secs: ActiveValue::Set(300),
         locked_by: ActiveValue::Set(None),
@@ -93,7 +93,7 @@ async fn test_cancel_pending_job() {
         .filter(jobs_entity::Column::State.eq(JobState::Pending.as_str()))
         .col_expr(
             jobs_entity::Column::State,
-            modo_db::sea_orm::sea_query::Expr::value(JobState::Dead.as_str()),
+            modo_db::sea_orm::sea_query::Expr::value(JobState::Cancelled.as_str()),
         )
         .exec(&db)
         .await
@@ -107,5 +107,5 @@ async fn test_cancel_pending_job() {
         .expect("Query failed")
         .expect("Job not found");
 
-    assert_eq!(found.state, "dead");
+    assert_eq!(found.state, "cancelled");
 }

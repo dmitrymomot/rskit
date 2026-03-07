@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
@@ -29,13 +30,14 @@ impl fmt::Display for JobId {
 }
 
 /// State of a job in the queue.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum JobState {
     Pending,
     Running,
     Completed,
-    Failed,
     Dead,
+    Cancelled,
 }
 
 impl JobState {
@@ -44,8 +46,8 @@ impl JobState {
             Self::Pending => "pending",
             Self::Running => "running",
             Self::Completed => "completed",
-            Self::Failed => "failed",
             Self::Dead => "dead",
+            Self::Cancelled => "cancelled",
         }
     }
 }
@@ -64,8 +66,8 @@ impl FromStr for JobState {
             "pending" => Ok(Self::Pending),
             "running" => Ok(Self::Running),
             "completed" => Ok(Self::Completed),
-            "failed" => Ok(Self::Failed),
             "dead" => Ok(Self::Dead),
+            "cancelled" => Ok(Self::Cancelled),
             other => Err(format!("unknown job state: {other}")),
         }
     }

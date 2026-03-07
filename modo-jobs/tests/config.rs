@@ -1,4 +1,4 @@
-use modo_jobs::{CleanupConfig, JobsConfig};
+use modo_jobs::{CleanupConfig, JobState, JobsConfig};
 
 #[test]
 fn test_jobs_config_defaults() {
@@ -16,7 +16,10 @@ fn test_cleanup_config_defaults() {
     let config = CleanupConfig::default();
     assert_eq!(config.interval_secs, 3600);
     assert_eq!(config.retention_secs, 86400);
-    assert_eq!(config.statuses, vec!["completed", "dead"]);
+    assert_eq!(
+        config.statuses,
+        vec![JobState::Completed, JobState::Dead, JobState::Cancelled]
+    );
 }
 
 #[test]
@@ -46,7 +49,7 @@ cleanup:
     assert_eq!(config.queues[1].concurrency, 1);
     assert_eq!(config.cleanup.interval_secs, 7200);
     assert_eq!(config.cleanup.retention_secs, 172800);
-    assert_eq!(config.cleanup.statuses, vec!["completed"]);
+    assert_eq!(config.cleanup.statuses, vec![JobState::Completed]);
 }
 
 #[test]

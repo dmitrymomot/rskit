@@ -26,8 +26,8 @@ fn test_job_state_display_roundtrip() {
         JobState::Pending,
         JobState::Running,
         JobState::Completed,
-        JobState::Failed,
         JobState::Dead,
+        JobState::Cancelled,
     ];
     for state in states {
         let s = state.to_string();
