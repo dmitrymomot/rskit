@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Semaphore;
+use tokio::sync::{Notify, Semaphore};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
@@ -86,6 +86,7 @@ pub async fn start(
         let services = services.clone();
         let poll_interval = Duration::from_secs(config.poll_interval_secs);
         let semaphore = Arc::new(Semaphore::new(queue_config.concurrency));
+        let notify = Arc::new(Notify::new());
         let queue_name = queue_config.name.clone();
         let worker_id = worker_id.clone();
         let db_pool_opt = services.get::<DbPool>();
@@ -97,6 +98,7 @@ pub async fn start(
                 services,
                 db_pool_opt,
                 semaphore,
+                notify,
                 &queue_name,
                 &worker_id,
                 poll_interval,
@@ -150,12 +152,14 @@ async fn poll_loop(
     services: ServiceRegistry,
     db_pool: Option<Arc<DbPool>>,
     semaphore: Arc<Semaphore>,
+    notify: Arc<Notify>,
     queue_name: &str,
     worker_id: &str,
     poll_interval: Duration,
 ) {
     let mut interval = tokio::time::interval(poll_interval);
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut queue_empty = false;
 
     loop {
         tokio::select! {
@@ -164,30 +168,42 @@ async fn poll_loop(
                 break;
             }
             _ = interval.tick() => {
-                // Try to acquire a permit before claiming
-                let permit = match semaphore.clone().try_acquire_owned() {
-                    Ok(p) => p,
-                    Err(_) => continue, // all slots busy
-                };
+                queue_empty = false; // reset on tick — always re-check
+            }
+            _ = notify.notified(), if !queue_empty => {
+                // job completed, slot freed — try to refill
+            }
+        }
 
-                match claim_next(db, queue_name, worker_id).await {
-                    Ok(Some(job)) => {
-                        let services = services.clone();
-                        let db_pool = db_pool.clone();
-                        let db_clone = db.clone();
+        // Inner loop: fill all available concurrency slots
+        loop {
+            let permit = match semaphore.clone().try_acquire_owned() {
+                Ok(p) => p,
+                Err(_) => break, // all slots full
+            };
 
-                        tokio::spawn(async move {
-                            execute_job(&db_clone, job, services, db_pool).await;
-                            drop(permit);
-                        });
-                    }
-                    Ok(None) => {
+            match claim_next(db, queue_name, worker_id).await {
+                Ok(Some(job)) => {
+                    let services = services.clone();
+                    let db_pool = db_pool.clone();
+                    let db_clone = db.clone();
+                    let notify = notify.clone();
+
+                    tokio::spawn(async move {
+                        execute_job(&db_clone, job, services, db_pool).await;
                         drop(permit);
-                    }
-                    Err(e) => {
-                        drop(permit);
-                        error!(queue = queue_name, error = %e, "Failed to claim job");
-                    }
+                        notify.notify_one();
+                    });
+                }
+                Ok(None) => {
+                    drop(permit);
+                    queue_empty = true;
+                    break; // no more jobs
+                }
+                Err(e) => {
+                    drop(permit);
+                    error!(queue = queue_name, error = %e, "Failed to claim job");
+                    break; // don't hammer DB on errors
                 }
             }
         }
