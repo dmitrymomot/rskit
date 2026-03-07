@@ -274,6 +274,7 @@ feat(modo-session): add session middleware (Tower Layer/Service)
 Methods:
 - `authenticate(user_id)` / `authenticate_with(user_id, data)` — destroy current (fixation prevention), create new, signal Set
 - `logout()` / `logout_all()` / `logout_other()` — destroy, signal Remove
+- `revoke(id: &SessionId)` — destroy a specific session by ID (must belong to current user)
 - `rotate()` — new token, signal Set
 - `current()`, `user_id()`, `is_authenticated()` — read from Mutex
 - `list_my_sessions()` — delegates to store

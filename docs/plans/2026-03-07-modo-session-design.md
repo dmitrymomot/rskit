@@ -119,6 +119,9 @@ impl SessionManager {
     pub async fn logout_all(&self) -> Result<()>;
     pub async fn logout_other(&self) -> Result<()>;
 
+    // Revoke a specific session (from "manage my devices" list)
+    pub async fn revoke(&self, id: &SessionId) -> Result<()>;
+
     // Token rotation
     pub async fn rotate(&self) -> Result<()>;
 
@@ -140,6 +143,7 @@ Behaviors:
 - `logout()` destroys current session, signals middleware to remove cookie.
 - `logout_all()` destroys all sessions for the user (including current).
 - `logout_other()` destroys all sessions except current.
+- `revoke(id)` destroys a specific session by ID (for "manage my devices" UI). Only works on sessions owned by the current user.
 - `rotate()` generates new token, signals middleware to update cookie.
 - `list_my_sessions()` returns all sessions for the authenticated user.
 - `get/set/remove_key` read-modify-write the JSON `data` blob with immediate DB writes.
