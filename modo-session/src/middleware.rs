@@ -1,10 +1,10 @@
 use crate::meta::{SessionMeta, extract_client_ip, header_str};
 use crate::store::SessionStore;
 use crate::types::{SessionData, SessionToken};
-use modo::axum::extract::connect_info::ConnectInfo;
 use chrono::Utc;
 use futures_util::future::BoxFuture;
 use http::{Request, Response};
+use modo::axum::extract::connect_info::ConnectInfo;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -178,27 +178,18 @@ where
                     }
                 }
                 SessionAction::None => {
-                    if should_touch {
-                        if let Some(ref session) = current_session {
-                            let new_expires =
-                                Utc::now() + chrono::Duration::seconds(ttl_secs as i64);
-                            if let Err(e) = store.touch(&session.id, new_expires).await {
-                                tracing::error!(
-                                    session_id = session.id.as_str(),
-                                    "Failed to touch session: {e}"
-                                );
-                            } else if let Some(ref token) = session_token {
-                                let cookie_val = build_set_cookie(
-                                    cookie_name,
-                                    &token.as_hex(),
-                                    ttl_secs,
-                                    is_secure,
-                                );
-                                if let Ok(val) = cookie_val.parse() {
-                                    response
-                                        .headers_mut()
-                                        .append(http::header::SET_COOKIE, val);
-                                }
+                    if should_touch && let Some(ref session) = current_session {
+                        let new_expires = Utc::now() + chrono::Duration::seconds(ttl_secs as i64);
+                        if let Err(e) = store.touch(&session.id, new_expires).await {
+                            tracing::error!(
+                                session_id = session.id.as_str(),
+                                "Failed to touch session: {e}"
+                            );
+                        } else if let Some(ref token) = session_token {
+                            let cookie_val =
+                                build_set_cookie(cookie_name, &token.as_hex(), ttl_secs, is_secure);
+                            if let Ok(val) = cookie_val.parse() {
+                                response.headers_mut().append(http::header::SET_COOKIE, val);
                             }
                         }
                     }
@@ -221,23 +212,25 @@ where
 // --- Cookie helpers ---
 
 fn read_session_cookie(headers: &http::HeaderMap, cookie_name: &str) -> Option<SessionToken> {
-    headers.get_all(http::header::COOKIE).iter().find_map(|val| {
-        let val = val.to_str().ok()?;
-        for pair in val.split(';') {
-            let pair = pair.trim();
-            if let Some(value) = pair.strip_prefix(cookie_name) {
-                let value = value.strip_prefix('=')?;
-                return SessionToken::from_hex(value).ok();
+    headers
+        .get_all(http::header::COOKIE)
+        .iter()
+        .find_map(|val| {
+            let val = val.to_str().ok()?;
+            for pair in val.split(';') {
+                let pair = pair.trim();
+                if let Some(value) = pair.strip_prefix(cookie_name) {
+                    let value = value.strip_prefix('=')?;
+                    return SessionToken::from_hex(value).ok();
+                }
             }
-        }
-        None
-    })
+            None
+        })
 }
 
 fn build_set_cookie(name: &str, value: &str, max_age_secs: u64, secure: bool) -> String {
-    let mut cookie = format!(
-        "{name}={value}; HttpOnly; SameSite=Lax; Path=/; Max-Age={max_age_secs}"
-    );
+    let mut cookie =
+        format!("{name}={value}; HttpOnly; SameSite=Lax; Path=/; Max-Age={max_age_secs}");
     if secure {
         cookie.push_str("; Secure");
     }

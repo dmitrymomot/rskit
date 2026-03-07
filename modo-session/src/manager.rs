@@ -14,10 +14,7 @@ pub struct SessionManager {
 impl<S: Send + Sync> FromRequestParts<S> for SessionManager {
     type Rejection = Error;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        _state: &S,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let state = parts
             .extensions
             .get::<Arc<SessionManagerState>>()
@@ -123,7 +120,9 @@ impl SessionManager {
             .ok_or_else(|| Error::internal("session not found"))?;
 
         if target.user_id != session.user_id {
-            return Err(Error::internal("cannot revoke session belonging to another user"));
+            return Err(Error::internal(
+                "cannot revoke session belonging to another user",
+            ));
         }
 
         self.state.store.destroy(id).await

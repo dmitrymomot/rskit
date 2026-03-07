@@ -4,10 +4,10 @@ use crate::meta::SessionMeta;
 use crate::types::{SessionData, SessionId, SessionToken};
 use chrono::{DateTime, Utc};
 use modo::Error;
+use modo_db::DbPool;
 use modo_db::sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
 };
-use modo_db::DbPool;
 
 #[derive(Clone)]
 pub struct SessionStore {
@@ -36,8 +36,7 @@ impl SessionStore {
         let token = SessionToken::generate();
         let token_hash = token.hash();
         let now = Utc::now();
-        let expires_at =
-            now + chrono::Duration::seconds(self.config.session_ttl_secs as i64);
+        let expires_at = now + chrono::Duration::seconds(self.config.session_ttl_secs as i64);
         let data_json = data.unwrap_or(serde_json::json!({}));
 
         let model = ActiveModel {
@@ -78,10 +77,7 @@ impl SessionStore {
         }
     }
 
-    pub async fn read_by_token(
-        &self,
-        token: &SessionToken,
-    ) -> Result<Option<SessionData>, Error> {
+    pub async fn read_by_token(&self, token: &SessionToken) -> Result<Option<SessionData>, Error> {
         let hash = token.hash();
         let model = Entity::find()
             .filter(Column::TokenHash.eq(&hash))
@@ -122,11 +118,7 @@ impl SessionStore {
         Ok(new_token)
     }
 
-    pub async fn touch(
-        &self,
-        id: &SessionId,
-        new_expires_at: DateTime<Utc>,
-    ) -> Result<(), Error> {
+    pub async fn touch(&self, id: &SessionId, new_expires_at: DateTime<Utc>) -> Result<(), Error> {
         let model = ActiveModel {
             id: Set(id.as_str().to_string()),
             last_active_at: Set(Utc::now()),
@@ -142,11 +134,7 @@ impl SessionStore {
         Ok(())
     }
 
-    pub async fn update_data(
-        &self,
-        id: &SessionId,
-        data: serde_json::Value,
-    ) -> Result<(), Error> {
+    pub async fn update_data(&self, id: &SessionId, data: serde_json::Value) -> Result<(), Error> {
         let model = ActiveModel {
             id: Set(id.as_str().to_string()),
             data: Set(serde_json::to_string(&data)
@@ -171,11 +159,7 @@ impl SessionStore {
         Ok(())
     }
 
-    pub async fn destroy_all_except(
-        &self,
-        user_id: &str,
-        keep: &SessionId,
-    ) -> Result<(), Error> {
+    pub async fn destroy_all_except(&self, user_id: &str, keep: &SessionId) -> Result<(), Error> {
         Entity::delete_many()
             .filter(Column::UserId.eq(user_id))
             .filter(Column::Id.ne(keep.as_str()))
