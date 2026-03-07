@@ -1,7 +1,7 @@
 use modo_db::sea_orm::{
     ActiveModelTrait, ActiveValue, ConnectionTrait, Database, EntityTrait, Schema,
 };
-use modo_jobs::entity::modo_jobs as jobs_entity;
+use modo_jobs::entity::job as jobs_entity;
 use modo_jobs::{JobId, JobState};
 
 async fn setup_db() -> modo_db::sea_orm::DatabaseConnection {

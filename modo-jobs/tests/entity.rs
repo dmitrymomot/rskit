@@ -2,7 +2,7 @@ use modo_db::EntityRegistration;
 
 // Force the linker to include modo_jobs entity registration.
 #[allow(unused_imports)]
-use modo_jobs::entity::modo_jobs as _;
+use modo_jobs::entity::job as _;
 
 #[test]
 fn test_entity_registered() {
@@ -30,7 +30,7 @@ fn test_entity_has_claim_index() {
     assert!(
         reg.extra_sql
             .iter()
-            .any(|s| s.contains("idx_modo_jobs_claim")),
+            .any(|s| s.contains("idx_modo_jobs_state_queue_run_at_priority")),
         "Expected claim index in extra_sql"
     );
 }
@@ -89,7 +89,7 @@ async fn test_claim_index_created() {
     // Check sqlite_master for the index
     let result = db
         .execute_unprepared(
-            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_modo_jobs_claim'",
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_modo_jobs_state_queue_run_at_priority'",
         )
         .await;
     assert!(result.is_ok(), "claim index should exist");

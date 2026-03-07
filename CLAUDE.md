@@ -122,5 +122,5 @@ Refactor strategy:
 - Clippy enforces `collapsible_if` — collapse nested `if`/`if let` with `&&`
 - In handler macro: `func_name` must be cloned (`func.sig.ident.clone()`) before mutating `func` — otherwise borrow checker blocks `&mut func`
 - Re-exports in `modo/src/lib.rs` must be alphabetically sorted (`cargo fmt` enforces this)
-- `modo-jobs` entity module is named `modo_jobs` — imports in tests can shadow the crate; use `use modo_jobs::entity::modo_jobs as jobs_entity;`
-- `inventory` registration from library crates may not link in tests — force with `use modo_jobs::entity::modo_jobs as _;`
+- `modo-jobs` entity module is named `job` (from `struct Job`); use `use modo_jobs::entity::job as jobs_entity;` in tests to avoid shadowing
+- `inventory` registration from library crates may not link in tests — force with `use modo_jobs::entity::job as _;`

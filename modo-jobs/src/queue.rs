@@ -1,4 +1,4 @@
-use crate::entity::modo_jobs;
+use crate::entity::job;
 use crate::handler::JobRegistration;
 use crate::types::{JobId, JobState};
 use chrono::{DateTime, Utc};
@@ -50,15 +50,15 @@ impl JobQueue {
     /// Cancel a pending job by ID.
     pub async fn cancel(&self, id: &JobId) -> Result<(), modo::Error> {
         let result = modo_db::sea_orm::UpdateMany::exec(
-            modo_jobs::Entity::update_many()
-                .filter(modo_jobs::Column::Id.eq(id.as_str()))
-                .filter(modo_jobs::Column::State.eq(JobState::Pending.as_str()))
+            job::Entity::update_many()
+                .filter(job::Column::Id.eq(id.as_str()))
+                .filter(job::Column::State.eq(JobState::Pending.as_str()))
                 .col_expr(
-                    modo_jobs::Column::State,
+                    job::Column::State,
                     modo_db::sea_orm::sea_query::Expr::value(JobState::Dead.as_str()),
                 )
                 .col_expr(
-                    modo_jobs::Column::UpdatedAt,
+                    job::Column::UpdatedAt,
                     modo_db::sea_orm::sea_query::Expr::value(Utc::now()),
                 ),
             self.db.as_ref(),
@@ -84,7 +84,7 @@ impl JobQueue {
     ) -> Result<JobId, modo::Error> {
         let id = JobId::new();
 
-        let model = modo_jobs::ActiveModel {
+        let model = job::ActiveModel {
             id: ActiveValue::Set(id.as_str().to_string()),
             name: ActiveValue::Set(reg.name.to_string()),
             queue: ActiveValue::Set(reg.queue.to_string()),

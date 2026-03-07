@@ -1,5 +1,5 @@
 use crate::config::JobsConfig;
-use crate::entity::modo_jobs;
+use crate::entity::job;
 use crate::handler::{JobContext, JobHandlerDyn, JobRegistration};
 use crate::queue::JobQueue;
 use crate::types::{JobId, JobState};
@@ -198,7 +198,7 @@ async fn claim_next(
     db: &modo_db::sea_orm::DatabaseConnection,
     queue: &str,
     worker_id: &str,
-) -> Result<Option<modo_jobs::Model>, modo::Error> {
+) -> Result<Option<job::Model>, modo::Error> {
     let now = Utc::now();
     let backend = db.get_database_backend();
 
@@ -245,7 +245,7 @@ async fn claim_next(
         }
     };
 
-    let result = modo_jobs::Model::find_by_statement(Statement::from_string(backend, sql))
+    let result = job::Model::find_by_statement(Statement::from_string(backend, sql))
         .one(db)
         .await
         .map_err(|e| modo::Error::internal(format!("Claim query failed: {e}")))?;
@@ -255,7 +255,7 @@ async fn claim_next(
 
 async fn execute_job(
     db: &modo_db::sea_orm::DatabaseConnection,
-    job: modo_jobs::Model,
+    job: job::Model,
     services: ServiceRegistry,
     db_pool: Option<Arc<DbPool>>,
 ) {
@@ -325,7 +325,7 @@ async fn execute_job(
     }
 }
 
-async fn handle_failure(db: &modo_db::sea_orm::DatabaseConnection, job: &modo_jobs::Model) {
+async fn handle_failure(db: &modo_db::sea_orm::DatabaseConnection, job: &job::Model) {
     if job.attempts < job.max_retries {
         mark_failed(db, job).await;
     } else {
@@ -335,14 +335,14 @@ async fn handle_failure(db: &modo_db::sea_orm::DatabaseConnection, job: &modo_jo
 
 async fn mark_completed(db: &modo_db::sea_orm::DatabaseConnection, id: &str) {
     let now = Utc::now();
-    if let Err(e) = modo_jobs::Entity::update_many()
-        .filter(modo_jobs::Column::Id.eq(id))
+    if let Err(e) = job::Entity::update_many()
+        .filter(job::Column::Id.eq(id))
         .col_expr(
-            modo_jobs::Column::State,
+            job::Column::State,
             modo_db::sea_orm::sea_query::Expr::value(JobState::Completed.as_str()),
         )
         .col_expr(
-            modo_jobs::Column::UpdatedAt,
+            job::Column::UpdatedAt,
             modo_db::sea_orm::sea_query::Expr::value(now),
         )
         .exec(db)
@@ -352,32 +352,32 @@ async fn mark_completed(db: &modo_db::sea_orm::DatabaseConnection, id: &str) {
     }
 }
 
-async fn mark_failed(db: &modo_db::sea_orm::DatabaseConnection, job: &modo_jobs::Model) {
+async fn mark_failed(db: &modo_db::sea_orm::DatabaseConnection, job: &job::Model) {
     let now = Utc::now();
     // Exponential backoff: 5s * 2^(attempt-1), capped at 1h
     let backoff_secs = std::cmp::min(5u64 * 2u64.pow((job.attempts - 1) as u32), 3600);
     let next_run = now + chrono::Duration::seconds(backoff_secs as i64);
 
-    if let Err(e) = modo_jobs::Entity::update_many()
-        .filter(modo_jobs::Column::Id.eq(&job.id))
+    if let Err(e) = job::Entity::update_many()
+        .filter(job::Column::Id.eq(&job.id))
         .col_expr(
-            modo_jobs::Column::State,
+            job::Column::State,
             modo_db::sea_orm::sea_query::Expr::value(JobState::Pending.as_str()),
         )
         .col_expr(
-            modo_jobs::Column::RunAt,
+            job::Column::RunAt,
             modo_db::sea_orm::sea_query::Expr::value(next_run),
         )
         .col_expr(
-            modo_jobs::Column::LockedBy,
+            job::Column::LockedBy,
             modo_db::sea_orm::sea_query::Expr::value(Option::<String>::None),
         )
         .col_expr(
-            modo_jobs::Column::LockedAt,
+            job::Column::LockedAt,
             modo_db::sea_orm::sea_query::Expr::value(Option::<chrono::DateTime<chrono::Utc>>::None),
         )
         .col_expr(
-            modo_jobs::Column::UpdatedAt,
+            job::Column::UpdatedAt,
             modo_db::sea_orm::sea_query::Expr::value(now),
         )
         .exec(db)
@@ -389,14 +389,14 @@ async fn mark_failed(db: &modo_db::sea_orm::DatabaseConnection, job: &modo_jobs:
 
 async fn mark_dead(db: &modo_db::sea_orm::DatabaseConnection, id: &str) {
     let now = Utc::now();
-    if let Err(e) = modo_jobs::Entity::update_many()
-        .filter(modo_jobs::Column::Id.eq(id))
+    if let Err(e) = job::Entity::update_many()
+        .filter(job::Column::Id.eq(id))
         .col_expr(
-            modo_jobs::Column::State,
+            job::Column::State,
             modo_db::sea_orm::sea_query::Expr::value(JobState::Dead.as_str()),
         )
         .col_expr(
-            modo_jobs::Column::UpdatedAt,
+            job::Column::UpdatedAt,
             modo_db::sea_orm::sea_query::Expr::value(now),
         )
         .exec(db)
@@ -422,23 +422,23 @@ async fn reap_stale_loop(
             }
             _ = interval.tick() => {
                 let cutoff = Utc::now() - chrono::Duration::seconds(threshold_secs as i64);
-                match modo_jobs::Entity::update_many()
-                    .filter(modo_jobs::Column::State.eq(JobState::Running.as_str()))
-                    .filter(modo_jobs::Column::LockedAt.lt(cutoff))
+                match job::Entity::update_many()
+                    .filter(job::Column::State.eq(JobState::Running.as_str()))
+                    .filter(job::Column::LockedAt.lt(cutoff))
                     .col_expr(
-                        modo_jobs::Column::State,
+                        job::Column::State,
                         modo_db::sea_orm::sea_query::Expr::value(JobState::Pending.as_str()),
                     )
                     .col_expr(
-                        modo_jobs::Column::LockedBy,
+                        job::Column::LockedBy,
                         modo_db::sea_orm::sea_query::Expr::value(Option::<String>::None),
                     )
                     .col_expr(
-                        modo_jobs::Column::LockedAt,
+                        job::Column::LockedAt,
                         modo_db::sea_orm::sea_query::Expr::value(Option::<chrono::DateTime<chrono::Utc>>::None),
                     )
                     .col_expr(
-                        modo_jobs::Column::UpdatedAt,
+                        job::Column::UpdatedAt,
                         modo_db::sea_orm::sea_query::Expr::value(Utc::now()),
                     )
                     .exec(db)
@@ -476,9 +476,9 @@ async fn cleanup_loop(
             }
             _ = interval.tick() => {
                 let cutoff = Utc::now() - chrono::Duration::seconds(retention_secs as i64);
-                match modo_jobs::Entity::delete_many()
-                    .filter(modo_jobs::Column::State.is_in(&statuses))
-                    .filter(modo_jobs::Column::UpdatedAt.lt(cutoff))
+                match job::Entity::delete_many()
+                    .filter(job::Column::State.is_in(&statuses))
+                    .filter(job::Column::UpdatedAt.lt(cutoff))
                     .exec(db)
                     .await
                 {

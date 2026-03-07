@@ -89,6 +89,7 @@ impl syn::parse::Parse for EntityArgs {
 struct StructAttrs {
     timestamps: bool,
     soft_delete: bool,
+    framework: bool,
     indices: Vec<CompositeIndex>,
 }
 
@@ -135,6 +136,7 @@ struct ParsedField {
 fn parse_struct_attrs(input: &mut ItemStruct) -> Result<StructAttrs> {
     let mut timestamps = false;
     let mut soft_delete = false;
+    let mut framework = false;
     let mut indices = Vec::new();
     let mut parse_errors: Vec<syn::Error> = Vec::new();
 
@@ -149,6 +151,9 @@ fn parse_struct_attrs(input: &mut ItemStruct) -> Result<StructAttrs> {
                 Ok(())
             } else if meta.path.is_ident("soft_delete") {
                 soft_delete = true;
+                Ok(())
+            } else if meta.path.is_ident("framework") {
+                framework = true;
                 Ok(())
             } else if meta.path.is_ident("index") {
                 let mut columns = Vec::new();
@@ -178,7 +183,8 @@ fn parse_struct_attrs(input: &mut ItemStruct) -> Result<StructAttrs> {
                 indices.push(CompositeIndex { columns, unique });
                 Ok(())
             } else {
-                Err(meta.error("expected `timestamps`, `soft_delete`, or `index(...)`"))
+                Err(meta
+                    .error("expected `timestamps`, `soft_delete`, `framework`, or `index(...)`"))
             }
         }) {
             parse_errors.push(e);
@@ -197,6 +203,7 @@ fn parse_struct_attrs(input: &mut ItemStruct) -> Result<StructAttrs> {
     Ok(StructAttrs {
         timestamps,
         soft_delete,
+        framework,
         indices,
     })
 }
@@ -659,6 +666,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         extra_sql_stmts.push(sql);
     }
 
+    let is_framework = struct_attrs.framework;
+
     let extra_sql_tokens = if extra_sql_stmts.is_empty() {
         quote! { &[] }
     } else {
@@ -703,7 +712,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             modo_db::EntityRegistration {
                 table_name: #table_name,
                 register_fn: |sb| sb.register(#mod_name::Entity),
-                is_framework: false,
+                is_framework: #is_framework,
                 extra_sql: #extra_sql_tokens,
             }
         }
