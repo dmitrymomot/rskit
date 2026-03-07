@@ -364,7 +364,7 @@ async fn execute_job(
 #[doc(hidden)]
 pub async fn handle_failure(db: &modo_db::sea_orm::DatabaseConnection, job: &job::Model) {
     if job.attempts < job.max_attempts {
-        mark_failed(db, job).await;
+        schedule_retry(db, job).await;
     } else {
         mark_dead(db, &job.id).await;
     }
@@ -391,7 +391,7 @@ pub async fn mark_completed(db: &modo_db::sea_orm::DatabaseConnection, id: &str)
 }
 
 #[doc(hidden)]
-pub async fn mark_failed(db: &modo_db::sea_orm::DatabaseConnection, job: &job::Model) {
+pub async fn schedule_retry(db: &modo_db::sea_orm::DatabaseConnection, job: &job::Model) {
     let now = Utc::now();
     // Exponential backoff: 5s * 2^(attempt-1), capped at 1h
     let backoff_secs = std::cmp::min(5u64 * 2u64.pow((job.attempts - 1) as u32), 3600);
@@ -422,7 +422,7 @@ pub async fn mark_failed(db: &modo_db::sea_orm::DatabaseConnection, job: &job::M
         .exec(db)
         .await
     {
-        error!(job_id = &job.id, error = %e, "Failed to mark job failed");
+        error!(job_id = &job.id, error = %e, "Failed to schedule job retry");
     }
 }
 

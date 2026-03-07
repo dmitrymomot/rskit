@@ -130,7 +130,7 @@ async fn test_mark_completed() {
 }
 
 #[tokio::test]
-async fn test_mark_failed_sets_pending_with_future_run_at() {
+async fn test_schedule_retry_sets_pending_with_future_run_at() {
     let db = setup_db().await;
     let id = JobId::new();
     let now = chrono::Utc::now();
@@ -143,7 +143,7 @@ async fn test_mark_failed_sets_pending_with_future_run_at() {
         .expect("Expected a job");
 
     // Mark failed (retry)
-    runner::mark_failed(&db, &claimed).await;
+    runner::schedule_retry(&db, &claimed).await;
 
     let job = jobs_entity::Entity::find_by_id(id.as_str())
         .one(&db)
