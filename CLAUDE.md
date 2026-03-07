@@ -32,7 +32,8 @@ Refactor strategy:
 - `modo-db/` — database layer (features: sqlite, postgres)
 - `modo-session/` — session management
 - `modo-auth/` — authentication
-- `modo-jobs/` — background jobs
+- `modo-jobs/` — background jobs (**implemented**)
+- `modo-jobs-macros/` — `#[job(...)]` proc macro (**implemented**)
 - `modo-templates/` — Askama + HTMX + flash
 - `modo-csrf/` — CSRF protection
 - ADR: `docs/plans/2026-03-06-crate-split-design.md`
@@ -72,6 +73,23 @@ Refactor strategy:
 - Template context: `#[modo::context]` with `#[base]` + `#[user]` + `#[session]` fields
 - BaseContext: includes request_id, is_htmx, current_url, flash_messages, csrf_token, locale
 
+## Jobs (modo-jobs)
+
+- Define jobs: `#[modo_jobs::job(queue = "...", priority = N, max_retries = N, timeout = "5m")]`
+- Cron jobs: `#[modo_jobs::job(cron = "0 0 * * * *", timeout = "5m")]` — in-memory only
+- Cron + queue/priority/max_retries = compile error (mutually exclusive)
+- Job params: `payload: T` (Serialize/Deserialize), `Service<T>`, `Db(db): Db`
+- Enqueue: `MyJob::enqueue(&queue, &payload).await?` or `MyJob::enqueue_at(&queue, &payload, run_at).await?`
+- Extractor: `queue: JobQueue` in handlers (requires `JobsHandle` registered as service)
+- Start runner: `let jobs = modo_jobs::start(&db, &config.jobs, services).await?;`
+- `start()` takes `ServiceRegistry` as third arg for DI in job handlers
+- Cancel: `queue.cancel(&job_id).await?`
+- Entity: `modo_jobs` table with `is_framework: true` — auto-created by `sync_and_migrate`
+- Retry backoff: `5s * 2^(attempt-1)`, capped at 1h
+- Stale reaper: resets stuck `running` jobs older than `stale_threshold_secs` back to `pending`
+- Cleanup: auto-purges `completed`/`dead` jobs older than `retention_secs`
+- Design doc: `docs/plans/2026-03-07-modo-jobs-design.md`
+
 ## Key Decisions
 
 - "Full magic" — proc macros for everything, auto-discovery, zero runtime cost
@@ -104,3 +122,5 @@ Refactor strategy:
 - Clippy enforces `collapsible_if` — collapse nested `if`/`if let` with `&&`
 - In handler macro: `func_name` must be cloned (`func.sig.ident.clone()`) before mutating `func` — otherwise borrow checker blocks `&mut func`
 - Re-exports in `modo/src/lib.rs` must be alphabetically sorted (`cargo fmt` enforces this)
+- `modo-jobs` entity module is named `modo_jobs` — imports in tests can shadow the crate; use `use modo_jobs::entity::modo_jobs as jobs_entity;`
+- `inventory` registration from library crates may not link in tests — force with `use modo_jobs::entity::modo_jobs as _;`
