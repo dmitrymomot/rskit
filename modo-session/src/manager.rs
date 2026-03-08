@@ -1,9 +1,8 @@
 use crate::middleware::{SessionAction, SessionManagerState};
 use crate::types::{SessionData, SessionId};
-use modo::Error;
 use modo::axum::extract::FromRequestParts;
 use modo::axum::http::request::Parts;
-use modo::error::HttpError;
+use modo::{Error, HttpError};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::sync::Arc;
@@ -98,7 +97,7 @@ impl SessionManager {
         let current = self.state.current_session.lock().await;
         let session = current
             .as_ref()
-            .ok_or_else(|| Error::internal("no active session"))?;
+            .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
         self.state
             .store
             .destroy_all_except(&session.user_id, &session.id)
@@ -111,17 +110,17 @@ impl SessionManager {
         let current = self.state.current_session.lock().await;
         let session = current
             .as_ref()
-            .ok_or_else(|| Error::internal("no active session"))?;
+            .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
 
         let target = self
             .state
             .store
             .read(id)
             .await?
-            .ok_or_else(|| HttpError::NotFound.with_message("session not found"))?;
+            .ok_or_else(|| Error::from(HttpError::NotFound))?;
 
         if target.user_id != session.user_id {
-            return Err(HttpError::NotFound.with_message("session not found"));
+            return Err(Error::from(HttpError::NotFound));
         }
 
         self.state.store.destroy(id).await
@@ -133,7 +132,7 @@ impl SessionManager {
             let current = self.state.current_session.lock().await;
             let session = current
                 .as_ref()
-                .ok_or_else(|| Error::internal("no active session"))?;
+                .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
             session.id.clone()
         };
 
@@ -176,7 +175,7 @@ impl SessionManager {
             let current = self.state.current_session.lock().await;
             let session = current
                 .as_ref()
-                .ok_or_else(|| Error::internal("no active session"))?;
+                .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
             session.user_id.clone()
         };
         self.state.store.list_for_user(&user_id).await
@@ -206,7 +205,7 @@ impl SessionManager {
         let mut current = self.state.current_session.lock().await;
         let session = current
             .as_mut()
-            .ok_or_else(|| Error::internal("no active session"))?;
+            .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
 
         if !session.data.is_object() {
             session.data = serde_json::Value::Object(Default::default());
@@ -229,7 +228,7 @@ impl SessionManager {
         let mut current = self.state.current_session.lock().await;
         let session = current
             .as_mut()
-            .ok_or_else(|| Error::internal("no active session"))?;
+            .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
 
         if let serde_json::Value::Object(ref mut map) = session.data {
             map.remove(key);
