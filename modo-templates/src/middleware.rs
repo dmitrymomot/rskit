@@ -31,10 +31,7 @@ pub struct ContextMiddleware<S> {
 
 impl<S, ReqBody, ResBody> Service<Request<ReqBody>> for ContextMiddleware<S>
 where
-    S: Service<Request<ReqBody>, Response = axum::http::Response<ResBody>>
-        + Clone
-        + Send
-        + 'static,
+    S: Service<Request<ReqBody>, Response = axum::http::Response<ResBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
     ReqBody: Send + 'static,
     ResBody: Send + 'static,
