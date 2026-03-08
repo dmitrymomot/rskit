@@ -12,6 +12,8 @@ pub struct View {
     pub htmx_template: Option<String>,
     /// Serialized user context (struct fields).
     pub user_context: Value,
+    /// HTTP status code for the response.
+    pub status: StatusCode,
 }
 
 impl View {
@@ -20,11 +22,17 @@ impl View {
             template: template.into(),
             htmx_template: None,
             user_context,
+            status: StatusCode::OK,
         }
     }
 
     pub fn with_htmx(mut self, htmx_template: impl Into<String>) -> Self {
         self.htmx_template = Some(htmx_template.into());
+        self
+    }
+
+    pub fn with_status(mut self, status: StatusCode) -> Self {
+        self.status = status;
         self
     }
 }
@@ -33,7 +41,7 @@ impl View {
 impl IntoResponse for View {
     fn into_response(self) -> Response {
         let mut response = Response::new(axum::body::Body::empty());
-        *response.status_mut() = StatusCode::OK;
+        *response.status_mut() = self.status;
         response.extensions_mut().insert(self);
         response
     }

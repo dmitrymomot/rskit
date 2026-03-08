@@ -339,7 +339,7 @@ impl AppBuilder {
         // Stack order: CORS > Maintenance > Catch Panic > Request ID >
         //   Sensitive Headers > Tracing > Client IP > Timeout > Trailing Slash >
         //   Compression > Body Limit > Security Headers > Error Handler >
-        //   Rate Limiter > Context Layer > User Layers > Render Layer >
+        //   Rate Limiter > Context Layer > Request ID Injector > User Layers > Render Layer >
         //   Module/Handler MW (innermost)
         // =====================================================================
 

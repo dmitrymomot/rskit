@@ -5,7 +5,7 @@ use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
 /// Layer that creates a `TemplateContext` in request extensions
-/// with built-in values (request_id, current_url).
+/// with built-in values (current_url).
 /// Must be applied outermost of all context-writing middleware.
 #[derive(Clone, Default)]
 pub struct ContextLayer;

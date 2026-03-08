@@ -76,11 +76,12 @@ fn view_impl(
     };
 
     Ok(quote! {
-        #[derive(::serde::Serialize)]
+        #[derive(::modo_templates::serde::Serialize)]
+        #[serde(crate = "::modo_templates::serde")]
         #input
 
-        impl ::axum::response::IntoResponse for #struct_name {
-            fn into_response(self) -> ::axum::response::Response {
+        impl ::modo_templates::axum::response::IntoResponse for #struct_name {
+            fn into_response(self) -> ::modo_templates::axum::response::Response {
                 let user_context = ::modo_templates::minijinja::Value::from_serialize(&self);
                 let view = #view_construction;
                 view.into_response()

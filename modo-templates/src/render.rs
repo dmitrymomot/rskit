@@ -9,7 +9,7 @@ use http::StatusCode;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
-use tracing::error;
+use tracing::{error, warn};
 
 /// Layer that intercepts View responses and renders them via the TemplateEngine.
 /// Merges request TemplateContext with the view's user context.
@@ -60,11 +60,13 @@ where
         let mut inner = self.inner.clone();
 
         // Capture request context and HTMX header before passing to handler
-        let template_ctx = request
-            .extensions()
-            .get::<TemplateContext>()
-            .cloned()
-            .unwrap_or_default();
+        let template_ctx = match request.extensions().get::<TemplateContext>().cloned() {
+            Some(ctx) => ctx,
+            None => {
+                warn!("TemplateContext not found in request extensions; was ContextLayer applied?");
+                TemplateContext::default()
+            }
+        };
         let is_htmx = request.headers().get("hx-request").is_some();
 
         Box::pin(async move {
@@ -105,7 +107,15 @@ where
                 }
                 Err(err) => {
                     error!(template = template_name, error = %err, "template render failed");
-                    Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response())
+                    let body = if cfg!(debug_assertions) {
+                        format!(
+                            "<h1>Template Render Error</h1><pre>{}</pre>",
+                            html_escape(&err.to_string())
+                        )
+                    } else {
+                        "<h1>Internal Server Error</h1>".to_string()
+                    };
+                    Ok((StatusCode::INTERNAL_SERVER_ERROR, Html(body)).into_response())
                 }
             }
         })
@@ -128,4 +138,11 @@ fn merge_contexts(request_ctx: TemplateContext, user_ctx: minijinja::Value) -> m
     }
 
     minijinja::Value::from_serialize(&map)
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }

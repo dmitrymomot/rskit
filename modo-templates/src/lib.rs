@@ -17,6 +17,8 @@ pub use view::View;
 // Re-export macro
 pub use modo_templates_macros::view;
 
-// Re-export minijinja essentials for macro-generated code
+// Re-export dependencies for macro-generated code
+pub use axum;
 pub use minijinja;
 pub use minijinja::context;
+pub use serde;

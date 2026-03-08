@@ -33,10 +33,24 @@ impl From<minijinja::Error> for TemplateError {
     fn from(err: minijinja::Error) -> Self {
         if err.kind() == minijinja::ErrorKind::TemplateNotFound {
             Self::NotFound {
-                name: err.template_source().unwrap_or("unknown").to_string(),
+                name: extract_template_name(&err),
             }
         } else {
             Self::Render { source: err }
         }
     }
+}
+
+/// Extracts the template name from a TemplateNotFound error's detail.
+/// MiniJinja's detail format: `template "NAME" does not exist`
+fn extract_template_name(err: &minijinja::Error) -> String {
+    if let Some(detail) = err.detail() {
+        if let Some(start) = detail.find('"')
+            && let Some(end) = detail[start + 1..].find('"')
+        {
+            return detail[start + 1..start + 1 + end].to_string();
+        }
+        return detail.to_string();
+    }
+    "unknown".to_string()
 }
