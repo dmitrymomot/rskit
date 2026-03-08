@@ -69,8 +69,9 @@ Default: `path = "templates"`, `strict = true`.
 Wraps `minijinja::Environment`. Arc-wrapped, registered as a service.
 
 ```rust
-let engine = modo_templates::engine(&config)
-    .build()?;
+let mut engine = modo_templates::engine(&config)?;
+// optionally register custom functions
+modo_i18n::register_template_functions(engine.env_mut(), &i18n_store);
 ```
 
 - Dev (`reload` feature): `minijinja-autoreload`, watches filesystem
@@ -223,11 +224,10 @@ Layouts use Jinja2 native `{% extends %}` / `{% block %}`. HTMX templates are fl
 ```rust
 #[modo::main]
 async fn main(app: Application) {
-    let mut engine = modo_templates::engine(&config.templates)
-        .build()?;
+    let mut engine = modo_templates::engine(&config.templates)?;
 
     // i18n registers t() function on the engine
-    modo_i18n::register_template_functions(&mut engine, &i18n_store);
+    modo_i18n::register_template_functions(engine.env_mut(), &i18n_store);
 
     // Just register as service — layers are auto-applied by the framework
     app.service(i18n_store)

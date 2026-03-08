@@ -332,14 +332,6 @@ pub struct TemplateEngine {
 }
 
 impl TemplateEngine {
-    /// Create a builder from config (follows modo pattern: config → builder → service).
-    pub fn builder(config: &crate::TemplateConfig) -> TemplateEngineBuilder {
-        TemplateEngineBuilder {
-            directory: config.path.clone().into(),
-            strict: config.strict,
-        }
-    }
-
     /// Get a reference to the inner MiniJinja Environment for registering
     /// custom functions, filters, or globals.
     pub fn env(&self) -> &Environment<'static> {
@@ -358,36 +350,17 @@ impl TemplateEngine {
     }
 }
 
-pub struct TemplateEngineBuilder {
-    directory: PathBuf,
-    strict: bool,
-}
+/// Create a template engine from config (follows `modo_i18n::load` pattern).
+pub fn engine(config: &crate::TemplateConfig) -> Result<TemplateEngine, crate::TemplateError> {
+    let mut env = Environment::new();
 
-impl TemplateEngineBuilder {
-    /// Override the template directory from config.
-    pub fn directory(mut self, path: impl Into<PathBuf>) -> Self {
-        self.directory = path.into();
-        self
+    if config.strict {
+        env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
     }
 
-    /// Override strict mode from config.
-    pub fn strict(mut self, strict: bool) -> Self {
-        self.strict = strict;
-        self
-    }
+    env.set_loader(minijinja::path_loader(&config.path));
 
-    /// Build the template engine.
-    pub fn build(self) -> Result<TemplateEngine, crate::TemplateError> {
-        let mut env = Environment::new();
-
-        if self.strict {
-            env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
-        }
-
-        env.set_loader(minijinja::path_loader(&self.directory));
-
-        Ok(TemplateEngine { env })
-    }
+    Ok(TemplateEngine { env })
 }
 
 #[cfg(test)]
@@ -423,8 +396,7 @@ mod tests {
     #[test]
     fn render_simple_template() {
         let dir = setup_templates("simple");
-        let engine = TemplateEngine::builder(&test_config(&dir))
-            .build()
+        let engine = crate::engine(&test_config(&dir))
             .unwrap();
 
         let result = engine
@@ -438,8 +410,7 @@ mod tests {
     #[test]
     fn render_with_inheritance() {
         let dir = setup_templates("inherit");
-        let engine = TemplateEngine::builder(&test_config(&dir))
-            .build()
+        let engine = crate::engine(&test_config(&dir))
             .unwrap();
 
         let result = engine
@@ -453,8 +424,7 @@ mod tests {
     #[test]
     fn strict_mode_rejects_undefined() {
         let dir = setup_templates("strict");
-        let engine = TemplateEngine::builder(&test_config(&dir))
-            .build()
+        let engine = crate::engine(&test_config(&dir))
             .unwrap();
 
         let result = engine.render(
@@ -469,8 +439,7 @@ mod tests {
     #[test]
     fn template_not_found_error() {
         let dir = setup_templates("notfound");
-        let engine = TemplateEngine::builder(&test_config(&dir))
-            .build()
+        let engine = crate::engine(&test_config(&dir))
             .unwrap();
 
         let result = engine.render("nonexistent.html", minijinja::context! {}.into());
@@ -496,7 +465,7 @@ Add to `modo-templates/src/lib.rs`:
 ```rust
 pub mod engine;
 
-pub use engine::{TemplateEngine, TemplateEngineBuilder};
+pub use engine::{TemplateEngine, engine};
 ```
 
 **Step 4: Commit**
@@ -1069,10 +1038,11 @@ fn setup(name: &str) -> (Arc<TemplateEngine>, PathBuf) {
     fs::write(dir.join("hello.html"), "Hello {{ name }}! url={{ current_url }}").unwrap();
     fs::write(dir.join("hello_htmx.html"), "partial: {{ name }}").unwrap();
 
-    let engine = TemplateEngine::builder()
-        .directory(&dir)
-        .build()
-        .unwrap();
+    let config = modo_templates::TemplateConfig {
+        path: dir.to_str().unwrap().to_string(),
+        ..Default::default()
+    };
+    let engine = modo_templates::engine(&config).unwrap();
     (Arc::new(engine), dir)
 }
 
@@ -1585,10 +1555,11 @@ fn setup(name: &str) -> (Arc<TemplateEngine>, PathBuf) {
 
     fs::write(htmx.join("home.html"), "<h1>{{ title }}</h1>").unwrap();
 
-    let engine = TemplateEngine::builder()
-        .directory(&dir)
-        .build()
-        .unwrap();
+    let config = modo_templates::TemplateConfig {
+        path: dir.to_str().unwrap().to_string(),
+        ..Default::default()
+    };
+    let engine = modo_templates::engine(&config).unwrap();
     (Arc::new(engine), dir)
 }
 
@@ -1706,7 +1677,7 @@ Under `## Conventions`, add:
 
 ```
 - Templates config: `TemplateConfig { path, strict }` — YAML-deserializable with serde defaults
-- Template engine: `TemplateEngine::builder(&config).build()` — config → builder → service pattern
+- Template engine: `modo_templates::engine(&config)?` — config → engine (follows `modo_i18n::load` pattern)
 - Views: `#[modo::view("pages/home.html")]` or `#[modo::view("page.html", htmx = "htmx/frag.html")]`
 - View structs: fields must implement `Serialize`, handler returns struct directly
 - Template context: `TemplateContext` in request extensions, middleware adds via `ctx.insert("key", value)`
