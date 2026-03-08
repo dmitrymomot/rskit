@@ -3,6 +3,7 @@ use crate::types::{SessionData, SessionId};
 use modo::Error;
 use modo::axum::extract::FromRequestParts;
 use modo::axum::http::request::Parts;
+use modo::error::HttpError;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::sync::Arc;
@@ -117,12 +118,10 @@ impl SessionManager {
             .store
             .read(id)
             .await?
-            .ok_or_else(|| Error::internal("session not found"))?;
+            .ok_or_else(|| HttpError::NotFound.with_message("session not found"))?;
 
         if target.user_id != session.user_id {
-            return Err(Error::internal(
-                "cannot revoke session belonging to another user",
-            ));
+            return Err(HttpError::NotFound.with_message("session not found"));
         }
 
         self.state.store.destroy(id).await

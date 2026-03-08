@@ -50,8 +50,6 @@ async fn create_and_read_by_token() {
 
     let (session, token) = store.create(&meta, "user1", None).await.unwrap();
     assert_eq!(session.user_id, "user1");
-    assert_eq!(session.token_hash, token.hash());
-
     let found = store.read_by_token(&token).await.unwrap();
     assert!(found.is_some());
     let found = found.unwrap();

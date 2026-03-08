@@ -6,7 +6,8 @@ use chrono::{DateTime, Utc};
 use modo::Error;
 use modo_db::DbPool;
 use modo_db::sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set,
 };
 
 #[derive(Clone)]
@@ -191,8 +192,11 @@ impl SessionStore {
     }
 
     async fn enforce_session_limit(&self, user_id: &str) -> Result<(), Error> {
+        let now = Utc::now();
+
         let count = Entity::find()
             .filter(Column::UserId.eq(user_id))
+            .filter(Column::ExpiresAt.gt(now))
             .count(self.db.connection())
             .await
             .map_err(|e| Error::internal(format!("count sessions: {e}")))?;
@@ -203,19 +207,23 @@ impl SessionStore {
 
         let excess = count as usize - self.config.max_sessions_per_user;
 
-        // Find oldest sessions by last_active_at (FIFO eviction)
+        // Find least-recently-used sessions (LRU eviction)
         let oldest = Entity::find()
             .filter(Column::UserId.eq(user_id))
+            .filter(Column::ExpiresAt.gt(now))
             .order_by_asc(Column::LastActiveAt)
+            .limit(excess as u64)
             .all(self.db.connection())
             .await
             .map_err(|e| Error::internal(format!("find oldest sessions: {e}")))?;
 
-        for model in oldest.into_iter().take(excess) {
-            Entity::delete_by_id(&model.id)
+        let ids: Vec<String> = oldest.into_iter().map(|m| m.id).collect();
+        if !ids.is_empty() {
+            Entity::delete_many()
+                .filter(Column::Id.is_in(ids))
                 .exec(self.db.connection())
                 .await
-                .map_err(|e| Error::internal(format!("evict session: {e}")))?;
+                .map_err(|e| Error::internal(format!("evict sessions: {e}")))?;
         }
 
         Ok(())

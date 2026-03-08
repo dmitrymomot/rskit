@@ -126,7 +126,7 @@ fn hex_digit(b: u8) -> Option<u8> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionData {
     pub id: SessionId,
-    pub token_hash: String,
+    pub(crate) token_hash: String,
     pub user_id: String,
     pub ip_address: String,
     pub user_agent: String,
