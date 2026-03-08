@@ -1,18 +1,38 @@
-use async_trait::async_trait;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 /// Trait for loading a user by their session-stored ID.
 ///
 /// Implement this on your own type (e.g., a repository struct that holds a DB pool)
 /// and register it via `UserProviderService::new(your_impl)` as a service.
-#[async_trait]
 pub trait UserProvider: Send + Sync + 'static {
     type User: Clone + Send + Sync + 'static;
 
     /// Look up a user by their ID (as stored in the session).
     /// Return `Ok(None)` if the user doesn't exist.
     /// Return `Err` only for infrastructure failures (DB errors, etc.).
-    async fn find_by_id(&self, id: &str) -> Result<Option<Self::User>, modo::Error>;
+    fn find_by_id(
+        &self,
+        id: &str,
+    ) -> impl Future<Output = Result<Option<Self::User>, modo::Error>> + Send;
+}
+
+/// Object-safe bridge trait for type-erasing `UserProvider`.
+trait UserProviderDyn<U>: Send + Sync {
+    fn find_by_id<'a>(
+        &'a self,
+        id: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<U>, modo::Error>> + Send + 'a>>;
+}
+
+impl<P: UserProvider> UserProviderDyn<P::User> for P {
+    fn find_by_id<'a>(
+        &'a self,
+        id: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<P::User>, modo::Error>> + Send + 'a>> {
+        Box::pin(UserProvider::find_by_id(self, id))
+    }
 }
 
 /// Type-erased wrapper around a `UserProvider` implementation.
@@ -20,7 +40,15 @@ pub trait UserProvider: Send + Sync + 'static {
 /// Stored in the service registry keyed by user type `U`, so that
 /// `Auth<U>` can look up `Service<UserProviderService<U>>` by `TypeId`.
 pub struct UserProviderService<U: Clone + Send + Sync + 'static> {
-    inner: Arc<dyn UserProvider<User = U>>,
+    inner: Arc<dyn UserProviderDyn<U>>,
+}
+
+impl<U: Clone + Send + Sync + 'static> Clone for UserProviderService<U> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
+    }
 }
 
 impl<U: Clone + Send + Sync + 'static> UserProviderService<U> {
@@ -49,7 +77,6 @@ mod tests {
 
     struct TestProvider;
 
-    #[async_trait]
     impl UserProvider for TestProvider {
         type User = TestUser;
 
@@ -59,6 +86,8 @@ mod tests {
                     id: "user-1".to_string(),
                     name: "Alice".to_string(),
                 }))
+            } else if id == "error-user" {
+                Err(modo::Error::internal("db error"))
             } else {
                 Ok(None)
             }
@@ -83,5 +112,12 @@ mod tests {
         let svc = UserProviderService::new(TestProvider);
         let user = svc.find_by_id("nonexistent").await.unwrap();
         assert_eq!(user, None);
+    }
+
+    #[tokio::test]
+    async fn user_provider_service_propagates_errors() {
+        let svc = UserProviderService::new(TestProvider);
+        let result = svc.find_by_id("error-user").await;
+        assert!(result.is_err());
     }
 }

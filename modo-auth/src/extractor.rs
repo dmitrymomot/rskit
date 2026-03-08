@@ -10,6 +10,7 @@ use std::ops::Deref;
 ///
 /// Returns 401 if no session exists or the user is not found.
 /// Returns 500 if the session middleware or `UserProviderService` is not registered.
+#[derive(Clone)]
 pub struct Auth<U: Clone + Send + Sync + 'static>(pub U);
 
 impl<U: Clone + Send + Sync + 'static> Deref for Auth<U> {
@@ -64,6 +65,7 @@ impl<U: Clone + Send + Sync + 'static> FromRequestParts<AppState> for Auth<U> {
 /// Never rejects — returns `OptionalAuth(None)` if not authenticated or user not found.
 /// Still returns 500 if session middleware or `UserProviderService` is missing,
 /// or if the provider returns an error (infrastructure failure).
+#[derive(Clone)]
 pub struct OptionalAuth<U: Clone + Send + Sync + 'static>(pub Option<U>);
 
 impl<U: Clone + Send + Sync + 'static> Deref for OptionalAuth<U> {
