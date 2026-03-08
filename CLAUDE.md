@@ -31,7 +31,7 @@ Refactor strategy:
 - `modo-macros/` — core proc macros
 - `modo-db/` — database layer (features: sqlite, postgres)
 - `modo-session/` — session management (**implemented**)
-- `modo-auth/` — authentication
+- `modo-auth/` — authentication (**implemented**)
 - `modo-jobs/` — background jobs (**implemented**)
 - `modo-jobs-macros/` — `#[job(...)]` proc macro (**implemented**)
 - `modo-templates/` — Askama + HTMX + flash
@@ -118,13 +118,24 @@ Refactor strategy:
 - Config: `SessionConfig` with `#[serde(default)]` — `session_ttl_secs`, `cookie_name`, `validate_fingerprint`, `touch_interval_secs`, `max_sessions_per_user`, `trusted_proxies`
 - Design doc: `docs/plans/2026-03-07-modo-session-design.md`
 
+## Auth (modo-auth)
+
+- Depends on: `modo`, `modo-session` (no `modo-db`)
+- Trait: `UserProvider` with `async fn find_by_id(&self, id: &str) -> Result<Option<Self::User>, Error>`
+- Registration: `UserProviderService::new(my_provider)` + `app.service(provider)`
+- `Auth<U>` extractor: requires authenticated user, 401 if no session or user not found, 500 if middleware/provider missing
+- `OptionalAuth<U>` extractor: returns `None` if not authenticated, 500 only for infrastructure errors
+- No password hashing, no session mutation, no DB dependency — apps handle login/signup themselves
+- No auto-destroy of stale sessions — app must revoke sessions on user deletion via `SessionManager::logout_all()`
+- Design doc: `docs/plans/2026-03-08-modo-auth-design.md`
+
 ## Key Decisions
 
 - "Full magic" — proc macros for everything, auto-discovery, zero runtime cost
 - Multi-DB — SQLite (default, WAL mode) + Postgres via modo-db feature flags
 - Cron jobs: in-memory only (tokio timers), errors logged via tracing
 - Multi-tenancy: shared-DB strategy (Phase 3); per-DB deferred to Phase 5
-- Auth: layered traits with swappable defaults
+- Auth: `UserProvider` trait + `Auth<U>`/`OptionalAuth<U>` extractors (thin layer, no DB/password hashing)
 - Cookie-based flash (not session) — no DB dependency
 - CSRF via double-submit signed cookie — ~130 lines, no external crate
 - `axum-extra` SignedCookieJar for all cookie ops
