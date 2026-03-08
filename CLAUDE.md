@@ -121,8 +121,10 @@ Refactor strategy:
 ## Auth (modo-auth)
 
 - Depends on: `modo`, `modo-session` (no `modo-db`)
-- Trait: `UserProvider` with `async fn find_by_id(&self, id: &str) -> Result<Option<Self::User>, Error>`
+- Trait: `UserProvider` with `fn find_by_id(&self, id: &str) -> impl Future<...> + Send` (native RPITIT, no `async-trait`)
+- Internal: `UserProviderDyn<U>` bridge trait for object-safe type erasure via `Pin<Box<dyn Future>>`
 - Registration: `UserProviderService::new(my_provider)` + `app.service(provider)`
+- `UserProviderService<U>`, `Auth<U>`, `OptionalAuth<U>` all implement `Clone`
 - `Auth<U>` extractor: requires authenticated user, 401 if no session or user not found, 500 if middleware/provider missing
 - `OptionalAuth<U>` extractor: returns `None` if not authenticated, 500 only for infrastructure errors
 - No password hashing, no session mutation, no DB dependency — apps handle login/signup themselves
@@ -163,6 +165,8 @@ Refactor strategy:
 - Re-exports in `modo/src/lib.rs` must be alphabetically sorted (`cargo fmt` enforces this)
 - `modo-jobs` entity module is named `job` (from `struct Job`); use `use modo_jobs::entity::job as jobs_entity;` in tests to avoid shadowing
 - `inventory` registration from library crates may not link in tests — force with `use modo_jobs::entity::job as _;`
+- `modo-session` entity links automatically when `modo-session` is a dependency — no force-link `use` needed
+- Integration tests for extractors: use `tower::ServiceExt::oneshot` on a `Router`, include fingerprint headers matching `test_meta()`
 - `#[job]` macro validates: must be async, only one payload parameter allowed
 - SeaORM's `ExprTrait` conflicts with `Ord::max`/`Ord::min` — disambiguate with `Ord::max(a, b)` syntax
 - `JobQueue` extractor looks up `JobsHandle` in services (not `JobQueue` directly) — register `JobsHandle` as service
