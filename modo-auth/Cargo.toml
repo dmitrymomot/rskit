@@ -7,7 +7,11 @@ license.workspace = true
 [dependencies]
 modo = { path = "../modo" }
 modo-session = { path = "../modo-session" }
-async-trait = "0.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
+modo-db = { path = "../modo-db" }
+axum = "0.8"
+axum-extra = { version = "0.10", features = ["cookie-signed"] }
+tower = { version = "0.5", features = ["util"] }
+http = "1"
