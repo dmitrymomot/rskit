@@ -30,6 +30,19 @@ pub fn register_template_functions(env: &mut Environment<'static>, store: Arc<Tr
             let mut count: Option<u64> = None;
 
             for k in kwargs.args() {
+                if k == "count" {
+                    // Try native numeric types first (template passes integer),
+                    // fall back to String parse for string-typed count values.
+                    if let Ok(n) = kwargs.get::<u64>(k) {
+                        count = Some(n);
+                        vars.push((k.to_string(), n.to_string()));
+                        continue;
+                    } else if let Ok(n) = kwargs.get::<i64>(k) {
+                        count = u64::try_from(n).ok();
+                        vars.push((k.to_string(), n.to_string()));
+                        continue;
+                    }
+                }
                 let v: String = kwargs
                     .get::<String>(k)
                     .map_err(|e: Error| Error::new(ErrorKind::InvalidOperation, e.to_string()))?;

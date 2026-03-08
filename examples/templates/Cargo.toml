@@ -1,0 +1,10 @@
+[package]
+name = "templates-example"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+modo = { path = "../../modo", features = ["templates"] }
+modo-templates = { path = "../../modo-templates" }
+chrono = "0.4"

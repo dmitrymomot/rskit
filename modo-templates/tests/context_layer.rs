@@ -8,11 +8,8 @@ use tower::ServiceExt;
 
 async fn handler(Extension(ctx): Extension<TemplateContext>) -> String {
     format!(
-        "url={} id={}",
+        "url={}",
         ctx.get("current_url")
-            .map(|v| v.to_string())
-            .unwrap_or_default(),
-        ctx.get("request_id")
             .map(|v| v.to_string())
             .unwrap_or_default(),
     )

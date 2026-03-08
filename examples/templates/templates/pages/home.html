@@ -1,0 +1,24 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Live Clock — modo-templates{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Live Clock</h1>
+    <p class="subtitle">Powered by <strong>modo-templates</strong> + HTMX polling</p>
+
+    <div id="clock"
+         hx-get="/"
+         hx-trigger="every 1s"
+         hx-swap="innerHTML">
+        {% include "partials/clock.html" %}
+    </div>
+
+    <hr class="divider">
+
+    <div class="meta">
+        <p>request_id: <code>{{ request_id }}</code></p>
+        <p>current_url: <code>{{ current_url }}</code></p>
+    </div>
+</div>
+{% endblock %}

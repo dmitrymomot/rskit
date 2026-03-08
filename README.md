@@ -1,6 +1,6 @@
 # modo
 
-> **modo** (Latin: "way, method") — _the way_ to build micro-SaaS with Rust.
+> **modo** (Latin: "way, method") — _the way_ to build web apps with Rust.
 > Single binary, compile-time magic, multi-DB support.
 
 [![CI](https://github.com/dmitrymomot/modo/actions/workflows/ci.yml/badge.svg)](https://github.com/dmitrymomot/modo/actions/workflows/ci.yml)
