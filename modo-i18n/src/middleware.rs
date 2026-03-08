@@ -140,6 +140,13 @@ where
             // Insert resolved language into extensions
             parts.extensions.insert(ResolvedLang(resolved.clone()));
 
+            // If TemplateContext exists (modo-templates context_layer is active),
+            // add the locale to it.
+            #[cfg(feature = "templates")]
+            if let Some(ctx) = parts.extensions.get_mut::<modo_templates::TemplateContext>() {
+                ctx.insert("locale", resolved.clone());
+            }
+
             // Reassemble request
             let request = Request::from_parts(parts, body);
 
