@@ -1,0 +1,13 @@
+[package]
+name = "modo-auth"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+modo = { path = "../modo" }
+modo-session = { path = "../modo-session" }
+async-trait = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
