@@ -22,6 +22,8 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 - `modo-jobs-macros/` — `#[job(...)]` proc macro
 - `modo-upload/` — file uploads
 - `modo-upload-macros/` — upload proc macros
+- `modo-i18n/` — internationalization (YAML translations, locale middleware)
+- `modo-i18n-macros/` — `t!()` translation macro
 - `modo-templates/` — Askama + HTMX + flash (planned)
 - `modo-csrf/` — CSRF protection (planned)
 
@@ -73,3 +75,4 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 - SeaORM's `ExprTrait` conflicts with `Ord::max`/`Ord::min` — disambiguate with `Ord::max(a, b)` syntax
 - Use official documentation only when researching dependencies
 - Session IDs: ULID (no UUID anywhere)
+- Testing Tower middleware: use `Router::new().route(...).layer(mw).oneshot(request)` pattern — no AppState needed, handler reads `Extension<T>` from extensions
