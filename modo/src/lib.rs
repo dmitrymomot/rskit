@@ -1,4 +1,6 @@
 pub use modo_macros::{Sanitize, Validate, error_handler, handler, main, module};
+#[cfg(feature = "templates")]
+pub use modo_templates_macros::view;
 
 pub mod app;
 pub mod config;
@@ -24,6 +26,8 @@ pub use axum;
 pub use axum_extra;
 pub use chrono;
 pub use inventory;
+#[cfg(feature = "templates")]
+pub use modo_templates;
 pub use serde;
 pub use serde_json;
 pub use tokio;

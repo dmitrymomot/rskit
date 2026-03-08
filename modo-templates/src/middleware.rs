@@ -56,11 +56,6 @@ where
             let mut ctx = TemplateContext::new();
             ctx.insert("current_url", parts.uri.to_string());
 
-            // Read request_id from extensions if set by request_id middleware
-            if let Some(request_id) = parts.extensions.get::<modo::RequestId>() {
-                ctx.insert("request_id", request_id.to_string());
-            }
-
             parts.extensions.insert(ctx);
 
             let request = Request::from_parts(parts, body);

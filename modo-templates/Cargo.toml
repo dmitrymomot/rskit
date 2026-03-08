@@ -5,7 +5,6 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
-modo = { path = "../modo" }
 modo-templates-macros = { path = "../modo-templates-macros" }
 
 minijinja = { version = "2", features = ["loader"] }
