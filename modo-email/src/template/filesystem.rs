@@ -1,0 +1,116 @@
+use super::{EmailTemplate, TemplateProvider};
+use std::path::PathBuf;
+
+/// Loads email templates from the filesystem with locale-based fallback.
+///
+/// Templates are stored as `.md` files with YAML frontmatter. Localized
+/// variants live in subdirectories named after the locale (e.g. `de/welcome.md`).
+/// When a localized file is not found, the provider falls back to the root
+/// template (`welcome.md`).
+pub struct FilesystemProvider {
+    base_dir: PathBuf,
+}
+
+impl FilesystemProvider {
+    pub fn new(base_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            base_dir: base_dir.into(),
+        }
+    }
+
+    fn resolve_path(&self, name: &str, locale: &str) -> Option<PathBuf> {
+        if !locale.is_empty() {
+            let localized = self.base_dir.join(locale).join(format!("{name}.md"));
+            if localized.is_file() {
+                return Some(localized);
+            }
+        }
+
+        let root = self.base_dir.join(format!("{name}.md"));
+        if root.is_file() {
+            return Some(root);
+        }
+
+        None
+    }
+}
+
+impl TemplateProvider for FilesystemProvider {
+    fn get(&self, name: &str, locale: &str) -> Result<EmailTemplate, modo::Error> {
+        let path = self.resolve_path(name, locale).ok_or_else(|| {
+            modo::Error::internal(format!("Email template not found: {name}"))
+        })?;
+
+        let raw = std::fs::read_to_string(&path).map_err(|e| {
+            modo::Error::internal(format!("Failed to read template {}: {e}", path.display()))
+        })?;
+
+        EmailTemplate::parse(&raw)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::template::TemplateProvider;
+    use std::fs;
+
+    #[test]
+    fn load_template_no_locale() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path();
+        fs::write(
+            path.join("welcome.md"),
+            "---\nsubject: \"Hi\"\n---\n\nHello!",
+        )
+        .unwrap();
+
+        let provider = FilesystemProvider::new(path.to_str().unwrap());
+        let tpl = provider.get("welcome", "").unwrap();
+        assert_eq!(tpl.subject, "Hi");
+    }
+
+    #[test]
+    fn load_template_with_locale() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path();
+        fs::create_dir_all(path.join("de")).unwrap();
+        fs::write(
+            path.join("de/welcome.md"),
+            "---\nsubject: \"Hallo\"\n---\n\nHallo!",
+        )
+        .unwrap();
+        fs::write(
+            path.join("welcome.md"),
+            "---\nsubject: \"Hi\"\n---\n\nHello!",
+        )
+        .unwrap();
+
+        let provider = FilesystemProvider::new(path.to_str().unwrap());
+        let tpl = provider.get("welcome", "de").unwrap();
+        assert_eq!(tpl.subject, "Hallo");
+    }
+
+    #[test]
+    fn locale_fallback_to_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path();
+        fs::write(
+            path.join("welcome.md"),
+            "---\nsubject: \"Hi\"\n---\n\nHello!",
+        )
+        .unwrap();
+
+        let provider = FilesystemProvider::new(path.to_str().unwrap());
+        let tpl = provider.get("welcome", "fr").unwrap();
+        assert_eq!(tpl.subject, "Hi");
+    }
+
+    #[test]
+    fn template_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider = FilesystemProvider::new(dir.path().to_str().unwrap());
+        let result = provider.get("missing", "");
+        assert!(result.is_err());
+    }
+}
