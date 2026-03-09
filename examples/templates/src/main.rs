@@ -24,7 +24,7 @@ async fn main(app: modo::app::AppBuilder) -> Result<(), Box<dyn std::error::Erro
 
     // Production: embed templates into the binary (requires minijinja-embed).
     // #[cfg(not(debug_assertions))]
-    // minijinja_embed::load_templates!(&mut engine.env_mut());
+    // minijinja_embed::load_templates!(engine.env_mut());
 
     // Custom template function — demonstrates env_mut().add_function() API
     engine
