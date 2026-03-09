@@ -46,9 +46,13 @@ chrono = { version = "0.4", features = ["serde"] }
 modo-templates = { path = "../modo-templates", optional = true }
 modo-templates-macros = { path = "../modo-templates-macros", optional = true }
 
+# CSRF (optional)
+modo-csrf = { path = "../modo-csrf", optional = true }
+
 [features]
 default = []
 templates = ["dep:modo-templates", "dep:modo-templates-macros"]
+csrf = ["dep:modo-csrf"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

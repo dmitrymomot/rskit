@@ -28,6 +28,8 @@ pub use axum;
 pub use axum_extra;
 pub use chrono;
 pub use inventory;
+#[cfg(feature = "csrf")]
+pub use modo_csrf;
 #[cfg(feature = "templates")]
 pub use modo_templates;
 pub use serde;
