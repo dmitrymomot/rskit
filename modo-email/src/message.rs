@@ -11,12 +11,21 @@ pub struct SenderProfile {
 
 impl SenderProfile {
     /// Format as `"Name <email>"` for the From header.
+    ///
+    /// Strips control characters and angle brackets from the name to prevent
+    /// header injection.
     pub fn format_address(&self) -> String {
-        format!("{} <{}>", self.from_name, self.from_email)
+        let safe_name: String = self
+            .from_name
+            .chars()
+            .filter(|c| !c.is_control() && *c != '<' && *c != '>')
+            .collect();
+        format!("{} <{}>", safe_name.trim(), self.from_email)
     }
 }
 
 /// A fully-rendered email ready for transport.
+#[derive(Debug, Clone)]
 pub struct MailMessage {
     pub from: String,
     pub reply_to: Option<String>,
@@ -27,6 +36,7 @@ pub struct MailMessage {
 }
 
 /// Builder for requesting a templated email send.
+#[derive(Debug)]
 pub struct SendEmail {
     pub(crate) template: String,
     pub(crate) to: String,

@@ -19,6 +19,17 @@ impl FilesystemProvider {
     }
 
     fn resolve_path(&self, name: &str, locale: &str) -> Option<PathBuf> {
+        // Reject path traversal attempts
+        if name.contains("..")
+            || name.contains('/')
+            || name.contains('\\')
+            || locale.contains("..")
+            || locale.contains('/')
+            || locale.contains('\\')
+        {
+            return None;
+        }
+
         if !locale.is_empty() {
             let localized = self.base_dir.join(locale).join(format!("{name}.md"));
             if localized.is_file() {
