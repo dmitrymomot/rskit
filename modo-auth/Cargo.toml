@@ -7,9 +7,12 @@ license.workspace = true
 [dependencies]
 modo = { path = "../modo" }
 modo-session = { path = "../modo-session" }
+argon2 = "0.5"
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
+serde_yaml_ng = "0.10"
 modo-db = { path = "../modo-db" }
 axum = "0.8"
 axum-extra = { version = "0.10", features = ["cookie-signed"] }
