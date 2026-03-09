@@ -1,3 +1,3 @@
 pub mod resolver;
 
-pub use resolver::HasTenantId;
+pub use resolver::{HasTenantId, TenantResolver, TenantResolverService};
