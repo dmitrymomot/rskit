@@ -72,49 +72,42 @@ mod tests {
 
     #[tokio::test]
     async fn extracts_subdomain() {
-        let resolver = SubdomainResolver::new("myapp.com", |slug| async move {
-            Ok(Some(T { id: slug }))
-        });
+        let resolver =
+            SubdomainResolver::new("myapp.com", |slug| async move { Ok(Some(T { id: slug })) });
         let p = parts("acme.myapp.com");
-        let result = crate::TenantResolver::resolve(&resolver, &p)
-            .await
-            .unwrap();
-        assert_eq!(result, Some(T { id: "acme".to_string() }));
+        let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
+        assert_eq!(
+            result,
+            Some(T {
+                id: "acme".to_string()
+            })
+        );
     }
 
     #[tokio::test]
     async fn returns_none_for_bare_domain() {
-        let resolver = SubdomainResolver::new("myapp.com", |slug| async move {
-            Ok(Some(T { id: slug }))
-        });
+        let resolver =
+            SubdomainResolver::new("myapp.com", |slug| async move { Ok(Some(T { id: slug })) });
         let p = parts("myapp.com");
-        let result = crate::TenantResolver::resolve(&resolver, &p)
-            .await
-            .unwrap();
+        let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
         assert_eq!(result, None);
     }
 
     #[tokio::test]
     async fn returns_none_for_www() {
-        let resolver = SubdomainResolver::new("myapp.com", |slug| async move {
-            Ok(Some(T { id: slug }))
-        });
+        let resolver =
+            SubdomainResolver::new("myapp.com", |slug| async move { Ok(Some(T { id: slug })) });
         let p = parts("www.myapp.com");
-        let result = crate::TenantResolver::resolve(&resolver, &p)
-            .await
-            .unwrap();
+        let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
         assert_eq!(result, None);
     }
 
     #[tokio::test]
     async fn returns_none_when_no_host() {
-        let resolver = SubdomainResolver::new("myapp.com", |slug| async move {
-            Ok(Some(T { id: slug }))
-        });
+        let resolver =
+            SubdomainResolver::new("myapp.com", |slug| async move { Ok(Some(T { id: slug })) });
         let p = Request::builder().body(()).unwrap().into_parts().0;
-        let result = crate::TenantResolver::resolve(&resolver, &p)
-            .await
-            .unwrap();
+        let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
         assert_eq!(result, None);
     }
 }

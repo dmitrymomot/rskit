@@ -1,7 +1,7 @@
+use crate::HasTenantId;
 use crate::cache::{ResolvedMember, ResolvedRole, ResolvedTenant};
 use crate::member::MemberProviderService;
 use crate::resolver::TenantResolverService;
-use crate::HasTenantId;
 use modo::{Error, HttpError};
 use std::sync::Arc;
 
@@ -89,8 +89,8 @@ pub fn require_roles<T, M>(
 ) -> std::pin::Pin<
     Box<dyn std::future::Future<Output = modo::axum::response::Response> + Send>,
 > + Clone
-       + Send
-       + Sync
++ Send
++ Sync
 where
     T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
     M: Clone + Send + Sync + serde::Serialize + 'static,
@@ -119,7 +119,7 @@ where
                     (Some(t), Some(m)) => (t, m),
                     _ => {
                         return Error::internal("Role guard: services not registered")
-                            .into_response()
+                            .into_response();
                     }
                 }
             } else {
@@ -150,8 +150,8 @@ pub fn exclude_roles<T, M>(
 ) -> std::pin::Pin<
     Box<dyn std::future::Future<Output = modo::axum::response::Response> + Send>,
 > + Clone
-       + Send
-       + Sync
++ Send
++ Sync
 where
     T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
     M: Clone + Send + Sync + serde::Serialize + 'static,
@@ -172,7 +172,7 @@ where
                     (Some(t), Some(m)) => (t, m),
                     _ => {
                         return Error::internal("Role guard: services not registered")
-                            .into_response()
+                            .into_response();
                     }
                 }
             } else {
@@ -206,19 +206,13 @@ mod tests {
     #[test]
     fn allowed_rejects_non_matching_role() {
         let err = check_allowed("viewer", &["admin", "owner"]).unwrap_err();
-        assert_eq!(
-            err.status_code(),
-            modo::axum::http::StatusCode::FORBIDDEN
-        );
+        assert_eq!(err.status_code(), modo::axum::http::StatusCode::FORBIDDEN);
     }
 
     #[test]
     fn denied_blocks_matching_role() {
         let err = check_denied("viewer", &["viewer"]).unwrap_err();
-        assert_eq!(
-            err.status_code(),
-            modo::axum::http::StatusCode::FORBIDDEN
-        );
+        assert_eq!(err.status_code(), modo::axum::http::StatusCode::FORBIDDEN);
     }
 
     #[test]

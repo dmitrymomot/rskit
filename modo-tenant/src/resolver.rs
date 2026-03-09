@@ -63,8 +63,8 @@ impl<T: Clone + Send + Sync + 'static> TenantResolverService<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use modo::axum::http::request::Parts;
     use modo::axum::http::Request;
+    use modo::axum::http::request::Parts;
 
     #[derive(Clone, Debug, PartialEq, serde::Serialize)]
     struct TestTenant {
@@ -83,10 +83,7 @@ mod tests {
     impl TenantResolver for TestResolver {
         type Tenant = TestTenant;
 
-        async fn resolve(
-            &self,
-            parts: &Parts,
-        ) -> Result<Option<Self::Tenant>, modo::Error> {
+        async fn resolve(&self, parts: &Parts) -> Result<Option<Self::Tenant>, modo::Error> {
             let host = parts
                 .headers
                 .get("host")
@@ -106,10 +103,7 @@ mod tests {
     }
 
     fn test_parts(host: &str) -> Parts {
-        let req = Request::builder()
-            .header("host", host)
-            .body(())
-            .unwrap();
+        let req = Request::builder().header("host", host).body(()).unwrap();
         req.into_parts().0
     }
 

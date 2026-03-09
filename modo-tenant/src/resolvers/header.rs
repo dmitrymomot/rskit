@@ -62,8 +62,7 @@ mod tests {
 
     #[tokio::test]
     async fn reads_header() {
-        let resolver =
-            HeaderResolver::new("x-tenant-id", |id| async move { Ok(Some(T { id })) });
+        let resolver = HeaderResolver::new("x-tenant-id", |id| async move { Ok(Some(T { id })) });
         let parts = Request::builder()
             .header("x-tenant-id", "acme")
             .body(())
@@ -73,13 +72,17 @@ mod tests {
         let result = crate::TenantResolver::resolve(&resolver, &parts)
             .await
             .unwrap();
-        assert_eq!(result, Some(T { id: "acme".to_string() }));
+        assert_eq!(
+            result,
+            Some(T {
+                id: "acme".to_string()
+            })
+        );
     }
 
     #[tokio::test]
     async fn returns_none_without_header() {
-        let resolver =
-            HeaderResolver::new("x-tenant-id", |id| async move { Ok(Some(T { id })) });
+        let resolver = HeaderResolver::new("x-tenant-id", |id| async move { Ok(Some(T { id })) });
         let parts = Request::builder().body(()).unwrap().into_parts().0;
         let result = crate::TenantResolver::resolve(&resolver, &parts)
             .await

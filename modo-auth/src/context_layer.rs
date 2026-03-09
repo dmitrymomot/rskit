@@ -112,15 +112,13 @@ where
             // Try to get user_id from session extensions
             let user_id = modo_session::user_id_from_extensions(&parts.extensions);
 
-            if let Some(user_id) = user_id {
-                if let Ok(Some(user)) = user_svc.find_by_id(&user_id).await {
-                    if let Some(ctx) = parts.extensions.get_mut::<TemplateContext>() {
-                        ctx.insert("user", minijinja::Value::from_serialize(&user));
-                    }
-                    parts
-                        .extensions
-                        .insert(ResolvedUser(Arc::new(user)));
+            if let Some(user_id) = user_id
+                && let Ok(Some(user)) = user_svc.find_by_id(&user_id).await
+            {
+                if let Some(ctx) = parts.extensions.get_mut::<TemplateContext>() {
+                    ctx.insert("user", minijinja::Value::from_serialize(&user));
                 }
+                parts.extensions.insert(ResolvedUser(Arc::new(user)));
             }
 
             let request = Request::from_parts(parts, body);

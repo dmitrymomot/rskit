@@ -1,7 +1,7 @@
+use crate::HasTenantId;
 use crate::cache::{ResolvedMember, ResolvedRole, ResolvedTenant, ResolvedTenants};
 use crate::member::MemberProviderService;
 use crate::resolver::TenantResolverService;
-use crate::HasTenantId;
 use modo::app::AppState;
 use modo::axum::extract::FromRequestParts;
 use modo::axum::http::request::Parts;
@@ -48,9 +48,7 @@ where
     let tenant = resolver.resolve(parts).await?;
 
     if let Some(ref t) = tenant {
-        parts
-            .extensions
-            .insert(ResolvedTenant(Arc::new(t.clone())));
+        parts.extensions.insert(ResolvedTenant(Arc::new(t.clone())));
     }
 
     Ok(tenant)
@@ -340,10 +338,10 @@ mod tests {
     use super::*;
     use crate::resolver::TenantResolverService;
     use modo::app::{AppState, ServiceRegistry};
+    use modo::axum::Router;
     use modo::axum::body::Body;
     use modo::axum::http::{Request, StatusCode};
     use modo::axum::routing::get;
-    use modo::axum::Router;
     use tower::ServiceExt;
 
     #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -396,7 +394,10 @@ mod tests {
     async fn tenant_extractor_returns_tenant() {
         let state = app_state_with_resolver();
         let app = Router::new()
-            .route("/", get(|t: Tenant<TestTenant>| async move { t.name.clone() }))
+            .route(
+                "/",
+                get(|t: Tenant<TestTenant>| async move { t.name.clone() }),
+            )
             .with_state(state);
 
         let resp = app
@@ -439,11 +440,7 @@ mod tests {
             .route(
                 "/",
                 get(|t: OptionalTenant<TestTenant>| async move {
-                    if t.0.is_some() {
-                        "found"
-                    } else {
-                        "none"
-                    }
+                    if t.0.is_some() { "found" } else { "none" }
                 }),
             )
             .with_state(state);

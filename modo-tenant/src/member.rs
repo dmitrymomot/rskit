@@ -147,10 +147,7 @@ mod tests {
             }
         }
 
-        async fn list_tenants(
-            &self,
-            user_id: &str,
-        ) -> Result<Vec<Self::Tenant>, modo::Error> {
+        async fn list_tenants(&self, user_id: &str) -> Result<Vec<Self::Tenant>, modo::Error> {
             if user_id == "u-1" {
                 Ok(vec![
                     TestTenant {

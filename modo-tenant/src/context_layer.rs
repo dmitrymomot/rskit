@@ -1,11 +1,11 @@
 #[cfg(feature = "templates")]
+use crate::HasTenantId;
+#[cfg(feature = "templates")]
 use crate::cache::{ResolvedMember, ResolvedRole, ResolvedTenant, ResolvedTenants};
 #[cfg(feature = "templates")]
 use crate::member::MemberProviderService;
 #[cfg(feature = "templates")]
 use crate::resolver::TenantResolverService;
-#[cfg(feature = "templates")]
-use crate::HasTenantId;
 
 #[cfg(feature = "templates")]
 use futures_util::future::BoxFuture;
@@ -93,8 +93,7 @@ where
 }
 
 #[cfg(feature = "templates")]
-impl<S, ReqBody, ResBody, T, M> Service<Request<ReqBody>>
-    for TenantContextMiddleware<S, T, M>
+impl<S, ReqBody, ResBody, T, M> Service<Request<ReqBody>> for TenantContextMiddleware<S, T, M>
 where
     S: Service<Request<ReqBody>, Response = modo::axum::http::Response<ResBody>>
         + Clone
@@ -129,9 +128,7 @@ where
                 } else {
                     match tenant_svc.resolve(&parts).await {
                         Ok(Some(t)) => {
-                            parts
-                                .extensions
-                                .insert(ResolvedTenant(Arc::new(t.clone())));
+                            parts.extensions.insert(ResolvedTenant(Arc::new(t.clone())));
                             Some(t)
                         }
                         _ => None,
@@ -139,10 +136,10 @@ where
                 };
 
             // Inject tenant into template context
-            if let Some(ref t) = tenant {
-                if let Some(ctx) = parts.extensions.get_mut::<TemplateContext>() {
-                    ctx.insert("tenant", minijinja::Value::from_serialize(t));
-                }
+            if let Some(ref t) = tenant
+                && let Some(ctx) = parts.extensions.get_mut::<TemplateContext>()
+            {
+                ctx.insert("tenant", minijinja::Value::from_serialize(t));
             }
 
             // If user is authenticated and tenant is resolved, load member + tenants
@@ -151,37 +148,26 @@ where
 
                 if let Some(user_id) = user_id {
                     // Load member
-                    if let Ok(Some(member)) = member_svc
-                        .find_member(&user_id, tenant.tenant_id())
-                        .await
+                    if let Ok(Some(member)) =
+                        member_svc.find_member(&user_id, tenant.tenant_id()).await
                     {
                         let role = member_svc.role(&member).to_string();
 
                         if let Some(ctx) = parts.extensions.get_mut::<TemplateContext>() {
-                            ctx.insert(
-                                "member",
-                                minijinja::Value::from_serialize(&member),
-                            );
+                            ctx.insert("member", minijinja::Value::from_serialize(&member));
                             ctx.insert("role", role.clone());
                         }
 
-                        parts
-                            .extensions
-                            .insert(ResolvedMember(Arc::new(member)));
+                        parts.extensions.insert(ResolvedMember(Arc::new(member)));
                         parts.extensions.insert(ResolvedRole(role));
                     }
 
                     // Load tenants list
                     if let Ok(tenants) = member_svc.list_tenants(&user_id).await {
                         if let Some(ctx) = parts.extensions.get_mut::<TemplateContext>() {
-                            ctx.insert(
-                                "tenants",
-                                minijinja::Value::from_serialize(&tenants),
-                            );
+                            ctx.insert("tenants", minijinja::Value::from_serialize(&tenants));
                         }
-                        parts
-                            .extensions
-                            .insert(ResolvedTenants(Arc::new(tenants)));
+                        parts.extensions.insert(ResolvedTenants(Arc::new(tenants)));
                     }
                 }
             }

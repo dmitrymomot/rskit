@@ -70,18 +70,18 @@ mod tests {
         let result = crate::TenantResolver::resolve(&resolver, &parts)
             .await
             .unwrap();
-        assert_eq!(result, Some(T { id: "acme".to_string() }));
+        assert_eq!(
+            result,
+            Some(T {
+                id: "acme".to_string()
+            })
+        );
     }
 
     #[tokio::test]
     async fn returns_none_for_root() {
         let resolver = PathPrefixResolver::new(|slug| async move { Ok(Some(T { id: slug })) });
-        let parts = Request::builder()
-            .uri("/")
-            .body(())
-            .unwrap()
-            .into_parts()
-            .0;
+        let parts = Request::builder().uri("/").body(()).unwrap().into_parts().0;
         let result = crate::TenantResolver::resolve(&resolver, &parts)
             .await
             .unwrap();
