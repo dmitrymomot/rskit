@@ -54,7 +54,7 @@ mime_guess = { version = "2", optional = true }
 default = []
 templates = ["dep:modo-templates", "dep:modo-templates-macros"]
 static-fs = []
-static-embed = ["dep:rust-embed", "dep:mime_guess"]
+static-embed = ["dep:rust-embed", "dep:mime_guess", "modo-macros/static-embed"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
