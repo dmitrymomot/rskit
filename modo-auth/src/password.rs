@@ -37,8 +37,17 @@ pub struct PasswordHasher {
 }
 
 impl PasswordHasher {
-    pub fn new(config: PasswordConfig) -> Self {
-        Self { config }
+    pub fn new(config: PasswordConfig) -> Result<Self, modo::Error> {
+        // Validate by attempting to build Argon2 params eagerly
+        Params::new(
+            config.memory_cost_kib,
+            config.time_cost,
+            config.parallelism,
+            None,
+        )
+        .map_err(|e| modo::Error::internal(format!("invalid argon2 params: {e}")))?;
+
+        Ok(Self { config })
     }
 
     /// Hash a password using Argon2id with a random salt.
@@ -102,7 +111,7 @@ impl PasswordHasher {
 
 impl Default for PasswordHasher {
     fn default() -> Self {
-        Self::new(PasswordConfig::default())
+        Self::new(PasswordConfig::default()).expect("default PasswordConfig is valid")
     }
 }
 
@@ -157,6 +166,16 @@ mod tests {
     }
 
     #[test]
+    fn invalid_config_rejected() {
+        let config = PasswordConfig {
+            memory_cost_kib: 0,
+            time_cost: 0,
+            parallelism: 0,
+        };
+        assert!(PasswordHasher::new(config).is_err());
+    }
+
+    #[test]
     fn default_config_values() {
         let config = PasswordConfig::default();
         assert_eq!(config.memory_cost_kib, 19456);
@@ -180,7 +199,7 @@ mod tests {
             time_cost: 1,
             parallelism: 1,
         };
-        let hasher = PasswordHasher::new(config);
+        let hasher = PasswordHasher::new(config).unwrap();
         let hash = hasher.hash_password("test-password").await.unwrap();
         assert!(
             hasher
