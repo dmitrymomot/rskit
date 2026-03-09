@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 modo = { path = "../modo" }
+modo-auth = { path = "../modo-auth" }
 modo-session = { path = "../modo-session" }
 serde = { version = "1", features = ["derive"] }
 tracing = "0.1"

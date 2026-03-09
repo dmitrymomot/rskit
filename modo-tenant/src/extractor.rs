@@ -1,4 +1,4 @@
-use crate::cache::{ResolvedMember, ResolvedRole, ResolvedTenant};
+use crate::cache::{ResolvedMember, ResolvedRole, ResolvedTenant, ResolvedTenants};
 use crate::member::MemberProviderService;
 use crate::resolver::TenantResolverService;
 use crate::HasTenantId;
@@ -6,6 +6,7 @@ use modo::app::AppState;
 use modo::axum::extract::FromRequestParts;
 use modo::axum::http::request::Parts;
 use modo::{Error, HttpError};
+use modo_auth::UserProviderService;
 use modo_session::SessionManager;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -216,6 +217,124 @@ where
     }
 }
 
+/// Full tenant context — everything needed for authenticated tenant pages.
+pub struct TenantContext<
+    T: HasTenantId + Clone + Send + Sync + 'static,
+    M: Clone + Send + Sync + 'static,
+    U: Clone + Send + Sync + 'static,
+> {
+    tenant: T,
+    member: M,
+    user: U,
+    tenants: Vec<T>,
+    role: String,
+}
+
+impl<T: HasTenantId + Clone + Send + Sync, M: Clone + Send + Sync, U: Clone + Send + Sync> Clone
+    for TenantContext<T, M, U>
+{
+    fn clone(&self) -> Self {
+        Self {
+            tenant: self.tenant.clone(),
+            member: self.member.clone(),
+            user: self.user.clone(),
+            tenants: self.tenants.clone(),
+            role: self.role.clone(),
+        }
+    }
+}
+
+impl<T: HasTenantId + Clone + Send + Sync, M: Clone + Send + Sync, U: Clone + Send + Sync>
+    TenantContext<T, M, U>
+{
+    pub fn tenant(&self) -> &T {
+        &self.tenant
+    }
+
+    pub fn member(&self) -> &M {
+        &self.member
+    }
+
+    pub fn user(&self) -> &U {
+        &self.user
+    }
+
+    pub fn tenants(&self) -> &[T] {
+        &self.tenants
+    }
+
+    pub fn role(&self) -> &str {
+        &self.role
+    }
+}
+
+impl<T, M, U> FromRequestParts<AppState> for TenantContext<T, M, U>
+where
+    T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
+    M: Clone + Send + Sync + serde::Serialize + 'static,
+    U: Clone + Send + Sync + 'static,
+{
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        // Resolve member (which resolves tenant internally)
+        let member_ext = Member::<T, M>::from_request_parts(parts, state).await?;
+
+        // Load user
+        let session = SessionManager::from_request_parts(parts, state)
+            .await
+            .map_err(|_| Error::internal("TenantContext requires session middleware"))?;
+        let user_id = session
+            .user_id()
+            .await
+            .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
+
+        let user_provider = state
+            .services
+            .get::<UserProviderService<U>>()
+            .ok_or_else(|| {
+                Error::internal(format!(
+                    "UserProviderService<{}> not registered",
+                    std::any::type_name::<U>()
+                ))
+            })?;
+        let user = user_provider
+            .find_by_id(&user_id)
+            .await?
+            .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
+
+        // Load tenants list (cached or fresh)
+        let tenants = if let Some(cached) = parts.extensions.get::<ResolvedTenants<T>>() {
+            (*cached.0).clone()
+        } else {
+            let provider = state
+                .services
+                .get::<MemberProviderService<M, T>>()
+                .ok_or_else(|| Error::internal("MemberProviderService not registered"))?;
+            let list = provider.list_tenants(&user_id).await?;
+            parts
+                .extensions
+                .insert(ResolvedTenants(Arc::new(list.clone())));
+            list
+        };
+
+        Ok(TenantContext {
+            tenant: member_ext.tenant.clone(),
+            member: member_ext.into_inner(),
+            user,
+            tenants,
+            role: parts
+                .extensions
+                .get::<ResolvedRole>()
+                .map(|r| r.0.clone())
+                .unwrap_or_default(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -347,6 +466,42 @@ mod tests {
         user_id: String,
         tenant_id: String,
         role: String,
+    }
+
+    #[derive(Clone, Debug, PartialEq, serde::Serialize)]
+    struct TestUser {
+        id: String,
+        name: String,
+    }
+
+    #[test]
+    fn tenant_context_accessors() {
+        let ctx = TenantContext::<TestTenant, TestMember, TestUser> {
+            tenant: TestTenant {
+                id: "t-1".to_string(),
+                name: "Acme".to_string(),
+            },
+            member: TestMember {
+                user_id: "u-1".to_string(),
+                tenant_id: "t-1".to_string(),
+                role: "admin".to_string(),
+            },
+            user: TestUser {
+                id: "u-1".to_string(),
+                name: "Alice".to_string(),
+            },
+            tenants: vec![TestTenant {
+                id: "t-1".to_string(),
+                name: "Acme".to_string(),
+            }],
+            role: "admin".to_string(),
+        };
+
+        assert_eq!(ctx.tenant().tenant_id(), "t-1");
+        assert_eq!(ctx.member().user_id, "u-1");
+        assert_eq!(ctx.user().name, "Alice");
+        assert_eq!(ctx.tenants().len(), 1);
+        assert_eq!(ctx.role(), "admin");
     }
 
     #[test]
