@@ -7,9 +7,6 @@ license.workspace = true
 [dependencies]
 http = "1"
 modo = { path = "../modo" }
-modo-auth = { path = "../modo-auth" }
-modo-session = { path = "../modo-session" }
-modo-tenant-macros = { path = "../modo-tenant-macros" }
 modo-templates = { path = "../modo-templates", optional = true }
 serde = { version = "1", features = ["derive"] }
 tower = { version = "0.5", features = ["util"] }

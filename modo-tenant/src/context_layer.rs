@@ -1,9 +1,7 @@
 #[cfg(feature = "templates")]
 use crate::HasTenantId;
 #[cfg(feature = "templates")]
-use crate::cache::{ResolvedMember, ResolvedRole, ResolvedTenant, ResolvedTenants};
-#[cfg(feature = "templates")]
-use crate::member::MemberProviderService;
+use crate::cache::ResolvedTenant;
 #[cfg(feature = "templates")]
 use crate::resolver::TenantResolverService;
 
@@ -20,80 +18,65 @@ use std::task::{Context, Poll};
 #[cfg(feature = "templates")]
 use tower::{Layer, Service};
 
-/// Layer that injects tenant, member, tenants, and role into TemplateContext.
-/// Graceful: skips if no tenant or no auth.
+/// Layer that injects the resolved tenant into TemplateContext.
+/// Graceful: skips if no tenant is resolved.
 #[cfg(feature = "templates")]
-pub struct TenantContextLayer<T, M>
+pub struct TenantContextLayer<T>
 where
     T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
-    M: Clone + Send + Sync + serde::Serialize + 'static,
 {
     tenant_svc: TenantResolverService<T>,
-    member_svc: MemberProviderService<M, T>,
 }
 
 #[cfg(feature = "templates")]
-impl<T, M> Clone for TenantContextLayer<T, M>
+impl<T> Clone for TenantContextLayer<T>
 where
     T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
-    M: Clone + Send + Sync + serde::Serialize + 'static,
 {
     fn clone(&self) -> Self {
         Self {
             tenant_svc: self.tenant_svc.clone(),
-            member_svc: self.member_svc.clone(),
         }
     }
 }
 
 #[cfg(feature = "templates")]
-impl<T, M> TenantContextLayer<T, M>
+impl<T> TenantContextLayer<T>
 where
     T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
-    M: Clone + Send + Sync + serde::Serialize + 'static,
 {
-    pub fn new(
-        tenant_svc: TenantResolverService<T>,
-        member_svc: MemberProviderService<M, T>,
-    ) -> Self {
-        Self {
-            tenant_svc,
-            member_svc,
-        }
+    pub fn new(tenant_svc: TenantResolverService<T>) -> Self {
+        Self { tenant_svc }
     }
 }
 
 #[cfg(feature = "templates")]
-impl<S, T, M> Layer<S> for TenantContextLayer<T, M>
+impl<S, T> Layer<S> for TenantContextLayer<T>
 where
     T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
-    M: Clone + Send + Sync + serde::Serialize + 'static,
 {
-    type Service = TenantContextMiddleware<S, T, M>;
+    type Service = TenantContextMiddleware<S, T>;
 
     fn layer(&self, inner: S) -> Self::Service {
         TenantContextMiddleware {
             inner,
             tenant_svc: self.tenant_svc.clone(),
-            member_svc: self.member_svc.clone(),
         }
     }
 }
 
 #[cfg(feature = "templates")]
 #[derive(Clone)]
-pub struct TenantContextMiddleware<S, T, M>
+pub struct TenantContextMiddleware<S, T>
 where
     T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
-    M: Clone + Send + Sync + serde::Serialize + 'static,
 {
     inner: S,
     tenant_svc: TenantResolverService<T>,
-    member_svc: MemberProviderService<M, T>,
 }
 
 #[cfg(feature = "templates")]
-impl<S, ReqBody, ResBody, T, M> Service<Request<ReqBody>> for TenantContextMiddleware<S, T, M>
+impl<S, ReqBody, ResBody, T> Service<Request<ReqBody>> for TenantContextMiddleware<S, T>
 where
     S: Service<Request<ReqBody>, Response = modo::axum::http::Response<ResBody>>
         + Clone
@@ -103,7 +86,6 @@ where
     ReqBody: Send + 'static,
     ResBody: Send + 'static,
     T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
-    M: Clone + Send + Sync + serde::Serialize + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -116,7 +98,6 @@ where
     fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
         let mut inner = self.inner.clone();
         let tenant_svc = self.tenant_svc.clone();
-        let member_svc = self.member_svc.clone();
 
         Box::pin(async move {
             let (mut parts, body) = request.into_parts();
@@ -144,36 +125,6 @@ where
                 && let Some(ctx) = parts.extensions.get_mut::<TemplateContext>()
             {
                 ctx.insert("tenant", minijinja::Value::from_serialize(t));
-            }
-
-            // If user is authenticated and tenant is resolved, load member + tenants
-            if let Some(ref tenant) = tenant {
-                let user_id = modo_session::user_id_from_extensions(&parts.extensions);
-
-                if let Some(user_id) = user_id {
-                    // Load member
-                    if let Ok(Some(member)) =
-                        member_svc.find_member(&user_id, tenant.tenant_id()).await
-                    {
-                        let role = member_svc.role(&member).to_string();
-
-                        if let Some(ctx) = parts.extensions.get_mut::<TemplateContext>() {
-                            ctx.insert("member", minijinja::Value::from_serialize(&member));
-                            ctx.insert("role", role.clone());
-                        }
-
-                        parts.extensions.insert(ResolvedMember(Arc::new(member)));
-                        parts.extensions.insert(ResolvedRole(role));
-                    }
-
-                    // Load tenants list
-                    if let Ok(tenants) = member_svc.list_tenants(&user_id).await {
-                        if let Some(ctx) = parts.extensions.get_mut::<TemplateContext>() {
-                            ctx.insert("tenants", minijinja::Value::from_serialize(&tenants));
-                        }
-                        parts.extensions.insert(ResolvedTenants(Arc::new(tenants)));
-                    }
-                }
             }
 
             let request = Request::from_parts(parts, body);
