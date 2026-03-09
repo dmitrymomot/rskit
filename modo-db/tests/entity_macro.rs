@@ -107,9 +107,21 @@ fn test_soft_delete_entity_has_deleted_at() {
 
 #[test]
 fn test_soft_delete_helpers_exist() {
-    let _ = test_item::find_active;
+    let _ = test_item::find;
+    let _ = test_item::find_by_id::<i32>;
+    let _ = test_item::with_deleted;
+    let _ = test_item::only_deleted;
     let _ = test_item::soft_delete::<sea_orm::DatabaseConnection>;
+    let _ = test_item::restore::<sea_orm::DatabaseConnection>;
     let _ = test_item::force_delete::<sea_orm::DatabaseConnection>;
+}
+
+#[test]
+fn test_soft_delete_query_scopes_return_select() {
+    let _: sea_orm::Select<test_item::Entity> = test_item::find();
+    let _: sea_orm::Select<test_item::Entity> = test_item::find_by_id(1);
+    let _: sea_orm::Select<test_item::Entity> = test_item::with_deleted();
+    let _: sea_orm::Select<test_item::Entity> = test_item::only_deleted();
 }
 
 // --- Entity with composite index ---
