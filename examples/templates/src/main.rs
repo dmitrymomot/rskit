@@ -4,6 +4,7 @@ use modo_templates::{TemplateConfig, engine};
 struct HomePage {
     time: String,
     date: String,
+    time_hour: u32,
 }
 
 #[modo::handler(GET, "/")]
@@ -12,6 +13,7 @@ async fn home() -> HomePage {
     HomePage {
         time: now.format("%H:%M:%S").to_string(),
         date: now.format("%A, %B %d, %Y").to_string(),
+        time_hour: chrono::Timelike::hour(&now),
     }
 }
 
@@ -19,6 +21,10 @@ async fn home() -> HomePage {
 async fn main(app: modo::app::AppBuilder) -> Result<(), Box<dyn std::error::Error>> {
     let config = TemplateConfig::default();
     let mut engine = engine(&config)?;
+
+    // Production: embed templates into the binary (requires minijinja-embed).
+    // #[cfg(not(debug_assertions))]
+    // minijinja_embed::load_templates!(&mut engine.env_mut());
 
     // Custom template function — demonstrates env_mut().add_function() API
     engine

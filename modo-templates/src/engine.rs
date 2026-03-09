@@ -25,7 +25,8 @@ impl TemplateEngine {
 
     /// Render a template by name with the given context value.
     ///
-    /// Dev: acquires a write lock, clears cached templates, and re-reads from disk.
+    /// Dev: acquires a write lock to clear cached templates, then drops it and
+    /// acquires a read lock for template loading + rendering (concurrent reads).
     /// Prod: acquires a read lock and serves from embedded templates only.
     pub fn render(
         &self,
@@ -33,8 +34,8 @@ impl TemplateEngine {
         ctx: minijinja::Value,
     ) -> Result<String, crate::TemplateError> {
         if cfg!(debug_assertions) {
-            let mut env = self.env.write().unwrap();
-            env.clear_templates();
+            self.env.write().unwrap().clear_templates();
+            let env = self.env.read().unwrap();
             let tmpl = env.get_template(name)?;
             Ok(tmpl.render(ctx)?)
         } else {
