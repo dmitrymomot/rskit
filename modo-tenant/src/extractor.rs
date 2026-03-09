@@ -1,10 +1,12 @@
-use crate::cache::ResolvedTenant;
+use crate::cache::{ResolvedMember, ResolvedRole, ResolvedTenant};
+use crate::member::MemberProviderService;
 use crate::resolver::TenantResolverService;
 use crate::HasTenantId;
 use modo::app::AppState;
 use modo::axum::extract::FromRequestParts;
 use modo::axum::http::request::Parts;
 use modo::{Error, HttpError};
+use modo_session::SessionManager;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -93,6 +95,124 @@ where
     ) -> Result<Self, Self::Rejection> {
         let tenant = resolve_tenant::<T>(parts, state).await?;
         Ok(OptionalTenant(tenant))
+    }
+}
+
+/// Extractor that requires tenant + auth + membership.
+/// Returns 404 (no tenant), 401 (no auth), or 403 (not a member).
+pub struct Member<T: HasTenantId + Clone + Send + Sync + 'static, M: Clone + Send + Sync + 'static>
+{
+    tenant: T,
+    inner: M,
+    role: String,
+}
+
+impl<T: HasTenantId + Clone + Send + Sync + 'static, M: Clone + Send + Sync + 'static> Clone
+    for Member<T, M>
+{
+    fn clone(&self) -> Self {
+        Self {
+            tenant: self.tenant.clone(),
+            inner: self.inner.clone(),
+            role: self.role.clone(),
+        }
+    }
+}
+
+impl<T: HasTenantId + Clone + Send + Sync + 'static, M: Clone + Send + Sync + 'static>
+    Member<T, M>
+{
+    pub fn tenant(&self) -> &T {
+        &self.tenant
+    }
+
+    pub fn role(&self) -> &str {
+        &self.role
+    }
+
+    pub fn into_inner(self) -> M {
+        self.inner
+    }
+}
+
+impl<T: HasTenantId + Clone + Send + Sync + 'static, M: Clone + Send + Sync + 'static> Deref
+    for Member<T, M>
+{
+    type Target = M;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T, M> FromRequestParts<AppState> for Member<T, M>
+where
+    T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
+    M: Clone + Send + Sync + serde::Serialize + 'static,
+{
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        // 1. Resolve tenant (cached or fresh)
+        let tenant = resolve_tenant::<T>(parts, state)
+            .await?
+            .ok_or_else(|| Error::from(HttpError::NotFound))?;
+
+        // 2. Check member cache
+        if let Some(cached_member) = parts.extensions.get::<ResolvedMember<M>>() {
+            let role = parts
+                .extensions
+                .get::<ResolvedRole>()
+                .map(|r| r.0.clone())
+                .unwrap_or_default();
+            return Ok(Member {
+                tenant,
+                inner: (*cached_member.0).clone(),
+                role,
+            });
+        }
+
+        // 3. Get user_id from session
+        let session = SessionManager::from_request_parts(parts, state)
+            .await
+            .map_err(|_| Error::internal("Member<T, M> requires session middleware"))?;
+        let user_id = session
+            .user_id()
+            .await
+            .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
+
+        // 4. Look up member
+        let provider = state
+            .services
+            .get::<MemberProviderService<M, T>>()
+            .ok_or_else(|| {
+                Error::internal(format!(
+                    "MemberProviderService<{}, {}> not registered",
+                    std::any::type_name::<M>(),
+                    std::any::type_name::<T>()
+                ))
+            })?;
+
+        let member = provider
+            .find_member(&user_id, tenant.tenant_id())
+            .await?
+            .ok_or_else(|| Error::from(HttpError::Forbidden))?;
+
+        let role = provider.role(&member).to_string();
+
+        // 5. Cache
+        parts
+            .extensions
+            .insert(ResolvedMember(Arc::new(member.clone())));
+        parts.extensions.insert(ResolvedRole(role.clone()));
+
+        Ok(Member {
+            tenant,
+            inner: member,
+            role,
+        })
     }
 }
 
@@ -220,5 +340,32 @@ mod tests {
             .unwrap();
 
         assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[derive(Clone, Debug, PartialEq, serde::Serialize)]
+    struct TestMember {
+        user_id: String,
+        tenant_id: String,
+        role: String,
+    }
+
+    #[test]
+    fn member_accessors() {
+        let member = Member::<TestTenant, TestMember> {
+            tenant: TestTenant {
+                id: "t-1".to_string(),
+                name: "Acme".to_string(),
+            },
+            inner: TestMember {
+                user_id: "u-1".to_string(),
+                tenant_id: "t-1".to_string(),
+                role: "admin".to_string(),
+            },
+            role: "admin".to_string(),
+        };
+
+        assert_eq!(member.tenant().tenant_id(), "t-1");
+        assert_eq!(member.role(), "admin");
+        assert_eq!(member.user_id, "u-1"); // Deref to M
     }
 }
