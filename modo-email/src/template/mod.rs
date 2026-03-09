@@ -1,6 +1,7 @@
 pub mod filesystem;
 pub mod layout;
 pub mod markdown;
+pub mod vars;
 
 use serde::Deserialize;
 
