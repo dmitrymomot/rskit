@@ -1,0 +1,19 @@
+[package]
+name = "modo-tenant"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+modo = { path = "../modo" }
+modo-session = { path = "../modo-session" }
+serde = { version = "1", features = ["derive"] }
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+axum-extra = { version = "0.10", features = ["cookie-signed"] }
+tower = { version = "0.5", features = ["util"] }
+http = "1"
+serde_json = "1"
