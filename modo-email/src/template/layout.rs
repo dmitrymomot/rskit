@@ -1,0 +1,157 @@
+use std::collections::HashMap;
+use std::path::Path;
+
+pub(crate) const DEFAULT_LAYOUT: &str = r#"<!DOCTYPE html>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>{{subject}}</title>
+<style>
+  @media (prefers-color-scheme: dark) {
+    body { background-color: #1a1a1a !important; }
+    .email-wrapper { background-color: #2d2d2d !important; }
+    .email-body { color: #e0e0e0 !important; }
+  }
+  @media only screen and (max-width: 620px) {
+    .email-wrapper { width: 100% !important; padding: 16px !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5">
+<tr><td align="center" style="padding:32px 16px">
+  <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+  <table role="presentation" class="email-wrapper" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden">
+    {% if logo_url %}
+    <tr><td style="padding:24px 32px 0;text-align:center">
+      <img src="{{logo_url}}" alt="{{product_name | default(value="")}}" style="max-height:48px;width:auto">
+    </td></tr>
+    {% endif %}
+    <tr><td class="email-body" style="padding:32px;color:#1f2937;font-size:16px;line-height:1.6">
+      {{content}}
+    </td></tr>
+    <tr><td style="padding:16px 32px 32px;color:#6b7280;font-size:13px;text-align:center;border-top:1px solid #e5e7eb">
+      {{footer_text | default(value="")}}
+    </td></tr>
+  </table>
+  <!--[if mso]></td></tr></table><![endif]-->
+</td></tr>
+</table>
+</body>
+</html>"#;
+
+pub struct LayoutEngine {
+    env: minijinja::Environment<'static>,
+}
+
+impl LayoutEngine {
+    pub fn new(templates_path: &str) -> Self {
+        let mut env = Self::base_env();
+
+        let layouts_dir = Path::new(templates_path).join("layouts");
+        if layouts_dir.is_dir()
+            && let Ok(entries) = std::fs::read_dir(&layouts_dir)
+        {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_some_and(|e| e == "html")
+                    && let (Some(stem), Ok(content)) = (
+                        path.file_stem().and_then(|s| s.to_str()),
+                        std::fs::read_to_string(&path),
+                    )
+                {
+                    env.add_template_owned(format!("layouts/{stem}.html"), content)
+                        .ok();
+                }
+            }
+        }
+
+        Self { env }
+    }
+
+    pub fn builtin_only() -> Self {
+        Self {
+            env: Self::base_env(),
+        }
+    }
+
+    pub fn render(
+        &self,
+        layout_name: &str,
+        context: &HashMap<String, serde_json::Value>,
+    ) -> Result<String, modo::Error> {
+        let template_name = format!("layouts/{layout_name}.html");
+        let builtin_name = format!("__builtin__/{layout_name}.html");
+
+        let tmpl = self
+            .env
+            .get_template(&template_name)
+            .or_else(|_| self.env.get_template(&builtin_name))
+            .map_err(|_| modo::Error::internal(format!("Layout not found: {layout_name}")))?;
+
+        let ctx = minijinja::Value::from_serialize(context);
+        tmpl.render(&ctx)
+            .map_err(|e| modo::Error::internal(format!("Layout render error: {e}")))
+    }
+
+    /// Creates a base environment with the built-in default layout and
+    /// auto-escaping disabled (email content is pre-rendered HTML).
+    fn base_env() -> minijinja::Environment<'static> {
+        let mut env = minijinja::Environment::new();
+        env.set_auto_escape_callback(|_| minijinja::AutoEscape::None);
+        env.add_template_owned(
+            "__builtin__/default.html".to_string(),
+            DEFAULT_LAYOUT.to_string(),
+        )
+        .expect("built-in layout is valid");
+        env
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn render_with_builtin_layout() {
+        let engine = LayoutEngine::builtin_only();
+        let mut ctx = HashMap::new();
+        ctx.insert("content".to_string(), serde_json::json!("<p>Hello</p>"));
+        ctx.insert("subject".to_string(), serde_json::json!("Test"));
+
+        let html = engine.render("default", &ctx).unwrap();
+        assert!(html.contains("<p>Hello</p>"));
+        assert!(html.contains("Test")); // subject in <title>
+        assert!(html.contains("max-width")); // responsive wrapper
+    }
+
+    #[test]
+    fn custom_layout_overrides_builtin() {
+        let dir = tempfile::tempdir().unwrap();
+        let layouts_dir = dir.path().join("layouts");
+        fs::create_dir_all(&layouts_dir).unwrap();
+        fs::write(
+            layouts_dir.join("default.html"),
+            "<html><body>CUSTOM: {{content}}</body></html>",
+        )
+        .unwrap();
+
+        let engine = LayoutEngine::new(dir.path().to_str().unwrap());
+        let mut ctx = HashMap::new();
+        ctx.insert("content".to_string(), serde_json::json!("<p>Hi</p>"));
+
+        let html = engine.render("default", &ctx).unwrap();
+        assert!(html.contains("CUSTOM: <p>Hi</p>"));
+    }
+
+    #[test]
+    fn missing_layout_errors() {
+        let engine = LayoutEngine::builtin_only();
+        let ctx = HashMap::new();
+        let result = engine.render("nonexistent", &ctx);
+        assert!(result.is_err());
+    }
+}
