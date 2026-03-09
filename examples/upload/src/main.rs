@@ -1,4 +1,5 @@
-use modo_upload::{FileStorage, FromMultipart, LocalStorage, MultipartForm, UploadedFile};
+use modo_upload::{FileStorage, FromMultipart, MultipartForm, UploadConfig, UploadedFile};
+use serde::Deserialize;
 
 #[derive(FromMultipart, modo::Sanitize, modo::Validate)]
 struct ProfileForm {
@@ -32,11 +33,22 @@ async fn index() -> &'static str {
     "Upload example — POST /profile with multipart/form-data"
 }
 
+#[derive(Default, Deserialize)]
+struct AppConfig {
+    #[serde(flatten)]
+    server: modo::config::ServerConfig,
+    #[serde(default)]
+    upload: UploadConfig,
+}
+
 #[modo::main]
 async fn main(
     app: modo::app::AppBuilder,
-    config: modo::config::ServerConfig,
+    config: AppConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let storage: Box<dyn FileStorage> = Box::new(LocalStorage::new("./uploads"));
-    app.server_config(config).service(storage).run().await
+    let storage = modo_upload::storage(&config.upload)?;
+    app.server_config(config.server)
+        .service(storage)
+        .run()
+        .await
 }
