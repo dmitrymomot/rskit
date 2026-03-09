@@ -40,16 +40,6 @@ In-memory and optional Redis support for performance-critical paths.
 - Cache invalidation helpers
 - Use cases: session caching, rate limit state, query result caching
 
-### 4. Password Hashing — in `modo-auth`
-
-Argon2id password hashing utilities. Every SaaS with login needs this.
-
-- `hash_password(plain: &str) -> String`
-- `verify_password(plain: &str, hash: &str) -> bool`
-- Argon2id with secure defaults
-- Configurable cost parameters via `AuthConfig`
-- Timing-safe comparison
-
 ### 5. Static File Serving — in `modo` core or `modo-static`
 
 Serve CSS, JS, images, fonts.
@@ -96,18 +86,6 @@ Many SaaS products expose APIs to customers.
 - Per-key rate limiting integration
 - Key rotation (create new before revoking old)
 - `ApiKeyProvider` trait (similar to `UserProvider`)
-
-### 9. Soft Deletes — in `modo-db`
-
-Common SaaS pattern for data retention and undo.
-
-- `#[entity(soft_delete)]` attribute
-- Adds `deleted_at: Option<DateTime>` column
-- Auto-filters `deleted_at IS NULL` on queries
-- `with_deleted()` scope to include soft-deleted records
-- `only_deleted()` scope for trash views
-- `restore()` method on ActiveModel
-- `force_delete()` to bypass soft delete
 
 ### 10. Audit Logging — `modo-audit`
 
@@ -186,14 +164,3 @@ Role-based access control for multi-user apps.
 - Role → permissions mapping
 - `RoleProvider` trait (similar to `UserProvider`)
 - Could be app-level initially, framework provides primitives
-
-### 17. Graceful Shutdown
-
-Clean shutdown for production deployments.
-
-- Signal handling (SIGTERM, SIGINT)
-- Drain in-flight HTTP requests (configurable timeout)
-- Finish active background jobs
-- Close database connections
-- Run shutdown hooks
-- Integration with `modo-jobs` drain

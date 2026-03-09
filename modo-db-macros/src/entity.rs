@@ -625,13 +625,40 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     let soft_delete_helpers = if struct_attrs.soft_delete {
         quote! {
-            pub fn find_active() -> modo_db::sea_orm::Select<Entity> {
+            /// Returns a select query that filters out soft-deleted records (`deleted_at IS NULL`).
+            pub fn find() -> modo_db::sea_orm::Select<Entity> {
                 use modo_db::sea_orm::EntityTrait;
                 use modo_db::sea_orm::QueryFilter;
                 use modo_db::sea_orm::ColumnTrait;
                 Entity::find().filter(Column::DeletedAt.is_null())
             }
 
+            /// Returns a select query for a single record by primary key, excluding soft-deleted records.
+            pub fn find_by_id<T>(id: T) -> modo_db::sea_orm::Select<Entity>
+            where
+                T: Into<<<Entity as modo_db::sea_orm::EntityTrait>::PrimaryKey as modo_db::sea_orm::PrimaryKeyTrait>::ValueType>,
+            {
+                use modo_db::sea_orm::EntityTrait;
+                use modo_db::sea_orm::QueryFilter;
+                use modo_db::sea_orm::ColumnTrait;
+                Entity::find_by_id(id).filter(Column::DeletedAt.is_null())
+            }
+
+            /// Returns a select query that includes all records, including soft-deleted ones.
+            pub fn with_deleted() -> modo_db::sea_orm::Select<Entity> {
+                use modo_db::sea_orm::EntityTrait;
+                Entity::find()
+            }
+
+            /// Returns a select query that returns only soft-deleted records (`deleted_at IS NOT NULL`).
+            pub fn only_deleted() -> modo_db::sea_orm::Select<Entity> {
+                use modo_db::sea_orm::EntityTrait;
+                use modo_db::sea_orm::QueryFilter;
+                use modo_db::sea_orm::ColumnTrait;
+                Entity::find().filter(Column::DeletedAt.is_not_null())
+            }
+
+            /// Sets `deleted_at` to the current timestamp, marking the record as soft-deleted.
             pub async fn soft_delete<C: modo_db::sea_orm::ConnectionTrait>(
                 mut model: ActiveModel,
                 db: &C,
@@ -641,6 +668,17 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
                 model.update(db).await
             }
 
+            /// Clears `deleted_at`, restoring a soft-deleted record.
+            pub async fn restore<C: modo_db::sea_orm::ConnectionTrait>(
+                mut model: ActiveModel,
+                db: &C,
+            ) -> std::result::Result<Model, modo_db::sea_orm::DbErr> {
+                use modo_db::sea_orm::ActiveModelTrait;
+                model.deleted_at = modo_db::sea_orm::ActiveValue::Set(None);
+                model.update(db).await
+            }
+
+            /// Permanently deletes the record from the database (hard delete).
             pub async fn force_delete<C: modo_db::sea_orm::ConnectionTrait>(
                 model: Model,
                 db: &C,
