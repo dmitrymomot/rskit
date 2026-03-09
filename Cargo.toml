@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["modo", "modo-macros", "modo-db", "modo-db-macros", "modo-i18n", "modo-i18n-macros", "modo-jobs", "modo-jobs-macros", "modo-session", "modo-auth", "modo-upload", "modo-upload-macros", "modo-templates", "modo-templates-macros", "modo-csrf", "examples/*"]
+members = ["modo", "modo-macros", "modo-db", "modo-db-macros", "modo-email", "modo-i18n", "modo-i18n-macros", "modo-jobs", "modo-jobs-macros", "modo-session", "modo-auth", "modo-upload", "modo-upload-macros", "modo-templates", "modo-templates-macros", "modo-csrf", "examples/*"]
 
 [workspace.package]
 license = "Apache-2.0"
