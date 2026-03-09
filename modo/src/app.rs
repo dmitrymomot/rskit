@@ -403,21 +403,6 @@ impl AppBuilder {
         //   Module/Handler MW (innermost)
         // =====================================================================
 
-        // --- Inject AppState into extensions (for handler-level middleware) ---
-        {
-            let st = state.clone();
-            router = router.layer(axum::middleware::from_fn(
-                move |mut req: axum::http::Request<axum::body::Body>,
-                      next: axum::middleware::Next| {
-                    let st = st.clone();
-                    async move {
-                        req.extensions_mut().insert(st);
-                        next.run(req).await
-                    }
-                },
-            ));
-        }
-
         // --- Template render layer (innermost — closest to handler) ---
         #[cfg(feature = "templates")]
         let template_engine: Option<std::sync::Arc<modo_templates::TemplateEngine>> =
