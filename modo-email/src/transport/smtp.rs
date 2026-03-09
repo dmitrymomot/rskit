@@ -1,7 +1,7 @@
 use super::MailTransport;
 use crate::config::SmtpConfig;
 use crate::message::MailMessage;
-use lettre::message::{header::ContentType, MultiPart, SinglePart};
+use lettre::message::{MultiPart, SinglePart, header::ContentType};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
@@ -18,8 +18,7 @@ impl SmtpTransport {
                 .map_err(|e| modo::Error::internal(format!("SMTP config error: {e}")))?
                 .port(config.port)
         } else {
-            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&config.host)
-                .port(config.port)
+            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&config.host).port(config.port)
         };
 
         let mailer = builder.credentials(creds).build();
@@ -32,18 +31,23 @@ impl SmtpTransport {
 impl MailTransport for SmtpTransport {
     async fn send(&self, message: &MailMessage) -> Result<(), modo::Error> {
         let mut builder = Message::builder()
-            .from(message.from.parse().map_err(|e| {
-                modo::Error::internal(format!("Invalid from address: {e}"))
-            })?)
-            .to(message.to.parse().map_err(|e| {
-                modo::Error::internal(format!("Invalid to address: {e}"))
-            })?)
+            .from(
+                message
+                    .from
+                    .parse()
+                    .map_err(|e| modo::Error::internal(format!("Invalid from address: {e}")))?,
+            )
+            .to(message
+                .to
+                .parse()
+                .map_err(|e| modo::Error::internal(format!("Invalid to address: {e}")))?)
             .subject(&message.subject);
 
         if let Some(ref reply_to) = message.reply_to {
-            builder = builder.reply_to(reply_to.parse().map_err(|e| {
-                modo::Error::internal(format!("Invalid reply-to address: {e}"))
-            })?);
+            builder =
+                builder.reply_to(reply_to.parse().map_err(|e| {
+                    modo::Error::internal(format!("Invalid reply-to address: {e}"))
+                })?);
         }
 
         let email = builder
