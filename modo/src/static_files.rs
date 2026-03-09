@@ -61,15 +61,16 @@ pub fn build_embed_service<E: rust_embed::Embed + 'static>(
     use axum::http::{HeaderMap, StatusCode, header};
     use axum::response::IntoResponse;
 
-    let cache_header: axum::http::HeaderValue = config
+    let cache_control = config
         .cache_control
-        .as_deref()
-        .unwrap_or("max-age=31536000, immutable")
-        .parse()
-        .expect("invalid cache_control value");
+        .clone()
+        .unwrap_or_else(|| "max-age=31536000, immutable".to_string());
+
+    // Validate at build time — panics once at startup if invalid
+    let _: axum::http::HeaderValue = cache_control.parse().expect("invalid cache_control value");
 
     axum::Router::new().fallback(move |uri: axum::http::Uri, headers: HeaderMap| {
-        let cache_header = cache_header.clone();
+        let cache_control = cache_control.clone();
         async move {
             let path = uri.path().trim_start_matches('/');
             match E::get(path) {
@@ -82,7 +83,6 @@ pub fn build_embed_service<E: rust_embed::Embed + 'static>(
                         .map(|b| format!("{b:02x}"))
                         .collect();
                     let etag = format!("\"{hash}\"");
-                    let cache_value = cache_header.to_str().unwrap_or_default().to_string();
 
                     // Return 304 if ETag matches
                     if headers
@@ -91,7 +91,7 @@ pub fn build_embed_service<E: rust_embed::Embed + 'static>(
                         .is_some_and(|v| v == etag)
                     {
                         return (
-                            [(header::ETAG, etag), (header::CACHE_CONTROL, cache_value)],
+                            [(header::ETAG, etag), (header::CACHE_CONTROL, cache_control)],
                             StatusCode::NOT_MODIFIED,
                         )
                             .into_response();
@@ -101,7 +101,7 @@ pub fn build_embed_service<E: rust_embed::Embed + 'static>(
                         [
                             (header::CONTENT_TYPE, mime.as_ref().to_string()),
                             (header::ETAG, etag),
-                            (header::CACHE_CONTROL, cache_value),
+                            (header::CACHE_CONTROL, cache_control),
                         ],
                         axum::body::Bytes::copy_from_slice(&file.data),
                     )
