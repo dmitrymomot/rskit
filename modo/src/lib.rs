@@ -13,6 +13,7 @@ pub mod middleware;
 pub mod request_id;
 pub mod router;
 pub mod sanitize;
+pub mod shutdown;
 pub mod validate;
 
 pub use config::{HttpConfig, RateLimitConfig, SecurityHeadersConfig, TrailingSlash};
@@ -20,6 +21,7 @@ pub use cors::CorsConfig;
 pub use error::{Error, ErrorContext, ErrorHandlerFn, ErrorHandlerRegistration, HttpError};
 pub use middleware::{ClientIp, RateLimitInfo};
 pub use request_id::RequestId;
+pub use shutdown::{GracefulShutdown, ShutdownPhase};
 
 // Re-exports for macro-generated code
 pub use axum;

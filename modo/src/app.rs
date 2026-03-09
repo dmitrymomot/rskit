@@ -8,6 +8,7 @@ use crate::logging;
 use crate::middleware;
 use crate::request_id;
 use crate::router::{ModuleRegistration, RouteRegistration};
+use crate::shutdown::{GracefulShutdown, ShutdownPhase};
 use axum::Router;
 use axum::extract::FromRef;
 use axum::http::header;
@@ -78,6 +79,7 @@ pub struct AppBuilder {
     layers: Vec<LayerFn>,
     cors_config: Option<CorsConfig>,
     shutdown_hooks: Vec<ShutdownHook>,
+    managed_shutdowns: Vec<Arc<dyn GracefulShutdown>>,
     readiness_checks: Vec<ReadinessCheck>,
     enable_request_logging: bool,
     // Middleware overrides (take precedence over YAML config)
@@ -96,6 +98,7 @@ impl AppBuilder {
             layers: Vec::new(),
             cors_config: None,
             shutdown_hooks: Vec::new(),
+            managed_shutdowns: Vec::new(),
             readiness_checks: Vec::new(),
             enable_request_logging: true,
             override_http: None,
@@ -113,6 +116,19 @@ impl AppBuilder {
 
     pub fn service<T: Send + Sync + 'static>(mut self, svc: T) -> Self {
         self.services.insert(TypeId::of::<T>(), Arc::new(svc));
+        self
+    }
+
+    /// Register a service that also participates in graceful shutdown.
+    ///
+    /// The service is added to the service registry (like `service()`) and
+    /// its `graceful_shutdown()` method is called automatically during
+    /// server shutdown in the appropriate phase.
+    pub fn managed_service<T: GracefulShutdown + 'static>(mut self, svc: T) -> Self {
+        let arc: Arc<T> = Arc::new(svc);
+        self.services
+            .insert(TypeId::of::<T>(), arc.clone() as Arc<dyn Any + Send + Sync>);
+        self.managed_shutdowns.push(arc);
         self
     }
 
@@ -503,6 +519,7 @@ impl AppBuilder {
         // Graceful shutdown with configurable timeout
         let shutdown_timeout = Duration::from_secs(server_config.shutdown_timeout_secs);
         let shutdown_hooks = self.shutdown_hooks;
+        let managed_shutdowns = self.managed_shutdowns;
         let shutdown_notify = Arc::new(tokio::sync::Notify::new());
         let notify_clone = shutdown_notify.clone();
 
@@ -523,7 +540,7 @@ impl AppBuilder {
             shutdown_timeout.as_secs()
         );
 
-        // Timeout only the drain period (not the entire server lifetime)
+        // 1. Drain in-flight HTTP requests
         match tokio::time::timeout(shutdown_timeout, serve_handle).await {
             Ok(Ok(Ok(()))) => info!("All connections drained"),
             Ok(Ok(Err(e))) => warn!("Server error during shutdown: {e}"),
@@ -534,7 +551,29 @@ impl AppBuilder {
             ),
         }
 
-        // Run cleanup hooks sequentially (5s budget per hook)
+        // Partition managed services by phase
+        let (drain_services, close_services): (Vec<_>, Vec<_>) = managed_shutdowns
+            .iter()
+            .partition(|s| s.shutdown_phase() == ShutdownPhase::Drain);
+
+        // 2. Shutdown Drain-phase managed services concurrently
+        if !drain_services.is_empty() {
+            info!("Draining {} managed service(s)", drain_services.len());
+            let handles: Vec<_> = drain_services
+                .into_iter()
+                .map(|s| {
+                    let s = s.clone();
+                    tokio::spawn(async move { s.graceful_shutdown().await })
+                })
+                .collect();
+            for handle in handles {
+                if let Err(e) = handle.await {
+                    warn!("Drain-phase service panicked: {e}");
+                }
+            }
+        }
+
+        // 3. Run user shutdown hooks sequentially (5s budget per hook)
         if !shutdown_hooks.is_empty() {
             info!("Running {} shutdown hook(s)", shutdown_hooks.len());
             for hook in shutdown_hooks {
@@ -543,6 +582,23 @@ impl AppBuilder {
                     .is_err()
                 {
                     warn!("Shutdown hook timed out");
+                }
+            }
+        }
+
+        // 4. Shutdown Close-phase managed services concurrently
+        if !close_services.is_empty() {
+            info!("Closing {} managed service(s)", close_services.len());
+            let handles: Vec<_> = close_services
+                .into_iter()
+                .map(|s| {
+                    let s = s.clone();
+                    tokio::spawn(async move { s.graceful_shutdown().await })
+                })
+                .collect();
+            for handle in handles {
+                if let Err(e) = handle.await {
+                    warn!("Close-phase service panicked: {e}");
                 }
             }
         }
