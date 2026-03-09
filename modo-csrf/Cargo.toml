@@ -1,0 +1,29 @@
+[package]
+name = "modo-csrf"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+axum = "0.8"
+http = "1"
+rand = "0.9"
+hmac = "0.12"
+sha2 = "0.10"
+subtle = "2"
+serde = { version = "1", features = ["derive"] }
+form_urlencoded = "1"
+tracing = "0.1"
+
+modo-templates = { path = "../modo-templates", optional = true }
+minijinja = { version = "2", optional = true }
+
+[features]
+default = []
+templates = ["dep:modo-templates", "dep:minijinja"]
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+serde_yaml_ng = "0.10"
