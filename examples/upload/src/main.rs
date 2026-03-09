@@ -33,7 +33,10 @@ async fn index() -> &'static str {
 }
 
 #[modo::main]
-async fn main(app: modo::app::AppBuilder) -> Result<(), Box<dyn std::error::Error>> {
+async fn main(
+    app: modo::app::AppBuilder,
+    config: modo::config::ServerConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
     let storage: Box<dyn FileStorage> = Box::new(LocalStorage::new("./uploads"));
-    app.service(storage).run().await
+    app.server_config(config).service(storage).run().await
 }

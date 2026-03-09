@@ -34,6 +34,9 @@ async fn contact(form: Form<ContactForm>) -> Result<&'static str, modo::Error> {
 }
 
 #[modo::main]
-async fn main(app: modo::app::AppBuilder) -> Result<(), Box<dyn std::error::Error>> {
-    app.run().await
+async fn main(
+    app: modo::app::AppBuilder,
+    config: modo::config::ServerConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
+    app.server_config(config).run().await
 }

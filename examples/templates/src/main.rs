@@ -18,9 +18,12 @@ async fn home() -> HomePage {
 }
 
 #[modo::main]
-async fn main(app: modo::app::AppBuilder) -> Result<(), Box<dyn std::error::Error>> {
-    let config = TemplateConfig::default();
-    let mut engine = engine(&config)?;
+async fn main(
+    app: modo::app::AppBuilder,
+    config: modo::config::ServerConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let template_config = TemplateConfig::default();
+    let mut engine = engine(&template_config)?;
 
     // Production: embed templates into the binary (requires minijinja-embed).
     // #[cfg(not(debug_assertions))]
@@ -37,13 +40,14 @@ async fn main(app: modo::app::AppBuilder) -> Result<(), Box<dyn std::error::Erro
             }
         });
 
-    app.security_headers(modo::SecurityHeadersConfig {
-        content_security_policy: Some(
-            "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'".to_string(),
-        ),
-        ..Default::default()
-    })
-    .service(engine)
-    .run()
-    .await
+    app.server_config(config)
+        .security_headers(modo::SecurityHeadersConfig {
+            content_security_policy: Some(
+                "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'".to_string(),
+            ),
+            ..Default::default()
+        })
+        .service(engine)
+        .run()
+        .await
 }

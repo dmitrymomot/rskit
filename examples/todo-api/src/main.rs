@@ -101,8 +101,10 @@ async fn delete_todo(
 // --- Main ---
 
 #[modo::main]
-async fn main(app: modo::app::AppBuilder) -> Result<(), Box<dyn std::error::Error>> {
-    let config: AppConfig = modo::config::load_or_default()?;
+async fn main(
+    app: modo::app::AppBuilder,
+    config: AppConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
     let db = modo_db::connect(&config.database).await?;
     modo_db::sync_and_migrate(&db).await?;
     app.server_config(config.server).service(db).run().await

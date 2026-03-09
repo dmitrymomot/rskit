@@ -43,7 +43,7 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 - Handlers: `#[modo::handler(METHOD, "/path")]`
 - Path params: plain `id: String` in handler fn auto-extracted from `{id}` in route path — no need for `Path(id): Path<String>`
 - Path params: partial extraction supported — declare only the params you need, others ignored via `..`
-- Entry point: `#[modo::main]`
+- Entry point: `#[modo::main]` — requires `(app: AppBuilder, config: MyConfig)` where config is auto-loaded via `load_or_default()`
 - Routes auto-discovered via `inventory` crate
 - DB extractor: `Db(db): Db`
 - Service extractor: `Service<MyType>`
