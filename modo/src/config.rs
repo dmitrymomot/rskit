@@ -182,6 +182,8 @@ pub struct ServerConfig {
     pub http: HttpConfig,
     pub security_headers: SecurityHeadersConfig,
     pub rate_limit: Option<RateLimitConfig>,
+    #[cfg(any(feature = "static-fs", feature = "static-embed"))]
+    pub static_files: Option<crate::static_files::StaticConfig>,
     #[serde(skip)]
     pub environment: Environment,
 }
@@ -201,6 +203,8 @@ impl Default for ServerConfig {
             http: HttpConfig::default(),
             security_headers: SecurityHeadersConfig::default(),
             rate_limit: None,
+            #[cfg(any(feature = "static-fs", feature = "static-embed"))]
+            static_files: None,
             environment: Environment::Development,
         }
     }

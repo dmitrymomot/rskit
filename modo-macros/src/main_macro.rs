@@ -2,7 +2,33 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{FnArg, ItemFn, Pat, Result, parse2};
 
-pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
+struct MainAttr {
+    static_assets: Option<syn::LitStr>,
+}
+
+impl syn::parse::Parse for MainAttr {
+    fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+        if input.is_empty() {
+            return Ok(Self {
+                static_assets: None,
+            });
+        }
+        let ident: syn::Ident = input.parse()?;
+        if ident != "static_assets" {
+            return Err(syn::Error::new_spanned(
+                &ident,
+                "unknown attribute, expected `static_assets`",
+            ));
+        }
+        input.parse::<syn::Token![=]>()?;
+        Ok(Self {
+            static_assets: Some(input.parse()?),
+        })
+    }
+}
+
+pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
+    let main_attr: MainAttr = parse2(attr)?;
     let func: ItemFn = parse2(item)?;
 
     if func.sig.ident != "main" {
@@ -58,6 +84,36 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         unreachable!() // already validated len == 2
     };
 
+    // Generate embed code conditionally
+    #[cfg(not(feature = "static-embed"))]
+    if main_attr.static_assets.is_some() {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "static_assets requires modo's 'static-embed' feature",
+        ));
+    }
+
+    let static_embed_tokens;
+    #[cfg(feature = "static-embed")]
+    {
+        let folder = main_attr
+            .static_assets
+            .unwrap_or_else(|| syn::LitStr::new("static/", proc_macro2::Span::call_site()));
+        static_embed_tokens = quote! {
+            let #app_ident = {
+                use ::modo::rust_embed;
+                #[derive(rust_embed::Embed)]
+                #[folder = #folder]
+                struct __ModoStaticAssets;
+                #app_ident.embed_static_files::<__ModoStaticAssets>()
+            };
+        };
+    }
+    #[cfg(not(feature = "static-embed"))]
+    {
+        static_embed_tokens = quote! {};
+    }
+
     let stmts = &func.block.stmts;
 
     Ok(quote! {
@@ -75,6 +131,8 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
                         .init();
 
                     let #app_ident = modo::app::AppBuilder::new();
+
+                    #static_embed_tokens
 
                     let __modo_result: std::result::Result<(), Box<dyn std::error::Error>> = {
                         async move {
