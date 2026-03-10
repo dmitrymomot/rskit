@@ -56,7 +56,7 @@ pub(crate) fn validate_logical_path(path: &str) -> Result<(), modo::Error> {
         return Err(modo::Error::internal("Invalid storage path"));
     }
     for segment in path.split('/') {
-        if segment == ".." {
+        if segment == ".." || segment == "." {
             return Err(modo::Error::internal("Invalid storage path"));
         }
     }
@@ -67,7 +67,7 @@ pub(crate) fn validate_logical_path(path: &str) -> Result<(), modo::Error> {
 pub(crate) fn generate_filename(original: &str) -> String {
     let id = ulid::Ulid::new().to_string().to_lowercase();
     match crate::file::extract_extension(original) {
-        Some(ext) => format!("{id}.{ext}"),
+        Some(ext) => format!("{id}.{}", ext.to_ascii_lowercase()),
         None => id,
     }
 }
@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn generate_filename_with_ext() {
         let name = generate_filename("photo.JPG");
-        assert!(name.ends_with(".JPG"), "expected .JPG suffix, got: {name}");
+        assert!(name.ends_with(".jpg"), "expected .jpg suffix, got: {name}");
         // ULID is 26 chars + dot + extension
         assert!(name.len() > 26);
     }
@@ -204,8 +204,8 @@ mod tests {
         }
 
         #[test]
-        fn validate_logical_path_allows_dot() {
-            assert!(validate_logical_path("a/./b").is_ok());
+        fn validate_logical_path_rejects_dot() {
+            assert!(validate_logical_path("a/./b").is_err());
         }
     }
 }

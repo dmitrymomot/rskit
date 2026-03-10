@@ -68,11 +68,11 @@ pub fn mime_matches(content_type: &str, pattern: &str) -> bool {
 }
 
 fn format_size(bytes: usize) -> String {
-    if bytes >= 1024 * 1024 * 1024 {
+    if bytes >= 1024 * 1024 * 1024 && bytes.is_multiple_of(1024 * 1024 * 1024) {
         format!("{}GB", bytes / (1024 * 1024 * 1024))
-    } else if bytes >= 1024 * 1024 {
+    } else if bytes >= 1024 * 1024 && bytes.is_multiple_of(1024 * 1024) {
         format!("{}MB", bytes / (1024 * 1024))
-    } else if bytes >= 1024 {
+    } else if bytes >= 1024 && bytes.is_multiple_of(1024) {
         format!("{}KB", bytes / 1024)
     } else {
         format!("{bytes}B")
@@ -148,6 +148,13 @@ mod tests {
         assert_eq!(format_size(1024), "1KB");
         assert_eq!(format_size(5 * 1024 * 1024), "5MB");
         assert_eq!(format_size(2 * 1024 * 1024 * 1024), "2GB");
+    }
+
+    #[test]
+    fn format_size_non_aligned_falls_back_to_bytes() {
+        assert_eq!(format_size(2047), "2047B");
+        assert_eq!(format_size(1025), "1025B");
+        assert_eq!(format_size(1024 * 1024 + 1), "1048577B");
     }
 
     // -- UploadValidator --
