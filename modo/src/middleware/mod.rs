@@ -9,6 +9,7 @@ mod trailing_slash;
 pub use crate::csrf::csrf_protection;
 pub use catch_panic::PanicHandler;
 pub use client_ip::{ClientIp, client_ip_middleware};
+pub(crate) use client_ip::{TrustedProxies, parse_trusted_proxies};
 pub use maintenance::maintenance_middleware;
 pub use rate_limit::{
     RateLimitInfo, RateLimiterState, by_header, by_ip, by_path, rate_limit_middleware,

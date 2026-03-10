@@ -1,7 +1,7 @@
 use super::extractor::ResolvedLang;
 use super::locale::{normalize_lang, resolve_from_accept_language};
 use super::store::TranslationStore;
-use crate::cookie_util::read_cookie;
+use crate::cookie_util::{hex_digit, read_cookie};
 use crate::cookies::{CookieConfig, CookieOptions, build_cookie};
 use futures_util::future::BoxFuture;
 use http::{Request, Response};
@@ -21,7 +21,7 @@ type CustomSourceFn = dyn Fn(&http::request::Parts) -> Option<String> + Send + S
 #[derive(Clone)]
 pub struct I18nLayer {
     store: Arc<TranslationStore>,
-    cookie_config: CookieConfig,
+    cookie_config: Arc<CookieConfig>,
     custom_source: Option<Arc<CustomSourceFn>>,
 }
 
@@ -31,7 +31,7 @@ pub struct I18nLayer {
 ///
 /// The resolved locale is inserted into request extensions as [`ResolvedLang`]
 /// for downstream extractors (e.g., [`I18n`](crate::extractor::I18n)).
-pub fn layer(store: Arc<TranslationStore>, cookie_config: CookieConfig) -> I18nLayer {
+pub fn layer(store: Arc<TranslationStore>, cookie_config: Arc<CookieConfig>) -> I18nLayer {
     I18nLayer {
         store,
         cookie_config,
@@ -49,7 +49,7 @@ pub fn layer(store: Arc<TranslationStore>, cookie_config: CookieConfig) -> I18nL
 /// is normalized and checked against available locales before being accepted.
 pub fn layer_with_source(
     store: Arc<TranslationStore>,
-    cookie_config: CookieConfig,
+    cookie_config: Arc<CookieConfig>,
     source: impl Fn(&http::request::Parts) -> Option<String> + Send + Sync + 'static,
 ) -> I18nLayer {
     I18nLayer {
@@ -79,7 +79,7 @@ impl<S> Layer<S> for I18nLayer {
 pub struct I18nMiddleware<S> {
     inner: S,
     store: Arc<TranslationStore>,
-    cookie_config: CookieConfig,
+    cookie_config: Arc<CookieConfig>,
     custom_source: Option<Arc<CustomSourceFn>>,
 }
 
@@ -212,15 +212,6 @@ fn percent_decode(input: &str) -> String {
         i += 1;
     }
     String::from_utf8(out).unwrap_or_else(|_| input.to_string())
-}
-
-fn hex_digit(b: u8) -> Option<u8> {
-    match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'A'..=b'F' => Some(b - b'A' + 10),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

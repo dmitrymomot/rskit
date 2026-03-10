@@ -59,6 +59,14 @@ pub async fn csrf_protection(
     }
 }
 
+#[cfg(feature = "templates")]
+fn inject_csrf_context(extensions: &mut http::Extensions, token: &str, field_name: &str) {
+    if let Some(ctx) = extensions.get_mut::<crate::templates::TemplateContext>() {
+        ctx.insert("csrf_token", token.to_owned());
+        ctx.insert("csrf_field_name", field_name.to_owned());
+    }
+}
+
 fn is_safe_method(method: &Method) -> bool {
     matches!(
         *method,
@@ -87,15 +95,8 @@ async fn handle_safe_request(
     // Insert token into extensions for handlers
     parts.extensions.insert(CsrfToken(raw_token.clone()));
 
-    // Insert into TemplateContext if available
     #[cfg(feature = "templates")]
-    if let Some(ctx) = parts
-        .extensions
-        .get_mut::<crate::templates::TemplateContext>()
-    {
-        ctx.insert("csrf_token", raw_token.clone());
-        ctx.insert("csrf_field_name", config.field_name.clone());
-    }
+    inject_csrf_context(&mut parts.extensions, &raw_token, &config.field_name);
 
     let request = Request::from_parts(parts, body);
     let mut response = next.run(request).await;
@@ -172,13 +173,7 @@ async fn handle_mutating_request(
     parts.extensions.insert(CsrfToken(cookie_token.clone()));
 
     #[cfg(feature = "templates")]
-    if let Some(ctx) = parts
-        .extensions
-        .get_mut::<crate::templates::TemplateContext>()
-    {
-        ctx.insert("csrf_token", cookie_token.clone());
-        ctx.insert("csrf_field_name", config.field_name.clone());
-    }
+    inject_csrf_context(&mut parts.extensions, &cookie_token, &config.field_name);
 
     let request = Request::from_parts(parts, body);
     next.run(request).await
