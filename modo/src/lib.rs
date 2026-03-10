@@ -1,6 +1,8 @@
 #[cfg(feature = "i18n")]
 pub use modo_macros::t;
 #[cfg(feature = "templates")]
+pub use modo_macros::template_filter;
+#[cfg(feature = "templates")]
 pub use modo_macros::template_function;
 #[cfg(feature = "templates")]
 pub use modo_macros::view;
