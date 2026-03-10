@@ -2,7 +2,7 @@
 
 use axum::extract::FromRequest;
 use axum::http::Request;
-use modo_upload::{FromMultipart, UploadedFile};
+use modo_upload::{FromMultipart, UploadStream, UploadedFile};
 
 // ---------------------------------------------------------------------------
 // Helper: build a real `axum::extract::Multipart` from field descriptors
@@ -92,7 +92,7 @@ async fn rename_string_field() {
         value: "Alice",
     }])
     .await;
-    let result = RenameString::from_multipart(&mut mp).await.unwrap();
+    let result = RenameString::from_multipart(&mut mp, None).await.unwrap();
     assert_eq!(result.name, "Alice");
 }
 
@@ -108,7 +108,7 @@ async fn no_rename_uses_field_name() {
         value: "Bob",
     }])
     .await;
-    let result = NoRename::from_multipart(&mut mp).await.unwrap();
+    let result = NoRename::from_multipart(&mut mp, None).await.unwrap();
     assert_eq!(result.name, "Bob");
 }
 
@@ -125,14 +125,18 @@ async fn rename_on_option_string() {
         value: "hello",
     }])
     .await;
-    let result = RenameOptionString::from_multipart(&mut mp).await.unwrap();
+    let result = RenameOptionString::from_multipart(&mut mp, None)
+        .await
+        .unwrap();
     assert_eq!(result.bio, Some("hello".to_owned()));
 }
 
 #[tokio::test]
 async fn rename_on_option_string_missing() {
     let mut mp = make_multipart(&[]).await;
-    let result = RenameOptionString::from_multipart(&mut mp).await.unwrap();
+    let result = RenameOptionString::from_multipart(&mut mp, None)
+        .await
+        .unwrap();
     assert_eq!(result.bio, None);
 }
 
@@ -149,7 +153,7 @@ async fn rename_on_from_str_field() {
         value: "25",
     }])
     .await;
-    let result = RenameFromStr::from_multipart(&mut mp).await.unwrap();
+    let result = RenameFromStr::from_multipart(&mut mp, None).await.unwrap();
     assert_eq!(result.age, 25);
 }
 
@@ -168,7 +172,9 @@ async fn rename_on_uploaded_file() {
         data: b"PNG",
     }])
     .await;
-    let result = RenameUploadedFile::from_multipart(&mut mp).await.unwrap();
+    let result = RenameUploadedFile::from_multipart(&mut mp, None)
+        .await
+        .unwrap();
     assert_eq!(result.avatar.file_name(), "face.png");
     assert_eq!(result.avatar.data().as_ref(), b"PNG");
 }
@@ -189,7 +195,7 @@ async fn rename_with_upload_attrs() {
         data: b"tiny",
     }])
     .await;
-    let result = RenameWithUploadAttrs::from_multipart(&mut mp)
+    let result = RenameWithUploadAttrs::from_multipart(&mut mp, None)
         .await
         .unwrap();
     assert_eq!(result.avatar.file_name(), "small.jpg");
@@ -208,7 +214,9 @@ async fn other_serde_attrs_ignored() {
         value: "hi",
     }])
     .await;
-    let result = OtherSerdeAttrs::from_multipart(&mut mp).await.unwrap();
+    let result = OtherSerdeAttrs::from_multipart(&mut mp, None)
+        .await
+        .unwrap();
     assert_eq!(result.name, "hi");
 }
 
@@ -232,7 +240,7 @@ async fn multiple_fields_mixed_rename() {
         },
     ])
     .await;
-    let result = MixedRename::from_multipart(&mut mp).await.unwrap();
+    let result = MixedRename::from_multipart(&mut mp, None).await.unwrap();
     assert_eq!(result.name, "Alice");
     assert_eq!(result.email, "a@b.c");
 }
@@ -253,14 +261,16 @@ async fn required_string_present() {
         value: "Bob",
     }])
     .await;
-    let result = RequiredString::from_multipart(&mut mp).await.unwrap();
+    let result = RequiredString::from_multipart(&mut mp, None).await.unwrap();
     assert_eq!(result.name, "Bob");
 }
 
 #[tokio::test]
 async fn required_string_missing() {
     let mut mp = make_multipart(&[]).await;
-    let err = RequiredString::from_multipart(&mut mp).await.unwrap_err();
+    let err = RequiredString::from_multipart(&mut mp, None)
+        .await
+        .unwrap_err();
     assert_validation_error(&err, "name");
 }
 
@@ -276,14 +286,14 @@ async fn option_string_present() {
         value: "hi",
     }])
     .await;
-    let result = OptString::from_multipart(&mut mp).await.unwrap();
+    let result = OptString::from_multipart(&mut mp, None).await.unwrap();
     assert_eq!(result.bio, Some("hi".to_owned()));
 }
 
 #[tokio::test]
 async fn option_string_missing() {
     let mut mp = make_multipart(&[]).await;
-    let result = OptString::from_multipart(&mut mp).await.unwrap();
+    let result = OptString::from_multipart(&mut mp, None).await.unwrap();
     assert_eq!(result.bio, None);
 }
 
@@ -299,7 +309,7 @@ async fn from_str_valid() {
         value: "42",
     }])
     .await;
-    let result = FromStrValid::from_multipart(&mut mp).await.unwrap();
+    let result = FromStrValid::from_multipart(&mut mp, None).await.unwrap();
     assert_eq!(result.age, 42);
 }
 
@@ -310,14 +320,18 @@ async fn from_str_invalid() {
         value: "abc",
     }])
     .await;
-    let err = FromStrValid::from_multipart(&mut mp).await.unwrap_err();
+    let err = FromStrValid::from_multipart(&mut mp, None)
+        .await
+        .unwrap_err();
     assert_validation_error(&err, "age");
 }
 
 #[tokio::test]
 async fn from_str_missing() {
     let mut mp = make_multipart(&[]).await;
-    let err = FromStrValid::from_multipart(&mut mp).await.unwrap_err();
+    let err = FromStrValid::from_multipart(&mut mp, None)
+        .await
+        .unwrap_err();
     assert_validation_error(&err, "age");
 }
 
@@ -340,7 +354,7 @@ async fn uploaded_file_present() {
         data,
     }])
     .await;
-    let result = RequiredFile::from_multipart(&mut mp).await.unwrap();
+    let result = RequiredFile::from_multipart(&mut mp, None).await.unwrap();
     assert_eq!(result.avatar.file_name(), "pic.png");
     assert_eq!(result.avatar.content_type(), "image/png");
     assert_eq!(result.avatar.data().as_ref(), data);
@@ -350,7 +364,7 @@ async fn uploaded_file_present() {
 #[tokio::test]
 async fn uploaded_file_missing() {
     let mut mp = make_multipart(&[]).await;
-    let Err(err) = RequiredFile::from_multipart(&mut mp).await else {
+    let Err(err) = RequiredFile::from_multipart(&mut mp, None).await else {
         panic!("expected error");
     };
     assert_validation_error(&err, "avatar");
@@ -370,7 +384,7 @@ async fn option_file_present() {
         data: b"data",
     }])
     .await;
-    let result = OptFile::from_multipart(&mut mp).await.unwrap();
+    let result = OptFile::from_multipart(&mut mp, None).await.unwrap();
     assert!(result.avatar.is_some());
     assert_eq!(result.avatar.unwrap().file_name(), "pic.png");
 }
@@ -378,7 +392,7 @@ async fn option_file_present() {
 #[tokio::test]
 async fn option_file_missing() {
     let mut mp = make_multipart(&[]).await;
-    let result = OptFile::from_multipart(&mut mp).await.unwrap();
+    let result = OptFile::from_multipart(&mut mp, None).await.unwrap();
     assert!(result.avatar.is_none());
 }
 
@@ -410,7 +424,7 @@ async fn vec_file_multiple() {
         },
     ])
     .await;
-    let result = VecFiles::from_multipart(&mut mp).await.unwrap();
+    let result = VecFiles::from_multipart(&mut mp, None).await.unwrap();
     assert_eq!(result.files.len(), 3);
     assert_eq!(result.files[0].file_name(), "a.txt");
     assert_eq!(result.files[1].file_name(), "b.txt");
@@ -420,7 +434,7 @@ async fn vec_file_multiple() {
 #[tokio::test]
 async fn vec_file_empty() {
     let mut mp = make_multipart(&[]).await;
-    let result = VecFiles::from_multipart(&mut mp).await.unwrap();
+    let result = VecFiles::from_multipart(&mut mp, None).await.unwrap();
     assert!(result.files.is_empty());
 }
 
@@ -443,7 +457,7 @@ async fn max_size_within_limit() {
         data: &[0u8; 5],
     }])
     .await;
-    MaxSizeFile::from_multipart(&mut mp).await.unwrap();
+    MaxSizeFile::from_multipart(&mut mp, None).await.unwrap();
 }
 
 #[tokio::test]
@@ -455,10 +469,11 @@ async fn max_size_exceeded() {
         data: &[0u8; 20],
     }])
     .await;
-    let Err(err) = MaxSizeFile::from_multipart(&mut mp).await else {
+    let Err(err) = MaxSizeFile::from_multipart(&mut mp, None).await else {
         panic!("expected error");
     };
-    assert_validation_error(&err, "f");
+    // Early rejection returns 413 Payload Too Large
+    assert_eq!(err.status_code(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
 }
 
 #[derive(FromMultipart)]
@@ -476,7 +491,7 @@ async fn accept_mime_match() {
         data: b"img",
     }])
     .await;
-    AcceptMimeFile::from_multipart(&mut mp).await.unwrap();
+    AcceptMimeFile::from_multipart(&mut mp, None).await.unwrap();
 }
 
 #[tokio::test]
@@ -488,7 +503,7 @@ async fn accept_mime_mismatch() {
         data: b"text",
     }])
     .await;
-    let Err(err) = AcceptMimeFile::from_multipart(&mut mp).await else {
+    let Err(err) = AcceptMimeFile::from_multipart(&mut mp, None).await else {
         panic!("expected error");
     };
     assert_validation_error(&err, "f");
@@ -509,7 +524,7 @@ async fn vec_min_count_not_met() {
         data: b"one",
     }])
     .await;
-    let Err(err) = MinCountFiles::from_multipart(&mut mp).await else {
+    let Err(err) = MinCountFiles::from_multipart(&mut mp, None).await else {
         panic!("expected error");
     };
     assert_validation_error(&err, "files");
@@ -544,7 +559,7 @@ async fn vec_max_count_exceeded() {
         },
     ])
     .await;
-    let Err(err) = MaxCountFiles::from_multipart(&mut mp).await else {
+    let Err(err) = MaxCountFiles::from_multipart(&mut mp, None).await else {
         panic!("expected error");
     };
     assert_validation_error(&err, "files");
@@ -567,7 +582,7 @@ async fn unknown_field_ignored() {
         },
     ])
     .await;
-    let result = RequiredString::from_multipart(&mut mp).await.unwrap();
+    let result = RequiredString::from_multipart(&mut mp, None).await.unwrap();
     assert_eq!(result.name, "Bob");
 }
 
@@ -578,7 +593,7 @@ async fn empty_string_field() {
         value: "",
     }])
     .await;
-    let result = RequiredString::from_multipart(&mut mp).await.unwrap();
+    let result = RequiredString::from_multipart(&mut mp, None).await.unwrap();
     assert_eq!(result.name, "");
 }
 
@@ -591,7 +606,9 @@ struct TwoRequired {
 #[tokio::test]
 async fn multiple_required_fields_missing() {
     let mut mp = make_multipart(&[]).await;
-    let err = TwoRequired::from_multipart(&mut mp).await.unwrap_err();
+    let err = TwoRequired::from_multipart(&mut mp, None)
+        .await
+        .unwrap_err();
     assert_eq!(err.status_code(), axum::http::StatusCode::BAD_REQUEST);
     // At least the first missing field should be reported
     assert!(
@@ -599,4 +616,434 @@ async fn multiple_required_fields_missing() {
         "expected at least one field in details: {:?}",
         err.details()
     );
+}
+
+// ===========================================================================
+// Group 6: UploadStream in derived structs
+// ===========================================================================
+
+#[derive(FromMultipart)]
+struct StreamUpload {
+    stream: UploadStream,
+}
+
+#[derive(FromMultipart)]
+struct MixedStreamAndText {
+    name: String,
+    stream: UploadStream,
+}
+
+#[tokio::test]
+async fn stream_field_present() {
+    let data = b"stream-content";
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "stream",
+        filename: "data.bin",
+        content_type: "application/octet-stream",
+        data,
+    }])
+    .await;
+    let result = StreamUpload::from_multipart(&mut mp, None).await.unwrap();
+    assert_eq!(result.stream.file_name(), "data.bin");
+    assert_eq!(result.stream.content_type(), "application/octet-stream");
+    assert_eq!(result.stream.size(), data.len());
+    assert_eq!(result.stream.to_bytes().as_ref(), data);
+}
+
+#[tokio::test]
+async fn stream_field_missing() {
+    let mut mp = make_multipart(&[]).await;
+    let Err(err) = StreamUpload::from_multipart(&mut mp, None).await else {
+        panic!("expected error");
+    };
+    assert_validation_error(&err, "stream");
+}
+
+#[tokio::test]
+async fn stream_with_text_field() {
+    let data = b"file-bytes";
+    let mut mp = make_multipart(&[
+        MultipartField::Text {
+            name: "name",
+            value: "Alice",
+        },
+        MultipartField::File {
+            name: "stream",
+            filename: "upload.bin",
+            content_type: "application/octet-stream",
+            data,
+        },
+    ])
+    .await;
+    let result = MixedStreamAndText::from_multipart(&mut mp, None)
+        .await
+        .unwrap();
+    assert_eq!(result.name, "Alice");
+    assert_eq!(result.stream.file_name(), "upload.bin");
+    assert_eq!(result.stream.to_bytes().as_ref(), data);
+}
+
+// ===========================================================================
+// Group 7: Global max_file_size passthrough
+// ===========================================================================
+
+#[tokio::test]
+async fn global_max_file_size_rejects_large_file() {
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "avatar",
+        filename: "big.bin",
+        content_type: "application/octet-stream",
+        data: &[0u8; 20],
+    }])
+    .await;
+    let Err(err) = RequiredFile::from_multipart(&mut mp, Some(10)).await else {
+        panic!("expected error");
+    };
+    assert_eq!(err.status_code(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn global_max_file_size_allows_within_limit() {
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "avatar",
+        filename: "small.bin",
+        content_type: "application/octet-stream",
+        data: &[0u8; 5],
+    }])
+    .await;
+    RequiredFile::from_multipart(&mut mp, Some(100))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn global_max_file_size_none_allows_any() {
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "avatar",
+        filename: "large.bin",
+        content_type: "application/octet-stream",
+        data: &[0u8; 1000],
+    }])
+    .await;
+    RequiredFile::from_multipart(&mut mp, None).await.unwrap();
+}
+
+#[tokio::test]
+async fn global_max_file_size_applies_to_stream() {
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "stream",
+        filename: "big.bin",
+        content_type: "application/octet-stream",
+        data: &[0u8; 20],
+    }])
+    .await;
+    let Err(err) = StreamUpload::from_multipart(&mut mp, Some(5)).await else {
+        panic!("expected error");
+    };
+    assert_eq!(err.status_code(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn global_max_file_size_applies_to_vec() {
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "files",
+        filename: "big.bin",
+        content_type: "text/plain",
+        data: &[0u8; 20],
+    }])
+    .await;
+    let Err(err) = VecFiles::from_multipart(&mut mp, Some(5)).await else {
+        panic!("expected error");
+    };
+    assert_eq!(err.status_code(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn global_max_file_size_applies_to_option() {
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "avatar",
+        filename: "big.bin",
+        content_type: "image/png",
+        data: &[0u8; 20],
+    }])
+    .await;
+    let Err(err) = OptFile::from_multipart(&mut mp, Some(5)).await else {
+        panic!("expected error");
+    };
+    assert_eq!(err.status_code(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn global_max_file_size_option_missing_ok() {
+    let mut mp = make_multipart(&[]).await;
+    let result = OptFile::from_multipart(&mut mp, Some(5)).await.unwrap();
+    assert!(result.avatar.is_none());
+}
+
+// ===========================================================================
+// Group 8: Per-field vs global precedence
+// ===========================================================================
+
+#[tokio::test]
+async fn per_field_overrides_global() {
+    // MaxSizeFile has #[upload(max_size = "10b")], global = 5B.
+    // File is 7 bytes — exceeds global but within per-field. Should succeed.
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "f",
+        filename: "mid.bin",
+        content_type: "application/octet-stream",
+        data: &[0u8; 7],
+    }])
+    .await;
+    MaxSizeFile::from_multipart(&mut mp, Some(5)).await.unwrap();
+}
+
+#[tokio::test]
+async fn per_field_still_rejects_over_own_limit() {
+    // MaxSizeFile has #[upload(max_size = "10b")], global = 1000B.
+    // File is 20 bytes — within global but exceeds per-field. Should fail.
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "f",
+        filename: "big.bin",
+        content_type: "application/octet-stream",
+        data: &[0u8; 20],
+    }])
+    .await;
+    let Err(err) = MaxSizeFile::from_multipart(&mut mp, Some(1000)).await else {
+        panic!("expected error");
+    };
+    assert_eq!(err.status_code(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+// ===========================================================================
+// Group 9: Exact boundary
+// ===========================================================================
+
+#[tokio::test]
+async fn vec_max_count_exact_boundary_ok() {
+    // MaxCountFiles has max_count=2, sending exactly 2 files should succeed.
+    let mut mp = make_multipart(&[
+        MultipartField::File {
+            name: "files",
+            filename: "a.txt",
+            content_type: "text/plain",
+            data: b"a",
+        },
+        MultipartField::File {
+            name: "files",
+            filename: "b.txt",
+            content_type: "text/plain",
+            data: b"b",
+        },
+    ])
+    .await;
+    let result = MaxCountFiles::from_multipart(&mut mp, None).await.unwrap();
+    assert_eq!(result.files.len(), 2);
+}
+
+// ===========================================================================
+// Group 10: Option/Vec with accept and max_size attributes
+// ===========================================================================
+
+#[derive(FromMultipart)]
+struct OptFileWithAccept {
+    #[upload(accept = "image/*")]
+    avatar: Option<UploadedFile>,
+}
+
+#[derive(FromMultipart)]
+struct OptFileWithMaxSize {
+    #[upload(max_size = "10b")]
+    avatar: Option<UploadedFile>,
+}
+
+#[derive(FromMultipart)]
+struct VecFilesWithAccept {
+    #[upload(accept = "image/*")]
+    files: Vec<UploadedFile>,
+}
+
+#[derive(FromMultipart)]
+struct VecFilesWithMaxSize {
+    #[upload(max_size = "10b")]
+    files: Vec<UploadedFile>,
+}
+
+#[tokio::test]
+async fn option_accept_present_match() {
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "avatar",
+        filename: "photo.png",
+        content_type: "image/png",
+        data: b"img",
+    }])
+    .await;
+    let result = OptFileWithAccept::from_multipart(&mut mp, None)
+        .await
+        .unwrap();
+    assert!(result.avatar.is_some());
+}
+
+#[tokio::test]
+async fn option_accept_present_mismatch() {
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "avatar",
+        filename: "doc.txt",
+        content_type: "text/plain",
+        data: b"text",
+    }])
+    .await;
+    let Err(err) = OptFileWithAccept::from_multipart(&mut mp, None).await else {
+        panic!("expected error");
+    };
+    assert_validation_error(&err, "avatar");
+}
+
+#[tokio::test]
+async fn option_accept_missing() {
+    let mut mp = make_multipart(&[]).await;
+    let result = OptFileWithAccept::from_multipart(&mut mp, None)
+        .await
+        .unwrap();
+    assert!(result.avatar.is_none());
+}
+
+#[tokio::test]
+async fn option_max_size_present_within() {
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "avatar",
+        filename: "small.bin",
+        content_type: "application/octet-stream",
+        data: &[0u8; 5],
+    }])
+    .await;
+    let result = OptFileWithMaxSize::from_multipart(&mut mp, None)
+        .await
+        .unwrap();
+    assert!(result.avatar.is_some());
+}
+
+#[tokio::test]
+async fn option_max_size_present_exceeded() {
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "avatar",
+        filename: "big.bin",
+        content_type: "application/octet-stream",
+        data: &[0u8; 20],
+    }])
+    .await;
+    let Err(err) = OptFileWithMaxSize::from_multipart(&mut mp, None).await else {
+        panic!("expected error");
+    };
+    assert_eq!(err.status_code(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn option_max_size_missing() {
+    let mut mp = make_multipart(&[]).await;
+    let result = OptFileWithMaxSize::from_multipart(&mut mp, None)
+        .await
+        .unwrap();
+    assert!(result.avatar.is_none());
+}
+
+#[tokio::test]
+async fn vec_accept_all_match() {
+    let mut mp = make_multipart(&[
+        MultipartField::File {
+            name: "files",
+            filename: "a.png",
+            content_type: "image/png",
+            data: b"img1",
+        },
+        MultipartField::File {
+            name: "files",
+            filename: "b.jpg",
+            content_type: "image/jpeg",
+            data: b"img2",
+        },
+    ])
+    .await;
+    let result = VecFilesWithAccept::from_multipart(&mut mp, None)
+        .await
+        .unwrap();
+    assert_eq!(result.files.len(), 2);
+}
+
+#[tokio::test]
+async fn vec_accept_one_mismatch() {
+    let mut mp = make_multipart(&[
+        MultipartField::File {
+            name: "files",
+            filename: "a.png",
+            content_type: "image/png",
+            data: b"img",
+        },
+        MultipartField::File {
+            name: "files",
+            filename: "b.txt",
+            content_type: "text/plain",
+            data: b"text",
+        },
+    ])
+    .await;
+    let Err(err) = VecFilesWithAccept::from_multipart(&mut mp, None).await else {
+        panic!("expected error");
+    };
+    assert_validation_error(&err, "files");
+}
+
+#[tokio::test]
+async fn vec_accept_empty() {
+    let mut mp = make_multipart(&[]).await;
+    let result = VecFilesWithAccept::from_multipart(&mut mp, None)
+        .await
+        .unwrap();
+    assert!(result.files.is_empty());
+}
+
+#[tokio::test]
+async fn vec_max_size_all_within() {
+    let mut mp = make_multipart(&[
+        MultipartField::File {
+            name: "files",
+            filename: "a.bin",
+            content_type: "application/octet-stream",
+            data: &[0u8; 5],
+        },
+        MultipartField::File {
+            name: "files",
+            filename: "b.bin",
+            content_type: "application/octet-stream",
+            data: &[0u8; 5],
+        },
+    ])
+    .await;
+    let result = VecFilesWithMaxSize::from_multipart(&mut mp, None)
+        .await
+        .unwrap();
+    assert_eq!(result.files.len(), 2);
+}
+
+#[tokio::test]
+async fn vec_max_size_one_exceeded() {
+    let mut mp = make_multipart(&[
+        MultipartField::File {
+            name: "files",
+            filename: "small.bin",
+            content_type: "application/octet-stream",
+            data: &[0u8; 5],
+        },
+        MultipartField::File {
+            name: "files",
+            filename: "big.bin",
+            content_type: "application/octet-stream",
+            data: &[0u8; 20],
+        },
+    ])
+    .await;
+    let Err(err) = VecFilesWithMaxSize::from_multipart(&mut mp, None).await else {
+        panic!("expected error");
+    };
+    assert_eq!(err.status_code(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
 }
