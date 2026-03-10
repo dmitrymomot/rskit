@@ -186,8 +186,82 @@ fn extract_query_param(query: &str, param_name: &str) -> Option<String> {
             && key == param_name
             && !value.is_empty()
         {
-            return Some(value.to_string());
+            return Some(percent_decode(value));
         }
     }
     None
+}
+
+fn percent_decode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let (Some(hi), Some(lo)) = (hex_digit(bytes[i + 1]), hex_digit(bytes[i + 2]))
+        {
+            out.push(hi << 4 | lo);
+            i += 3;
+            continue;
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| input.to_string())
+}
+
+fn hex_digit(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_query_param_plain() {
+        assert_eq!(
+            extract_query_param("lang=en&page=1", "lang"),
+            Some("en".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_query_param_percent_encoded() {
+        assert_eq!(
+            extract_query_param("lang=pt%2DBR&page=1", "lang"),
+            Some("pt-BR".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_query_param_missing() {
+        assert_eq!(extract_query_param("page=1", "lang"), None);
+    }
+
+    #[test]
+    fn extract_query_param_empty_value() {
+        assert_eq!(extract_query_param("lang=&page=1", "lang"), None);
+    }
+
+    #[test]
+    fn percent_decode_no_encoding() {
+        assert_eq!(percent_decode("hello"), "hello");
+    }
+
+    #[test]
+    fn percent_decode_encoded_dash() {
+        assert_eq!(percent_decode("pt%2DBR"), "pt-BR");
+    }
+
+    #[test]
+    fn percent_decode_invalid_sequence() {
+        assert_eq!(percent_decode("100%ZZ"), "100%ZZ");
+    }
 }
