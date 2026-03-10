@@ -12,7 +12,6 @@ pub enum SameSite {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct CookieConfig {
-    pub secret: Option<String>,
     pub domain: Option<String>,
     pub path: String,
     pub secure: bool,
@@ -25,7 +24,6 @@ pub struct CookieConfig {
 impl Default for CookieConfig {
     fn default() -> Self {
         Self {
-            secret: None,
             domain: None,
             path: "/".to_string(),
             secure: true,
@@ -69,6 +67,11 @@ impl CookieOptions {
         self
     }
 
+    pub fn no_domain(mut self) -> Self {
+        self.domain = None;
+        self
+    }
+
     pub fn secure(mut self, secure: bool) -> Self {
         self.secure = secure;
         self
@@ -102,7 +105,6 @@ mod tests {
     #[test]
     fn default_cookie_config() {
         let config = CookieConfig::default();
-        assert!(config.secret.is_none());
         assert!(config.domain.is_none());
         assert_eq!(config.path, "/");
         assert!(config.secure);

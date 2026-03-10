@@ -33,6 +33,7 @@ where
             .unwrap_or_default();
 
         // Extract all jars using AppState (which implements FromRef<AppState> for Key).
+        // unwrap() is safe: these extractors have Rejection = Infallible.
         let jar = axum_extra::extract::CookieJar::from_request_parts(parts, &app_state)
             .await
             .unwrap();
@@ -125,10 +126,48 @@ impl CookieManager {
         self.get(name).and_then(|v| serde_json::from_str(&v).ok())
     }
 
-    pub fn set_json<T: serde::Serialize>(&mut self, name: &str, value: &T) {
-        if let Ok(json) = serde_json::to_string(value) {
-            self.set(name, &json);
-        }
+    pub fn set_json<T: serde::Serialize>(
+        &mut self,
+        name: &str,
+        value: &T,
+    ) -> Result<(), serde_json::Error> {
+        let json = serde_json::to_string(value)?;
+        self.set(name, &json);
+        Ok(())
+    }
+
+    // --- Signed JSON convenience ---
+
+    pub fn get_signed_json<T: serde::de::DeserializeOwned>(&self, name: &str) -> Option<T> {
+        self.get_signed(name)
+            .and_then(|v| serde_json::from_str(&v).ok())
+    }
+
+    pub fn set_signed_json<T: serde::Serialize>(
+        &mut self,
+        name: &str,
+        value: &T,
+    ) -> Result<(), serde_json::Error> {
+        let json = serde_json::to_string(value)?;
+        self.set_signed(name, &json);
+        Ok(())
+    }
+
+    // --- Encrypted JSON convenience ---
+
+    pub fn get_encrypted_json<T: serde::de::DeserializeOwned>(&self, name: &str) -> Option<T> {
+        self.get_encrypted(name)
+            .and_then(|v| serde_json::from_str(&v).ok())
+    }
+
+    pub fn set_encrypted_json<T: serde::Serialize>(
+        &mut self,
+        name: &str,
+        value: &T,
+    ) -> Result<(), serde_json::Error> {
+        let json = serde_json::to_string(value)?;
+        self.set_encrypted(name, &json);
+        Ok(())
     }
 
     /// Default options from the global config — useful as a starting point for overrides.
@@ -170,7 +209,9 @@ fn build_cookie<'a>(name: &str, value: &str, opts: &CookieOptions) -> Cookie<'a>
     }
 
     if let Some(max_age) = opts.max_age {
-        cookie.set_max_age(Duration::seconds(max_age as i64));
+        cookie.set_max_age(Duration::seconds(
+            i64::try_from(max_age).unwrap_or(i64::MAX),
+        ));
     }
 
     cookie
@@ -189,10 +230,7 @@ mod tests {
     use tower::ServiceExt;
 
     fn test_state() -> AppState {
-        let cookie_config = CookieConfig {
-            secret: Some("test-secret-at-least-32-bytes-long-for-key".to_string()),
-            ..Default::default()
-        };
+        let cookie_config = CookieConfig::default();
         let services = ServiceRegistry::new().with(cookie_config);
         AppState {
             services,

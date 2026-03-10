@@ -35,6 +35,7 @@ pub mod templates;
 pub mod validate;
 
 pub use config::{AppConfig, HttpConfig, RateLimitConfig, SecurityHeadersConfig, TrailingSlash};
+pub use cookies::{CookieConfig, CookieManager, CookieOptions, SameSite};
 pub use cors::CorsConfig;
 pub use error::{Error, ErrorContext, ErrorHandlerFn, ErrorHandlerRegistration, HttpError};
 pub use middleware::{ClientIp, RateLimitInfo};
