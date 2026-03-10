@@ -1,6 +1,6 @@
-use crate::extractor::ResolvedLang;
-use crate::locale::{normalize_lang, resolve_from_accept_language};
-use crate::store::TranslationStore;
+use super::extractor::ResolvedLang;
+use super::locale::{normalize_lang, resolve_from_accept_language};
+use super::store::TranslationStore;
 use futures_util::future::BoxFuture;
 use http::{Request, Response};
 use std::sync::Arc;
@@ -145,7 +145,7 @@ where
             #[cfg(feature = "templates")]
             if let Some(ctx) = parts
                 .extensions
-                .get_mut::<modo_templates::TemplateContext>()
+                .get_mut::<crate::templates::TemplateContext>()
             {
                 ctx.insert("locale", resolved.clone());
             }

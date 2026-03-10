@@ -1,6 +1,6 @@
-use crate::config::I18nConfig;
-use crate::entry::Entry;
-use crate::error::I18nError;
+use super::config::I18nConfig;
+use super::entry::Entry;
+use super::error::I18nError;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -211,7 +211,7 @@ fn flatten_yaml(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::I18nConfig;
+    use crate::i18n::config::I18nConfig;
     use std::fs;
 
     fn setup_locales(dir: &std::path::Path) {

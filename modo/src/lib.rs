@@ -1,4 +1,6 @@
 pub use modo_macros::{Sanitize, Validate, error_handler, handler, main, module};
+#[cfg(feature = "i18n")]
+pub use modo_macros::t;
 #[cfg(feature = "templates")]
 pub use modo_macros::view;
 
@@ -10,6 +12,8 @@ pub mod csrf;
 pub mod error;
 pub mod extractors;
 pub mod health;
+#[cfg(feature = "i18n")]
+pub mod i18n;
 pub mod logging;
 pub mod middleware;
 pub mod request_id;

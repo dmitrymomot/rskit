@@ -1,4 +1,4 @@
-use crate::store::TranslationStore;
+use super::store::TranslationStore;
 use minijinja::value::Kwargs;
 use minijinja::{Environment, Error, ErrorKind, State};
 use std::sync::Arc;

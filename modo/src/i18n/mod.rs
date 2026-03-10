@@ -5,6 +5,7 @@ pub mod extractor;
 pub mod locale;
 pub mod middleware;
 pub mod store;
+
 #[cfg(feature = "templates")]
 pub mod template;
 
@@ -17,6 +18,3 @@ pub use store::{TranslationStore, load};
 
 #[cfg(feature = "templates")]
 pub use template::register_template_functions;
-
-// Re-export macro
-pub use modo_i18n_macros::t;

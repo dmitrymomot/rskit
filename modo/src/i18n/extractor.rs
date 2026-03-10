@@ -1,8 +1,8 @@
-use crate::store::TranslationStore;
-use modo::Error;
-use modo::app::AppState;
-use modo::axum::extract::FromRequestParts;
-use modo::axum::http::request::Parts;
+use super::store::TranslationStore;
+use crate::Error;
+use crate::app::AppState;
+use axum::extract::FromRequestParts;
+use axum::http::request::Parts;
 use std::sync::Arc;
 
 /// Newtype inserted into request extensions by the i18n middleware,
@@ -103,8 +103,8 @@ fn interpolate(template: &str, vars: &[(&str, &str)]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::I18nConfig;
-    use crate::store;
+    use crate::i18n::config::I18nConfig;
+    use crate::i18n::store;
     use std::fs;
 
     fn setup_store(name: &str) -> (Arc<TranslationStore>, std::path::PathBuf) {
