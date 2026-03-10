@@ -1,4 +1,4 @@
-use modo_templates::{TemplateConfig, engine};
+use modo::templates::{TemplateConfig, engine};
 
 #[modo::view("pages/home.html", htmx = "partials/clock.html")]
 struct HomePage {
@@ -40,14 +40,5 @@ async fn main(
             }
         });
 
-    app.server_config(config)
-        .security_headers(modo::SecurityHeadersConfig {
-            content_security_policy: Some(
-                "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'".to_string(),
-            ),
-            ..Default::default()
-        })
-        .service(engine)
-        .run()
-        .await
+    app.server_config(config).service(engine).run().await
 }

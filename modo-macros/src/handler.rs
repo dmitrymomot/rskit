@@ -85,12 +85,9 @@ fn transform_path_params(
     let struct_name = format_ident!("__{func_name}PathParams", func_name = func_name);
 
     // Build struct fields: declared params use their type, undeclared default to String
-    let declared: std::collections::HashMap<&str, &Type> = matched
+    let declared: std::collections::HashMap<String, &Type> = matched
         .iter()
-        .map(|m| (m.ident.to_string().as_str().to_owned(), &m.ty))
-        .collect::<Vec<_>>()
-        .into_iter()
-        .map(|(name, ty)| (Box::leak(name.into_boxed_str()) as &str, ty))
+        .map(|m| (m.ident.to_string(), &m.ty))
         .collect();
 
     let struct_fields: Vec<TokenStream> = path_params

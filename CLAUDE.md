@@ -12,8 +12,13 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 
 ## Architecture
 
-- `modo/` — core crate (HTTP, cookies, services — no DB)
-- `modo-macros/` — core proc macros
+- `modo/` — core crate (HTTP, cookies, services, templates, CSRF, i18n — no DB)
+  - Feature `templates` — MiniJinja template engine (views, render layer, context injection)
+  - Feature `csrf` — CSRF protection (double-submit cookie, HMAC-signed tokens)
+  - Feature `i18n` — internationalization (YAML translations, locale middleware, `t!()` macro)
+  - Feature `static-fs` — serve static files from filesystem
+  - Feature `static-embed` — embed static files via `rust-embed`
+- `modo-macros/` — core proc macros (`#[handler]`, `#[main]`, `#[module]`, `#[view]`, `t!()`, `Sanitize`, `Validate`)
 - `modo-db/` — database layer (features: sqlite, postgres)
 - `modo-db-macros/` — database proc macros
 - `modo-session/` — session management
@@ -22,11 +27,6 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 - `modo-jobs-macros/` — `#[job(...)]` proc macro
 - `modo-upload/` — file uploads
 - `modo-upload-macros/` — upload proc macros
-- `modo-i18n/` — internationalization (YAML translations, locale middleware)
-- `modo-i18n-macros/` — `t!()` translation macro
-- `modo-templates/` — MiniJinja template engine (views, render layer, context injection)
-- `modo-templates-macros/` — `#[view("path", htmx = "path")]` proc macro
-- `modo-csrf/` — CSRF protection (double-submit cookie, HMAC-signed tokens)
 - `modo-tenant/` — multi-tenancy (tenant resolution, extractors, template context)
 
 ## Commands
@@ -53,13 +53,13 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 - CSRF: `#[middleware(modo::middleware::csrf_protection)]` — uses double-submit cookie
 - Flash messages: `Flash` (write) / `FlashMessages` (read) — cookie-based, one-shot
 - Templates config: `TemplateConfig { path, strict }` — YAML-deserializable with serde defaults
-- Template engine: `modo_templates::engine(&config)?` — config to engine (follows `modo_i18n::load` pattern)
+- Template engine: `modo::templates::engine(&config)?` — config to engine (follows `modo::i18n::load` pattern)
 - Views: `#[modo::view("pages/home.html")]` or `#[modo::view("page.html", htmx = "htmx/frag.html")]`
 - View structs: fields must implement `Serialize`, handler returns struct directly
 - Template context: `TemplateContext` in request extensions, middleware adds via `ctx.insert("key", value)`
 - Template layers: auto-registered when `TemplateEngine` is a service — no manual `.layer()` needed
 - HTMX views: htmx template rendered on HX-Request, always HTTP 200, non-200 skips render
-- i18n in templates: `{{ t("key", name=val) }}` — register via `modo_i18n::register_template_functions`
+- i18n in templates: `{{ t("key", name=val) }}` — register via `modo::i18n::register_template_functions`
 - Middleware: plain async functions, attached via `#[middleware(fn_name(params))]`
 - Middleware stacking order: Global (outermost) → Module → Handler (innermost)
 - Services: manually constructed, registered via `.service(instance)`

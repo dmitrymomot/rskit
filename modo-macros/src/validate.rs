@@ -427,13 +427,12 @@ fn gen_rule_check(
             }
         }
         ValidationRule::Custom { func_path, message } => {
-            let errors_ident2 = &errors_ident;
             if is_option {
                 if let Some(msg) = message {
                     quote! {
                         if let Some(ref __val) = self.#field_name {
-                            if let Err(_) = #func_path(__val) {
-                                #errors_ident2.push(#msg.to_owned());
+                            if #func_path(__val).is_err() {
+                                #errors_ident.push(#msg.to_owned());
                             }
                         }
                     }
@@ -441,9 +440,9 @@ fn gen_rule_check(
                     let fm = field_message.as_ref().unwrap();
                     quote! {
                         if let Some(ref __val) = self.#field_name {
-                            if let Err(_) = #func_path(__val) {
+                            if #func_path(__val).is_err() {
                                 if !__field_msg_added {
-                                    #errors_ident2.push(#fm.to_owned());
+                                    #errors_ident.push(#fm.to_owned());
                                     __field_msg_added = true;
                                 }
                             }
@@ -453,23 +452,23 @@ fn gen_rule_check(
                     quote! {
                         if let Some(ref __val) = self.#field_name {
                             if let Err(__e) = #func_path(__val) {
-                                #errors_ident2.push(__e);
+                                #errors_ident.push(__e);
                             }
                         }
                     }
                 }
             } else if let Some(msg) = message {
                 quote! {
-                    if let Err(_) = #func_path(&self.#field_name) {
-                        #errors_ident2.push(#msg.to_owned());
+                    if #func_path(&self.#field_name).is_err() {
+                        #errors_ident.push(#msg.to_owned());
                     }
                 }
             } else if has_field_msg {
                 let fm = field_message.as_ref().unwrap();
                 quote! {
-                    if let Err(_) = #func_path(&self.#field_name) {
+                    if #func_path(&self.#field_name).is_err() {
                         if !__field_msg_added {
-                            #errors_ident2.push(#fm.to_owned());
+                            #errors_ident.push(#fm.to_owned());
                             __field_msg_added = true;
                         }
                     }
@@ -477,7 +476,7 @@ fn gen_rule_check(
             } else {
                 quote! {
                     if let Err(__e) = #func_path(&self.#field_name) {
-                        #errors_ident2.push(__e);
+                        #errors_ident.push(__e);
                     }
                 }
             }

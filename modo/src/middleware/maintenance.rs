@@ -10,10 +10,6 @@ pub async fn maintenance_middleware(
     request: Request<axum::body::Body>,
     next: Next,
 ) -> Response {
-    if !state.server_config.http.maintenance {
-        return next.run(request).await;
-    }
-
     // Bypass health check paths
     let path = request.uri().path();
     if path == state.server_config.liveness_path || path == state.server_config.readiness_path {

@@ -6,7 +6,7 @@ use futures_util::future::BoxFuture;
 #[cfg(feature = "templates")]
 use modo::axum::http::Request;
 #[cfg(feature = "templates")]
-use modo_templates::TemplateContext;
+use modo::templates::TemplateContext;
 #[cfg(feature = "templates")]
 use std::sync::Arc;
 #[cfg(feature = "templates")]
@@ -116,7 +116,7 @@ where
                 && let Ok(Some(user)) = user_svc.find_by_id(&user_id).await
             {
                 if let Some(ctx) = parts.extensions.get_mut::<TemplateContext>() {
-                    ctx.insert("user", minijinja::Value::from_serialize(&user));
+                    ctx.insert("user", modo::minijinja::Value::from_serialize(&user));
                 }
                 parts.extensions.insert(ResolvedUser(Arc::new(user)));
             }

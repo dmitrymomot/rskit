@@ -42,10 +42,13 @@ pub fn uppercase(s: String) -> String {
 
 /// Remove HTML tags using a simple char-by-char state machine.
 ///
+/// # Warning
+///
 /// This is cosmetic stripping only — **not** a security sanitizer.
-/// HTML entities (e.g. `&amp;`) pass through unchanged, and unclosed tags
-/// will swallow all content after the opening `<`.
-pub fn strip_html(s: String) -> String {
+/// Do **not** rely on this for XSS prevention. HTML entities (e.g. `&amp;`)
+/// pass through unchanged, and unclosed tags will swallow all content after
+/// the opening `<`. Use a dedicated HTML sanitizer library for security.
+pub fn strip_html_tags(s: String) -> String {
     let mut out = String::with_capacity(s.len());
     let mut inside_tag = false;
     for c in s.chars() {
@@ -58,6 +61,12 @@ pub fn strip_html(s: String) -> String {
         }
     }
     out
+}
+
+/// Remove HTML tags.
+#[deprecated(since = "0.1.0", note = "renamed to `strip_html_tags`")]
+pub fn strip_html(s: String) -> String {
+    strip_html_tags(s)
 }
 
 /// Collapse multiple consecutive whitespace characters into a single space.

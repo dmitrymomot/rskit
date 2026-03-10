@@ -274,8 +274,9 @@ pub fn substitute_env_vars(input: &str) -> String {
                 result.push_str(&input[i + 1..=close]);
                 i = close + 1;
             } else {
-                result.push(bytes[i] as char);
-                i += 1;
+                let ch = input[i..].chars().next().unwrap();
+                result.push(ch);
+                i += ch.len_utf8();
             }
             continue;
         }
@@ -313,8 +314,9 @@ pub fn substitute_env_vars(input: &str) -> String {
             continue;
         }
 
-        result.push(bytes[i] as char);
-        i += 1;
+        let ch = input[i..].chars().next().unwrap();
+        result.push(ch);
+        i += ch.len_utf8();
     }
 
     result
@@ -437,6 +439,12 @@ mod tests {
             "start-aaa-bbb-end"
         );
         unsafe { std::env::remove_var("MODO_MIX_A") };
+    }
+
+    #[test]
+    fn test_substitute_preserves_non_ascii() {
+        assert_eq!(substitute_env_vars("name: José"), "name: José");
+        assert_eq!(substitute_env_vars("emoji: 🚀 done"), "emoji: 🚀 done");
     }
 
     #[test]

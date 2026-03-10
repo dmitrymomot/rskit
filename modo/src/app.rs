@@ -57,9 +57,7 @@ impl ServiceRegistry {
 
     /// Insert a service into the registry (builder pattern, before sharing).
     pub fn with<T: Send + Sync + 'static>(mut self, svc: T) -> Self {
-        Arc::get_mut(&mut self.services)
-            .expect("ServiceRegistry::with called after Arc was shared")
-            .insert(TypeId::of::<T>(), Arc::new(svc));
+        Arc::make_mut(&mut self.services).insert(TypeId::of::<T>(), Arc::new(svc));
         self
     }
 
@@ -358,7 +356,10 @@ impl AppBuilder {
                 router = router.nest(module_reg.prefix, sub_router);
                 info!("Registered module: {} at {}", mod_name, module_reg.prefix);
             } else {
-                // Module routes without a ModuleRegistration — nest at root
+                warn!(
+                    "Routes reference module '{}' but no #[module] registration found — mounting at root",
+                    mod_name
+                );
                 router = router.merge(sub_router);
             }
         }
@@ -366,10 +367,9 @@ impl AppBuilder {
         // Mount static file service (before fallback so it takes precedence)
         #[cfg(any(feature = "static-fs", feature = "static-embed"))]
         if let Some(ref static_config) = server_config.static_files {
-            assert!(
-                static_config.prefix.starts_with('/'),
-                "static files prefix must start with '/'"
-            );
+            if !static_config.prefix.starts_with('/') {
+                return Err("static files prefix must start with '/'".into());
+            }
 
             let mut static_svc = None;
 
@@ -405,12 +405,12 @@ impl AppBuilder {
 
         // --- Template render layer (innermost — closest to handler) ---
         #[cfg(feature = "templates")]
-        let template_engine: Option<std::sync::Arc<modo_templates::TemplateEngine>> =
-            state.services.get::<modo_templates::TemplateEngine>();
+        let template_engine: Option<std::sync::Arc<crate::templates::TemplateEngine>> =
+            state.services.get::<crate::templates::TemplateEngine>();
 
         #[cfg(feature = "templates")]
         if let Some(ref engine) = template_engine {
-            router = router.layer(modo_templates::RenderLayer::new(engine.clone()));
+            router = router.layer(crate::templates::RenderLayer::new(engine.clone()));
         }
 
         // --- User global layers (innermost of framework layers) ---
@@ -434,7 +434,7 @@ impl AppBuilder {
                         if let Some(rid_str) = rid_str
                             && let Some(ctx) = parts
                                 .extensions
-                                .get_mut::<modo_templates::TemplateContext>()
+                                .get_mut::<crate::templates::TemplateContext>()
                         {
                             ctx.insert("request_id", rid_str);
                         }
@@ -442,16 +442,18 @@ impl AppBuilder {
                         next.run(request).await
                     },
                 ));
-            router = router.layer(modo_templates::ContextLayer::new());
+            router = router.layer(crate::templates::ContextLayer::new());
         }
 
         // --- Rate limiter (global) ---
+        let mut cleanup_handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
         if let Some(ref rl_config) = server_config.rate_limit {
             let limiter = Arc::new(middleware::RateLimiterState::new(
                 rl_config.requests,
                 rl_config.window_secs,
             ));
-            middleware::rate_limit::spawn_cleanup_task(limiter.clone());
+            let handle = middleware::rate_limit::spawn_cleanup_task(limiter.clone());
+            cleanup_handles.push(handle);
             let mw = middleware::rate_limit::rate_limit_middleware(limiter, middleware::by_ip());
             router = router.layer(axum::middleware::from_fn(move |req, next| {
                 let mw = mw.clone();
@@ -584,6 +586,11 @@ impl AppBuilder {
             shutdown_timeout.as_secs()
         );
 
+        // Abort rate limiter cleanup tasks
+        for handle in cleanup_handles {
+            handle.abort();
+        }
+
         // 1. Drain in-flight HTTP requests
         match tokio::time::timeout(shutdown_timeout, serve_handle).await {
             Ok(Ok(Ok(()))) => info!("All connections drained"),
@@ -611,8 +618,10 @@ impl AppBuilder {
                 })
                 .collect();
             for handle in handles {
-                if let Err(e) = handle.await {
-                    warn!("Drain-phase service panicked: {e}");
+                match tokio::time::timeout(shutdown_timeout, handle).await {
+                    Ok(Err(e)) => warn!("Drain-phase service panicked: {e}"),
+                    Err(_) => warn!("Drain-phase service timed out"),
+                    Ok(Ok(())) => {}
                 }
             }
         }
@@ -641,8 +650,10 @@ impl AppBuilder {
                 })
                 .collect();
             for handle in handles {
-                if let Err(e) = handle.await {
-                    warn!("Close-phase service panicked: {e}");
+                match tokio::time::timeout(shutdown_timeout, handle).await {
+                    Ok(Err(e)) => warn!("Close-phase service panicked: {e}"),
+                    Err(_) => warn!("Close-phase service timed out"),
+                    Ok(Ok(())) => {}
                 }
             }
         }

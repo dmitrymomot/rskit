@@ -7,17 +7,15 @@ license.workspace = true
 [dependencies]
 modo = { path = "../modo" }
 modo-session = { path = "../modo-session" }
-modo-templates = { path = "../modo-templates", optional = true }
 argon2 = "0.5"
 futures-util = "0.3"
-minijinja = { version = "2", optional = true }
 serde = { version = "1", features = ["derive"] }
 tower = { version = "0.5", features = ["util"] }
 tokio = { version = "1", features = ["rt"] }
 
 [features]
 default = []
-templates = ["dep:modo-templates", "dep:minijinja"]
+templates = ["modo/templates"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

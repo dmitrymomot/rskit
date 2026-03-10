@@ -201,7 +201,7 @@ fn empty_string_inputs() {
     use modo::sanitize;
 
     assert_eq!(sanitize::trim(String::new()), "");
-    assert_eq!(sanitize::strip_html(String::new()), "");
+    assert_eq!(sanitize::strip_html_tags(String::new()), "");
     assert_eq!(sanitize::truncate(String::new(), 5), "");
     assert_eq!(sanitize::lowercase(String::new()), "");
     assert_eq!(sanitize::uppercase(String::new()), "");

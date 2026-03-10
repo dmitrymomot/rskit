@@ -6,5 +6,4 @@ publish = false
 
 [dependencies]
 modo = { path = "../../modo", features = ["templates"] }
-modo-templates = { path = "../../modo-templates" }
 chrono = "0.4"

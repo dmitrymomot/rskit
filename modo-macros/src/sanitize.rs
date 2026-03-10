@@ -37,7 +37,7 @@ impl Parse for SanitizeAttr {
                 "trim" => rules.push(SanitizationRule::Trim),
                 "lowercase" => rules.push(SanitizationRule::Lowercase),
                 "uppercase" => rules.push(SanitizationRule::Uppercase),
-                "strip_html" => rules.push(SanitizationRule::StripHtml),
+                "strip_html" | "strip_html_tags" => rules.push(SanitizationRule::StripHtml),
                 "collapse_whitespace" => rules.push(SanitizationRule::CollapseWhitespace),
                 "truncate" => {
                     input.parse::<Token![=]>()?;
@@ -166,7 +166,9 @@ fn gen_field_sanitization(sf: &SanitizeField) -> TokenStream {
             SanitizationRule::Trim => quote! { __val = modo::sanitize::trim(__val); },
             SanitizationRule::Lowercase => quote! { __val = modo::sanitize::lowercase(__val); },
             SanitizationRule::Uppercase => quote! { __val = modo::sanitize::uppercase(__val); },
-            SanitizationRule::StripHtml => quote! { __val = modo::sanitize::strip_html(__val); },
+            SanitizationRule::StripHtml => {
+                quote! { __val = modo::sanitize::strip_html_tags(__val); }
+            }
             SanitizationRule::CollapseWhitespace => {
                 quote! { __val = modo::sanitize::collapse_whitespace(__val); }
             }

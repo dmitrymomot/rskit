@@ -8,7 +8,7 @@ use futures_util::future::BoxFuture;
 #[cfg(feature = "templates")]
 use modo::axum::http::Request;
 #[cfg(feature = "templates")]
-use modo_templates::TemplateContext;
+use modo::templates::TemplateContext;
 #[cfg(feature = "templates")]
 use std::task::{Context, Poll};
 #[cfg(feature = "templates")]
@@ -112,7 +112,7 @@ where
             if let Some(ref t) = tenant
                 && let Some(ctx) = parts.extensions.get_mut::<TemplateContext>()
             {
-                ctx.insert("tenant", minijinja::Value::from_serialize(t));
+                ctx.insert("tenant", modo::minijinja::Value::from_serialize(t));
             }
 
             let request = Request::from_parts(parts, body);

@@ -50,6 +50,11 @@ fn resolve_client_ip(
     socket_ip: IpAddr,
     trusted: &[CidrRange],
 ) -> IpAddr {
+    // Only inspect proxy headers when the direct connection is from a trusted proxy
+    if !is_trusted(socket_ip, trusted) {
+        return socket_ip;
+    }
+
     // 1. CF-Connecting-IP (Cloudflare)
     if let Some(ip) = header_ip(headers, "cf-connecting-ip") {
         return ip;
@@ -216,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_resolve_cf_connecting_ip() {
-        let trusted = vec![];
+        let trusted = vec![CidrRange::parse("127.0.0.1/32").unwrap()];
         let mut headers = axum::http::HeaderMap::new();
         headers.insert("cf-connecting-ip", "1.2.3.4".parse().unwrap());
         headers.insert("x-forwarded-for", "5.6.7.8".parse().unwrap());
@@ -230,6 +235,46 @@ mod tests {
         let trusted = vec![];
         let headers = axum::http::HeaderMap::new();
         let socket: IpAddr = "192.168.0.1".parse().unwrap();
+        let ip = resolve_client_ip(&headers, socket, &trusted);
+        assert_eq!(ip, socket);
+    }
+
+    #[test]
+    fn test_cf_connecting_ip_ignored_when_socket_untrusted() {
+        let trusted = vec![CidrRange::parse("10.0.0.0/8").unwrap()];
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("cf-connecting-ip", "1.2.3.4".parse().unwrap());
+        let socket: IpAddr = "203.0.113.50".parse().unwrap();
+        let ip = resolve_client_ip(&headers, socket, &trusted);
+        assert_eq!(ip, socket);
+    }
+
+    #[test]
+    fn test_x_real_ip_ignored_when_socket_untrusted() {
+        let trusted = vec![CidrRange::parse("10.0.0.0/8").unwrap()];
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("x-real-ip", "1.2.3.4".parse().unwrap());
+        let socket: IpAddr = "203.0.113.50".parse().unwrap();
+        let ip = resolve_client_ip(&headers, socket, &trusted);
+        assert_eq!(ip, socket);
+    }
+
+    #[test]
+    fn test_x_real_ip_used_when_socket_trusted() {
+        let trusted = vec![CidrRange::parse("127.0.0.0/8").unwrap()];
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("x-real-ip", "203.0.113.1".parse().unwrap());
+        let socket: IpAddr = "127.0.0.1".parse().unwrap();
+        let ip = resolve_client_ip(&headers, socket, &trusted);
+        assert_eq!(ip, "203.0.113.1".parse::<IpAddr>().unwrap());
+    }
+
+    #[test]
+    fn test_xff_ignored_when_socket_untrusted() {
+        let trusted = vec![CidrRange::parse("10.0.0.0/8").unwrap()];
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.2.3.4, 10.0.0.1".parse().unwrap());
+        let socket: IpAddr = "203.0.113.50".parse().unwrap();
         let ip = resolve_client_ip(&headers, socket, &trusted);
         assert_eq!(ip, socket);
     }

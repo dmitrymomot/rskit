@@ -242,7 +242,9 @@ fn set_rate_headers(headers: &mut axum::http::HeaderMap, limit: u32, remaining: 
 }
 
 /// Spawns a background task that prunes expired buckets every 5 minutes.
-pub fn spawn_cleanup_task(limiter: Arc<RateLimiterState>) {
+///
+/// Returns the `JoinHandle` so callers can abort it during shutdown.
+pub fn spawn_cleanup_task(limiter: Arc<RateLimiterState>) -> tokio::task::JoinHandle<()> {
     let window = limiter.window_secs;
     tokio::spawn(async move {
         let interval = std::time::Duration::from_secs(300); // 5 min
@@ -251,7 +253,7 @@ pub fn spawn_cleanup_task(limiter: Arc<RateLimiterState>) {
             tokio::time::sleep(interval).await;
             limiter.cleanup(max_age);
         }
-    });
+    })
 }
 
 #[cfg(test)]
