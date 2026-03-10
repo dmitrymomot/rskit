@@ -65,12 +65,7 @@ pub fn register_template_functions(env: &mut Environment<'static>, store: Arc<Tr
 
             match result {
                 Some(template_str) => {
-                    // Apply variable interpolation
-                    let mut output = template_str;
-                    for (k, v) in &vars {
-                        output = output.replace(&format!("{{{k}}}"), v);
-                    }
-                    Ok(output)
+                    Ok(super::interpolate(&template_str, &vars))
                 }
                 None => {
                     // Return the key itself as fallback (common i18n convention)

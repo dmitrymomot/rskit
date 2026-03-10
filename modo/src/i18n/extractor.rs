@@ -1,3 +1,4 @@
+use super::interpolate;
 use super::store::TranslationStore;
 use crate::Error;
 use crate::app::AppState;
@@ -89,15 +90,6 @@ impl FromRequestParts<AppState> for I18n {
 
         Ok(I18n::new(store, lang, default_lang))
     }
-}
-
-/// Replace `{key}` placeholders in `template` with values from `vars`.
-fn interpolate(template: &str, vars: &[(&str, &str)]) -> String {
-    let mut result = template.to_string();
-    for (key, value) in vars {
-        result = result.replace(&format!("{{{key}}}"), value);
-    }
-    result
 }
 
 #[cfg(test)]

@@ -23,10 +23,6 @@ impl TranslationStore {
         &self.langs
     }
 
-    pub fn has_lang(&self, lang: &str) -> bool {
-        self.langs.iter().any(|l| l == lang)
-    }
-
     /// Look up a plain translation key for a given language.
     pub fn get(&self, lang: &str, key: &str) -> Option<String> {
         self.translations.get(lang)?.get(key).and_then(|e| match e {
@@ -142,13 +138,20 @@ pub fn load(config: &I18nConfig) -> Result<Arc<TranslationStore>, I18nError> {
     }))
 }
 
-const PLURAL_KEYS: &[&str] = &["zero", "one", "other"];
+const PLURAL_KEY_ZERO: &str = "zero";
+const PLURAL_KEY_ONE: &str = "one";
+const PLURAL_KEY_OTHER: &str = "other";
+const PLURAL_KEYS: &[&str] = &[PLURAL_KEY_ZERO, PLURAL_KEY_ONE, PLURAL_KEY_OTHER];
+
+fn plural_value(key: &str) -> serde_yaml_ng::Value {
+    serde_yaml_ng::Value::String(key.to_string())
+}
 
 fn is_plural_map(map: &serde_yaml_ng::Mapping) -> bool {
     if map.is_empty() {
         return false;
     }
-    let has_other = map.contains_key(serde_yaml_ng::Value::String("other".to_string()));
+    let has_other = map.contains_key(plural_value(PLURAL_KEY_OTHER));
     let all_plural = map
         .keys()
         .all(|k| k.as_str().is_some_and(|s| PLURAL_KEYS.contains(&s)));
@@ -174,7 +177,7 @@ fn flatten_yaml(
             }
             serde_yaml_ng::Value::Mapping(nested) if is_plural_map(nested) => {
                 let other = nested
-                    .get(serde_yaml_ng::Value::String("other".to_string()))
+                    .get(plural_value(PLURAL_KEY_OTHER))
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| I18nError::PluralMissingOther {
                         lang: lang.to_string(),
@@ -182,11 +185,11 @@ fn flatten_yaml(
                     })?
                     .to_string();
                 let zero = nested
-                    .get(serde_yaml_ng::Value::String("zero".to_string()))
+                    .get(plural_value(PLURAL_KEY_ZERO))
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
                 let one = nested
-                    .get(serde_yaml_ng::Value::String("one".to_string()))
+                    .get(plural_value(PLURAL_KEY_ONE))
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
                 out.insert(full_key, Entry::Plural { zero, one, other });

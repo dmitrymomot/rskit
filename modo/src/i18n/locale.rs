@@ -36,11 +36,10 @@ pub fn parse_accept_language(header: &str) -> Vec<String> {
     entries.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     // Deduplicate, keeping first (highest weight)
-    let mut seen = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     let mut result = Vec::new();
     for (lang, _) in entries {
-        if !seen.contains(&lang) {
-            seen.push(lang.clone());
+        if seen.insert(lang.clone()) {
             result.push(lang);
         }
     }

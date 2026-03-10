@@ -1,6 +1,7 @@
 use super::extractor::ResolvedLang;
 use super::locale::{normalize_lang, resolve_from_accept_language};
 use super::store::TranslationStore;
+use crate::cookie_util::read_cookie;
 use futures_util::future::BoxFuture;
 use http::{Request, Response};
 use std::sync::Arc;
@@ -130,7 +131,9 @@ where
                 .and_then(|v| resolve_from_accept_language(v, available));
 
             // Resolve: custom > query > cookie > accept-language > default
-            let should_set_cookie = custom_lang.is_none() && query_lang.is_some();
+            let should_set_cookie = custom_lang.is_none()
+                && query_lang.is_some()
+                && cookie_lang.as_deref() != query_lang.as_deref();
             let resolved = custom_lang
                 .or(query_lang)
                 .or(cookie_lang)
@@ -170,25 +173,6 @@ where
 }
 
 // --- Cookie helpers ---
-
-fn read_cookie(headers: &http::HeaderMap, cookie_name: &str) -> Option<String> {
-    let prefix = format!("{cookie_name}=");
-    headers
-        .get_all(http::header::COOKIE)
-        .iter()
-        .find_map(|val| {
-            let val = val.to_str().ok()?;
-            for pair in val.split(';') {
-                let pair = pair.trim();
-                if let Some(value) = pair.strip_prefix(&prefix)
-                    && !value.is_empty()
-                {
-                    return Some(value.to_string());
-                }
-            }
-            None
-        })
-}
 
 fn build_lang_cookie(name: &str, value: &str) -> String {
     format!("{name}={value}; Path=/; SameSite=Lax; Max-Age=31536000")

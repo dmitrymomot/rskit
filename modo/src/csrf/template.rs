@@ -1,3 +1,4 @@
+use crate::templates::html_escape;
 use minijinja::{Environment, Error, ErrorKind, State};
 
 /// Register CSRF template functions on the MiniJinja environment.
@@ -53,18 +54,4 @@ pub fn register_template_functions(env: &mut Environment<'static>) {
 
         Ok(token)
     });
-}
-
-fn html_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '"' => out.push_str("&quot;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            _ => out.push(c),
-        }
-    }
-    out
 }

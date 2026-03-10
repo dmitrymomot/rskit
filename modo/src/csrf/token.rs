@@ -10,11 +10,7 @@ type HmacSha256 = Hmac<Sha256>;
 pub fn generate(len: usize) -> String {
     let mut bytes = vec![0u8; len];
     rand::rng().fill_bytes(&mut bytes);
-    let mut hex = String::with_capacity(len * 2);
-    for b in &bytes {
-        write!(hex, "{b:02x}").expect("writing to String cannot fail");
-    }
-    hex
+    bytes_to_hex(&bytes)
 }
 
 /// Sign a token with HMAC-SHA256. Returns `{token}.{hmac_hex}`.
@@ -31,11 +27,16 @@ pub fn sign(token: &str, key: &[u8]) -> String {
     let mut mac = HmacSha256::new_from_slice(key).expect("HMAC-SHA256 accepts any key length");
     mac.update(token.as_bytes());
     let result = mac.finalize().into_bytes();
-    let mut sig = String::with_capacity(result.len() * 2);
-    for b in &result {
-        write!(sig, "{b:02x}").expect("writing to String cannot fail");
-    }
+    let sig = bytes_to_hex(&result);
     format!("{token}.{sig}")
+}
+
+fn bytes_to_hex(bytes: &[u8]) -> String {
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        write!(hex, "{b:02x}").expect("writing to String cannot fail");
+    }
+    hex
 }
 
 /// Verify an HMAC-signed token. Returns the raw token on success.

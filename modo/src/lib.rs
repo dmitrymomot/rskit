@@ -4,6 +4,9 @@ pub use modo_macros::t;
 pub use modo_macros::view;
 pub use modo_macros::{Sanitize, Validate, error_handler, handler, main, module};
 
+#[cfg(any(feature = "csrf", feature = "i18n"))]
+pub(crate) mod cookie_util;
+
 pub mod app;
 pub mod config;
 pub mod cors;

@@ -1,5 +1,6 @@
 use super::config::CsrfConfig;
 use super::token;
+use crate::cookie_util::read_cookie;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Method, Request, StatusCode};
@@ -25,18 +26,22 @@ pub async fn csrf_protection(
     request: Request<Body>,
     next: Next,
 ) -> Response {
-    let config = state
-        .services
-        .get::<CsrfConfig>()
-        .map(|c| (*c).clone())
-        .unwrap_or_default();
+    let arc_config = state.services.get::<CsrfConfig>();
+    let default_config;
+    let config: &CsrfConfig = match &arc_config {
+        Some(c) => c,
+        None => {
+            default_config = CsrfConfig::default();
+            &default_config
+        }
+    };
     let key = state.server_config.secret_key.as_bytes();
     let method = request.method().clone();
 
     if is_safe_method(&method) {
-        handle_safe_request(request, next, &config, key).await
+        handle_safe_request(request, next, config, key).await
     } else {
-        handle_mutating_request(request, next, &config, key).await
+        handle_mutating_request(request, next, config, key).await
     }
 }
 
@@ -206,22 +211,6 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 }
 
 // --- Cookie helpers ---
-
-fn read_cookie(headers: &http::HeaderMap, cookie_name: &str) -> Option<String> {
-    let prefix = format!("{cookie_name}=");
-    headers.get_all(header::COOKIE).iter().find_map(|val| {
-        let val = val.to_str().ok()?;
-        for pair in val.split(';') {
-            let pair = pair.trim();
-            if let Some(value) = pair.strip_prefix(&prefix)
-                && !value.is_empty()
-            {
-                return Some(value.to_string());
-            }
-        }
-        None
-    })
-}
 
 fn build_set_cookie(name: &str, value: &str, max_age: u64, secure: bool) -> String {
     let secure_flag = if secure { "; Secure" } else { "" };

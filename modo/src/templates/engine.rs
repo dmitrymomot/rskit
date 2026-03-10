@@ -33,16 +33,12 @@ impl TemplateEngine {
         name: &str,
         ctx: minijinja::Value,
     ) -> Result<String, crate::templates::TemplateError> {
-        if cfg!(debug_assertions) {
-            self.env.write().unwrap().clear_templates();
-            let env = self.env.read().unwrap();
-            let tmpl = env.get_template(name)?;
-            Ok(tmpl.render(ctx)?)
-        } else {
-            let env = self.env.read().unwrap();
-            let tmpl = env.get_template(name)?;
-            Ok(tmpl.render(ctx)?)
-        }
+        #[cfg(debug_assertions)]
+        self.env.write().unwrap().clear_templates();
+
+        let env = self.env.read().unwrap();
+        let tmpl = env.get_template(name)?;
+        Ok(tmpl.render(ctx)?)
     }
 }
 

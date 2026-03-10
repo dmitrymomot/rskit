@@ -18,3 +18,16 @@ pub use store::{TranslationStore, load};
 
 #[cfg(feature = "templates")]
 pub use template::register_template_functions;
+
+/// Replace `{key}` placeholders in `template` with values from `vars`.
+pub(super) fn interpolate<K, V>(template: &str, vars: &[(K, V)]) -> String
+where
+    K: AsRef<str>,
+    V: AsRef<str>,
+{
+    let mut result = template.to_string();
+    for (key, value) in vars {
+        result = result.replace(&format!("{{{}}}", key.as_ref()), value.as_ref());
+    }
+    result
+}

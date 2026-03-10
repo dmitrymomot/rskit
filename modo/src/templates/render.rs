@@ -1,5 +1,6 @@
 use super::context::TemplateContext;
 use super::engine::TemplateEngine;
+use super::html_escape;
 use super::view::View;
 use axum::body::Body;
 use axum::http::Request;
@@ -138,11 +139,4 @@ fn merge_contexts(request_ctx: TemplateContext, user_ctx: minijinja::Value) -> m
     }
 
     minijinja::Value::from_serialize(&map)
-}
-
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
 }
