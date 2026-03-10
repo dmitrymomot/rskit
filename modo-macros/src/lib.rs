@@ -9,6 +9,7 @@ mod sanitize;
 mod t_macro;
 mod template_filter;
 mod template_function;
+mod utils;
 mod validate;
 mod view;
 

@@ -1,4 +1,6 @@
-use crate::middleware::{MiddlewareAttr, MiddlewareList, gen_router_middleware_wrapper};
+use crate::middleware::{
+    MiddlewareAttr, MiddlewareList, build_middleware_vec, gen_router_middleware_wrapper,
+};
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
@@ -72,11 +74,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         wrapper_defs.push(def);
     }
 
-    let middleware_vec = if wrapper_names.is_empty() {
-        quote! { vec![] }
-    } else {
-        quote! { vec![#(#wrapper_names as modo::router::RouterMiddlewareFn),*] }
-    };
+    let middleware_vec =
+        build_middleware_vec(&wrapper_names, quote! { modo::router::RouterMiddlewareFn });
 
     Ok(quote! {
         #module
