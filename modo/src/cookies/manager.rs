@@ -192,7 +192,7 @@ impl IntoResponse for CookieManager {
     }
 }
 
-fn build_cookie<'a>(name: &str, value: &str, opts: &CookieOptions) -> Cookie<'a> {
+pub(crate) fn build_cookie<'a>(name: &str, value: &str, opts: &CookieOptions) -> Cookie<'a> {
     let mut cookie = Cookie::new(name.to_string(), value.to_string());
     cookie.set_path(opts.path.clone());
     cookie.set_http_only(opts.http_only);
