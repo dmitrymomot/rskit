@@ -62,7 +62,7 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 - Template layers: auto-registered when `TemplateEngine` is a service — no manual `.layer()` needed
 - HTMX views: htmx template rendered on HX-Request, always HTTP 200, non-200 skips render
 - i18n in templates: `{{ t("key", name=val) }}` — register via `modo::i18n::register_template_functions`
-- i18n layer: `modo::i18n::layer(store, cookie_config)` / `modo::i18n::layer_with_source(store, cookie_config, source_fn)`
+- i18n layer: `modo::i18n::layer(store, Arc::new(cookie_config))` / `modo::i18n::layer_with_source(store, Arc::new(cookie_config), source_fn)`
 - Middleware: plain async functions, attached via `#[middleware(fn_name(params))]`
 - Middleware stacking order: Global (outermost) → Module → Handler (innermost)
 - Services: manually constructed, registered via `.service(instance)`
