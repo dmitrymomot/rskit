@@ -214,14 +214,14 @@ where
 ///
 /// Uses `try_lock()` to avoid deadlocks when `SessionManager::set()` or
 /// `remove_key()` hold the mutex across `.await`. Returns `None` if no session
-/// exists or the lock is contended (logged as a warning).
+/// exists or the lock is contended (logged at trace level).
 pub fn user_id_from_extensions(extensions: &http::Extensions) -> Option<String> {
     extensions
         .get::<Arc<SessionManagerState>>()
         .and_then(|state| match state.current_session.try_lock() {
             Ok(guard) => guard.as_ref().map(|s| s.user_id.clone()),
             Err(_) => {
-                tracing::warn!("user_id_from_extensions: session lock contended, returning None");
+                tracing::trace!("user_id_from_extensions: session lock contended, returning None");
                 None
             }
         })

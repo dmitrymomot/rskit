@@ -1,8 +1,6 @@
 #[cfg(feature = "templates")]
 use crate::HasTenantId;
 #[cfg(feature = "templates")]
-use crate::cache::ResolvedTenant;
-#[cfg(feature = "templates")]
 use crate::resolver::TenantResolverService;
 
 #[cfg(feature = "templates")]
@@ -11,8 +9,6 @@ use futures_util::future::BoxFuture;
 use modo::axum::http::Request;
 #[cfg(feature = "templates")]
 use modo_templates::TemplateContext;
-#[cfg(feature = "templates")]
-use std::sync::Arc;
 #[cfg(feature = "templates")]
 use std::task::{Context, Poll};
 #[cfg(feature = "templates")]
@@ -104,19 +100,11 @@ where
 
             // Resolve tenant (cached or fresh)
             let tenant: Option<T> =
-                if let Some(cached) = parts.extensions.get::<ResolvedTenant<T>>() {
-                    Some((*cached.0).clone())
-                } else {
-                    match tenant_svc.resolve(&parts).await {
-                        Ok(Some(t)) => {
-                            parts.extensions.insert(ResolvedTenant(Arc::new(t.clone())));
-                            Some(t)
-                        }
-                        Ok(None) => None,
-                        Err(e) => {
-                            tracing::warn!("TenantContextLayer: tenant resolution failed: {e}");
-                            None
-                        }
+                match crate::extractor::resolve_and_cache(&mut parts, &tenant_svc).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        tracing::warn!("TenantContextLayer: tenant resolution failed: {e}");
+                        None
                     }
                 };
 

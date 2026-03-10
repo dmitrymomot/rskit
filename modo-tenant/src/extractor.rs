@@ -20,6 +20,29 @@ impl<T: Clone + Send + Sync + 'static> Deref for Tenant<T> {
 }
 
 /// Resolve tenant from cache or via resolver service, caching the result.
+///
+/// Shared by both the `FromRequestParts` extractors and `TenantContextMiddleware`.
+pub(crate) async fn resolve_and_cache<T>(
+    parts: &mut Parts,
+    resolver: &TenantResolverService<T>,
+) -> Result<Option<T>, Error>
+where
+    T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
+{
+    if let Some(cached) = parts.extensions.get::<ResolvedTenant<T>>() {
+        return Ok(Some((*cached.0).clone()));
+    }
+
+    let tenant = resolver.resolve(parts).await?;
+
+    if let Some(ref t) = tenant {
+        parts.extensions.insert(ResolvedTenant(Arc::new(t.clone())));
+    }
+
+    Ok(tenant)
+}
+
+/// Resolve tenant using the `TenantResolverService` from `AppState`.
 pub(crate) async fn resolve_tenant<T>(
     parts: &mut Parts,
     state: &AppState,
@@ -27,11 +50,6 @@ pub(crate) async fn resolve_tenant<T>(
 where
     T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
 {
-    // Check cache first
-    if let Some(cached) = parts.extensions.get::<ResolvedTenant<T>>() {
-        return Ok(Some((*cached.0).clone()));
-    }
-
     let resolver = state
         .services
         .get::<TenantResolverService<T>>()
@@ -42,13 +60,7 @@ where
             ))
         })?;
 
-    let tenant = resolver.resolve(parts).await?;
-
-    if let Some(ref t) = tenant {
-        parts.extensions.insert(ResolvedTenant(Arc::new(t.clone())));
-    }
-
-    Ok(tenant)
+    resolve_and_cache(parts, &resolver).await
 }
 
 impl<T> FromRequestParts<AppState> for Tenant<T>
@@ -69,6 +81,11 @@ where
 }
 
 /// Extractor that optionally resolves a tenant. Never rejects due to missing tenant.
+///
+/// Note: unlike `TenantContextLayer` (which silently swallows resolver errors),
+/// this extractor will reject with an error if the resolver itself fails (e.g.
+/// misconfigured service). It only returns `None` when the resolver succeeds
+/// but finds no matching tenant.
 #[derive(Clone)]
 pub struct OptionalTenant<T: Clone + Send + Sync + 'static>(pub Option<T>);
 

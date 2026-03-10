@@ -1,4 +1,4 @@
-pub mod cache;
+pub(crate) mod cache;
 #[cfg(feature = "templates")]
 pub mod context_layer;
 pub mod extractor;

@@ -48,6 +48,12 @@ impl<T: Clone + Send + Sync + 'static> Clone for TenantResolverService<T> {
     }
 }
 
+impl<T: Clone + Send + Sync + 'static> std::fmt::Debug for TenantResolverService<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TenantResolverService<{}>", std::any::type_name::<T>())
+    }
+}
+
 impl<T: Clone + Send + Sync + 'static> TenantResolverService<T> {
     pub fn new<R: TenantResolver<Tenant = T>>(resolver: R) -> Self {
         Self {
