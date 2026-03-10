@@ -125,14 +125,6 @@ impl AppBuilder {
         self
     }
 
-    #[deprecated(note = "use `config()` with `AppConfig` instead")]
-    pub fn server_config(mut self, config: ServerConfig) -> Self {
-        let mut app_config = self.app_config.take().unwrap_or_default();
-        app_config.server = config;
-        self.app_config = Some(app_config);
-        self
-    }
-
     pub fn service<T: Send + Sync + 'static>(mut self, svc: T) -> Self {
         self.services.insert(TypeId::of::<T>(), Arc::new(svc));
         self
