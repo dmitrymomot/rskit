@@ -3,11 +3,11 @@ use crate::entity::job;
 use crate::handler::{JobContext, JobHandlerDyn, JobRegistration};
 use crate::queue::JobQueue;
 use crate::types::{JobId, JobState};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use modo::app::ServiceRegistry;
-use modo_db::pool::DbPool;
 use modo_db::sea_orm::{
     ColumnTrait, DatabaseBackend, EntityTrait, ExprTrait, FromQueryResult, QueryFilter, Statement,
+    UpdateMany,
 };
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -87,13 +87,11 @@ struct PollContext {
 ///
 /// Returns a `JobsHandle` that should be registered as a service.
 pub async fn start(
-    db: &DbPool,
+    db: &modo_db::pool::DbPool,
     config: &JobsConfig,
     services: ServiceRegistry,
 ) -> Result<JobsHandle, modo::Error> {
-    config
-        .validate()
-        .map_err(|e| modo::Error::internal(format!("Invalid jobs config: {e}")))?;
+    config.validate()?;
 
     // Validate queue config against registered jobs
     let queue_names: HashMap<&str, usize> = config
@@ -107,12 +105,12 @@ pub async fn start(
             continue; // cron jobs don't use queues
         }
         if !queue_names.contains_key(reg.queue) {
-            panic!(
+            return Err(modo::Error::internal(format!(
                 "Job '{}' references queue '{}' which is not configured. Available queues: {:?}",
                 reg.name,
                 reg.queue,
                 queue_names.keys().collect::<Vec<_>>()
-            );
+            )));
         }
     }
 
@@ -249,8 +247,8 @@ pub async fn claim_next(
     // Raw SQL is required here because SeaORM doesn't support the atomic
     // UPDATE...WHERE id = (SELECT...) RETURNING * pattern. This single-statement
     // approach claims a job atomically without race conditions between workers.
-    let (sql, values) = match backend {
-        DatabaseBackend::Sqlite => (
+    let sql = match backend {
+        DatabaseBackend::Sqlite => {
             "UPDATE modo_jobs \
              SET state = 'running', locked_by = $1, \
                  locked_at = $2, attempts = attempts + 1, \
@@ -261,16 +259,9 @@ pub async fn claim_next(
                  ORDER BY priority DESC, run_at ASC \
                  LIMIT 1 \
              ) \
-             RETURNING *",
-            vec![
-                worker_id.into(),
-                now.into(),
-                now.into(),
-                queue.into(),
-                now.into(),
-            ],
-        ),
-        DatabaseBackend::Postgres => (
+             RETURNING *"
+        }
+        DatabaseBackend::Postgres => {
             "UPDATE modo_jobs \
              SET state = 'running', locked_by = $1, \
                  locked_at = $2, attempts = attempts + 1, \
@@ -282,19 +273,17 @@ pub async fn claim_next(
                  LIMIT 1 \
                  FOR UPDATE SKIP LOCKED \
              ) \
-             RETURNING *",
-            vec![
-                worker_id.into(),
-                now.into(),
-                now.into(),
-                queue.into(),
-                now.into(),
-            ],
-        ),
-        _ => {
-            return Err(modo::Error::internal("Unsupported database backend"));
+             RETURNING *"
         }
+        _ => return Err(modo::Error::internal("Unsupported database backend")),
     };
+    let values = vec![
+        worker_id.into(),
+        now.into(),
+        now.into(),
+        queue.into(),
+        now.into(),
+    ];
 
     let stmt = Statement::from_sql_and_values(backend, sql, values);
     let result = job::Model::find_by_statement(stmt)
@@ -310,37 +299,28 @@ async fn execute_job(
     job: job::Model,
     services: ServiceRegistry,
 ) {
-    let job_id = JobId::from_raw(&job.id);
-    let job_name = job.name.clone();
-    let queue = job.queue.clone();
-    let attempt = job.attempts;
-    let max_attempts = job.max_attempts;
+    let job_name = &job.name;
+    let queue = &job.queue;
     let timeout_secs = Ord::max(job.timeout_secs, 1) as u64;
 
     // Find handler
     let handler: Option<Box<dyn JobHandlerDyn>> = inventory::iter::<JobRegistration>
         .into_iter()
-        .find(|r| r.name == job_name)
+        .find(|r| r.name == *job_name)
         .map(|r| (r.handler_factory)());
 
     let Some(handler) = handler else {
-        error!(
-            job_id = %job_id,
-            job_name = %job_name,
-            "No handler registered for job"
-        );
+        error!(job_id = %job.id, job_name = %job_name, "No handler registered for job");
         mark_dead(db, &job.id, Some("No handler registered for job")).await;
         return;
     };
 
-    let db_pool = services.get::<DbPool>();
     let ctx = JobContext {
-        job_id: job_id.clone(),
-        name: job_name.clone(),
-        queue: queue.clone(),
-        attempt,
+        job_id: JobId::from(job.id.clone()),
+        name: job.name.clone(),
+        queue: job.queue.clone(),
+        attempt: job.attempts,
         services,
-        db: db_pool.map(|p| (*p).clone()),
         payload_json: job.payload.clone(),
     };
 
@@ -352,29 +332,20 @@ async fn execute_job(
             mark_completed(db, &job.id).await;
         }
         Ok(Err(e)) => {
-            let error_msg = e.to_string();
             error!(
-                job_id = %job_id,
-                job_name = %job_name,
-                queue = %queue,
-                attempt = attempt,
-                max_attempts = max_attempts,
-                error = %e,
-                "Job failed"
+                job_id = %job.id, job_name = %job_name, queue = %queue,
+                attempt = job.attempts, max_attempts = job.max_attempts,
+                error = %e, "Job failed"
             );
-            handle_failure(db, &job, Some(&error_msg)).await;
+            handle_failure(db, &job, Some(&e.to_string())).await;
         }
         Err(_) => {
-            let error_msg = format!("Job timed out after {timeout_secs}s");
             error!(
-                job_id = %job_id,
-                job_name = %job_name,
-                queue = %queue,
-                attempt = attempt,
-                max_attempts = max_attempts,
+                job_id = %job.id, job_name = %job_name, queue = %queue,
+                attempt = job.attempts, max_attempts = job.max_attempts,
                 "Job timed out"
             );
-            handle_failure(db, &job, Some(&error_msg)).await;
+            handle_failure(db, &job, Some(&format!("Job timed out after {timeout_secs}s"))).await;
         }
     }
 }
@@ -392,30 +363,33 @@ pub async fn handle_failure(
     }
 }
 
-#[doc(hidden)]
-pub async fn mark_completed(db: &modo_db::sea_orm::DatabaseConnection, id: &str) {
-    let now = Utc::now();
-    if let Err(e) = job::Entity::update_many()
-        .filter(job::Column::Id.eq(id))
-        .col_expr(
-            job::Column::State,
-            modo_db::sea_orm::sea_query::Expr::value(JobState::Completed.as_str()),
-        )
+/// Apply the common "release lock + set updated_at" columns to an update query.
+fn release_lock(update: UpdateMany<job::Entity>, now: DateTime<Utc>) -> UpdateMany<job::Entity> {
+    update
         .col_expr(
             job::Column::LockedBy,
             modo_db::sea_orm::sea_query::Expr::value(Option::<String>::None),
         )
         .col_expr(
             job::Column::LockedAt,
-            modo_db::sea_orm::sea_query::Expr::value(Option::<chrono::DateTime<chrono::Utc>>::None),
+            modo_db::sea_orm::sea_query::Expr::value(Option::<DateTime<Utc>>::None),
         )
         .col_expr(
             job::Column::UpdatedAt,
             modo_db::sea_orm::sea_query::Expr::value(now),
         )
-        .exec(db)
-        .await
-    {
+}
+
+#[doc(hidden)]
+pub async fn mark_completed(db: &modo_db::sea_orm::DatabaseConnection, id: &str) {
+    let now = Utc::now();
+    let update = job::Entity::update_many()
+        .filter(job::Column::Id.eq(id))
+        .col_expr(
+            job::Column::State,
+            modo_db::sea_orm::sea_query::Expr::value(JobState::Completed.as_str()),
+        );
+    if let Err(e) = release_lock(update, now).exec(db).await {
         error!(job_id = id, error = %e, "Failed to mark job completed");
     }
 }
@@ -435,7 +409,7 @@ pub async fn schedule_retry(
     );
     let next_run = now + chrono::Duration::seconds(backoff_secs as i64);
 
-    if let Err(e) = job::Entity::update_many()
+    let update = job::Entity::update_many()
         .filter(job::Column::Id.eq(&job.id))
         .col_expr(
             job::Column::State,
@@ -446,24 +420,10 @@ pub async fn schedule_retry(
             modo_db::sea_orm::sea_query::Expr::value(next_run),
         )
         .col_expr(
-            job::Column::LockedBy,
-            modo_db::sea_orm::sea_query::Expr::value(Option::<String>::None),
-        )
-        .col_expr(
-            job::Column::LockedAt,
-            modo_db::sea_orm::sea_query::Expr::value(Option::<chrono::DateTime<chrono::Utc>>::None),
-        )
-        .col_expr(
             job::Column::LastError,
             modo_db::sea_orm::sea_query::Expr::value(error_msg.map(|s| s.to_string())),
-        )
-        .col_expr(
-            job::Column::UpdatedAt,
-            modo_db::sea_orm::sea_query::Expr::value(now),
-        )
-        .exec(db)
-        .await
-    {
+        );
+    if let Err(e) = release_lock(update, now).exec(db).await {
         error!(job_id = &job.id, error = %e, "Failed to schedule job retry");
     }
 }
@@ -475,31 +435,17 @@ pub async fn mark_dead(
     error_msg: Option<&str>,
 ) {
     let now = Utc::now();
-    if let Err(e) = job::Entity::update_many()
+    let update = job::Entity::update_many()
         .filter(job::Column::Id.eq(id))
         .col_expr(
             job::Column::State,
             modo_db::sea_orm::sea_query::Expr::value(JobState::Dead.as_str()),
         )
         .col_expr(
-            job::Column::LockedBy,
-            modo_db::sea_orm::sea_query::Expr::value(Option::<String>::None),
-        )
-        .col_expr(
-            job::Column::LockedAt,
-            modo_db::sea_orm::sea_query::Expr::value(Option::<chrono::DateTime<chrono::Utc>>::None),
-        )
-        .col_expr(
             job::Column::LastError,
             modo_db::sea_orm::sea_query::Expr::value(error_msg.map(|s| s.to_string())),
-        )
-        .col_expr(
-            job::Column::UpdatedAt,
-            modo_db::sea_orm::sea_query::Expr::value(now),
-        )
-        .exec(db)
-        .await
-    {
+        );
+    if let Err(e) = release_lock(update, now).exec(db).await {
         error!(job_id = id, error = %e, "Failed to mark job dead");
     }
 }
@@ -519,8 +465,9 @@ async fn reap_stale_loop(
                 break;
             }
             _ = interval.tick() => {
-                let cutoff = Utc::now() - chrono::Duration::seconds(threshold_secs as i64);
-                match job::Entity::update_many()
+                let now = Utc::now();
+                let cutoff = now - chrono::Duration::seconds(threshold_secs as i64);
+                let update = job::Entity::update_many()
                     .filter(job::Column::State.eq(JobState::Running.as_str()))
                     .filter(job::Column::LockedAt.lt(cutoff))
                     .col_expr(
@@ -528,23 +475,10 @@ async fn reap_stale_loop(
                         modo_db::sea_orm::sea_query::Expr::value(JobState::Pending.as_str()),
                     )
                     .col_expr(
-                        job::Column::LockedBy,
-                        modo_db::sea_orm::sea_query::Expr::value(Option::<String>::None),
-                    )
-                    .col_expr(
-                        job::Column::LockedAt,
-                        modo_db::sea_orm::sea_query::Expr::value(Option::<chrono::DateTime<chrono::Utc>>::None),
-                    )
-                    .col_expr(
                         job::Column::Attempts,
                         modo_db::sea_orm::sea_query::Expr::col(job::Column::Attempts).sub(1),
-                    )
-                    .col_expr(
-                        job::Column::UpdatedAt,
-                        modo_db::sea_orm::sea_query::Expr::value(Utc::now()),
-                    )
-                    .exec(db)
-                    .await
+                    );
+                match release_lock(update, now).exec(db).await
                 {
                     Ok(result) if result.rows_affected > 0 => {
                         warn!(count = result.rows_affected, "Reaped stale jobs");

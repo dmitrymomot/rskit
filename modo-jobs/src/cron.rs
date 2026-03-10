@@ -1,8 +1,6 @@
 use crate::handler::{JobContext, JobRegistration};
 use crate::types::JobId;
 use modo::app::ServiceRegistry;
-use modo_db::pool::DbPool;
-use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
@@ -55,7 +53,6 @@ async fn run_cron_loop(
     handler_factory: fn() -> Box<dyn crate::handler::JobHandlerDyn>,
     schedule: cron::Schedule,
 ) {
-    let db_pool: Option<Arc<DbPool>> = services.get::<DbPool>();
     let mut consecutive_failures: u32 = 0;
 
     loop {
@@ -84,7 +81,6 @@ async fn run_cron_loop(
                     queue: "cron".to_string(),
                     attempt: 1,
                     services: services.clone(),
-                    db: db_pool.as_ref().map(|p| (**p).clone()),
                     payload_json: "null".to_string(),
                 };
 
@@ -99,20 +95,14 @@ async fn run_cron_loop(
                         consecutive_failures = 0;
                         info!(job = name, "Cron job completed");
                     }
-                    Ok(Err(e)) => {
+                    outcome => {
+                        let err_msg = match &outcome {
+                            Ok(Err(e)) => format!("{e}"),
+                            Err(_) => format!("timed out after {timeout_secs}s"),
+                            _ => unreachable!(),
+                        };
                         consecutive_failures += 1;
-                        error!(job = name, error = %e, "Cron job failed");
-                        if consecutive_failures >= 5 {
-                            warn!(
-                                job = name,
-                                consecutive_failures,
-                                "Cron job has failed {consecutive_failures} consecutive times, investigate"
-                            );
-                        }
-                    }
-                    Err(_) => {
-                        consecutive_failures += 1;
-                        error!(job = name, "Cron job timed out");
+                        error!(job = name, error = %err_msg, "Cron job failed");
                         if consecutive_failures >= 5 {
                             warn!(
                                 job = name,

@@ -12,7 +12,6 @@ pub struct JobContext {
     pub queue: String,
     pub attempt: i32,
     pub(crate) services: ServiceRegistry,
-    pub(crate) db: Option<DbPool>,
     pub(crate) payload_json: String,
 }
 
@@ -34,9 +33,9 @@ impl JobContext {
     }
 
     /// Get the database connection pool.
-    pub fn db(&self) -> Result<&DbPool, modo::Error> {
-        self.db
-            .as_ref()
+    pub fn db(&self) -> Result<Arc<DbPool>, modo::Error> {
+        self.services
+            .get::<DbPool>()
             .ok_or_else(|| modo::Error::internal("Database not available in job context"))
     }
 }
