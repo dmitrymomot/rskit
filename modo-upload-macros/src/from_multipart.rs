@@ -262,10 +262,9 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
             let var = quote::format_ident!("__{}", f.field_name);
             let name = &f.multipart_name;
             // For file fields: use per-field max_size if set, otherwise fall back to __max_file_size
-            let file_size_limit = match f.upload_attrs.max_size {
-                Some(max_bytes) => quote! { Some(#max_bytes) },
-                None => quote! { __max_file_size },
-            };
+            // Always pass the global limit to from_field for streaming enforcement.
+            // Per-field limits are checked post-collection with proper validation errors.
+            let file_size_limit = quote! { __max_file_size };
             match &f.kind {
                 FieldKind::UploadedFile | FieldKind::OptionUploadedFile => quote! {
                     Some(#name) => {

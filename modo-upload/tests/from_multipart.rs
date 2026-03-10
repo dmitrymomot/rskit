@@ -472,8 +472,8 @@ async fn max_size_exceeded() {
     let Err(err) = MaxSizeFile::from_multipart(&mut mp, None).await else {
         panic!("expected error");
     };
-    // Early rejection returns 413 Payload Too Large
-    assert_eq!(err.status_code(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+    // Per-field size violation returns 400 validation error with field name
+    assert_validation_error(&err, "f");
 }
 
 #[derive(FromMultipart)]
@@ -785,23 +785,10 @@ async fn global_max_file_size_option_missing_ok() {
 // ===========================================================================
 
 #[tokio::test]
-async fn per_field_overrides_global() {
-    // MaxSizeFile has #[upload(max_size = "10b")], global = 5B.
-    // File is 7 bytes — exceeds global but within per-field. Should succeed.
-    let mut mp = make_multipart(&[MultipartField::File {
-        name: "f",
-        filename: "mid.bin",
-        content_type: "application/octet-stream",
-        data: &[0u8; 7],
-    }])
-    .await;
-    MaxSizeFile::from_multipart(&mut mp, Some(5)).await.unwrap();
-}
-
-#[tokio::test]
-async fn per_field_still_rejects_over_own_limit() {
+async fn per_field_rejects_over_own_limit_with_validation_error() {
     // MaxSizeFile has #[upload(max_size = "10b")], global = 1000B.
-    // File is 20 bytes — within global but exceeds per-field. Should fail.
+    // File is 20 bytes — within global but exceeds per-field.
+    // Should fail with 400 validation error (not 413).
     let mut mp = make_multipart(&[MultipartField::File {
         name: "f",
         filename: "big.bin",
@@ -810,6 +797,23 @@ async fn per_field_still_rejects_over_own_limit() {
     }])
     .await;
     let Err(err) = MaxSizeFile::from_multipart(&mut mp, Some(1000)).await else {
+        panic!("expected error");
+    };
+    assert_validation_error(&err, "f");
+}
+
+#[tokio::test]
+async fn global_limit_still_enforced_during_streaming() {
+    // MaxSizeFile has #[upload(max_size = "10b")], global = 5B.
+    // File is 7 bytes — exceeds global. Global limit enforced via streaming → 413.
+    let mut mp = make_multipart(&[MultipartField::File {
+        name: "f",
+        filename: "mid.bin",
+        content_type: "application/octet-stream",
+        data: &[0u8; 7],
+    }])
+    .await;
+    let Err(err) = MaxSizeFile::from_multipart(&mut mp, Some(5)).await else {
         panic!("expected error");
     };
     assert_eq!(err.status_code(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
@@ -935,7 +939,8 @@ async fn option_max_size_present_exceeded() {
     let Err(err) = OptFileWithMaxSize::from_multipart(&mut mp, None).await else {
         panic!("expected error");
     };
-    assert_eq!(err.status_code(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+    // Per-field size violation returns 400 validation error with field name
+    assert_validation_error(&err, "avatar");
 }
 
 #[tokio::test]
@@ -1045,5 +1050,6 @@ async fn vec_max_size_one_exceeded() {
     let Err(err) = VecFilesWithMaxSize::from_multipart(&mut mp, None).await else {
         panic!("expected error");
     };
-    assert_eq!(err.status_code(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+    // Per-field size violation returns 400 validation error with field name
+    assert_validation_error(&err, "files");
 }
