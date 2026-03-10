@@ -75,7 +75,7 @@ type EmbedBuilderFn =
     Box<dyn FnOnce(&crate::static_files::StaticConfig) -> axum::Router<()> + Send>;
 
 pub struct AppBuilder {
-    server_config: ServerConfig,
+    app_config: Option<crate::config::AppConfig>,
     services: HashMap<TypeId, Arc<dyn Any + Send + Sync>>,
     layers: Vec<LayerFn>,
     cors_config: Option<CorsConfig>,
@@ -96,7 +96,7 @@ pub struct AppBuilder {
 impl AppBuilder {
     pub fn new() -> Self {
         Self {
-            server_config: ServerConfig::default(),
+            app_config: None,
             services: HashMap::new(),
             layers: Vec::new(),
             cors_config: None,
@@ -114,8 +114,16 @@ impl AppBuilder {
         }
     }
 
+    pub fn config(mut self, config: crate::config::AppConfig) -> Self {
+        self.app_config = Some(config);
+        self
+    }
+
+    /// Deprecated: use `config()` with `AppConfig` instead.
     pub fn server_config(mut self, config: ServerConfig) -> Self {
-        self.server_config = config;
+        let mut app_config = self.app_config.take().unwrap_or_default();
+        app_config.server = config;
+        self.app_config = Some(app_config);
         self
     }
 
@@ -242,14 +250,20 @@ impl AppBuilder {
 
     fn ensure_http_override(&mut self) -> &mut HttpConfig {
         if self.override_http.is_none() {
-            self.override_http = Some(self.server_config.http.clone());
+            let http = self
+                .app_config
+                .as_ref()
+                .map(|c| c.server.http.clone())
+                .unwrap_or_default();
+            self.override_http = Some(http);
         }
         self.override_http.as_mut().unwrap()
     }
 
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error>> {
         // Resolve effective config (builder overrides > YAML config)
-        let mut server_config = self.server_config.clone();
+        let app_config = self.app_config.unwrap_or_default();
+        let mut server_config = app_config.server.clone();
         if let Some(ref http) = self.override_http {
             server_config.http = http.clone();
         }
