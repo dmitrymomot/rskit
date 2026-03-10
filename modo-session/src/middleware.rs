@@ -87,7 +87,7 @@ where
         let mut inner = self.inner.clone();
 
         Box::pin(async move {
-            let config = store.config().clone();
+            let config = store.config();
             let cookie_name = &config.cookie_name;
 
             // Extract meta from request headers
@@ -162,22 +162,23 @@ where
             };
 
             let ttl_secs = config.session_ttl_secs;
-            let cookie_config = store.cookie_config();
-            let set_opts = CookieOptions::from_config(cookie_config).max_age(ttl_secs);
-            let remove_opts = CookieOptions::from_config(cookie_config).max_age(0);
 
             match action {
                 SessionAction::Set(token) => {
-                    let cookie = build_cookie(cookie_name, &token.as_hex(), &set_opts);
-                    if let Ok(val) = cookie.to_string().parse() {
-                        response.headers_mut().append(http::header::SET_COOKIE, val);
-                    }
+                    let opts = CookieOptions::from_config(store.cookie_config())
+                        .max_age(ttl_secs);
+                    append_cookie_header(
+                        &mut response,
+                        cookie_name,
+                        &token.as_hex(),
+                        &opts,
+                    );
                 }
                 SessionAction::Remove => {
-                    let cookie = build_cookie(cookie_name, "", &remove_opts);
-                    if let Ok(val) = cookie.to_string().parse() {
-                        response.headers_mut().append(http::header::SET_COOKIE, val);
-                    }
+                    // Max-Age=0 instructs the browser to delete the cookie
+                    let opts =
+                        CookieOptions::from_config(store.cookie_config()).max_age(0);
+                    append_cookie_header(&mut response, cookie_name, "", &opts);
                 }
                 SessionAction::None => {
                     if should_touch && let Some(ref session) = current_session {
@@ -188,19 +189,23 @@ where
                                 "Failed to touch session: {e}"
                             );
                         } else if let Some(ref token) = session_token {
-                            let cookie = build_cookie(cookie_name, &token.as_hex(), &set_opts);
-                            if let Ok(val) = cookie.to_string().parse() {
-                                response.headers_mut().append(http::header::SET_COOKIE, val);
-                            }
+                            let opts = CookieOptions::from_config(store.cookie_config())
+                                .max_age(ttl_secs);
+                            append_cookie_header(
+                                &mut response,
+                                cookie_name,
+                                &token.as_hex(),
+                                &opts,
+                            );
                         }
                     }
 
                     // Remove stale cookie (session not found, but cookie existed)
                     if had_cookie && current_session.is_none() && !read_failed {
-                        let cookie = build_cookie(cookie_name, "", &remove_opts);
-                        if let Ok(val) = cookie.to_string().parse() {
-                            response.headers_mut().append(http::header::SET_COOKIE, val);
-                        }
+                        // Max-Age=0 instructs the browser to delete the cookie
+                        let opts =
+                            CookieOptions::from_config(store.cookie_config()).max_age(0);
+                        append_cookie_header(&mut response, cookie_name, "", &opts);
                     }
                 }
             }
@@ -245,4 +250,21 @@ fn read_session_cookie(headers: &http::HeaderMap, cookie_name: &str) -> Option<S
             }
             None
         })
+}
+
+fn append_cookie_header<B>(
+    response: &mut Response<B>,
+    name: &str,
+    value: &str,
+    opts: &CookieOptions,
+) {
+    let cookie = build_cookie(name, value, opts);
+    match http::HeaderValue::try_from(cookie.to_string()) {
+        Ok(val) => {
+            response.headers_mut().append(http::header::SET_COOKIE, val);
+        }
+        Err(e) => {
+            tracing::warn!(cookie_name = name, "Failed to serialize session cookie: {e}");
+        }
+    }
 }
