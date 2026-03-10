@@ -59,7 +59,7 @@ pub fn expand(input: proc_macro2::TokenStream) -> syn::Result<proc_macro2::Token
             .unwrap();
 
         Ok(quote! {
-            #i18n.t_plural(#key, #count_expr as u64, &[#(#var_pairs),*])
+            #i18n.t_plural(#key, u64::try_from(#count_expr).unwrap_or(u64::MAX), &[#(#var_pairs),*])
         })
     } else {
         Ok(quote! {

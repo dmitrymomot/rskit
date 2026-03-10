@@ -71,7 +71,9 @@ pub fn load(config: &I18nConfig) -> Result<Arc<TranslationStore>, I18nError> {
     for entry in entries {
         let lang_name = entry.file_name().to_string_lossy().to_string();
 
-        // Skip directories that aren't pure lowercase alpha
+        // Skip directories that aren't pure lowercase alpha (e.g. "en", "fr").
+        // Directories with hyphens like "pt-br" or "zh-cn" are not supported;
+        // use bare language codes only.
         if !lang_name.chars().all(|c| c.is_ascii_lowercase()) {
             continue;
         }

@@ -274,8 +274,9 @@ pub fn substitute_env_vars(input: &str) -> String {
                 result.push_str(&input[i + 1..=close]);
                 i = close + 1;
             } else {
-                result.push(bytes[i] as char);
-                i += 1;
+                let ch = input[i..].chars().next().unwrap();
+                result.push(ch);
+                i += ch.len_utf8();
             }
             continue;
         }

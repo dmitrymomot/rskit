@@ -38,6 +38,7 @@ pub fn register_template_functions(env: &mut Environment<'static>, store: Arc<Tr
                         vars.push((k.to_string(), n.to_string()));
                         continue;
                     } else if let Ok(n) = kwargs.get::<i64>(k) {
+                        // Negative counts become None → plain-key lookup (no plural form).
                         count = u64::try_from(n).ok();
                         vars.push((k.to_string(), n.to_string()));
                         continue;
