@@ -9,6 +9,16 @@ pub enum SameSite {
     None,
 }
 
+impl From<SameSite> for cookie::SameSite {
+    fn from(val: SameSite) -> Self {
+        match val {
+            SameSite::Strict => cookie::SameSite::Strict,
+            SameSite::Lax => cookie::SameSite::Lax,
+            SameSite::None => cookie::SameSite::None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct CookieConfig {
@@ -64,11 +74,6 @@ impl CookieOptions {
 
     pub fn domain(mut self, domain: impl Into<String>) -> Self {
         self.domain = Some(domain.into());
-        self
-    }
-
-    pub fn no_domain(mut self) -> Self {
-        self.domain = None;
         self
     }
 

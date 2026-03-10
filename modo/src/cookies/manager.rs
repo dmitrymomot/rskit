@@ -1,4 +1,4 @@
-use super::config::{CookieConfig, CookieOptions, SameSite};
+use super::config::{CookieConfig, CookieOptions};
 use axum::extract::FromRef;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
@@ -123,13 +123,7 @@ impl CookieManager {
     // --- JSON convenience ---
 
     pub fn get_json<T: serde::de::DeserializeOwned>(&self, name: &str) -> Option<T> {
-        self.get(name).and_then(|v| match serde_json::from_str(&v) {
-            Ok(val) => Some(val),
-            Err(e) => {
-                tracing::debug!(cookie = name, error = %e, "failed to deserialize cookie JSON");
-                None
-            }
-        })
+        deserialize_cookie_json(self.get(name), name)
     }
 
     pub fn set_json<T: serde::Serialize>(
@@ -142,16 +136,8 @@ impl CookieManager {
         Ok(())
     }
 
-    // --- Signed JSON convenience ---
-
     pub fn get_signed_json<T: serde::de::DeserializeOwned>(&self, name: &str) -> Option<T> {
-        self.get_signed(name).and_then(|v| match serde_json::from_str(&v) {
-            Ok(val) => Some(val),
-            Err(e) => {
-                tracing::debug!(cookie = name, error = %e, "failed to deserialize signed cookie JSON");
-                None
-            }
-        })
+        deserialize_cookie_json(self.get_signed(name), name)
     }
 
     pub fn set_signed_json<T: serde::Serialize>(
@@ -164,16 +150,8 @@ impl CookieManager {
         Ok(())
     }
 
-    // --- Encrypted JSON convenience ---
-
     pub fn get_encrypted_json<T: serde::de::DeserializeOwned>(&self, name: &str) -> Option<T> {
-        self.get_encrypted(name).and_then(|v| match serde_json::from_str(&v) {
-            Ok(val) => Some(val),
-            Err(e) => {
-                tracing::debug!(cookie = name, error = %e, "failed to deserialize encrypted cookie JSON");
-                None
-            }
-        })
+        deserialize_cookie_json(self.get_encrypted(name), name)
     }
 
     pub fn set_encrypted_json<T: serde::Serialize>(
@@ -208,17 +186,26 @@ impl IntoResponse for CookieManager {
     }
 }
 
-pub(crate) fn build_cookie<'a>(name: &str, value: &str, opts: &CookieOptions) -> Cookie<'a> {
+fn deserialize_cookie_json<T: serde::de::DeserializeOwned>(
+    raw: Option<String>,
+    name: &str,
+) -> Option<T> {
+    raw.and_then(|v| match serde_json::from_str(&v) {
+        Ok(val) => Some(val),
+        Err(e) => {
+            tracing::debug!(cookie = name, error = %e, "failed to deserialize cookie JSON");
+            None
+        }
+    })
+}
+
+pub fn build_cookie<'a>(name: &str, value: &str, opts: &CookieOptions) -> Cookie<'a> {
     let mut cookie = Cookie::new(name.to_string(), value.to_string());
     cookie.set_path(opts.path.clone());
     cookie.set_http_only(opts.http_only);
     cookie.set_secure(opts.secure);
 
-    match opts.same_site {
-        SameSite::Strict => cookie.set_same_site(cookie::SameSite::Strict),
-        SameSite::Lax => cookie.set_same_site(cookie::SameSite::Lax),
-        SameSite::None => cookie.set_same_site(cookie::SameSite::None),
-    }
+    cookie.set_same_site(cookie::SameSite::from(opts.same_site.clone()));
 
     if let Some(domain) = &opts.domain {
         cookie.set_domain(domain.clone());
