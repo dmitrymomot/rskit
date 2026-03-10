@@ -1,17 +1,12 @@
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SameSite {
     Strict,
+    #[default]
     Lax,
     None,
-}
-
-impl Default for SameSite {
-    fn default() -> Self {
-        Self::Lax
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
