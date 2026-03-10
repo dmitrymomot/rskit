@@ -68,18 +68,6 @@ impl Parse for SanitizeAttr {
     }
 }
 
-/// Returns true if the type is `Option<...>`.
-fn is_option_type(ty: &Type) -> bool {
-    if let Type::Path(tp) = ty {
-        tp.path
-            .segments
-            .last()
-            .is_some_and(|seg| seg.ident == "Option")
-    } else {
-        false
-    }
-}
-
 pub fn expand(input: TokenStream) -> Result<TokenStream> {
     let input: DeriveInput = parse2(input)?;
     let struct_name = &input.ident;
@@ -157,7 +145,7 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
 
 fn gen_field_sanitization(sf: &SanitizeField) -> TokenStream {
     let field_name = &sf.field_name;
-    let is_option = is_option_type(&sf.field_type);
+    let is_option = crate::utils::is_type_named(&sf.field_type, "Option");
 
     let rule_calls: Vec<TokenStream> = sf
         .rules

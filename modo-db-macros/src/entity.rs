@@ -236,6 +236,7 @@ fn parse_field_attrs(field: &mut syn::Field) -> Result<FieldAttrs> {
                 }
                 "unique" => attrs.unique = true,
                 "indexed" => attrs.indexed = true,
+                // Accepted but unused — Option<T> already implies nullable in SeaORM.
                 "nullable" => {}
                 "column_type" => {
                     let lit: LitStr = meta.value()?.parse()?;
@@ -512,21 +513,11 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             continue;
         }
 
+        let pascal = to_pascal_case(&f.name.to_string());
         let target = if f.attrs.has_many {
-            f.attrs.via.as_ref().map_or_else(
-                || {
-                    to_pascal_case(&f.name.to_string())
-                        .trim_end_matches('s')
-                        .to_string()
-                },
-                |_via| {
-                    to_pascal_case(&f.name.to_string())
-                        .trim_end_matches('s')
-                        .to_string()
-                },
-            )
+            pascal.trim_end_matches('s').to_string()
         } else {
-            to_pascal_case(&f.name.to_string())
+            pascal
         };
 
         let target_mod = format_ident!("{}", to_snake_case(&target));

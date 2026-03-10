@@ -21,32 +21,35 @@ impl<T: Clone + Send + Sync + 'static> Deref for Tenant<T> {
 
 /// Resolve tenant from cache or via resolver service, caching the result.
 ///
-/// Shared by both the `FromRequestParts` extractors and `TenantContextMiddleware`.
+/// Returns `Arc<T>` so callers that only need a reference (e.g. template injection)
+/// avoid cloning the inner value. Extractors clone at the boundary.
 pub(crate) async fn resolve_and_cache<T>(
     parts: &mut Parts,
     resolver: &TenantResolverService<T>,
-) -> Result<Option<T>, Error>
+) -> Result<Option<Arc<T>>, Error>
 where
     T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
 {
     if let Some(cached) = parts.extensions.get::<ResolvedTenant<T>>() {
-        return Ok(Some((*cached.0).clone()));
+        return Ok(Some(Arc::clone(&cached.0)));
     }
 
     let tenant = resolver.resolve(parts).await?;
 
-    if let Some(ref t) = tenant {
-        parts.extensions.insert(ResolvedTenant(Arc::new(t.clone())));
+    if let Some(t) = tenant {
+        let arc = Arc::new(t);
+        parts.extensions.insert(ResolvedTenant(Arc::clone(&arc)));
+        return Ok(Some(arc));
     }
 
-    Ok(tenant)
+    Ok(None)
 }
 
 /// Resolve tenant using the `TenantResolverService` from `AppState`.
 pub(crate) async fn resolve_tenant<T>(
     parts: &mut Parts,
     state: &AppState,
-) -> Result<Option<T>, Error>
+) -> Result<Option<Arc<T>>, Error>
 where
     T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
 {
@@ -73,10 +76,10 @@ where
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let tenant = resolve_tenant::<T>(parts, state)
+        let arc = resolve_tenant::<T>(parts, state)
             .await?
             .ok_or_else(|| Error::from(HttpError::NotFound))?;
-        Ok(Tenant(tenant))
+        Ok(Tenant((*arc).clone()))
     }
 }
 
@@ -106,8 +109,8 @@ where
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let tenant = resolve_tenant::<T>(parts, state).await?;
-        Ok(OptionalTenant(tenant))
+        let arc = resolve_tenant::<T>(parts, state).await?;
+        Ok(OptionalTenant(arc.map(|a| (*a).clone())))
     }
 }
 
@@ -270,6 +273,116 @@ mod tests {
 
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(call_count.load(Ordering::SeqCst), 1);
+    }
+
+    struct ErrorResolver;
+
+    impl crate::TenantResolver for ErrorResolver {
+        type Tenant = TestTenant;
+
+        async fn resolve(
+            &self,
+            _parts: &modo::axum::http::request::Parts,
+        ) -> Result<Option<Self::Tenant>, modo::Error> {
+            Err(modo::Error::internal("db error"))
+        }
+    }
+
+    fn app_state_with_error_resolver() -> AppState {
+        let services = ServiceRegistry::new().with(TenantResolverService::new(ErrorResolver));
+        AppState {
+            services,
+            server_config: Default::default(),
+            cookie_key: axum_extra::extract::cookie::Key::generate(),
+        }
+    }
+
+    fn app_state_empty() -> AppState {
+        AppState {
+            services: ServiceRegistry::new(),
+            server_config: Default::default(),
+            cookie_key: axum_extra::extract::cookie::Key::generate(),
+        }
+    }
+
+    #[tokio::test]
+    async fn tenant_extractor_returns_500_on_resolver_error() {
+        let state = app_state_with_error_resolver();
+        let app = Router::new()
+            .route("/", get(|_t: Tenant<TestTenant>| async { "ok" }))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .header("host", "acme.test.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn optional_tenant_returns_500_on_resolver_error() {
+        let state = app_state_with_error_resolver();
+        let app = Router::new()
+            .route("/", get(|_t: OptionalTenant<TestTenant>| async { "ok" }))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .header("host", "acme.test.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn tenant_extractor_returns_500_when_service_not_registered() {
+        let state = app_state_empty();
+        let app = Router::new()
+            .route("/", get(|_t: Tenant<TestTenant>| async { "ok" }))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .header("host", "acme.test.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn optional_tenant_returns_500_when_service_not_registered() {
+        let state = app_state_empty();
+        let app = Router::new()
+            .route("/", get(|_t: OptionalTenant<TestTenant>| async { "ok" }))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .header("host", "acme.test.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     #[tokio::test]

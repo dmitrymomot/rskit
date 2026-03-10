@@ -138,30 +138,6 @@ fn parse_rule_message(input: ParseStream) -> Result<Option<String>> {
     }
 }
 
-/// Returns true if the type is `Option<...>`.
-fn is_option_type(ty: &Type) -> bool {
-    if let Type::Path(tp) = ty {
-        tp.path
-            .segments
-            .last()
-            .is_some_and(|seg| seg.ident == "Option")
-    } else {
-        false
-    }
-}
-
-/// Returns true if the type is `String` (simple heuristic).
-fn is_string_type(ty: &Type) -> bool {
-    if let Type::Path(tp) = ty {
-        tp.path
-            .segments
-            .last()
-            .is_some_and(|seg| seg.ident == "String")
-    } else {
-        false
-    }
-}
-
 pub fn expand(input: TokenStream) -> Result<TokenStream> {
     let input: DeriveInput = parse2(input)?;
     let struct_name = &input.ident;
@@ -215,44 +191,72 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
     // Generate validation code for each field
     let field_checks: Vec<TokenStream> = validate_fields.iter().map(gen_field_validation).collect();
 
-    let field_collect: Vec<TokenStream> = validate_fields
-        .iter()
-        .map(|vf| {
-            let name_str = vf.field_name.to_string();
-            let errors_ident = quote::format_ident!("__errors_{}", vf.field_name);
-            quote! { (#name_str, #errors_ident) }
-        })
-        .collect();
-
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    // Defer Vec allocation to error path
+    let body = if validate_fields.is_empty() {
+        quote! { Ok(()) }
+    } else {
+        let error_idents: Vec<proc_macro2::Ident> = validate_fields
+            .iter()
+            .map(|vf| quote::format_ident!("__errors_{}", vf.field_name))
+            .collect();
+        let empty_checks: Vec<TokenStream> = error_idents
+            .iter()
+            .map(|id| quote! { #id.is_empty() })
+            .collect();
+        let field_collect: Vec<TokenStream> = validate_fields
+            .iter()
+            .zip(error_idents.iter())
+            .map(|(vf, id)| {
+                let name_str = vf.field_name.to_string();
+                quote! { (#name_str, #id) }
+            })
+            .collect();
+        quote! {
+            if #(#empty_checks)&&* {
+                Ok(())
+            } else {
+                Err(modo::validate::validation_error(vec![#(#field_collect),*]))
+            }
+        }
+    };
 
     Ok(quote! {
         impl #impl_generics modo::validate::Validate for #struct_name #ty_generics #where_clause {
             fn validate(&self) -> Result<(), modo::Error> {
                 #(#field_checks)*
-
-                let __field_errors: Vec<(&str, Vec<String>)> = vec![#(#field_collect),*];
-                let __has_errors = __field_errors.iter().any(|(_, msgs)| !msgs.is_empty());
-                if __has_errors {
-                    Err(modo::validate::validation_error(__field_errors))
-                } else {
-                    Ok(())
-                }
+                #body
             }
         }
     })
 }
 
+struct FieldContext<'a> {
+    field_name: &'a Ident,
+    is_option: bool,
+    is_string: bool,
+    has_required: bool,
+    has_field_msg: bool,
+    field_message: &'a Option<String>,
+}
+
 fn gen_field_validation(vf: &ValidateField) -> TokenStream {
     let field_name = &vf.field_name;
     let errors_ident = quote::format_ident!("__errors_{}", field_name);
-    let is_option = is_option_type(&vf.field_type);
-    let is_string = is_string_type(&vf.field_type);
     let has_field_msg = vf.field_message.is_some();
-    let has_required = vf
-        .rules
-        .iter()
-        .any(|r| matches!(r, ValidationRule::Required { .. }));
+
+    let ctx = FieldContext {
+        field_name,
+        is_option: crate::utils::is_type_named(&vf.field_type, "Option"),
+        is_string: crate::utils::is_type_named(&vf.field_type, "String"),
+        has_required: vf
+            .rules
+            .iter()
+            .any(|r| matches!(r, ValidationRule::Required { .. })),
+        has_field_msg,
+        field_message: &vf.field_message,
+    };
 
     let field_msg_added_decl = if has_field_msg {
         quote! { let mut __field_msg_added = false; }
@@ -263,17 +267,7 @@ fn gen_field_validation(vf: &ValidateField) -> TokenStream {
     let rule_checks: Vec<TokenStream> = vf
         .rules
         .iter()
-        .map(|rule| {
-            gen_rule_check(
-                rule,
-                field_name,
-                is_option,
-                is_string,
-                has_required,
-                has_field_msg,
-                &vf.field_message,
-            )
-        })
+        .map(|rule| gen_rule_check(rule, &ctx))
         .collect();
 
     quote! {
@@ -283,15 +277,13 @@ fn gen_field_validation(vf: &ValidateField) -> TokenStream {
     }
 }
 
-fn gen_rule_check(
-    rule: &ValidationRule,
-    field_name: &Ident,
-    is_option: bool,
-    is_string: bool,
-    has_required: bool,
-    has_field_msg: bool,
-    field_message: &Option<String>,
-) -> TokenStream {
+fn gen_rule_check(rule: &ValidationRule, ctx: &FieldContext) -> TokenStream {
+    let field_name = ctx.field_name;
+    let is_option = ctx.is_option;
+    let is_string = ctx.is_string;
+    let has_required = ctx.has_required;
+    let has_field_msg = ctx.has_field_msg;
+    let field_message = ctx.field_message;
     let errors_ident = quote::format_ident!("__errors_{}", field_name);
 
     match rule {

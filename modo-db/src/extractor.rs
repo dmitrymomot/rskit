@@ -22,7 +22,7 @@ impl FromRequestParts<AppState> for Db {
         state
             .services
             .get::<DbPool>()
-            .map(|pool| Db(DbPool(pool.connection().clone())))
+            .map(|pool| Db((*pool).clone()))
             .ok_or_else(|| {
                 Error::internal("Database not configured. Register DbPool via app.service(db).")
             })

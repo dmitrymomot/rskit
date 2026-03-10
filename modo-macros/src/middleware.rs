@@ -38,6 +38,15 @@ impl Parse for MiddlewareList {
     }
 }
 
+/// Build the layer expression for a middleware attribute.
+fn build_layer_expr(attr: &MiddlewareAttr) -> TokenStream {
+    let path = &attr.path;
+    match &attr.args {
+        None => quote! { modo::axum::middleware::from_fn(#path) },
+        Some(args) => quote! { #path(#(#args),*) },
+    }
+}
+
 /// Generate a middleware wrapper function for a handler-level middleware.
 /// Returns (wrapper_fn_ident, wrapper_fn_definition).
 pub fn gen_handler_middleware_wrapper(
@@ -47,18 +56,7 @@ pub fn gen_handler_middleware_wrapper(
 ) -> (syn::Ident, TokenStream) {
     let wrapper_name =
         syn::Ident::new(&format!("__mw_{handler_name}_{index}"), handler_name.span());
-    let path = &attr.path;
-
-    let layer_expr = match &attr.args {
-        None => {
-            // Bare function -> wrap with from_fn()
-            quote! { modo::axum::middleware::from_fn(#path) }
-        }
-        Some(args) => {
-            // Factory function with args -> call directly, returns a Layer
-            quote! { #path(#(#args),*) }
-        }
-    };
+    let layer_expr = build_layer_expr(attr);
 
     let def = quote! {
         fn #wrapper_name(
@@ -82,16 +80,7 @@ pub fn gen_router_middleware_wrapper(
         &format!("__mw_mod_{module_name}_{index}"),
         module_name.span(),
     );
-    let path = &attr.path;
-
-    let layer_expr = match &attr.args {
-        None => {
-            quote! { modo::axum::middleware::from_fn(#path) }
-        }
-        Some(args) => {
-            quote! { #path(#(#args),*) }
-        }
-    };
+    let layer_expr = build_layer_expr(attr);
 
     let def = quote! {
         fn #wrapper_name(
@@ -102,4 +91,14 @@ pub fn gen_router_middleware_wrapper(
     };
 
     (wrapper_name, def)
+}
+
+/// Build a `vec![...]` expression casting wrapper function names to the given type.
+/// Returns `vec![]` when `wrapper_names` is empty.
+pub fn build_middleware_vec(wrapper_names: &[syn::Ident], cast_path: TokenStream) -> TokenStream {
+    if wrapper_names.is_empty() {
+        quote! { vec![] }
+    } else {
+        quote! { vec![#(#wrapper_names as #cast_path),*] }
+    }
 }

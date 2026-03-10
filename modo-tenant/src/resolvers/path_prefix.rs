@@ -110,4 +110,82 @@ mod tests {
             .unwrap();
         assert_eq!(result, None);
     }
+
+    #[tokio::test]
+    async fn extracts_first_segment_from_multi_segment_path() {
+        let resolver =
+            PathPrefixResolver::new(|slug| async move { Ok(Some(TestTenant { id: slug })) });
+        let parts = Request::builder()
+            .uri("/org1/users/123/edit")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
+        let result = crate::TenantResolver::resolve(&resolver, &parts)
+            .await
+            .unwrap();
+        assert_eq!(
+            result,
+            Some(TestTenant {
+                id: "org1".to_string()
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn extracts_segment_with_trailing_slash() {
+        let resolver =
+            PathPrefixResolver::new(|slug| async move { Ok(Some(TestTenant { id: slug })) });
+        let parts = Request::builder()
+            .uri("/acme/")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
+        let result = crate::TenantResolver::resolve(&resolver, &parts)
+            .await
+            .unwrap();
+        assert_eq!(
+            result,
+            Some(TestTenant {
+                id: "acme".to_string()
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn extracts_single_segment_without_trailing_slash() {
+        let resolver =
+            PathPrefixResolver::new(|slug| async move { Ok(Some(TestTenant { id: slug })) });
+        let parts = Request::builder()
+            .uri("/acme")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
+        let result = crate::TenantResolver::resolve(&resolver, &parts)
+            .await
+            .unwrap();
+        assert_eq!(
+            result,
+            Some(TestTenant {
+                id: "acme".to_string()
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn propagates_lookup_error() {
+        let resolver = PathPrefixResolver::new(|_slug| async move {
+            Err::<Option<TestTenant>, _>(modo::Error::internal("db connection lost"))
+        });
+        let parts = Request::builder()
+            .uri("/acme/dashboard")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
+        let result = crate::TenantResolver::resolve(&resolver, &parts).await;
+        assert!(result.is_err());
+    }
 }

@@ -1,3 +1,4 @@
+use crate::cache::ResolvedUser;
 use crate::provider::UserProviderService;
 use modo::app::AppState;
 use modo::axum::extract::FromRequestParts;
@@ -5,6 +6,48 @@ use modo::axum::http::request::Parts;
 use modo::{Error, HttpError};
 use modo_session::SessionManager;
 use std::ops::Deref;
+use std::sync::Arc;
+
+/// Resolve the authenticated user, checking the extension cache first.
+///
+/// Returns `Ok(None)` when no session or user exists.
+/// Returns `Err` for infrastructure failures (missing middleware/service, DB errors).
+async fn resolve_user<U: Clone + Send + Sync + 'static>(
+    parts: &mut Parts,
+    state: &AppState,
+) -> Result<Option<U>, Error> {
+    // Fast path: user already resolved by UserContextLayer or a prior extractor
+    if let Some(cached) = parts.extensions.get::<ResolvedUser<U>>() {
+        return Ok(Some((*cached.0).clone()));
+    }
+
+    let session = SessionManager::from_request_parts(parts, state)
+        .await
+        .map_err(|_| Error::internal("Auth requires session middleware"))?;
+
+    let user_id = match session.user_id().await {
+        Some(id) => id,
+        None => return Ok(None),
+    };
+
+    let provider = state
+        .services
+        .get::<UserProviderService<U>>()
+        .ok_or_else(|| {
+            Error::internal(format!(
+                "UserProviderService<{}> not registered",
+                std::any::type_name::<U>()
+            ))
+        })?;
+
+    let user = provider.find_by_id(&user_id).await?;
+
+    if let Some(ref u) = user {
+        parts.extensions.insert(ResolvedUser(Arc::new(u.clone())));
+    }
+
+    Ok(user)
+}
 
 /// Extractor that requires an authenticated user.
 ///
@@ -28,34 +71,9 @@ impl<U: Clone + Send + Sync + 'static> FromRequestParts<AppState> for Auth<U> {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        // 1. Extract SessionManager from request extensions
-        let session = SessionManager::from_request_parts(parts, state)
-            .await
-            .map_err(|_| Error::internal("Auth<U> requires session middleware"))?;
-
-        // 2. Get user_id from session
-        let user_id = session
-            .user_id()
-            .await
-            .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
-
-        // 3. Look up UserProviderService<U> in service registry
-        let provider = state
-            .services
-            .get::<UserProviderService<U>>()
-            .ok_or_else(|| {
-                Error::internal(format!(
-                    "UserProviderService<{}> not registered",
-                    std::any::type_name::<U>()
-                ))
-            })?;
-
-        // 4. Load user — None means 401, Err means 500
-        let user = provider
-            .find_by_id(&user_id)
+        let user = resolve_user::<U>(parts, state)
             .await?
             .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
-
         Ok(Auth(user))
     }
 }
@@ -83,31 +101,7 @@ impl<U: Clone + Send + Sync + 'static> FromRequestParts<AppState> for OptionalAu
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        // 1. Extract SessionManager — missing middleware is still a 500
-        let session = SessionManager::from_request_parts(parts, state)
-            .await
-            .map_err(|_| Error::internal("OptionalAuth<U> requires session middleware"))?;
-
-        // 2. Get user_id — no session means None (not an error)
-        let user_id = match session.user_id().await {
-            Some(id) => id,
-            None => return Ok(OptionalAuth(None)),
-        };
-
-        // 3. Look up provider — missing provider is still a 500
-        let provider = state
-            .services
-            .get::<UserProviderService<U>>()
-            .ok_or_else(|| {
-                Error::internal(format!(
-                    "UserProviderService<{}> not registered",
-                    std::any::type_name::<U>()
-                ))
-            })?;
-
-        // 4. Load user — Err propagates as 500, None returns OptionalAuth(None)
-        let user = provider.find_by_id(&user_id).await?;
-
+        let user = resolve_user::<U>(parts, state).await?;
         Ok(OptionalAuth(user))
     }
 }

@@ -80,12 +80,8 @@ fn test_validate_rejects_zero_poll_interval() {
         poll_interval_secs: 0,
         ..Default::default()
     };
-    assert!(
-        config
-            .validate()
-            .unwrap_err()
-            .contains("poll_interval_secs")
-    );
+    let err = config.validate().unwrap_err().to_string();
+    assert!(err.contains("poll_interval_secs"));
 }
 
 #[test]
@@ -94,12 +90,8 @@ fn test_validate_rejects_zero_stale_threshold() {
         stale_threshold_secs: 0,
         ..Default::default()
     };
-    assert!(
-        config
-            .validate()
-            .unwrap_err()
-            .contains("stale_threshold_secs")
-    );
+    let err = config.validate().unwrap_err().to_string();
+    assert!(err.contains("stale_threshold_secs"));
 }
 
 #[test]
@@ -108,7 +100,8 @@ fn test_validate_rejects_empty_queues() {
         queues: vec![],
         ..Default::default()
     };
-    assert!(config.validate().unwrap_err().contains("queue"));
+    let err = config.validate().unwrap_err().to_string();
+    assert!(err.contains("queue"));
 }
 
 #[test]
@@ -120,7 +113,8 @@ fn test_validate_rejects_zero_concurrency() {
         }],
         ..Default::default()
     };
-    assert!(config.validate().unwrap_err().contains("concurrency"));
+    let err = config.validate().unwrap_err().to_string();
+    assert!(err.contains("concurrency"));
 }
 
 #[test]
@@ -132,12 +126,8 @@ fn test_validate_rejects_zero_cleanup_interval() {
         },
         ..Default::default()
     };
-    assert!(
-        config
-            .validate()
-            .unwrap_err()
-            .contains("cleanup.interval_secs")
-    );
+    let err = config.validate().unwrap_err().to_string();
+    assert!(err.contains("cleanup.interval_secs"));
 }
 
 #[test]

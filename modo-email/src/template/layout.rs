@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::Path;
 
 pub(crate) const DEFAULT_LAYOUT: &str = r#"<!DOCTYPE html>
@@ -80,19 +79,16 @@ impl LayoutEngine {
     pub fn render(
         &self,
         layout_name: &str,
-        context: &HashMap<String, serde_json::Value>,
+        context: &minijinja::Value,
     ) -> Result<String, modo::Error> {
         let template_name = format!("layouts/{layout_name}.html");
-        let builtin_name = format!("__builtin__/{layout_name}.html");
 
         let tmpl = self
             .env
             .get_template(&template_name)
-            .or_else(|_| self.env.get_template(&builtin_name))
             .map_err(|_| modo::Error::internal(format!("Layout not found: {layout_name}")))?;
 
-        let ctx = minijinja::Value::from_serialize(context);
-        tmpl.render(&ctx)
+        tmpl.render(context)
             .map_err(|e| modo::Error::internal(format!("Layout render error: {e}")))
     }
 
@@ -102,7 +98,7 @@ impl LayoutEngine {
         let mut env = minijinja::Environment::new();
         env.set_auto_escape_callback(|_| minijinja::AutoEscape::None);
         env.add_template_owned(
-            "__builtin__/default.html".to_string(),
+            "layouts/default.html".to_string(),
             DEFAULT_LAYOUT.to_string(),
         )
         .expect("built-in layout is valid");
@@ -118,9 +114,10 @@ mod tests {
     #[test]
     fn render_with_builtin_layout() {
         let engine = LayoutEngine::builtin_only();
-        let mut ctx = HashMap::new();
-        ctx.insert("content".to_string(), serde_json::json!("<p>Hello</p>"));
-        ctx.insert("subject".to_string(), serde_json::json!("Test"));
+        let ctx = minijinja::context! {
+            content => "<p>Hello</p>",
+            subject => "Test",
+        };
 
         let html = engine.render("default", &ctx).unwrap();
         assert!(html.contains("<p>Hello</p>"));
@@ -140,8 +137,9 @@ mod tests {
         .unwrap();
 
         let engine = LayoutEngine::new(dir.path().to_str().unwrap());
-        let mut ctx = HashMap::new();
-        ctx.insert("content".to_string(), serde_json::json!("<p>Hi</p>"));
+        let ctx = minijinja::context! {
+            content => "<p>Hi</p>",
+        };
 
         let html = engine.render("default", &ctx).unwrap();
         assert!(html.contains("CUSTOM: <p>Hi</p>"));
@@ -150,8 +148,44 @@ mod tests {
     #[test]
     fn missing_layout_errors() {
         let engine = LayoutEngine::builtin_only();
-        let ctx = HashMap::new();
+        let ctx = minijinja::context! {};
         let result = engine.render("nonexistent", &ctx);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn empty_layout_name() {
+        let engine = LayoutEngine::builtin_only();
+        let ctx = minijinja::context! {};
+        let result = engine.render("", &ctx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn missing_optional_context_vars() {
+        let engine = LayoutEngine::builtin_only();
+        let ctx = minijinja::context! {
+            content => "<p>Hello</p>",
+            subject => "Test",
+        };
+        // No logo_url or footer_text — should render without error
+        let html = engine.render("default", &ctx).unwrap();
+        assert!(html.contains("<p>Hello</p>"));
+        assert!(html.contains("Test"));
+        // logo_url block should be skipped ({% if logo_url %} is falsy)
+        assert!(!html.contains("<img"));
+    }
+
+    #[test]
+    fn context_with_html_in_content() {
+        let engine = LayoutEngine::builtin_only();
+        let ctx = minijinja::context! {
+            content => "<h1>Title</h1><p>Body &amp; more</p>",
+            subject => "Test",
+        };
+        let html = engine.render("default", &ctx).unwrap();
+        // Auto-escape is disabled, so HTML should be rendered verbatim
+        assert!(html.contains("<h1>Title</h1>"));
+        assert!(html.contains("<p>Body &amp; more</p>"));
     }
 }

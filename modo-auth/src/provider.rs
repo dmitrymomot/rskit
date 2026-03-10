@@ -51,6 +51,12 @@ impl<U: Clone + Send + Sync + 'static> Clone for UserProviderService<U> {
     }
 }
 
+impl<U: Clone + Send + Sync + 'static> std::fmt::Debug for UserProviderService<U> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UserProviderService<{}>", std::any::type_name::<U>())
+    }
+}
+
 impl<U: Clone + Send + Sync + 'static> UserProviderService<U> {
     /// Wrap a `UserProvider` implementation for registration in the service registry.
     pub fn new<P: UserProvider<User = U>>(provider: P) -> Self {

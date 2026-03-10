@@ -1,4 +1,5 @@
 use crate::types::JobState;
+use modo::Error;
 use serde::Deserialize;
 
 /// Top-level jobs configuration, deserialized from YAML.
@@ -20,23 +21,26 @@ pub struct JobsConfig {
 }
 
 impl JobsConfig {
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), Error> {
         if self.poll_interval_secs == 0 {
-            return Err("poll_interval_secs must be > 0".into());
+            return Err(Error::internal("poll_interval_secs must be > 0"));
         }
         if self.stale_threshold_secs == 0 {
-            return Err("stale_threshold_secs must be > 0".into());
+            return Err(Error::internal("stale_threshold_secs must be > 0"));
         }
         if self.queues.is_empty() {
-            return Err("at least one queue must be configured".into());
+            return Err(Error::internal("at least one queue must be configured"));
         }
         for q in &self.queues {
             if q.concurrency == 0 {
-                return Err(format!("queue '{}': concurrency must be > 0", q.name));
+                return Err(Error::internal(format!(
+                    "queue '{}': concurrency must be > 0",
+                    q.name
+                )));
             }
         }
         if self.cleanup.interval_secs == 0 {
-            return Err("cleanup.interval_secs must be > 0".into());
+            return Err(Error::internal("cleanup.interval_secs must be > 0"));
         }
         Ok(())
     }

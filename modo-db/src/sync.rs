@@ -15,32 +15,32 @@ use tracing::info;
 pub async fn sync_and_migrate(db: &DbPool) -> Result<(), modo::Error> {
     let conn = db.connection();
 
-    // 1. Bootstrap _modo_migrations
+    // 1. Bootstrap _modo_migrations (BIGINT + CURRENT_TIMESTAMP work on both SQLite and Postgres)
     conn.execute_unprepared(
         "CREATE TABLE IF NOT EXISTS _modo_migrations (\
-            version INTEGER PRIMARY KEY, \
+            version BIGINT PRIMARY KEY, \
             description TEXT NOT NULL, \
-            executed_at TEXT NOT NULL DEFAULT (datetime('now'))\
+            executed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\
         )",
     )
     .await
     .map_err(|e| modo::Error::internal(format!("Failed to bootstrap migrations table: {e}")))?;
 
-    // 2. Collect and register all entities
+    // 2. Collect all entities in a single pass, partitioned by framework vs user
+    let (framework, user): (Vec<_>, Vec<_>) = inventory::iter::<EntityRegistration>
+        .into_iter()
+        .partition(|r| r.is_framework);
+
     let backend = conn.get_database_backend();
     let schema = Schema::new(backend);
     let mut builder = schema.builder();
 
-    // Framework entities first, then user entities
-    for reg in inventory::iter::<EntityRegistration> {
-        if reg.is_framework {
-            builder = (reg.register_fn)(builder);
-        }
+    // Register framework entities first, then user entities
+    for reg in &framework {
+        builder = (reg.register_fn)(builder);
     }
-    for reg in inventory::iter::<EntityRegistration> {
-        if !reg.is_framework {
-            builder = (reg.register_fn)(builder);
-        }
+    for reg in &user {
+        builder = (reg.register_fn)(builder);
     }
 
     // 3. Sync (addition-only — SeaORM handles topo sort)
@@ -51,7 +51,7 @@ pub async fn sync_and_migrate(db: &DbPool) -> Result<(), modo::Error> {
     info!("Schema sync complete");
 
     // 4. Run extra SQL (composite indices, partial unique indices, etc.)
-    for reg in inventory::iter::<EntityRegistration> {
+    for reg in framework.iter().chain(user.iter()) {
         for sql in reg.extra_sql {
             if let Err(e) = conn.execute_unprepared(sql).await {
                 tracing::error!(

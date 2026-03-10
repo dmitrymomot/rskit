@@ -1,4 +1,4 @@
-use crate::middleware::{MiddlewareList, gen_handler_middleware_wrapper};
+use crate::middleware::{MiddlewareList, build_middleware_vec, gen_handler_middleware_wrapper};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{FnArg, Ident, ItemFn, LitStr, Pat, Result, Token, Type, parse2};
@@ -111,20 +111,17 @@ fn transform_path_params(
         }
     };
 
-    // Remove matched params from function signature (in reverse order to preserve indices)
-    let mut indices: Vec<usize> = matched.iter().map(|m| m.sig_index).collect();
-    indices.sort_unstable();
-    indices.reverse();
-    for idx in indices {
-        func.sig.inputs = func
-            .sig
-            .inputs
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| *i != idx)
-            .map(|(_, arg)| arg.clone())
-            .collect();
-    }
+    // Remove matched params from function signature in a single pass
+    let remove_indices: std::collections::HashSet<usize> =
+        matched.iter().map(|m| m.sig_index).collect();
+    func.sig.inputs = func
+        .sig
+        .inputs
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !remove_indices.contains(i))
+        .map(|(_, arg)| arg.clone())
+        .collect();
 
     // Build destructuring pattern with only declared fields + `..`
     let field_idents: Vec<&Ident> = matched.iter().map(|m| &m.ident).collect();
@@ -158,31 +155,41 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     }
 
     let method_str = method_ident.to_string().to_uppercase();
-    let modo_method = match method_str.as_str() {
-        "GET" => quote! { modo::router::Method::GET },
-        "POST" => quote! { modo::router::Method::POST },
-        "PUT" => quote! { modo::router::Method::PUT },
-        "PATCH" => quote! { modo::router::Method::PATCH },
-        "DELETE" => quote! { modo::router::Method::DELETE },
-        "HEAD" => quote! { modo::router::Method::HEAD },
-        "OPTIONS" => quote! { modo::router::Method::OPTIONS },
+    let (modo_method, axum_method) = match method_str.as_str() {
+        "GET" => (
+            quote! { modo::router::Method::GET },
+            quote! { modo::axum::routing::get },
+        ),
+        "POST" => (
+            quote! { modo::router::Method::POST },
+            quote! { modo::axum::routing::post },
+        ),
+        "PUT" => (
+            quote! { modo::router::Method::PUT },
+            quote! { modo::axum::routing::put },
+        ),
+        "PATCH" => (
+            quote! { modo::router::Method::PATCH },
+            quote! { modo::axum::routing::patch },
+        ),
+        "DELETE" => (
+            quote! { modo::router::Method::DELETE },
+            quote! { modo::axum::routing::delete },
+        ),
+        "HEAD" => (
+            quote! { modo::router::Method::HEAD },
+            quote! { modo::axum::routing::head },
+        ),
+        "OPTIONS" => (
+            quote! { modo::router::Method::OPTIONS },
+            quote! { modo::axum::routing::options },
+        ),
         _ => {
             return Err(syn::Error::new_spanned(
                 method_ident,
                 format!("unsupported HTTP method: {method_str}"),
             ));
         }
-    };
-
-    let axum_method = match method_str.as_str() {
-        "GET" => quote! { modo::axum::routing::get },
-        "POST" => quote! { modo::axum::routing::post },
-        "PUT" => quote! { modo::axum::routing::put },
-        "PATCH" => quote! { modo::axum::routing::patch },
-        "DELETE" => quote! { modo::axum::routing::delete },
-        "HEAD" => quote! { modo::axum::routing::head },
-        "OPTIONS" => quote! { modo::axum::routing::options },
-        _ => unreachable!(),
     };
 
     // Extract and remove #[middleware(...)] attributes from the function
@@ -210,11 +217,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         wrapper_defs.push(def);
     }
 
-    let middleware_vec = if wrapper_names.is_empty() {
-        quote! { vec![] }
-    } else {
-        quote! { vec![#(#wrapper_names as modo::router::MiddlewareFn),*] }
-    };
+    let middleware_vec =
+        build_middleware_vec(&wrapper_names, quote! { modo::router::MiddlewareFn });
 
     let module_expr = match &args.module {
         Some(m) => quote! { Some(#m) },

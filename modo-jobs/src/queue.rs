@@ -3,21 +3,20 @@ use crate::handler::JobRegistration;
 use crate::types::{JobId, JobState};
 use chrono::{DateTime, Utc};
 use modo_db::sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
-use std::sync::Arc;
 
 /// Handle for enqueuing and cancelling jobs.
 ///
 /// Implements `FromRequestParts` for use as an axum extractor.
 #[derive(Clone)]
 pub struct JobQueue {
-    pub(crate) db: Arc<modo_db::sea_orm::DatabaseConnection>,
+    pub(crate) db: modo_db::sea_orm::DatabaseConnection,
     pub(crate) max_payload_bytes: Option<usize>,
 }
 
 impl JobQueue {
     pub fn new(db: &modo_db::pool::DbPool, max_payload_bytes: Option<usize>) -> Self {
         Self {
-            db: Arc::new(db.connection().clone()),
+            db: db.connection().clone(),
             max_payload_bytes,
         }
     }
@@ -72,7 +71,7 @@ impl JobQueue {
                     job::Column::UpdatedAt,
                     modo_db::sea_orm::sea_query::Expr::value(Utc::now()),
                 ),
-            self.db.as_ref(),
+            &self.db,
         )
         .await
         .map_err(|e| modo::Error::internal(format!("Failed to cancel job: {e}")))?;
@@ -114,7 +113,7 @@ impl JobQueue {
         };
 
         model
-            .insert(self.db.as_ref())
+            .insert(&self.db)
             .await
             .map_err(|e| modo::Error::internal(format!("Failed to insert job: {e}")))?;
 

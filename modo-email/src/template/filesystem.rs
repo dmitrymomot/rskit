@@ -124,4 +124,60 @@ mod tests {
         let result = provider.get("missing", "");
         assert!(result.is_err());
     }
+
+    #[test]
+    fn path_traversal_in_name_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider = FilesystemProvider::new(dir.path().to_str().unwrap());
+        let result = provider.get("../secret", "");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn path_traversal_in_locale_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider = FilesystemProvider::new(dir.path().to_str().unwrap());
+        let result = provider.get("welcome", "../../etc");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn backslash_traversal_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider = FilesystemProvider::new(dir.path().to_str().unwrap());
+        let result = provider.get("..\\secret", "");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn forward_slash_in_name_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider = FilesystemProvider::new(dir.path().to_str().unwrap());
+        let result = provider.get("sub/template", "");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn empty_locale_uses_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path();
+        fs::write(
+            path.join("welcome.md"),
+            "---\nsubject: \"Root\"\n---\n\nRoot body",
+        )
+        .unwrap();
+
+        let provider = FilesystemProvider::new(path.to_str().unwrap());
+        let tpl = provider.get("welcome", "").unwrap();
+        assert_eq!(tpl.subject, "Root");
+    }
+
+    #[test]
+    fn name_with_md_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider = FilesystemProvider::new(dir.path().to_str().unwrap());
+        // "welcome.md" → tries "welcome.md.md" → not found
+        let result = provider.get("welcome.md", "");
+        assert!(result.is_err());
+    }
 }

@@ -7,9 +7,9 @@ use syn::{FnArg, Ident, ItemFn, Lit, LitStr, Pat, Result, Token, Type, parse2};
 // ---------------------------------------------------------------------------
 
 struct JobArgs {
-    queue: String,
-    priority: i32,
-    max_attempts: u32,
+    queue: Option<String>,
+    priority: Option<i32>,
+    max_attempts: Option<u32>,
     timeout: String,
     cron: Option<String>,
 }
@@ -17,9 +17,9 @@ struct JobArgs {
 impl Default for JobArgs {
     fn default() -> Self {
         Self {
-            queue: "default".to_string(),
-            priority: 0,
-            max_attempts: 3,
+            queue: None,
+            priority: None,
+            max_attempts: None,
             timeout: "5m".to_string(),
             cron: None,
         }
@@ -29,50 +29,37 @@ impl Default for JobArgs {
 impl syn::parse::Parse for JobArgs {
     fn parse(input: syn::parse::ParseStream) -> Result<Self> {
         let mut args = JobArgs::default();
-        let mut has_queue = false;
-        let mut has_priority = false;
-        let mut has_max_attempts = false;
 
         while !input.is_empty() {
             let ident: Ident = input.parse()?;
             input.parse::<Token![=]>()?;
 
-            match ident.to_string().as_str() {
-                "queue" => {
-                    let val: LitStr = input.parse()?;
-                    args.queue = val.value();
-                    has_queue = true;
-                }
-                "priority" => {
-                    let val: Lit = input.parse()?;
-                    args.priority = match val {
-                        Lit::Int(i) => i.base10_parse()?,
-                        _ => return Err(syn::Error::new_spanned(val, "expected integer")),
-                    };
-                    has_priority = true;
-                }
-                "max_attempts" => {
-                    let val: Lit = input.parse()?;
-                    args.max_attempts = match val {
-                        Lit::Int(i) => i.base10_parse()?,
-                        _ => return Err(syn::Error::new_spanned(val, "expected integer")),
-                    };
-                    has_max_attempts = true;
-                }
-                "timeout" => {
-                    let val: LitStr = input.parse()?;
-                    args.timeout = val.value();
-                }
-                "cron" => {
-                    let val: LitStr = input.parse()?;
-                    args.cron = Some(val.value());
-                }
-                other => {
-                    return Err(syn::Error::new_spanned(
-                        ident,
-                        format!("unknown job attribute: {other}"),
-                    ));
-                }
+            if ident == "queue" {
+                let val: LitStr = input.parse()?;
+                args.queue = Some(val.value());
+            } else if ident == "priority" {
+                let val: Lit = input.parse()?;
+                args.priority = Some(match val {
+                    Lit::Int(i) => i.base10_parse()?,
+                    _ => return Err(syn::Error::new_spanned(val, "expected integer")),
+                });
+            } else if ident == "max_attempts" {
+                let val: Lit = input.parse()?;
+                args.max_attempts = Some(match val {
+                    Lit::Int(i) => i.base10_parse()?,
+                    _ => return Err(syn::Error::new_spanned(val, "expected integer")),
+                });
+            } else if ident == "timeout" {
+                let val: LitStr = input.parse()?;
+                args.timeout = val.value();
+            } else if ident == "cron" {
+                let val: LitStr = input.parse()?;
+                args.cron = Some(val.value());
+            } else {
+                return Err(syn::Error::new_spanned(
+                    &ident,
+                    format!("unknown job attribute: {ident}"),
+                ));
             }
 
             if input.peek(Token![,]) {
@@ -81,7 +68,9 @@ impl syn::parse::Parse for JobArgs {
         }
 
         // Mutual exclusion: cron + queue/priority/max_attempts
-        if args.cron.is_some() && (has_queue || has_priority || has_max_attempts) {
+        if args.cron.is_some()
+            && (args.queue.is_some() || args.priority.is_some() || args.max_attempts.is_some())
+        {
             return Err(syn::Error::new(
                 proc_macro2::Span::call_site(),
                 "cron jobs cannot have queue, priority, or max_attempts attributes",
@@ -111,33 +100,24 @@ fn to_pascal_case(s: &str) -> String {
 
 fn parse_duration_secs(s: &str) -> Result<u64> {
     let s = s.trim();
-    if let Some(num) = s.strip_suffix('s') {
-        num.parse::<u64>().map_err(|_| {
-            syn::Error::new(
-                proc_macro2::Span::call_site(),
-                format!("invalid timeout: {s}"),
-            )
-        })
-    } else if let Some(num) = s.strip_suffix('m') {
-        num.parse::<u64>().map(|n| n * 60).map_err(|_| {
-            syn::Error::new(
-                proc_macro2::Span::call_site(),
-                format!("invalid timeout: {s}"),
-            )
-        })
-    } else if let Some(num) = s.strip_suffix('h') {
-        num.parse::<u64>().map(|n| n * 3600).map_err(|_| {
-            syn::Error::new(
-                proc_macro2::Span::call_site(),
-                format!("invalid timeout: {s}"),
-            )
-        })
+    let (num_str, mult) = if let Some(n) = s.strip_suffix('h') {
+        (n, 3600u64)
+    } else if let Some(n) = s.strip_suffix('m') {
+        (n, 60)
+    } else if let Some(n) = s.strip_suffix('s') {
+        (n, 1)
     } else {
-        Err(syn::Error::new(
+        return Err(syn::Error::new(
             proc_macro2::Span::call_site(),
             format!("invalid timeout format: {s}. Use e.g. '30s', '5m', '1h'"),
-        ))
-    }
+        ));
+    };
+    num_str.parse::<u64>().map(|n| n * mult).map_err(|_| {
+        syn::Error::new(
+            proc_macro2::Span::call_site(),
+            format!("invalid timeout: {s}"),
+        )
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -199,16 +179,15 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         ));
     }
 
-    let func_name = func.sig.ident.clone();
+    let func_name = &func.sig.ident;
     let func_name_str = func_name.to_string();
     let impl_name = format_ident!("__job_{}_impl", func_name);
     let struct_name = format_ident!("{}Job", to_pascal_case(&func_name_str));
 
     let timeout_secs = parse_duration_secs(&args.timeout)?;
-    let queue = &args.queue;
-    let priority = args.priority;
-    let max_attempts = args.max_attempts;
-    let is_cron = args.cron.is_some();
+    let queue = args.queue.as_deref().unwrap_or("default");
+    let priority = args.priority.unwrap_or(0);
+    let max_attempts = args.max_attempts.unwrap_or(3);
 
     let cron_expr = match &args.cron {
         Some(expr) => quote! { Some(#expr) },
@@ -266,9 +245,13 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     impl_func.sig.ident = impl_name.clone();
     impl_func.vis = syn::Visibility::Inherited;
 
-    // Generate handler impl
+    // Generate handler impl with JOB_NAME const
     let handler_impl = quote! {
         pub struct #struct_name;
+
+        impl #struct_name {
+            pub const JOB_NAME: &str = #func_name_str;
+        }
 
         impl modo_jobs::JobHandler for #struct_name {
             async fn run(&self, ctx: modo_jobs::JobContext) -> Result<(), modo_jobs::modo::error::Error> {
@@ -279,42 +262,26 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     };
 
     // Generate enqueue methods (only for non-cron jobs)
-    let enqueue_methods = if !is_cron {
-        if let Some(ref payload_ty) = payload_type {
-            quote! {
-                impl #struct_name {
-                    pub async fn enqueue(
-                        queue: &modo_jobs::JobQueue,
-                        payload: &#payload_ty,
-                    ) -> Result<modo_jobs::JobId, modo_jobs::modo::error::Error> {
-                        queue.enqueue(#func_name_str, payload).await
-                    }
-
-                    pub async fn enqueue_at(
-                        queue: &modo_jobs::JobQueue,
-                        payload: &#payload_ty,
-                        run_at: modo_jobs::chrono::DateTime<modo_jobs::chrono::Utc>,
-                    ) -> Result<modo_jobs::JobId, modo_jobs::modo::error::Error> {
-                        queue.enqueue_at(#func_name_str, payload, run_at).await
-                    }
+    let enqueue_methods = if args.cron.is_none() {
+        let (payload_param, payload_arg) = match &payload_type {
+            Some(ty) => (quote! { payload: &#ty, }, quote! { payload }),
+            None => (quote! {}, quote! { &() }),
+        };
+        quote! {
+            impl #struct_name {
+                pub async fn enqueue(
+                    queue: &modo_jobs::JobQueue,
+                    #payload_param
+                ) -> Result<modo_jobs::JobId, modo_jobs::modo::error::Error> {
+                    queue.enqueue(Self::JOB_NAME, #payload_arg).await
                 }
-            }
-        } else {
-            // No-payload job
-            quote! {
-                impl #struct_name {
-                    pub async fn enqueue(
-                        queue: &modo_jobs::JobQueue,
-                    ) -> Result<modo_jobs::JobId, modo_jobs::modo::error::Error> {
-                        queue.enqueue(#func_name_str, &()).await
-                    }
 
-                    pub async fn enqueue_at(
-                        queue: &modo_jobs::JobQueue,
-                        run_at: modo_jobs::chrono::DateTime<modo_jobs::chrono::Utc>,
-                    ) -> Result<modo_jobs::JobId, modo_jobs::modo::error::Error> {
-                        queue.enqueue_at(#func_name_str, &(), run_at).await
-                    }
+                pub async fn enqueue_at(
+                    queue: &modo_jobs::JobQueue,
+                    #payload_param
+                    run_at: modo_jobs::chrono::DateTime<modo_jobs::chrono::Utc>,
+                ) -> Result<modo_jobs::JobId, modo_jobs::modo::error::Error> {
+                    queue.enqueue_at(Self::JOB_NAME, #payload_arg, run_at).await
                 }
             }
         }
@@ -326,7 +293,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     let registration = quote! {
         modo_jobs::inventory::submit! {
             modo_jobs::JobRegistration {
-                name: #func_name_str,
+                name: #struct_name::JOB_NAME,
                 queue: #queue,
                 priority: #priority,
                 max_attempts: #max_attempts,

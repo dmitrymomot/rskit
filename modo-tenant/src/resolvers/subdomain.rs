@@ -129,4 +129,39 @@ mod tests {
         let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
         assert_eq!(result, None);
     }
+
+    #[tokio::test]
+    async fn extracts_multi_level_subdomain() {
+        let resolver = SubdomainResolver::new("myapp.com", |slug| async move {
+            Ok(Some(TestTenant { id: slug }))
+        });
+        let p = parts("a.b.myapp.com");
+        let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
+        assert_eq!(
+            result,
+            Some(TestTenant {
+                id: "a.b".to_string()
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn returns_none_for_different_base_domain() {
+        let resolver = SubdomainResolver::new("myapp.com", |slug| async move {
+            Ok(Some(TestTenant { id: slug }))
+        });
+        let p = parts("acme.otherdomain.com");
+        let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn propagates_lookup_error() {
+        let resolver = SubdomainResolver::new("myapp.com", |_slug| async move {
+            Err::<Option<TestTenant>, _>(modo::Error::internal("db error"))
+        });
+        let p = parts("acme.myapp.com");
+        let result = crate::TenantResolver::resolve(&resolver, &p).await;
+        assert!(result.is_err());
+    }
 }

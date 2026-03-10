@@ -78,6 +78,7 @@ impl PasswordHasher {
     /// Note: uses the params embedded in the hash, not `self.params`.
     /// Runs on a blocking thread to avoid stalling the Tokio runtime.
     pub async fn verify_password(&self, password: &str, hash: &str) -> Result<bool, modo::Error> {
+        let params = self.params.clone();
         let password = password.to_owned();
         let hash = hash.to_owned();
 
@@ -85,7 +86,9 @@ impl PasswordHasher {
             let parsed = PasswordHash::new(&hash)
                 .map_err(|e| modo::Error::internal(format!("invalid password hash: {e}")))?;
 
-            match Argon2::new(Algorithm::Argon2id, Version::V0x13, Params::default())
+            // Note: argon2's verify_password uses params from the parsed hash,
+            // not from the Argon2 instance — but we pass self.params for consistency.
+            match Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
                 .verify_password(password.as_bytes(), &parsed)
             {
                 Ok(()) => Ok(true),

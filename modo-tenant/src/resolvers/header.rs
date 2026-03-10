@@ -37,8 +37,9 @@ where
             .headers
             .get(&self.header_name)
             .and_then(|v| v.to_str().ok())
+            .map(str::trim)
         {
-            Some(v) if !v.trim().is_empty() => v.trim().to_string(),
+            Some(v) if !v.is_empty() => v.to_string(),
             _ => return Ok(None),
         };
         (self.lookup)(value).await

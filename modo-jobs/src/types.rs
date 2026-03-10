@@ -17,9 +17,27 @@ impl JobId {
         &self.0
     }
 
-    /// Create a `JobId` from an existing raw string (e.g. from DB).
-    pub fn from_raw(s: impl Into<String>) -> Self {
-        Self(s.into())
+    /// Consume the ID, returning the inner `String`.
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for JobId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for JobId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+impl AsRef<str> for JobId {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 

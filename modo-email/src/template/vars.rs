@@ -92,4 +92,83 @@ mod tests {
         let ctx = HashMap::new();
         assert_eq!(substitute("", &ctx), "");
     }
+
+    #[test]
+    fn no_placeholders_passthrough() {
+        let ctx = HashMap::new();
+        let result = substitute("Plain text with no braces at all.", &ctx);
+        assert_eq!(result, "Plain text with no braces at all.");
+    }
+
+    #[test]
+    fn unclosed_placeholder_at_eof() {
+        let ctx = HashMap::new();
+        let result = substitute("Hello {{name", &ctx);
+        assert_eq!(result, "Hello {{name");
+    }
+
+    #[test]
+    fn unclosed_placeholder_mid_text() {
+        let ctx = HashMap::new();
+        let result = substitute("Hello {{name and more", &ctx);
+        assert_eq!(result, "Hello {{name and more");
+    }
+
+    #[test]
+    fn adjacent_placeholders() {
+        let mut ctx = HashMap::new();
+        ctx.insert("a".to_string(), json!("X"));
+        ctx.insert("b".to_string(), json!("Y"));
+        let result = substitute("{{a}}{{b}}", &ctx);
+        assert_eq!(result, "XY");
+    }
+
+    #[test]
+    fn nested_braces() {
+        let ctx = HashMap::new();
+        let result = substitute("{{{{name}}}}", &ctx);
+        // First {{ matches first }} → key "{{name", not found → "{{{{name}}"
+        // Remaining }} are literal
+        assert_eq!(result, "{{{{name}}}}");
+    }
+
+    #[test]
+    fn whitespace_only_key() {
+        let ctx = HashMap::new();
+        let result = substitute("{{ }}", &ctx);
+        // Key trims to "", lookup fails → left as {{}}
+        assert_eq!(result, "{{}}");
+    }
+
+    #[test]
+    fn null_json_value() {
+        let mut ctx = HashMap::new();
+        ctx.insert("val".to_string(), json!(null));
+        let result = substitute("Got: {{val}}", &ctx);
+        assert_eq!(result, "Got: null");
+    }
+
+    #[test]
+    fn object_json_value() {
+        let mut ctx = HashMap::new();
+        ctx.insert("obj".to_string(), json!({"key": "value"}));
+        let result = substitute("{{obj}}", &ctx);
+        assert_eq!(result, r#"{"key":"value"}"#);
+    }
+
+    #[test]
+    fn array_json_value() {
+        let mut ctx = HashMap::new();
+        ctx.insert("arr".to_string(), json!([1, 2, 3]));
+        let result = substitute("{{arr}}", &ctx);
+        assert_eq!(result, "[1,2,3]");
+    }
+
+    #[test]
+    fn unicode_in_keys_and_values() {
+        let mut ctx = HashMap::new();
+        ctx.insert("名前".to_string(), json!("太郎"));
+        let result = substitute("Hello {{名前}}", &ctx);
+        assert_eq!(result, "Hello 太郎");
+    }
 }

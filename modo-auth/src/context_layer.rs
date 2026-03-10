@@ -1,33 +1,15 @@
-#[cfg(feature = "templates")]
+use crate::cache::ResolvedUser;
 use crate::provider::UserProviderService;
 
-#[cfg(feature = "templates")]
 use futures_util::future::BoxFuture;
-#[cfg(feature = "templates")]
 use modo::axum::http::Request;
-#[cfg(feature = "templates")]
 use modo::templates::TemplateContext;
-#[cfg(feature = "templates")]
 use std::sync::Arc;
-#[cfg(feature = "templates")]
 use std::task::{Context, Poll};
-#[cfg(feature = "templates")]
 use tower::{Layer, Service};
-
-/// Cached resolved user in request extensions.
-#[cfg(feature = "templates")]
-pub struct ResolvedUser<U>(pub Arc<U>);
-
-#[cfg(feature = "templates")]
-impl<U> Clone for ResolvedUser<U> {
-    fn clone(&self) -> Self {
-        Self(Arc::clone(&self.0))
-    }
-}
 
 /// Layer that injects the authenticated user into TemplateContext.
 /// Graceful: injects nothing if not authenticated.
-#[cfg(feature = "templates")]
 pub struct UserContextLayer<U>
 where
     U: Clone + Send + Sync + serde::Serialize + 'static,
@@ -35,7 +17,6 @@ where
     user_svc: UserProviderService<U>,
 }
 
-#[cfg(feature = "templates")]
 impl<U> Clone for UserContextLayer<U>
 where
     U: Clone + Send + Sync + serde::Serialize + 'static,
@@ -47,7 +28,6 @@ where
     }
 }
 
-#[cfg(feature = "templates")]
 impl<U> UserContextLayer<U>
 where
     U: Clone + Send + Sync + serde::Serialize + 'static,
@@ -57,7 +37,6 @@ where
     }
 }
 
-#[cfg(feature = "templates")]
 impl<S, U> Layer<S> for UserContextLayer<U>
 where
     U: Clone + Send + Sync + serde::Serialize + 'static,
@@ -72,7 +51,6 @@ where
     }
 }
 
-#[cfg(feature = "templates")]
 #[derive(Clone)]
 pub struct UserContextMiddleware<S, U>
 where
@@ -82,7 +60,6 @@ where
     user_svc: UserProviderService<U>,
 }
 
-#[cfg(feature = "templates")]
 impl<S, ReqBody, ResBody, U> Service<Request<ReqBody>> for UserContextMiddleware<S, U>
 where
     S: Service<Request<ReqBody>, Response = modo::axum::http::Response<ResBody>>

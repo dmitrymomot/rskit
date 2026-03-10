@@ -39,8 +39,6 @@ pub fn expand(input: proc_macro2::TokenStream) -> syn::Result<proc_macro2::Token
     let i18n = &input.i18n_expr;
     let key = &input.key;
 
-    let has_count = input.vars.iter().any(|(name, _)| name == "count");
-
     let var_pairs: Vec<proc_macro2::TokenStream> = input
         .vars
         .iter()
@@ -50,14 +48,7 @@ pub fn expand(input: proc_macro2::TokenStream) -> syn::Result<proc_macro2::Token
         })
         .collect();
 
-    if has_count {
-        let count_expr = input
-            .vars
-            .iter()
-            .find(|(name, _)| name == "count")
-            .map(|(_, expr)| expr)
-            .unwrap();
-
+    if let Some((_, count_expr)) = input.vars.iter().find(|(name, _)| name == "count") {
         Ok(quote! {
             #i18n.t_plural(#key, u64::try_from(#count_expr).unwrap_or(u64::MAX), &[#(#var_pairs),*])
         })

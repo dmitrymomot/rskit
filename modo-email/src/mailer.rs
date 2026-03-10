@@ -2,7 +2,6 @@ use crate::message::{MailMessage, SendEmail, SenderProfile};
 use crate::template::layout::LayoutEngine;
 use crate::template::{TemplateProvider, markdown, vars};
 use crate::transport::MailTransport;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 /// High-level email service that ties together template loading, variable
@@ -48,20 +47,16 @@ impl Mailer {
             .get("brand_color")
             .and_then(|v| v.as_str())
             .filter(|s| is_valid_hex_color(s))
-            .unwrap_or("#4F46E5");
+            .unwrap_or(markdown::DEFAULT_BUTTON_COLOR);
 
-        // Render Markdown body to HTML (with optional custom button color).
-        let html_body = markdown::render_markdown_with_color(&body, button_color);
-        let text = markdown::render_plain_text(&body);
+        // Render Markdown body to HTML and plain text in one pass.
+        let (html_body, text) = markdown::render(&body, button_color);
 
         // Wrap HTML body in a layout.
         let layout_name = template.layout.as_deref().unwrap_or("default");
-        let mut layout_ctx: HashMap<String, serde_json::Value> = email.context.clone();
-        layout_ctx.insert("content".to_string(), serde_json::Value::String(html_body));
-        layout_ctx.insert(
-            "subject".to_string(),
-            serde_json::Value::String(subject.clone()),
-        );
+        let base_ctx = minijinja::Value::from_serialize(&email.context);
+        let extra_ctx = minijinja::context! { content => html_body, subject => &subject };
+        let layout_ctx = minijinja::context! { ..base_ctx, ..extra_ctx };
         let html = self.layout_engine.render(layout_name, &layout_ctx)?;
 
         // Resolve sender (per-email override or default).
@@ -230,7 +225,7 @@ mod tests {
             .unwrap();
 
         // Should use default color, not the injection attempt
-        assert!(msg.html.contains("#4F46E5"));
+        assert!(msg.html.contains(markdown::DEFAULT_BUTTON_COLOR));
         assert!(!msg.html.contains("position:absolute"));
     }
 

@@ -43,15 +43,11 @@ pub async fn csrf_protection(
         config.validate()
     );
 
-    let arc_cookie_config = state.services.get::<CookieConfig>();
-    let default_cookie_config;
-    let cookie_config: &CookieConfig = match &arc_cookie_config {
-        Some(c) => c,
-        None => {
-            default_cookie_config = CookieConfig::default();
-            &default_cookie_config
-        }
-    };
+    let arc_cookie_config = state
+        .services
+        .get::<CookieConfig>()
+        .expect("CookieConfig must be registered (auto-registered by AppBuilder)");
+    let cookie_config: &CookieConfig = &arc_cookie_config;
 
     let key = state.server_config.secret_key.as_bytes();
     let method = request.method().clone();

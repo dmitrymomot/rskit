@@ -45,7 +45,7 @@ fn test_config() -> SessionConfig {
 #[tokio::test]
 async fn create_and_read_by_token() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, test_config());
+    let store = SessionStore::new(&db, test_config(), Default::default());
     let meta = test_meta();
 
     let (session, token) = store.create(&meta, "user1", None).await.unwrap();
@@ -60,7 +60,7 @@ async fn create_and_read_by_token() {
 #[tokio::test]
 async fn destroy_removes_session() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, test_config());
+    let store = SessionStore::new(&db, test_config(), Default::default());
     let meta = test_meta();
 
     let (session, token) = store.create(&meta, "user1", None).await.unwrap();
@@ -73,7 +73,7 @@ async fn destroy_removes_session() {
 #[tokio::test]
 async fn rotate_token_changes_hash() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, test_config());
+    let store = SessionStore::new(&db, test_config(), Default::default());
     let meta = test_meta();
 
     let (session, old_token) = store.create(&meta, "user1", None).await.unwrap();
@@ -90,7 +90,7 @@ async fn max_sessions_evicts_oldest() {
     let db = setup_db().await;
     let mut config = test_config();
     config.max_sessions_per_user = 2;
-    let store = SessionStore::new(&db, config);
+    let store = SessionStore::new(&db, config, Default::default());
     let meta = test_meta();
 
     let (s1, t1) = store.create(&meta, "user1", None).await.unwrap();
@@ -108,7 +108,7 @@ async fn max_sessions_evicts_oldest() {
 #[tokio::test]
 async fn list_for_user_returns_all_active() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, test_config());
+    let store = SessionStore::new(&db, test_config(), Default::default());
     let meta = test_meta();
 
     store.create(&meta, "user1", None).await.unwrap();
@@ -125,7 +125,7 @@ async fn list_for_user_returns_all_active() {
 #[tokio::test]
 async fn destroy_all_except_keeps_one() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, test_config());
+    let store = SessionStore::new(&db, test_config(), Default::default());
     let meta = test_meta();
 
     let (s1, _) = store.create(&meta, "user1", None).await.unwrap();
@@ -142,7 +142,7 @@ async fn destroy_all_except_keeps_one() {
 #[tokio::test]
 async fn update_data_roundtrip() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, test_config());
+    let store = SessionStore::new(&db, test_config(), Default::default());
     let meta = test_meta();
 
     let (session, _) = store.create(&meta, "user1", None).await.unwrap();
@@ -159,7 +159,7 @@ async fn cleanup_expired_removes_old() {
     let db = setup_db().await;
     let mut config = test_config();
     config.session_ttl_secs = 0;
-    let store = SessionStore::new(&db, config);
+    let store = SessionStore::new(&db, config, Default::default());
     let meta = test_meta();
 
     store.create(&meta, "user1", None).await.unwrap();

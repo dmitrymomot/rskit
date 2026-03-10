@@ -5,6 +5,7 @@ use chrono::Utc;
 use futures_util::future::BoxFuture;
 use http::{Request, Response};
 use modo::axum::extract::connect_info::ConnectInfo;
+use modo::cookies::{CookieOptions, build_cookie};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -86,7 +87,7 @@ where
         let mut inner = self.inner.clone();
 
         Box::pin(async move {
-            let config = store.config().clone();
+            let config = store.config();
             let cookie_name = &config.cookie_name;
 
             // Extract meta from request headers
@@ -161,21 +162,16 @@ where
             };
 
             let ttl_secs = config.session_ttl_secs;
-            let is_secure = cfg!(not(debug_assertions));
 
             match action {
                 SessionAction::Set(token) => {
-                    let cookie_val =
-                        build_set_cookie(cookie_name, &token.as_hex(), ttl_secs, is_secure);
-                    if let Ok(val) = cookie_val.parse() {
-                        response.headers_mut().append(http::header::SET_COOKIE, val);
-                    }
+                    let opts = CookieOptions::from_config(store.cookie_config()).max_age(ttl_secs);
+                    append_cookie_header(&mut response, cookie_name, &token.as_hex(), &opts);
                 }
                 SessionAction::Remove => {
-                    let cookie_val = build_remove_cookie(cookie_name);
-                    if let Ok(val) = cookie_val.parse() {
-                        response.headers_mut().append(http::header::SET_COOKIE, val);
-                    }
+                    // Max-Age=0 instructs the browser to delete the cookie
+                    let opts = CookieOptions::from_config(store.cookie_config()).max_age(0);
+                    append_cookie_header(&mut response, cookie_name, "", &opts);
                 }
                 SessionAction::None => {
                     if should_touch && let Some(ref session) = current_session {
@@ -186,20 +182,22 @@ where
                                 "Failed to touch session: {e}"
                             );
                         } else if let Some(ref token) = session_token {
-                            let cookie_val =
-                                build_set_cookie(cookie_name, &token.as_hex(), ttl_secs, is_secure);
-                            if let Ok(val) = cookie_val.parse() {
-                                response.headers_mut().append(http::header::SET_COOKIE, val);
-                            }
+                            let opts =
+                                CookieOptions::from_config(store.cookie_config()).max_age(ttl_secs);
+                            append_cookie_header(
+                                &mut response,
+                                cookie_name,
+                                &token.as_hex(),
+                                &opts,
+                            );
                         }
                     }
 
                     // Remove stale cookie (session not found, but cookie existed)
                     if had_cookie && current_session.is_none() && !read_failed {
-                        let cookie_val = build_remove_cookie(cookie_name);
-                        if let Ok(val) = cookie_val.parse() {
-                            response.headers_mut().append(http::header::SET_COOKIE, val);
-                        }
+                        // Max-Age=0 instructs the browser to delete the cookie
+                        let opts = CookieOptions::from_config(store.cookie_config()).max_age(0);
+                        append_cookie_header(&mut response, cookie_name, "", &opts);
                     }
                 }
             }
@@ -246,15 +244,22 @@ fn read_session_cookie(headers: &http::HeaderMap, cookie_name: &str) -> Option<S
         })
 }
 
-fn build_set_cookie(name: &str, value: &str, max_age_secs: u64, secure: bool) -> String {
-    let mut cookie =
-        format!("{name}={value}; HttpOnly; SameSite=Lax; Path=/; Max-Age={max_age_secs}");
-    if secure {
-        cookie.push_str("; Secure");
+fn append_cookie_header<B>(
+    response: &mut Response<B>,
+    name: &str,
+    value: &str,
+    opts: &CookieOptions,
+) {
+    let cookie = build_cookie(name, value, opts);
+    match http::HeaderValue::try_from(cookie.to_string()) {
+        Ok(val) => {
+            response.headers_mut().append(http::header::SET_COOKIE, val);
+        }
+        Err(e) => {
+            tracing::warn!(
+                cookie_name = name,
+                "Failed to serialize session cookie: {e}"
+            );
+        }
     }
-    cookie
-}
-
-fn build_remove_cookie(name: &str) -> String {
-    format!("{name}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0")
 }

@@ -139,7 +139,7 @@ fn request_no_cookie(uri: &str) -> Request<axum::body::Body> {
 #[tokio::test]
 async fn auth_no_session_returns_401() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, SessionConfig::default());
+    let store = SessionStore::new(&db, SessionConfig::default(), Default::default());
     let app = build_app(store);
 
     let resp = app.oneshot(request_no_cookie("/auth")).await.unwrap();
@@ -149,7 +149,7 @@ async fn auth_no_session_returns_401() {
 #[tokio::test]
 async fn auth_valid_session_returns_user() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, SessionConfig::default());
+    let store = SessionStore::new(&db, SessionConfig::default(), Default::default());
     let app = build_app(store.clone());
 
     let cookie = create_session(&store, "user-1").await;
@@ -166,7 +166,7 @@ async fn auth_valid_session_returns_user() {
 #[tokio::test]
 async fn auth_user_not_found_returns_401() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, SessionConfig::default());
+    let store = SessionStore::new(&db, SessionConfig::default(), Default::default());
     let app = build_app(store.clone());
 
     let cookie = create_session(&store, "unknown-user").await;
@@ -180,7 +180,7 @@ async fn auth_user_not_found_returns_401() {
 #[tokio::test]
 async fn auth_provider_error_returns_500() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, SessionConfig::default());
+    let store = SessionStore::new(&db, SessionConfig::default(), Default::default());
     let app = build_app(store.clone());
 
     let cookie = create_session(&store, "error-user").await;
@@ -196,7 +196,7 @@ async fn auth_provider_error_returns_500() {
 #[tokio::test]
 async fn optional_auth_no_session_returns_none() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, SessionConfig::default());
+    let store = SessionStore::new(&db, SessionConfig::default(), Default::default());
     let app = build_app(store);
 
     let resp = app.oneshot(request_no_cookie("/optional")).await.unwrap();
@@ -209,7 +209,7 @@ async fn optional_auth_no_session_returns_none() {
 #[tokio::test]
 async fn optional_auth_valid_session_returns_user() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, SessionConfig::default());
+    let store = SessionStore::new(&db, SessionConfig::default(), Default::default());
     let app = build_app(store.clone());
 
     let cookie = create_session(&store, "user-1").await;
@@ -226,7 +226,7 @@ async fn optional_auth_valid_session_returns_user() {
 #[tokio::test]
 async fn optional_auth_provider_error_returns_500() {
     let db = setup_db().await;
-    let store = SessionStore::new(&db, SessionConfig::default());
+    let store = SessionStore::new(&db, SessionConfig::default(), Default::default());
     let app = build_app(store.clone());
 
     let cookie = create_session(&store, "error-user").await;

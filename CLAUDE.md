@@ -66,7 +66,7 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 - Middleware: plain async functions, attached via `#[middleware(fn_name(params))]`
 - Middleware stacking order: Global (outermost) → Module → Handler (innermost)
 - Services: manually constructed, registered via `.service(instance)`
-- Sessions: `SessionStore::new(&db, config)` + `app.service(store.clone()).layer(modo_session::layer(store))`
+- Sessions: `SessionStore::new(&db, session_config, cookie_config)` + `app.service(store.clone()).layer(modo_session::layer(store))`
 - SessionManager extractor: `authenticate()` / `logout()` / `logout_all()` / `logout_other()` / `revoke(id)` / `rotate()` — handles cookies automatically
 - SessionManager data: `get::<T>(key)` / `set(key, value)` / `remove_key(key)` — immediate store writes
 - Auth: implement `UserProvider` trait, use `Auth<User>` / `OptionalAuth<User>` extractors

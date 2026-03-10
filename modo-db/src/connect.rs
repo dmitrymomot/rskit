@@ -17,7 +17,7 @@ pub async fn connect(config: &DatabaseConfig) -> Result<DbPool, modo::Error> {
         .map_err(|e| modo::Error::internal(format!("Database connection failed: {e}")))?;
 
     // Apply backend-specific settings
-    if config.url.starts_with("sqlite://") || config.url.starts_with("sqlite:") {
+    if conn.get_database_backend() == sea_orm::DatabaseBackend::Sqlite {
         apply_sqlite_pragmas(&conn).await?;
     }
 
@@ -53,12 +53,13 @@ async fn apply_sqlite_pragmas(_conn: &sea_orm::DatabaseConnection) -> Result<(),
 
 /// Redact credentials from database URL for logging.
 fn redact_url(url: &str) -> String {
-    if let Some(at_pos) = url.find('@')
-        && let Some(scheme_end) = url.find("://")
-    {
-        let prefix = &url[..scheme_end + 3];
-        let suffix = &url[at_pos..];
-        return format!("{prefix}***{suffix}");
+    if let Some(scheme_end) = url.find("://") {
+        let authority_start = scheme_end + 3;
+        if let Some(relative_at) = url[authority_start..].find('@') {
+            let prefix = &url[..authority_start];
+            let suffix = &url[authority_start + relative_at..];
+            return format!("{prefix}***{suffix}");
+        }
     }
     url.to_string()
 }

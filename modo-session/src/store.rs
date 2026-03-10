@@ -4,6 +4,7 @@ use crate::meta::SessionMeta;
 use crate::types::{SessionData, SessionId, SessionToken};
 use chrono::{DateTime, Utc};
 use modo::Error;
+use modo::cookies::CookieConfig;
 use modo_db::DbPool;
 use modo_db::sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
@@ -14,18 +15,24 @@ use modo_db::sea_orm::{
 pub struct SessionStore {
     db: DbPool,
     config: SessionConfig,
+    cookie_config: CookieConfig,
 }
 
 impl SessionStore {
-    pub fn new(db: &DbPool, config: SessionConfig) -> Self {
+    pub fn new(db: &DbPool, config: SessionConfig, cookie_config: CookieConfig) -> Self {
         Self {
             db: db.clone(),
             config,
+            cookie_config,
         }
     }
 
     pub fn config(&self) -> &SessionConfig {
         &self.config
+    }
+
+    pub fn cookie_config(&self) -> &CookieConfig {
+        &self.cookie_config
     }
 
     pub async fn create(

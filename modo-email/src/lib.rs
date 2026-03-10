@@ -22,15 +22,8 @@ use std::sync::Arc;
 
 /// Create a Mailer with the default FilesystemProvider.
 pub fn mailer(config: &EmailConfig) -> Result<Mailer, modo::Error> {
-    let transport = transport::transport(config)?;
     let provider = Arc::new(FilesystemProvider::new(&config.templates_path));
-    let layout = Arc::new(LayoutEngine::new(&config.templates_path));
-    let sender = SenderProfile {
-        from_name: config.default_from_name.clone(),
-        from_email: config.default_from_email.clone(),
-        reply_to: config.default_reply_to.clone(),
-    };
-    Ok(Mailer::new(transport, provider, sender, layout))
+    mailer_with(config, provider)
 }
 
 /// Create a Mailer with a custom TemplateProvider.
