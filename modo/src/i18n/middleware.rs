@@ -2,6 +2,7 @@ use super::extractor::ResolvedLang;
 use super::locale::{normalize_lang, resolve_from_accept_language};
 use super::store::TranslationStore;
 use crate::cookie_util::read_cookie;
+use crate::cookies::{CookieConfig, CookieOptions, build_cookie};
 use futures_util::future::BoxFuture;
 use http::{Request, Response};
 use std::sync::Arc;
@@ -20,6 +21,7 @@ type CustomSourceFn = dyn Fn(&http::request::Parts) -> Option<String> + Send + S
 #[derive(Clone)]
 pub struct I18nLayer {
     store: Arc<TranslationStore>,
+    cookie_config: CookieConfig,
     custom_source: Option<Arc<CustomSourceFn>>,
 }
 
@@ -29,9 +31,10 @@ pub struct I18nLayer {
 ///
 /// The resolved locale is inserted into request extensions as [`ResolvedLang`]
 /// for downstream extractors (e.g., [`I18n`](crate::extractor::I18n)).
-pub fn layer(store: Arc<TranslationStore>) -> I18nLayer {
+pub fn layer(store: Arc<TranslationStore>, cookie_config: CookieConfig) -> I18nLayer {
     I18nLayer {
         store,
+        cookie_config,
         custom_source: None,
     }
 }
@@ -46,10 +49,12 @@ pub fn layer(store: Arc<TranslationStore>) -> I18nLayer {
 /// is normalized and checked against available locales before being accepted.
 pub fn layer_with_source(
     store: Arc<TranslationStore>,
+    cookie_config: CookieConfig,
     source: impl Fn(&http::request::Parts) -> Option<String> + Send + Sync + 'static,
 ) -> I18nLayer {
     I18nLayer {
         store,
+        cookie_config,
         custom_source: Some(Arc::new(source)),
     }
 }
@@ -61,6 +66,7 @@ impl<S> Layer<S> for I18nLayer {
         I18nMiddleware {
             inner,
             store: self.store.clone(),
+            cookie_config: self.cookie_config.clone(),
             custom_source: self.custom_source.clone(),
         }
     }
@@ -73,6 +79,7 @@ impl<S> Layer<S> for I18nLayer {
 pub struct I18nMiddleware<S> {
     inner: S,
     store: Arc<TranslationStore>,
+    cookie_config: CookieConfig,
     custom_source: Option<Arc<CustomSourceFn>>,
 }
 
@@ -93,6 +100,7 @@ where
 
     fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
         let store = self.store.clone();
+        let cookie_config = self.cookie_config.clone();
         let custom_source = self.custom_source.clone();
         let mut inner = self.inner.clone();
 
@@ -161,8 +169,9 @@ where
 
             // Set cookie if query param resolved the language (and no cookie was present)
             if should_set_cookie {
-                let cookie_val = build_lang_cookie(&config.cookie_name, &resolved);
-                if let Ok(val) = cookie_val.parse() {
+                let opts = CookieOptions::from_config(&cookie_config).max_age(31_536_000); // 1 year
+                let cookie = build_cookie(&config.cookie_name, &resolved, &opts);
+                if let Ok(val) = cookie.to_string().parse() {
                     response.headers_mut().append(http::header::SET_COOKIE, val);
                 }
             }
@@ -170,12 +179,6 @@ where
             Ok(response)
         })
     }
-}
-
-// --- Cookie helpers ---
-
-fn build_lang_cookie(name: &str, value: &str) -> String {
-    format!("{name}={value}; Path=/; SameSite=Lax; Max-Age=31536000")
 }
 
 // --- Query param helper ---

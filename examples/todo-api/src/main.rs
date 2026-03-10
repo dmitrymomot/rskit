@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 // --- Config ---
 
 #[derive(Default, Deserialize)]
-struct AppConfig {
+struct Config {
     #[serde(flatten)]
-    server: modo::config::ServerConfig,
+    core: modo::config::AppConfig,
     database: DatabaseConfig,
 }
 
@@ -27,7 +27,7 @@ pub struct Todo {
 
 #[derive(Deserialize, modo::Sanitize, modo::Validate)]
 struct CreateTodo {
-    #[clean(trim, strip_html)]
+    #[clean(trim, strip_html_tags)]
     #[validate(required(message = "title is required"), min_length = 5(message = "title must be at least 5 characters"), max_length = 500(message = "title must be at most 500 characters"))]
     title: String,
 }
@@ -103,12 +103,9 @@ async fn delete_todo(
 #[modo::main]
 async fn main(
     app: modo::app::AppBuilder,
-    config: AppConfig,
+    config: Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let db = modo_db::connect(&config.database).await?;
     modo_db::sync_and_migrate(&db).await?;
-    app.server_config(config.server)
-        .managed_service(db)
-        .run()
-        .await
+    app.config(config.core).managed_service(db).run().await
 }

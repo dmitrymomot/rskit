@@ -6,9 +6,9 @@ use serde::Deserialize;
 // --- Config ---
 
 #[derive(Default, Deserialize)]
-struct AppConfig {
+struct Config {
     #[serde(flatten)]
-    server: modo::config::ServerConfig,
+    core: modo::config::AppConfig,
     database: DatabaseConfig,
     #[serde(default)]
     jobs: modo_jobs::JobsConfig,
@@ -76,7 +76,7 @@ async fn enqueue_remind(
 #[modo::main]
 async fn main(
     app: modo::app::AppBuilder,
-    config: AppConfig,
+    config: Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let db = modo_db::connect(&config.database).await?;
     modo_db::sync_and_migrate(&db).await?;
@@ -84,7 +84,7 @@ async fn main(
     let services = ServiceRegistry::new().with(db.clone());
     let jobs = modo_jobs::start(&db, &config.jobs, services).await?;
 
-    app.server_config(config.server)
+    app.config(config.core)
         .managed_service(db)
         .managed_service(jobs)
         .run()

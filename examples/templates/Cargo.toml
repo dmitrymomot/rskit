@@ -7,3 +7,6 @@ publish = false
 [dependencies]
 modo = { path = "../../modo", features = ["templates"] }
 chrono = "0.4"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("templates"))'] }

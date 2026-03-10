@@ -7,7 +7,7 @@ struct ContactForm {
     #[validate(required, email)]
     email: String,
 
-    #[clean(trim, strip_html)]
+    #[clean(trim, strip_html_tags)]
     #[validate(required, min_length = 5, max_length = 1000)]
     message: String,
 }
@@ -36,7 +36,7 @@ async fn contact(form: Form<ContactForm>) -> Result<&'static str, modo::Error> {
 #[modo::main]
 async fn main(
     app: modo::app::AppBuilder,
-    config: modo::config::ServerConfig,
+    config: modo::config::AppConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    app.server_config(config).run().await
+    app.config(config).run().await
 }

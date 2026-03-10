@@ -1,6 +1,10 @@
 #[cfg(feature = "i18n")]
 pub use modo_macros::t;
 #[cfg(feature = "templates")]
+pub use modo_macros::template_filter;
+#[cfg(feature = "templates")]
+pub use modo_macros::template_function;
+#[cfg(feature = "templates")]
 pub use modo_macros::view;
 pub use modo_macros::{Sanitize, Validate, error_handler, handler, main, module};
 
@@ -9,6 +13,7 @@ pub(crate) mod cookie_util;
 
 pub mod app;
 pub mod config;
+pub mod cookies;
 pub mod cors;
 #[cfg(feature = "csrf")]
 pub mod csrf;
@@ -29,7 +34,8 @@ pub(crate) mod static_files;
 pub mod templates;
 pub mod validate;
 
-pub use config::{HttpConfig, RateLimitConfig, SecurityHeadersConfig, TrailingSlash};
+pub use config::{AppConfig, HttpConfig, RateLimitConfig, SecurityHeadersConfig, TrailingSlash};
+pub use cookies::{CookieConfig, CookieManager, CookieOptions, SameSite};
 pub use cors::CorsConfig;
 pub use error::{Error, ErrorContext, ErrorHandlerFn, ErrorHandlerRegistration, HttpError};
 pub use middleware::{ClientIp, RateLimitInfo};

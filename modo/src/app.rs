@@ -73,9 +73,11 @@ type ShutdownHook = Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send>>
 #[cfg(feature = "static-embed")]
 type EmbedBuilderFn =
     Box<dyn FnOnce(&crate::static_files::StaticConfig) -> axum::Router<()> + Send>;
+#[cfg(feature = "templates")]
+type TemplatesCallback = Box<dyn FnOnce(&mut crate::templates::TemplateEngine) + Send>;
 
 pub struct AppBuilder {
-    server_config: ServerConfig,
+    app_config: Option<crate::config::AppConfig>,
     services: HashMap<TypeId, Arc<dyn Any + Send + Sync>>,
     layers: Vec<LayerFn>,
     cors_config: Option<CorsConfig>,
@@ -91,12 +93,14 @@ pub struct AppBuilder {
     override_maintenance: Option<bool>,
     #[cfg(feature = "static-embed")]
     embed_builder: Option<EmbedBuilderFn>,
+    #[cfg(feature = "templates")]
+    templates_callback: Option<TemplatesCallback>,
 }
 
 impl AppBuilder {
     pub fn new() -> Self {
         Self {
-            server_config: ServerConfig::default(),
+            app_config: None,
             services: HashMap::new(),
             layers: Vec::new(),
             cors_config: None,
@@ -111,11 +115,13 @@ impl AppBuilder {
             override_maintenance: None,
             #[cfg(feature = "static-embed")]
             embed_builder: None,
+            #[cfg(feature = "templates")]
+            templates_callback: None,
         }
     }
 
-    pub fn server_config(mut self, config: ServerConfig) -> Self {
-        self.server_config = config;
+    pub fn config(mut self, config: crate::config::AppConfig) -> Self {
+        self.app_config = Some(config);
         self
     }
 
@@ -240,16 +246,36 @@ impl AppBuilder {
         self
     }
 
+    /// Configure the template engine before it's registered as a service.
+    ///
+    /// The callback receives a `&mut TemplateEngine` after auto-discovery
+    /// of `#[template_function]` and `#[template_filter]` macros, but before
+    /// the engine is registered. Use this for advanced `env_mut()` access.
+    #[cfg(feature = "templates")]
+    pub fn templates(
+        mut self,
+        f: impl FnOnce(&mut crate::templates::TemplateEngine) + Send + 'static,
+    ) -> Self {
+        self.templates_callback = Some(Box::new(f));
+        self
+    }
+
     fn ensure_http_override(&mut self) -> &mut HttpConfig {
         if self.override_http.is_none() {
-            self.override_http = Some(self.server_config.http.clone());
+            let http = self
+                .app_config
+                .as_ref()
+                .map(|c| c.server.http.clone())
+                .unwrap_or_default();
+            self.override_http = Some(http);
         }
         self.override_http.as_mut().unwrap()
     }
 
-    pub async fn run(self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn run(mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Resolve effective config (builder overrides > YAML config)
-        let mut server_config = self.server_config.clone();
+        let app_config = self.app_config.unwrap_or_default();
+        let mut server_config = app_config.server.clone();
         if let Some(ref http) = self.override_http {
             server_config.http = http.clone();
         }
@@ -276,6 +302,69 @@ impl AppBuilder {
         } else {
             Key::derive_from(server_config.secret_key.as_bytes())
         };
+
+        // --- Auto-wire CookieConfig (always registered; cookies is a core feature, not feature-gated) ---
+        self.services.insert(
+            TypeId::of::<crate::cookies::CookieConfig>(),
+            Arc::new(app_config.cookies.clone()),
+        );
+
+        // --- Auto-wire templates ---
+        #[cfg(feature = "templates")]
+        {
+            use crate::templates::{TemplateFilterEntry, TemplateFunctionEntry};
+
+            let mut engine = crate::templates::engine(&app_config.templates)?;
+
+            // Register inventory-discovered functions
+            for entry in inventory::iter::<TemplateFunctionEntry> {
+                (entry.register_fn)(engine.env_mut());
+            }
+
+            // Register inventory-discovered filters
+            for entry in inventory::iter::<TemplateFilterEntry> {
+                (entry.register_fn)(engine.env_mut());
+            }
+
+            // Auto-wire i18n template functions if both features enabled
+            #[cfg(feature = "i18n")]
+            {
+                let i18n_store = crate::i18n::load(&app_config.i18n)?;
+                crate::i18n::register_template_functions(engine.env_mut(), i18n_store.clone());
+                self.services
+                    .insert(TypeId::of::<crate::i18n::TranslationStore>(), i18n_store);
+            }
+
+            // Auto-wire CSRF template functions if both features enabled
+            #[cfg(feature = "csrf")]
+            crate::csrf::register_template_functions(engine.env_mut());
+
+            // Run user callback
+            if let Some(callback) = self.templates_callback {
+                callback(&mut engine);
+            }
+
+            // Register engine as service
+            self.services.insert(
+                TypeId::of::<crate::templates::TemplateEngine>(),
+                Arc::new(engine),
+            );
+        }
+
+        // --- Auto-wire i18n (standalone, without templates) ---
+        #[cfg(all(feature = "i18n", not(feature = "templates")))]
+        {
+            let i18n_store = crate::i18n::load(&app_config.i18n)?;
+            self.services
+                .insert(TypeId::of::<crate::i18n::TranslationStore>(), i18n_store);
+        }
+
+        // --- Auto-wire CsrfConfig ---
+        #[cfg(feature = "csrf")]
+        self.services.insert(
+            TypeId::of::<crate::csrf::CsrfConfig>(),
+            Arc::new(app_config.csrf.clone()),
+        );
 
         let state = AppState {
             services: ServiceRegistry {
@@ -443,6 +532,12 @@ impl AppBuilder {
                     },
                 ));
             router = router.layer(crate::templates::ContextLayer::new());
+        }
+
+        // --- i18n layer (auto-wired) ---
+        #[cfg(feature = "i18n")]
+        if let Some(store) = state.services.get::<crate::i18n::TranslationStore>() {
+            router = router.layer(crate::i18n::layer(store, app_config.cookies.clone()));
         }
 
         // --- Rate limiter (global) ---

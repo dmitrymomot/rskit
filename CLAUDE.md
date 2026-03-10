@@ -41,6 +41,8 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 
 ## Conventions
 
+- Cookie building: use `cookies::build_cookie()` + `CookieOptions::from_config(&cookie_config)` with overrides — never hand-format `Set-Cookie` strings
+- `CookieConfig` is always auto-registered in `app.rs` services; middleware can read it via `state.services.get::<CookieConfig>()`
 - Handlers: `#[modo::handler(METHOD, "/path")]`
 - Path params: plain `id: String` in handler fn auto-extracted from `{id}` in route path — no need for `Path(id): Path<String>`
 - Path params: partial extraction supported — declare only the params you need, others ignored via `..`
@@ -60,6 +62,7 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 - Template layers: auto-registered when `TemplateEngine` is a service — no manual `.layer()` needed
 - HTMX views: htmx template rendered on HX-Request, always HTTP 200, non-200 skips render
 - i18n in templates: `{{ t("key", name=val) }}` — register via `modo::i18n::register_template_functions`
+- i18n layer: `modo::i18n::layer(store, cookie_config)` / `modo::i18n::layer_with_source(store, cookie_config, source_fn)`
 - Middleware: plain async functions, attached via `#[middleware(fn_name(params))]`
 - Middleware stacking order: Global (outermost) → Module → Handler (innermost)
 - Services: manually constructed, registered via `.service(instance)`
@@ -89,5 +92,6 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 - Use official documentation only when researching dependencies
 - Session IDs: ULID (no UUID anywhere)
 - Testing Tower middleware: use `Router::new().route(...).layer(mw).oneshot(request)` pattern — no AppState needed, handler reads `Extension<T>` from extensions
+- Testing cookie attributes: create `AppState` with custom `CookieConfig` (e.g. `domain`), fire request, assert `Set-Cookie` header contains expected attributes
 - Type-erased services: use object-safe bridge trait (`XxxDyn`) + `Arc<dyn XxxDyn<T>>` wrapper — see `TenantResolverService` pattern
 - Session user ID access: use `modo_session::user_id_from_extensions(&parts.extensions)` — returns `Option<String>`

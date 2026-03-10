@@ -34,9 +34,9 @@ async fn index() -> &'static str {
 }
 
 #[derive(Default, Deserialize)]
-struct AppConfig {
+struct Config {
     #[serde(flatten)]
-    server: modo::config::ServerConfig,
+    core: modo::config::AppConfig,
     #[serde(default)]
     upload: UploadConfig,
 }
@@ -44,11 +44,8 @@ struct AppConfig {
 #[modo::main]
 async fn main(
     app: modo::app::AppBuilder,
-    config: AppConfig,
+    config: Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let storage = modo_upload::storage(&config.upload)?;
-    app.server_config(config.server)
-        .service(storage)
-        .run()
-        .await
+    app.config(config.core).service(storage).run().await
 }

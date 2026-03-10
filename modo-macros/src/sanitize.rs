@@ -37,7 +37,7 @@ impl Parse for SanitizeAttr {
                 "trim" => rules.push(SanitizationRule::Trim),
                 "lowercase" => rules.push(SanitizationRule::Lowercase),
                 "uppercase" => rules.push(SanitizationRule::Uppercase),
-                "strip_html" | "strip_html_tags" => rules.push(SanitizationRule::StripHtml),
+                "strip_html_tags" => rules.push(SanitizationRule::StripHtml),
                 "collapse_whitespace" => rules.push(SanitizationRule::CollapseWhitespace),
                 "truncate" => {
                     input.parse::<Token![=]>()?;

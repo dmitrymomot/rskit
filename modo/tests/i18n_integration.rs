@@ -4,6 +4,7 @@ use axum::body::Body;
 use axum::routing::get;
 use axum::{Extension, Router};
 use http::Request;
+use modo::cookies::CookieConfig;
 use modo::i18n::extractor::ResolvedLang;
 use modo::i18n::{I18n, I18nConfig, load};
 use modo::t;
@@ -125,7 +126,7 @@ async fn lang_handler(Extension(lang): Extension<ResolvedLang>) -> String {
 fn middleware_app(store: Arc<modo::i18n::TranslationStore>) -> Router {
     Router::new()
         .route("/", get(lang_handler))
-        .layer(modo::i18n::layer(store))
+        .layer(modo::i18n::layer(store, CookieConfig::default()))
 }
 
 fn middleware_app_with_source(
@@ -134,7 +135,11 @@ fn middleware_app_with_source(
 ) -> Router {
     Router::new()
         .route("/", get(lang_handler))
-        .layer(modo::i18n::layer_with_source(store, source))
+        .layer(modo::i18n::layer_with_source(
+            store,
+            CookieConfig::default(),
+            source,
+        ))
 }
 
 async fn body_string(resp: http::Response<Body>) -> String {

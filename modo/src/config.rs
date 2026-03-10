@@ -217,6 +217,28 @@ impl ServerConfig {
 }
 
 // ---------------------------------------------------------------------------
+// AppConfig
+// ---------------------------------------------------------------------------
+
+/// Unified application configuration.
+///
+/// Top-level config type for `#[modo::main]`. Includes server settings
+/// and optional feature-specific sections (cookies, templates, i18n, CSRF).
+/// All feature sections use `#[serde(default)]` — absent in YAML means defaults apply.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct AppConfig {
+    pub server: ServerConfig,
+    pub cookies: crate::cookies::CookieConfig,
+    #[cfg(feature = "templates")]
+    pub templates: crate::templates::TemplateConfig,
+    #[cfg(feature = "i18n")]
+    pub i18n: crate::i18n::I18nConfig,
+    #[cfg(feature = "csrf")]
+    pub csrf: crate::csrf::CsrfConfig,
+}
+
+// ---------------------------------------------------------------------------
 // ConfigError
 // ---------------------------------------------------------------------------
 
@@ -514,5 +536,21 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(cfg.bind_address(), "127.0.0.1:8080");
+    }
+
+    #[test]
+    fn test_app_config_defaults() {
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.server.port, 3000);
+        assert_eq!(cfg.cookies.path, "/");
+    }
+
+    #[test]
+    fn test_app_config_yaml_minimal() {
+        let yaml = "server:\n  port: 8080\n";
+        let cfg: AppConfig = serde_yaml_ng::from_str(yaml).unwrap();
+        assert_eq!(cfg.server.port, 8080);
+        // cookies get defaults
+        assert_eq!(cfg.cookies.path, "/");
     }
 }

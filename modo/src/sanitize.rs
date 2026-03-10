@@ -63,12 +63,6 @@ pub fn strip_html_tags(s: String) -> String {
     out
 }
 
-/// Remove HTML tags.
-#[deprecated(since = "0.1.0", note = "renamed to `strip_html_tags`")]
-pub fn strip_html(s: String) -> String {
-    strip_html_tags(s)
-}
-
 /// Collapse multiple consecutive whitespace characters into a single space.
 pub fn collapse_whitespace(s: String) -> String {
     let mut out = String::with_capacity(s.len());

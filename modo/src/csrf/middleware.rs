@@ -1,6 +1,7 @@
 use super::config::CsrfConfig;
 use super::token;
 use crate::cookie_util::read_cookie;
+use crate::cookies::{CookieConfig, CookieOptions, build_cookie};
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Method, Request, StatusCode};
@@ -42,11 +43,21 @@ pub async fn csrf_protection(
         config.validate()
     );
 
+    let arc_cookie_config = state.services.get::<CookieConfig>();
+    let default_cookie_config;
+    let cookie_config: &CookieConfig = match &arc_cookie_config {
+        Some(c) => c,
+        None => {
+            default_cookie_config = CookieConfig::default();
+            &default_cookie_config
+        }
+    };
+
     let key = state.server_config.secret_key.as_bytes();
     let method = request.method().clone();
 
     if is_safe_method(&method) {
-        handle_safe_request(request, next, config, key).await
+        handle_safe_request(request, next, config, cookie_config, key).await
     } else {
         handle_mutating_request(request, next, config, key).await
     }
@@ -63,6 +74,7 @@ async fn handle_safe_request(
     request: Request<Body>,
     next: Next,
     config: &CsrfConfig,
+    cookie_config: &CookieConfig,
     key: &[u8],
 ) -> Response {
     let (mut parts, body) = request.into_parts();
@@ -94,13 +106,12 @@ async fn handle_safe_request(
 
     if needs_cookie {
         let signed = token::sign(&raw_token, key);
-        let cookie = build_set_cookie(
-            &config.cookie_name,
-            &signed,
-            config.cookie_max_age,
-            config.secure,
-        );
-        if let Ok(val) = cookie.parse() {
+        let opts = CookieOptions::from_config(cookie_config)
+            .max_age(config.cookie_max_age)
+            .secure(config.secure)
+            .http_only(true);
+        let cookie = build_cookie(&config.cookie_name, &signed, &opts);
+        if let Ok(val) = cookie.to_string().parse() {
             response.headers_mut().append(header::SET_COOKIE, val);
         }
     }
@@ -217,18 +228,12 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.ct_eq(b).into()
 }
 
-// --- Cookie helpers ---
-
-fn build_set_cookie(name: &str, value: &str, max_age: u64, secure: bool) -> String {
-    let secure_flag = if secure { "; Secure" } else { "" };
-    format!("{name}={value}; HttpOnly; SameSite=Lax; Path=/; Max-Age={max_age}{secure_flag}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::{AppState, ServiceRegistry};
     use crate::config::ServerConfig;
+    use crate::cookies::CookieConfig;
     use axum::Router;
     use axum::routing::{get, post};
     use axum_extra::extract::cookie::Key;
@@ -236,7 +241,9 @@ mod tests {
     use tower::ServiceExt;
 
     fn test_state() -> AppState {
-        let services = ServiceRegistry::new().with(CsrfConfig::default());
+        let services = ServiceRegistry::new()
+            .with(CsrfConfig::default())
+            .with(CookieConfig::default());
 
         let server_config = ServerConfig {
             secret_key: "test-secret-key-for-csrf".to_string(),
@@ -445,19 +452,32 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
-    #[test]
-    fn build_set_cookie_format() {
-        let cookie = build_set_cookie("_csrf", "token123", 86400, false);
-        assert_eq!(
-            cookie,
-            "_csrf=token123; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400"
+    #[tokio::test]
+    async fn csrf_cookie_inherits_domain_from_cookie_config() {
+        let cookie_config = CookieConfig {
+            domain: Some("example.com".to_string()),
+            ..Default::default()
+        };
+        let services = ServiceRegistry::new()
+            .with(CsrfConfig::default())
+            .with(cookie_config);
+        let server_config = ServerConfig {
+            secret_key: "test-secret-key-for-csrf".to_string(),
+            ..Default::default()
+        };
+        let state = AppState {
+            services,
+            server_config,
+            cookie_key: Key::generate(),
+        };
+        let app = test_app(state);
+        let request = Request::builder().uri("/form").body(Body::empty()).unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        let set_cookie = extract_set_cookie(&response).expect("should set cookie");
+        assert!(
+            set_cookie.contains("Domain=example.com"),
+            "expected Domain=example.com in Set-Cookie: {set_cookie}"
         );
-    }
-
-    #[test]
-    fn build_set_cookie_secure() {
-        let cookie = build_set_cookie("_csrf", "token123", 86400, true);
-        assert!(cookie.contains("; Secure"));
     }
 
     #[test]

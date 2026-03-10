@@ -52,7 +52,7 @@ fn uppercase_converts() {
 
 #[derive(serde::Deserialize, modo::Sanitize)]
 struct StripHtmlField {
-    #[clean(strip_html)]
+    #[clean(strip_html_tags)]
     content: String,
 }
 
@@ -432,7 +432,7 @@ struct CombinedForm {
     #[validate(required, email)]
     email: String,
 
-    #[clean(trim, strip_html)]
+    #[clean(trim, strip_html_tags)]
     #[validate(required, min_length = 5)]
     message: String,
 }

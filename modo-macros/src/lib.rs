@@ -7,6 +7,8 @@ mod middleware;
 mod module;
 mod sanitize;
 mod t_macro;
+mod template_filter;
+mod template_function;
 mod validate;
 mod view;
 
@@ -70,6 +72,22 @@ pub fn t(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn view(attr: TokenStream, item: TokenStream) -> TokenStream {
     view::expand(attr.into(), item.into())
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
+}
+
+/// Auto-register a function as a MiniJinja template function.
+#[proc_macro_attribute]
+pub fn template_function(attr: TokenStream, item: TokenStream) -> TokenStream {
+    template_function::expand(attr.into(), item.into())
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
+}
+
+/// Auto-register a function as a MiniJinja template filter.
+#[proc_macro_attribute]
+pub fn template_filter(attr: TokenStream, item: TokenStream) -> TokenStream {
+    template_filter::expand(attr.into(), item.into())
         .unwrap_or_else(|e| e.to_compile_error())
         .into()
 }
