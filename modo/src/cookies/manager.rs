@@ -123,7 +123,13 @@ impl CookieManager {
     // --- JSON convenience ---
 
     pub fn get_json<T: serde::de::DeserializeOwned>(&self, name: &str) -> Option<T> {
-        self.get(name).and_then(|v| serde_json::from_str(&v).ok())
+        self.get(name).and_then(|v| match serde_json::from_str(&v) {
+            Ok(val) => Some(val),
+            Err(e) => {
+                tracing::debug!(cookie = name, error = %e, "failed to deserialize cookie JSON");
+                None
+            }
+        })
     }
 
     pub fn set_json<T: serde::Serialize>(
@@ -139,8 +145,13 @@ impl CookieManager {
     // --- Signed JSON convenience ---
 
     pub fn get_signed_json<T: serde::de::DeserializeOwned>(&self, name: &str) -> Option<T> {
-        self.get_signed(name)
-            .and_then(|v| serde_json::from_str(&v).ok())
+        self.get_signed(name).and_then(|v| match serde_json::from_str(&v) {
+            Ok(val) => Some(val),
+            Err(e) => {
+                tracing::debug!(cookie = name, error = %e, "failed to deserialize signed cookie JSON");
+                None
+            }
+        })
     }
 
     pub fn set_signed_json<T: serde::Serialize>(
@@ -156,8 +167,13 @@ impl CookieManager {
     // --- Encrypted JSON convenience ---
 
     pub fn get_encrypted_json<T: serde::de::DeserializeOwned>(&self, name: &str) -> Option<T> {
-        self.get_encrypted(name)
-            .and_then(|v| serde_json::from_str(&v).ok())
+        self.get_encrypted(name).and_then(|v| match serde_json::from_str(&v) {
+            Ok(val) => Some(val),
+            Err(e) => {
+                tracing::debug!(cookie = name, error = %e, "failed to deserialize encrypted cookie JSON");
+                None
+            }
+        })
     }
 
     pub fn set_encrypted_json<T: serde::Serialize>(
@@ -209,9 +225,14 @@ pub(crate) fn build_cookie<'a>(name: &str, value: &str, opts: &CookieOptions) ->
     }
 
     if let Some(max_age) = opts.max_age {
-        cookie.set_max_age(Duration::seconds(
-            i64::try_from(max_age).unwrap_or(i64::MAX),
-        ));
+        let secs = match i64::try_from(max_age) {
+            Ok(v) => v,
+            Err(_) => {
+                tracing::warn!(max_age, "cookie max_age exceeds i64::MAX, clamping");
+                i64::MAX
+            }
+        };
+        cookie.set_max_age(Duration::seconds(secs));
     }
 
     cookie
@@ -269,5 +290,119 @@ mod tests {
         assert!(set_cookie.contains("test=hello"));
         assert!(set_cookie.contains("HttpOnly"));
         assert!(set_cookie.contains("Path=/"));
+    }
+
+    #[tokio::test]
+    async fn set_and_read_signed_cookie() {
+        let state = test_state();
+        let app = Router::new()
+            .route(
+                "/set",
+                get(|mut cookies: CookieManager| async move {
+                    cookies.set_signed("sig", "secret-value");
+                    cookies
+                }),
+            )
+            .with_state(state.clone());
+
+        let response = app
+            .oneshot(Request::builder().uri("/set").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        let set_cookie = response
+            .headers()
+            .get(http::header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        // Signed cookie is present but value is opaque (not plaintext)
+        assert!(set_cookie.contains("sig="));
+        assert!(!set_cookie.contains("sig=secret-value"));
+        assert!(set_cookie.contains("HttpOnly"));
+
+        // Round-trip: read back the signed cookie
+        let cookie_header = set_cookie.split(';').next().unwrap();
+        let app = Router::new()
+            .route(
+                "/read",
+                get(|cookies: CookieManager| async move {
+                    cookies.get_signed("sig").unwrap_or_default()
+                }),
+            )
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/read")
+                    .header(http::header::COOKIE, cookie_header)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        assert_eq!(&body[..], b"secret-value");
+    }
+
+    #[tokio::test]
+    async fn set_and_read_encrypted_cookie() {
+        let state = test_state();
+        let app = Router::new()
+            .route(
+                "/set",
+                get(|mut cookies: CookieManager| async move {
+                    cookies.set_encrypted("enc", "top-secret");
+                    cookies
+                }),
+            )
+            .with_state(state.clone());
+
+        let response = app
+            .oneshot(Request::builder().uri("/set").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        let set_cookie = response
+            .headers()
+            .get(http::header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        // Encrypted cookie is present but value is opaque
+        assert!(set_cookie.contains("enc="));
+        assert!(!set_cookie.contains("enc=top-secret"));
+        assert!(set_cookie.contains("HttpOnly"));
+
+        // Round-trip: read back the encrypted cookie
+        let cookie_header = set_cookie.split(';').next().unwrap();
+        let app = Router::new()
+            .route(
+                "/read",
+                get(|cookies: CookieManager| async move {
+                    cookies.get_encrypted("enc").unwrap_or_default()
+                }),
+            )
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/read")
+                    .header(http::header::COOKIE, cookie_header)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        assert_eq!(&body[..], b"top-secret");
     }
 }
