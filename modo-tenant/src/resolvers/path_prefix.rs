@@ -39,7 +39,7 @@ where
         let mut segments = path.splitn(3, '/').filter(|s| !s.is_empty());
 
         let identifier = match segments.next() {
-            Some(id) if !id.is_empty() => id.to_string(),
+            Some(id) => id.to_string(),
             _ => return Ok(None),
         };
 
@@ -53,10 +53,10 @@ mod tests {
     use modo::axum::http::Request;
 
     #[derive(Clone, Debug, PartialEq, serde::Serialize)]
-    struct T {
+    struct TestTenant {
         id: String,
     }
-    impl crate::HasTenantId for T {
+    impl crate::HasTenantId for TestTenant {
         fn tenant_id(&self) -> &str {
             &self.id
         }
@@ -64,7 +64,8 @@ mod tests {
 
     #[tokio::test]
     async fn extracts_first_segment() {
-        let resolver = PathPrefixResolver::new(|slug| async move { Ok(Some(T { id: slug })) });
+        let resolver =
+            PathPrefixResolver::new(|slug| async move { Ok(Some(TestTenant { id: slug })) });
         let parts = Request::builder()
             .uri("/acme/dashboard")
             .body(())
@@ -76,7 +77,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             result,
-            Some(T {
+            Some(TestTenant {
                 id: "acme".to_string()
             })
         );
@@ -84,8 +85,26 @@ mod tests {
 
     #[tokio::test]
     async fn returns_none_for_root() {
-        let resolver = PathPrefixResolver::new(|slug| async move { Ok(Some(T { id: slug })) });
+        let resolver =
+            PathPrefixResolver::new(|slug| async move { Ok(Some(TestTenant { id: slug })) });
         let parts = Request::builder().uri("/").body(()).unwrap().into_parts().0;
+        let result = crate::TenantResolver::resolve(&resolver, &parts)
+            .await
+            .unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn returns_none_for_single_segment_slash() {
+        let resolver =
+            PathPrefixResolver::new(|slug| async move { Ok(Some(TestTenant { id: slug })) });
+        // Absolute URI with only authority, path defaults to "/"
+        let parts = Request::builder()
+            .uri("http://example.com")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
         let result = crate::TenantResolver::resolve(&resolver, &parts)
             .await
             .unwrap();

@@ -159,6 +159,9 @@ mod tests {
         }
     }
 
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     fn app_state_with_resolver() -> AppState {
         let services = ServiceRegistry::new().with(TenantResolverService::new(TestResolver));
         AppState {
@@ -209,6 +212,64 @@ mod tests {
             .unwrap();
 
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn resolver_called_once_with_caching() {
+        let call_count = Arc::new(AtomicUsize::new(0));
+
+        struct CountingResolver {
+            count: Arc<AtomicUsize>,
+        }
+
+        impl crate::TenantResolver for CountingResolver {
+            type Tenant = TestTenant;
+
+            async fn resolve(
+                &self,
+                _parts: &modo::axum::http::request::Parts,
+            ) -> Result<Option<Self::Tenant>, modo::Error> {
+                self.count.fetch_add(1, Ordering::SeqCst);
+                Ok(Some(TestTenant {
+                    id: "t-1".to_string(),
+                    name: "Acme".to_string(),
+                }))
+            }
+        }
+
+        let resolver = CountingResolver {
+            count: call_count.clone(),
+        };
+        let services = ServiceRegistry::new().with(TenantResolverService::new(resolver));
+        let state = AppState {
+            services,
+            server_config: Default::default(),
+            cookie_key: axum_extra::extract::cookie::Key::generate(),
+        };
+
+        let app = Router::new()
+            .route(
+                "/",
+                get(
+                    |t: Tenant<TestTenant>, opt: OptionalTenant<TestTenant>| async move {
+                        format!("{}-{}", t.name, opt.is_some())
+                    },
+                ),
+            )
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .header("host", "acme.test.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(call_count.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]

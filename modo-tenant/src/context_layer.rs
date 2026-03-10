@@ -120,3 +120,138 @@ where
         })
     }
 }
+
+#[cfg(all(test, feature = "templates"))]
+mod tests {
+    use super::*;
+    use crate::resolver::TenantResolverService;
+    use modo::axum::body::Body;
+    use modo::axum::extract::Extension;
+    use modo::axum::http::StatusCode;
+    use modo::axum::routing::get;
+
+    #[derive(Clone, Debug, serde::Serialize)]
+    struct TestTenant {
+        id: String,
+    }
+
+    impl crate::HasTenantId for TestTenant {
+        fn tenant_id(&self) -> &str {
+            &self.id
+        }
+    }
+
+    struct OkResolver;
+
+    impl crate::TenantResolver for OkResolver {
+        type Tenant = TestTenant;
+
+        async fn resolve(
+            &self,
+            parts: &modo::axum::http::request::Parts,
+        ) -> Result<Option<Self::Tenant>, modo::Error> {
+            let host = parts
+                .headers
+                .get("host")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("");
+            if host.starts_with("acme.") {
+                Ok(Some(TestTenant {
+                    id: "t-1".to_string(),
+                }))
+            } else {
+                Ok(None)
+            }
+        }
+    }
+
+    struct ErrorResolver;
+
+    impl crate::TenantResolver for ErrorResolver {
+        type Tenant = TestTenant;
+
+        async fn resolve(
+            &self,
+            _parts: &modo::axum::http::request::Parts,
+        ) -> Result<Option<Self::Tenant>, modo::Error> {
+            Err(modo::Error::internal("db error"))
+        }
+    }
+
+    #[tokio::test]
+    async fn injects_tenant_into_template_context() {
+        let svc = TenantResolverService::new(OkResolver);
+        let layer = TenantContextLayer::new(svc);
+
+        let app = modo::axum::Router::new()
+            .route(
+                "/",
+                get(|Extension(ctx): Extension<TemplateContext>| async move {
+                    if ctx.get("tenant").is_some() {
+                        "injected"
+                    } else {
+                        "missing"
+                    }
+                }),
+            )
+            .layer(layer);
+
+        let mut req = Request::builder()
+            .header("host", "acme.test.com")
+            .body(Body::empty())
+            .unwrap();
+        req.extensions_mut().insert(TemplateContext::new());
+
+        let resp = tower::ServiceExt::oneshot(app, req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = modo::axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&body[..], b"injected");
+    }
+
+    #[tokio::test]
+    async fn continues_on_resolver_error() {
+        let svc = TenantResolverService::new(ErrorResolver);
+        let layer = TenantContextLayer::new(svc);
+
+        let app = modo::axum::Router::new()
+            .route("/", get(|| async { "ok" }))
+            .layer(layer);
+
+        let req = Request::builder()
+            .header("host", "acme.test.com")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = tower::ServiceExt::oneshot(app, req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = modo::axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&body[..], b"ok");
+    }
+
+    #[tokio::test]
+    async fn no_crash_without_template_context() {
+        let svc = TenantResolverService::new(OkResolver);
+        let layer = TenantContextLayer::new(svc);
+
+        let app = modo::axum::Router::new()
+            .route("/", get(|| async { "ok" }))
+            .layer(layer);
+
+        // No TemplateContext in extensions
+        let req = Request::builder()
+            .header("host", "acme.test.com")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = tower::ServiceExt::oneshot(app, req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = modo::axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&body[..], b"ok");
+    }
+}
