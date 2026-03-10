@@ -89,4 +89,58 @@ mod tests {
         let result = EmailTemplate::parse(raw);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn parse_empty_input() {
+        let result = EmailTemplate::parse("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_only_opening_delimiter() {
+        let result = EmailTemplate::parse("---");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_body_contains_triple_dash() {
+        let raw = "---\nsubject: \"Hi\"\n---\nBody\n---\nMore body";
+        let tpl = EmailTemplate::parse(raw).unwrap();
+        assert_eq!(tpl.subject, "Hi");
+        assert!(tpl.body.contains("Body"));
+        assert!(tpl.body.contains("---"));
+        assert!(tpl.body.contains("More body"));
+    }
+
+    #[test]
+    fn parse_empty_body() {
+        let raw = "---\nsubject: \"Hi\"\n---";
+        let tpl = EmailTemplate::parse(raw).unwrap();
+        assert_eq!(tpl.subject, "Hi");
+        assert!(tpl.body.trim().is_empty());
+    }
+
+    #[test]
+    fn parse_unicode_subject_and_body() {
+        let raw = "---\nsubject: \"Willkommen 🎉\"\n---\n你好世界";
+        let tpl = EmailTemplate::parse(raw).unwrap();
+        assert_eq!(tpl.subject, "Willkommen 🎉");
+        assert!(tpl.body.contains("你好世界"));
+    }
+
+    #[test]
+    fn parse_extra_whitespace_around_frontmatter() {
+        let raw = "  \n---\nsubject: \"Hi\"\n---\nBody  \n  ";
+        let tpl = EmailTemplate::parse(raw).unwrap();
+        assert_eq!(tpl.subject, "Hi");
+        assert!(tpl.body.contains("Body"));
+    }
+
+    #[test]
+    fn parse_extra_fields_ignored() {
+        let raw = "---\nsubject: \"Hi\"\npriority: high\ncustom_key: value\n---\nBody";
+        let tpl = EmailTemplate::parse(raw).unwrap();
+        assert_eq!(tpl.subject, "Hi");
+        assert!(tpl.body.contains("Body"));
+    }
 }
