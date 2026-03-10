@@ -5,6 +5,7 @@ use chrono::Utc;
 use futures_util::future::BoxFuture;
 use http::{Request, Response};
 use modo::axum::extract::connect_info::ConnectInfo;
+use modo::cookies::{CookieOptions, build_cookie};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -161,19 +162,20 @@ where
             };
 
             let ttl_secs = config.session_ttl_secs;
-            let is_secure = cfg!(not(debug_assertions));
+            let cookie_config = store.cookie_config();
+            let set_opts = CookieOptions::from_config(cookie_config).max_age(ttl_secs);
+            let remove_opts = CookieOptions::from_config(cookie_config).max_age(0);
 
             match action {
                 SessionAction::Set(token) => {
-                    let cookie_val =
-                        build_set_cookie(cookie_name, &token.as_hex(), ttl_secs, is_secure);
-                    if let Ok(val) = cookie_val.parse() {
+                    let cookie = build_cookie(cookie_name, &token.as_hex(), &set_opts);
+                    if let Ok(val) = cookie.to_string().parse() {
                         response.headers_mut().append(http::header::SET_COOKIE, val);
                     }
                 }
                 SessionAction::Remove => {
-                    let cookie_val = build_remove_cookie(cookie_name);
-                    if let Ok(val) = cookie_val.parse() {
+                    let cookie = build_cookie(cookie_name, "", &remove_opts);
+                    if let Ok(val) = cookie.to_string().parse() {
                         response.headers_mut().append(http::header::SET_COOKIE, val);
                     }
                 }
@@ -186,9 +188,8 @@ where
                                 "Failed to touch session: {e}"
                             );
                         } else if let Some(ref token) = session_token {
-                            let cookie_val =
-                                build_set_cookie(cookie_name, &token.as_hex(), ttl_secs, is_secure);
-                            if let Ok(val) = cookie_val.parse() {
+                            let cookie = build_cookie(cookie_name, &token.as_hex(), &set_opts);
+                            if let Ok(val) = cookie.to_string().parse() {
                                 response.headers_mut().append(http::header::SET_COOKIE, val);
                             }
                         }
@@ -196,8 +197,8 @@ where
 
                     // Remove stale cookie (session not found, but cookie existed)
                     if had_cookie && current_session.is_none() && !read_failed {
-                        let cookie_val = build_remove_cookie(cookie_name);
-                        if let Ok(val) = cookie_val.parse() {
+                        let cookie = build_cookie(cookie_name, "", &remove_opts);
+                        if let Ok(val) = cookie.to_string().parse() {
                             response.headers_mut().append(http::header::SET_COOKIE, val);
                         }
                     }
@@ -244,17 +245,4 @@ fn read_session_cookie(headers: &http::HeaderMap, cookie_name: &str) -> Option<S
             }
             None
         })
-}
-
-fn build_set_cookie(name: &str, value: &str, max_age_secs: u64, secure: bool) -> String {
-    let mut cookie =
-        format!("{name}={value}; HttpOnly; SameSite=Lax; Path=/; Max-Age={max_age_secs}");
-    if secure {
-        cookie.push_str("; Secure");
-    }
-    cookie
-}
-
-fn build_remove_cookie(name: &str) -> String {
-    format!("{name}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0")
 }
