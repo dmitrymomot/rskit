@@ -33,7 +33,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     };
 
     Ok(quote! {
-        #[allow(dead_code)]
+        #[allow(dead_code)] // fn is referenced via inventory::submit! below
         #func
 
         #[allow(unexpected_cfgs)]
