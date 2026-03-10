@@ -366,6 +366,14 @@ impl AppBuilder {
             Arc::new(app_config.csrf.clone()),
         );
 
+        // --- Pre-parse trusted proxies (avoids per-request CIDR parsing) ---
+        self.services.insert(
+            TypeId::of::<middleware::TrustedProxies>(),
+            Arc::new(middleware::TrustedProxies(
+                middleware::parse_trusted_proxies(&server_config.trusted_proxies),
+            )),
+        );
+
         let state = AppState {
             services: ServiceRegistry {
                 services: Arc::new(self.services),
@@ -537,7 +545,10 @@ impl AppBuilder {
         // --- i18n layer (auto-wired) ---
         #[cfg(feature = "i18n")]
         if let Some(store) = state.services.get::<crate::i18n::TranslationStore>() {
-            router = router.layer(crate::i18n::layer(store, app_config.cookies.clone()));
+            router = router.layer(crate::i18n::layer(
+                store,
+                Arc::new(app_config.cookies.clone()),
+            ));
         }
 
         // --- Rate limiter (global) ---

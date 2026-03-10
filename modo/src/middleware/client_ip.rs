@@ -8,6 +8,9 @@ use axum::middleware::Next;
 use axum::response::Response;
 use std::net::{IpAddr, SocketAddr};
 
+/// Pre-parsed trusted proxy CIDR ranges, registered as a service at startup.
+pub(crate) struct TrustedProxies(pub Vec<CidrRange>);
+
 /// The resolved client IP address, inserted into request extensions.
 #[derive(Debug, Clone, Copy)]
 pub struct ClientIp(pub IpAddr);
@@ -33,12 +36,13 @@ pub async fn client_ip_middleware(
     request: Request<axum::body::Body>,
     next: Next,
 ) -> Response {
-    let trusted = parse_trusted_proxies(&state.server_config.trusted_proxies);
+    let trusted_arc = state.services.get::<TrustedProxies>();
+    let trusted: &[CidrRange] = trusted_arc.as_ref().map(|t| t.0.as_slice()).unwrap_or(&[]);
     let socket_ip = connect_info.0.ip();
 
     let (mut parts, body) = request.into_parts();
 
-    let ip = resolve_client_ip(&parts.headers, socket_ip, &trusted);
+    let ip = resolve_client_ip(&parts.headers, socket_ip, trusted);
     parts.extensions.insert(ClientIp(ip));
 
     let request = Request::from_parts(parts, body);
@@ -99,7 +103,7 @@ fn is_trusted(ip: IpAddr, trusted: &[CidrRange]) -> bool {
     trusted.iter().any(|cidr| cidr.contains(ip))
 }
 
-fn parse_trusted_proxies(proxies: &[String]) -> Vec<CidrRange> {
+pub(crate) fn parse_trusted_proxies(proxies: &[String]) -> Vec<CidrRange> {
     proxies.iter().filter_map(|s| CidrRange::parse(s)).collect()
 }
 
@@ -107,8 +111,8 @@ fn parse_trusted_proxies(proxies: &[String]) -> Vec<CidrRange> {
 // CIDR matching
 // ---------------------------------------------------------------------------
 
-#[derive(Debug)]
-struct CidrRange {
+#[derive(Debug, Clone)]
+pub(crate) struct CidrRange {
     network: IpAddr,
     prefix_len: u8,
 }

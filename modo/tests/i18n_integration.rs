@@ -126,7 +126,7 @@ async fn lang_handler(Extension(lang): Extension<ResolvedLang>) -> String {
 fn middleware_app(store: Arc<modo::i18n::TranslationStore>) -> Router {
     Router::new()
         .route("/", get(lang_handler))
-        .layer(modo::i18n::layer(store, CookieConfig::default()))
+        .layer(modo::i18n::layer(store, Arc::new(CookieConfig::default())))
 }
 
 fn middleware_app_with_source(
@@ -137,7 +137,7 @@ fn middleware_app_with_source(
         .route("/", get(lang_handler))
         .layer(modo::i18n::layer_with_source(
             store,
-            CookieConfig::default(),
+            Arc::new(CookieConfig::default()),
             source,
         ))
 }
