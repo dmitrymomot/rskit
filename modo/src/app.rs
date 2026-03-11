@@ -508,6 +508,7 @@ impl AppBuilder {
         #[cfg(feature = "templates")]
         if let Some(ref engine) = template_engine {
             router = router.layer(crate::templates::RenderLayer::new(engine.clone()));
+            router = router.layer(axum::extract::Extension(engine.clone()));
         }
 
         // --- User global layers (innermost of framework layers) ---
