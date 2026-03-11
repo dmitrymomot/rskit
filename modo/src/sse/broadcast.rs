@@ -75,7 +75,7 @@ where
     /// raw `T` values -- convert to [`SseEvent`](super::SseEvent) downstream
     /// using [`SseStreamExt`](super::SseStreamExt) or `.map()`.
     pub fn subscribe(&self, key: &K) -> SseStream<T> {
-        let mut channels = self.channels.write().unwrap();
+        let mut channels = self.channels.write().unwrap_or_else(|e| e.into_inner());
 
         // Prune dead channels while we have the lock
         channels.retain(|_, sender| sender.receiver_count() > 0);
@@ -95,7 +95,7 @@ where
     /// **Does NOT create a channel** -- only [`subscribe()`](Self::subscribe)
     /// creates channels lazily. Sending to a nonexistent key is a silent no-op.
     pub fn send(&self, key: &K, event: T) -> Result<usize, Error> {
-        let mut channels = self.channels.write().unwrap();
+        let mut channels = self.channels.write().unwrap_or_else(|e| e.into_inner());
 
         // Prune dead channels
         channels.retain(|_, sender| sender.receiver_count() > 0);
@@ -114,7 +114,7 @@ where
     ///
     /// Returns 0 if the key has no channel.
     pub fn subscriber_count(&self, key: &K) -> usize {
-        let channels = self.channels.read().unwrap();
+        let channels = self.channels.read().unwrap_or_else(|e| e.into_inner());
         channels.get(key).map(|s| s.receiver_count()).unwrap_or(0)
     }
 
@@ -123,7 +123,7 @@ where
     /// Typically not needed -- channels auto-clean when the last subscriber
     /// drops. Use this for explicit teardown (e.g., deleting a chat room).
     pub fn remove(&self, key: &K) {
-        let mut channels = self.channels.write().unwrap();
+        let mut channels = self.channels.write().unwrap_or_else(|e| e.into_inner());
         channels.remove(key);
     }
 }

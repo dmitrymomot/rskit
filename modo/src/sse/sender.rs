@@ -1,7 +1,8 @@
 use super::event::SseEvent;
 use super::response::SseResponse;
 use crate::error::Error;
-use futures_util::Stream;
+use futures_util::{FutureExt, Stream};
+use std::panic::AssertUnwindSafe;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::sync::mpsc;
@@ -97,8 +98,11 @@ where
     let sender = SseSender { tx };
 
     tokio::spawn(async move {
-        if let Err(e) = f(sender).await {
-            tracing::debug!(error = %e, "SSE channel closure ended with error");
+        let result = AssertUnwindSafe(f(sender)).catch_unwind().await;
+        match result {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => tracing::debug!(error = %e, "SSE channel closure ended with error"),
+            Err(_) => tracing::error!("SSE channel closure panicked"),
         }
     });
 
