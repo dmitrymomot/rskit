@@ -56,6 +56,13 @@ pub fn expand(
         },
     };
 
+    let htmx_template_expr = match &attr.htmx_template {
+        Some(htmx_lit) => quote! { #htmx_lit },
+        None => quote! { #template_path },
+    };
+
+    let has_dual = attr.htmx_template.is_some();
+
     Ok(quote! {
         #[derive(::modo::serde::Serialize)]
         #[serde(crate = "::modo::serde")]
@@ -66,6 +73,28 @@ pub fn expand(
                 let user_context = ::modo::minijinja::Value::from_serialize(&self);
                 let view = #view_construction;
                 view.into_response()
+            }
+        }
+
+        impl ::modo::templates::ViewRender for #struct_name {
+            fn has_dual_template(&self) -> bool {
+                #has_dual
+            }
+
+            fn render_with(
+                &self,
+                engine: &::modo::templates::TemplateEngine,
+                context: &::modo::templates::TemplateContext,
+                is_htmx: bool,
+            ) -> Result<String, ::modo::templates::TemplateError> {
+                let user_context = ::modo::minijinja::Value::from_serialize(&self);
+                let template = if is_htmx {
+                    #htmx_template_expr
+                } else {
+                    #template_path
+                };
+                let merged = context.merge_with(user_context);
+                engine.render(template, merged)
             }
         }
     })
