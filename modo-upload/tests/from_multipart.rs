@@ -2,7 +2,7 @@
 
 use axum::extract::FromRequest;
 use axum::http::Request;
-use modo_upload::{FromMultipart, UploadStream, UploadedFile};
+use modo_upload::{BufferedUpload, FromMultipart, UploadedFile};
 
 // ---------------------------------------------------------------------------
 // Helper: build a real `axum::extract::Multipart` from field descriptors
@@ -619,18 +619,18 @@ async fn multiple_required_fields_missing() {
 }
 
 // ===========================================================================
-// Group 6: UploadStream in derived structs
+// Group 6: BufferedUpload in derived structs
 // ===========================================================================
 
 #[derive(FromMultipart)]
 struct StreamUpload {
-    stream: UploadStream,
+    stream: BufferedUpload,
 }
 
 #[derive(FromMultipart)]
 struct MixedStreamAndText {
     name: String,
-    stream: UploadStream,
+    stream: BufferedUpload,
 }
 
 #[tokio::test]

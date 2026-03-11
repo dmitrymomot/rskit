@@ -4,7 +4,7 @@ pub mod local;
 pub mod opendal;
 
 use crate::file::UploadedFile;
-use crate::stream::UploadStream;
+use crate::stream::BufferedUpload;
 use std::path::{Component, Path, PathBuf};
 
 /// Metadata for a stored file.
@@ -21,11 +21,11 @@ pub trait FileStorage: Send + Sync + 'static {
     /// Store a buffered file under `prefix/`. Returns the stored path and size.
     async fn store(&self, prefix: &str, file: &UploadedFile) -> Result<StoredFile, modo::Error>;
 
-    /// Store a streaming file under `prefix/`. Returns the stored path and size.
+    /// Store a buffered-chunked file under `prefix/`. Returns the stored path and size.
     async fn store_stream(
         &self,
         prefix: &str,
-        stream: &mut UploadStream,
+        stream: &mut BufferedUpload,
     ) -> Result<StoredFile, modo::Error>;
 
     /// Delete a file by its storage path.
@@ -42,6 +42,8 @@ pub(crate) fn ensure_within(base: &Path, path: &Path) -> Result<PathBuf, modo::E
     for component in path.components() {
         match component {
             Component::Normal(c) => result.push(c),
+            // `.` is harmless in filesystem paths — silently stripped.
+            // (Object-store keys must be canonical, so `validate_logical_path` rejects `.`.)
             Component::CurDir => {}
             _ => return Err(modo::Error::internal("Invalid storage path")),
         }

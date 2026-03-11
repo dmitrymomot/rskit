@@ -1,10 +1,10 @@
 use bytes::Bytes;
-use modo_upload::UploadStream;
+use modo_upload::BufferedUpload;
 use tokio::io::AsyncReadExt;
 
 #[tokio::test]
 async fn chunk_returns_in_order_then_none() {
-    let mut stream = modo_upload::UploadStream::__test_new(
+    let mut stream = modo_upload::BufferedUpload::__test_new(
         "file",
         "data.bin",
         "application/octet-stream",
@@ -22,7 +22,7 @@ async fn chunk_returns_in_order_then_none() {
 
 #[tokio::test]
 async fn size_returns_total() {
-    let stream = modo_upload::UploadStream::__test_new(
+    let stream = modo_upload::BufferedUpload::__test_new(
         "file",
         "data.bin",
         "application/octet-stream",
@@ -33,7 +33,7 @@ async fn size_returns_total() {
 
 #[tokio::test]
 async fn into_reader_yields_all_bytes() {
-    let stream = modo_upload::UploadStream::__test_new(
+    let stream = modo_upload::BufferedUpload::__test_new(
         "file",
         "data.bin",
         "application/octet-stream",
@@ -47,7 +47,7 @@ async fn into_reader_yields_all_bytes() {
 
 #[test]
 fn to_bytes_multiple_chunks() {
-    let stream = UploadStream::__test_new(
+    let stream = BufferedUpload::__test_new(
         "file",
         "data.bin",
         "application/octet-stream",
@@ -58,7 +58,7 @@ fn to_bytes_multiple_chunks() {
 
 #[test]
 fn to_bytes_single_chunk() {
-    let stream = UploadStream::__test_new(
+    let stream = BufferedUpload::__test_new(
         "file",
         "data.bin",
         "application/octet-stream",
@@ -69,13 +69,13 @@ fn to_bytes_single_chunk() {
 
 #[test]
 fn to_bytes_empty() {
-    let stream = UploadStream::__test_new("file", "data.bin", "application/octet-stream", vec![]);
+    let stream = BufferedUpload::__test_new("file", "data.bin", "application/octet-stream", vec![]);
     assert!(stream.to_bytes().is_empty());
 }
 
 #[tokio::test]
 async fn chunk_after_eof_returns_none_repeatedly() {
-    let mut stream = UploadStream::__test_new(
+    let mut stream = BufferedUpload::__test_new(
         "file",
         "data.bin",
         "application/octet-stream",
@@ -91,7 +91,7 @@ async fn chunk_after_eof_returns_none_repeatedly() {
 
 #[tokio::test]
 async fn into_reader_empty_stream() {
-    let stream = UploadStream::__test_new("file", "data.bin", "application/octet-stream", vec![]);
+    let stream = BufferedUpload::__test_new("file", "data.bin", "application/octet-stream", vec![]);
     let mut reader = stream.into_reader();
     let mut buf = Vec::new();
     reader.read_to_end(&mut buf).await.unwrap();
@@ -101,7 +101,7 @@ async fn into_reader_empty_stream() {
 #[test]
 fn accessors_return_correct_values() {
     let stream =
-        UploadStream::__test_new("avatar", "pic.png", "image/png", vec![Bytes::from("data")]);
+        BufferedUpload::__test_new("avatar", "pic.png", "image/png", vec![Bytes::from("data")]);
     assert_eq!(stream.name(), "avatar");
     assert_eq!(stream.file_name(), "pic.png");
     assert_eq!(stream.content_type(), "image/png");
@@ -109,13 +109,13 @@ fn accessors_return_correct_values() {
 
 #[test]
 fn size_empty_stream() {
-    let stream = UploadStream::__test_new("file", "data.bin", "application/octet-stream", vec![]);
+    let stream = BufferedUpload::__test_new("file", "data.bin", "application/octet-stream", vec![]);
     assert_eq!(stream.size(), 0);
 }
 
 #[test]
 fn to_bytes_does_not_advance_chunk_pos() {
-    let mut stream = UploadStream::__test_new(
+    let mut stream = BufferedUpload::__test_new(
         "file",
         "data.bin",
         "application/octet-stream",
@@ -132,7 +132,7 @@ fn to_bytes_does_not_advance_chunk_pos() {
 
 #[tokio::test]
 async fn chunk_with_empty_intermediate_chunk() {
-    let mut stream = UploadStream::__test_new(
+    let mut stream = BufferedUpload::__test_new(
         "file",
         "data.bin",
         "application/octet-stream",

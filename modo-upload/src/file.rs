@@ -8,7 +8,7 @@ pub(crate) fn extract_extension(filename: &str) -> Option<&str> {
     if ext == filename { None } else { Some(ext) }
 }
 
-/// Metadata extracted from a multipart field (shared by UploadedFile and UploadStream).
+/// Metadata extracted from a multipart field (shared by UploadedFile and BufferedUpload).
 pub(crate) struct FieldMeta {
     pub name: String,
     pub file_name: String,

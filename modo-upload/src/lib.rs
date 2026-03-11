@@ -13,7 +13,7 @@ pub use config::{StorageBackend, UploadConfig};
 pub use extractor::MultipartForm;
 pub use file::UploadedFile;
 pub use storage::{FileStorage, StoredFile, storage};
-pub use stream::UploadStream;
+pub use stream::BufferedUpload;
 pub use validate::{gb, kb, mb};
 
 /// Trait for parsing a struct from `multipart/form-data`.

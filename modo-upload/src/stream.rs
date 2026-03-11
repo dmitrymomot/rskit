@@ -4,12 +4,12 @@ use futures_util::stream;
 use std::pin::Pin;
 use tokio::io::AsyncRead;
 
-/// An uploaded file stored as a sequence of chunks rather than one contiguous buffer.
+/// An uploaded file fully buffered in memory as a sequence of chunks.
 ///
-/// **Note:** This is not a true streaming upload. During multipart parsing, all
-/// chunks are fully buffered in memory before the struct is returned. The
-/// `chunk()` and `into_reader()` methods replay from this in-memory buffer.
-pub struct UploadStream {
+/// During multipart parsing all chunks are collected into memory before the
+/// struct is returned.  The [`chunk()`](Self::chunk) and
+/// [`into_reader()`](Self::into_reader) methods replay from this buffer.
+pub struct BufferedUpload {
     name: String,
     file_name: String,
     content_type: String,
@@ -18,7 +18,7 @@ pub struct UploadStream {
     pos: usize,
 }
 
-impl UploadStream {
+impl BufferedUpload {
     /// Create from an axum multipart field by draining its chunks.
     #[doc(hidden)]
     pub async fn from_field(
@@ -105,7 +105,7 @@ impl UploadStream {
         buf.freeze()
     }
 
-    /// Test helper — construct an `UploadStream` without multipart parsing.
+    /// Test helper — construct a `BufferedUpload` without multipart parsing.
     #[doc(hidden)]
     pub fn __test_new(name: &str, file_name: &str, content_type: &str, chunks: Vec<Bytes>) -> Self {
         let total_size = chunks.iter().map(|c| c.len()).sum();

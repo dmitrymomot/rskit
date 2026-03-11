@@ -1,6 +1,6 @@
 use super::{FileStorage, StoredFile, ensure_within, generate_filename};
 use crate::file::UploadedFile;
-use crate::stream::UploadStream;
+use crate::stream::BufferedUpload;
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
 
@@ -43,7 +43,7 @@ impl FileStorage for LocalStorage {
     async fn store_stream(
         &self,
         prefix: &str,
-        stream: &mut UploadStream,
+        stream: &mut BufferedUpload,
     ) -> Result<StoredFile, modo::Error> {
         let filename = generate_filename(stream.file_name());
         let rel_path = format!("{prefix}/{filename}");

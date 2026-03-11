@@ -8,7 +8,7 @@ enum FieldKind {
     UploadedFile,
     OptionUploadedFile,
     VecUploadedFile,
-    UploadStream,
+    BufferedUpload,
     String,
     OptionString,
     /// Other type implementing FromStr.
@@ -130,7 +130,7 @@ fn classify_type(ty: &Type) -> FieldKind {
 
     match last.ident.to_string().as_str() {
         "UploadedFile" => FieldKind::UploadedFile,
-        "UploadStream" => FieldKind::UploadStream,
+        "BufferedUpload" => FieldKind::BufferedUpload,
         "String" => FieldKind::String,
         "Option" => classify_inner_type(last, |name| match name {
             "UploadedFile" => Some(FieldKind::OptionUploadedFile),
@@ -188,7 +188,7 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
         let field_name = field.ident.clone().unwrap();
         let kind = classify_type(&field.ty);
 
-        if matches!(kind, FieldKind::UploadStream) {
+        if matches!(kind, FieldKind::BufferedUpload) {
             has_stream = true;
         }
 
@@ -220,12 +220,12 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
     if has_stream {
         let stream_count = multipart_fields
             .iter()
-            .filter(|f| matches!(f.kind, FieldKind::UploadStream))
+            .filter(|f| matches!(f.kind, FieldKind::BufferedUpload))
             .count();
         if stream_count > 1 {
             return Err(syn::Error::new_spanned(
                 &input,
-                "only one UploadStream field is allowed",
+                "only one BufferedUpload field is allowed",
             ));
         }
     }
@@ -245,8 +245,8 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
                 FieldKind::VecUploadedFile => {
                     quote! { let mut #var: Vec<modo_upload::UploadedFile> = Vec::new(); }
                 }
-                FieldKind::UploadStream => {
-                    quote! { let mut #var: Option<modo_upload::UploadStream> = None; }
+                FieldKind::BufferedUpload => {
+                    quote! { let mut #var: Option<modo_upload::BufferedUpload> = None; }
                 }
                 FieldKind::String => quote! { let mut #var: Option<String> = None; },
                 FieldKind::OptionString => quote! { let mut #var: Option<String> = None; },
@@ -276,9 +276,9 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
                         #var.push(modo_upload::UploadedFile::from_field(__field, #file_size_limit).await?);
                     }
                 },
-                FieldKind::UploadStream => quote! {
+                FieldKind::BufferedUpload => quote! {
                     Some(#name) => {
-                        #var = Some(modo_upload::UploadStream::from_field(__field, #file_size_limit).await?);
+                        #var = Some(modo_upload::BufferedUpload::from_field(__field, #file_size_limit).await?);
                     }
                 },
                 FieldKind::String | FieldKind::OptionString | FieldKind::FromStr => quote! {
@@ -396,7 +396,7 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
                 }
                 field_assignments.push(quote! { #field_name: #var });
             }
-            FieldKind::UploadStream => {
+            FieldKind::BufferedUpload => {
                 validation_stmts.push(quote! {
                     let #var = #var.ok_or_else(|| {
                         modo::validate::validation_error(vec![(#name_str, vec!["is required".into()])])

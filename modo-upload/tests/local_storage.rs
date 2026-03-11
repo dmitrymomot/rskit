@@ -81,7 +81,7 @@ async fn store_stream_writes_file() {
     let dir = tempfile::tempdir().unwrap();
     let storage = LocalStorage::new(dir.path());
 
-    let mut stream = modo_upload::UploadStream::__test_new(
+    let mut stream = modo_upload::BufferedUpload::__test_new(
         "file",
         "test.txt",
         "text/plain",
@@ -103,7 +103,7 @@ async fn store_stream_empty_stream() {
     let storage = LocalStorage::new(dir.path());
 
     let mut stream =
-        modo_upload::UploadStream::__test_new("file", "empty.txt", "text/plain", vec![]);
+        modo_upload::BufferedUpload::__test_new("file", "empty.txt", "text/plain", vec![]);
     let stored = storage.store_stream("docs", &mut stream).await.unwrap();
 
     assert!(stored.path.starts_with("docs/"));
@@ -137,7 +137,7 @@ async fn store_stream_creates_nested_directories() {
     let dir = tempfile::tempdir().unwrap();
     let storage = LocalStorage::new(dir.path());
 
-    let mut stream = modo_upload::UploadStream::__test_new(
+    let mut stream = modo_upload::BufferedUpload::__test_new(
         "file",
         "test.txt",
         "text/plain",

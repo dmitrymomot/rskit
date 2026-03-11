@@ -1,6 +1,6 @@
 use super::{FileStorage, StoredFile, generate_filename, validate_logical_path};
 use crate::file::UploadedFile;
-use crate::stream::UploadStream;
+use crate::stream::BufferedUpload;
 
 /// Storage backend powered by Apache OpenDAL (S3, GCS, Azure, etc.).
 ///
@@ -39,7 +39,7 @@ impl FileStorage for OpendalStorage {
     async fn store_stream(
         &self,
         prefix: &str,
-        stream: &mut UploadStream,
+        stream: &mut BufferedUpload,
     ) -> Result<StoredFile, modo::Error> {
         validate_logical_path(prefix)?;
         let filename = generate_filename(stream.file_name());
