@@ -28,18 +28,19 @@ Add Server-Sent Events support to the `modo` core crate as an opt-in feature fla
 
 ## Dependencies
 
-No new external crates required:
+No new external crates. The `sse` feature activates `dep:futures-util` (already an optional dep used by `templates` and `i18n`):
 
-- `axum::response::sse` — built-in SSE response types
-- `tokio::sync::broadcast` — multi-producer, multi-consumer channels
+- `axum::response::sse` — built-in SSE response types (requires axum's `"json"` feature for `Event::json_data()`, which is enabled by axum's default features and already active in modo)
+- `tokio::sync::broadcast` — multi-producer, multi-consumer channels (for `SseBroadcastManager`)
+- `tokio::sync::mpsc` — single-producer channel (for `SseSender` in `channel()`)
 - `tokio::sync::RwLock` — concurrent access to channel registry
-- `futures-util` — `Stream` trait and combinators (already a dependency)
+- `futures-util` — `Stream` trait and combinators
 
 ## Types
 
 ### `SseEvent`
 
-Builder for a single SSE event. Wraps `axum::response::sse::Event`.
+Builder for a single SSE event. Wraps `axum::response::sse::Event`. Annotated with `#[must_use]` to catch unchained builder calls.
 
 ```rust
 SseEvent::new()
@@ -48,7 +49,7 @@ SseEvent::new()
     .json(&my_struct)?                   // JSON-serialized payload (mutually exclusive with .data/.html)
     .html("<div>fragment</div>")         // HTML fragment payload (mutually exclusive with .data/.json)
     .id("evt-123")                       // last-event-id for reconnection (optional)
-    .retry(Duration::from_secs(5))       // client reconnect hint (optional)
+    .retry(Duration::from_secs(5))       // client reconnect hint (serialized as milliseconds per SSE spec)
 ```
 
 - `.data()`, `.json()`, `.html()` are mutually exclusive — each sets the data payload
@@ -61,56 +62,76 @@ Handler return type. Wraps `axum::response::sse::Sse<S>` with automatic keep-ali
 
 Implements `IntoResponse` so handlers can return it directly.
 
+Keep-alive interval is read from `SseConfig` at construction time. If no config is available, uses the hardcoded default (15 seconds). An `.with_keep_alive(interval)` method on `SseResponse` allows per-handler override.
+
 ### `SseConfig`
 
-Optional YAML-deserializable configuration. Auto-registered in `AppBuilder::run()`.
+Optional YAML-deserializable configuration. Added as a field on `AppConfig` (gated with `#[cfg(feature = "sse")]`), auto-registered as a service in `AppBuilder::run()`.
 
 ```yaml
 sse:
-  keep_alive_interval: 15s   # default: 15 seconds
+  keep_alive_interval_secs: 15   # default: 15 seconds
 ```
 
 ```rust
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SseConfig {
-    #[serde(default = "default_keep_alive_interval")]
-    pub keep_alive_interval: Duration,  // default: 15s
+    /// Keep-alive interval in seconds. Converted to `Duration` internally.
+    /// Default: 15 seconds.
+    #[serde(default = "default_keep_alive_interval_secs")]
+    pub keep_alive_interval_secs: u64,
+}
+
+impl SseConfig {
+    pub fn keep_alive_interval(&self) -> Duration {
+        Duration::from_secs(self.keep_alive_interval_secs)
+    }
 }
 ```
+
+Uses `u64` seconds (not `Duration`) for YAML deserialization, matching the pattern used by `CsrfConfig.cookie_max_age`.
 
 ### `SseSender`
 
 Channel sender for imperative message production within a `modo::sse::channel()` closure.
 
+Backed by `tokio::sync::mpsc::Sender<SseEvent>`. The receiver end is held by the `SseResponse` stream. When the client disconnects, axum drops the response body, which drops the receiver. Subsequent `send()` calls return `Err` immediately.
+
 ```rust
 impl SseSender {
+    /// Send an event to the connected client.
+    ///
+    /// # Errors
+    /// Returns an error if the client has disconnected (receiver dropped).
     async fn send(&self, event: SseEvent) -> Result<(), Error>;
 }
 ```
 
-Returns an error if the client has disconnected — no sending into the void.
-
 ### `SseBroadcastManager<K, T>`
 
-Registry of keyed broadcast channels. One manager per domain concept, registered as a service.
+Registry of keyed broadcast channels. One manager per domain concept, registered as a service via `app.service(manager)` (the service registry handles `Arc` wrapping — do not wrap in `Arc` yourself).
 
 ```rust
 impl<K, T> SseBroadcastManager<K, T>
 where
     K: Hash + Eq + Clone + Send + Sync + 'static,
-    T: Into<SseEvent> + Clone + Send + Sync + 'static,
+    T: Clone + Send + Sync + 'static,
 {
     /// Create a new manager with the given per-channel buffer size.
     fn new(buffer: usize) -> Self;
 
     /// Subscribe to a keyed channel.
     /// Creates the channel lazily on first subscription.
+    /// Returns a stream of raw `T` values (not yet converted to `SseEvent`).
     fn subscribe(&self, key: &K) -> SseStream<T>;
 
     /// Send an event to all subscribers of a keyed channel.
     /// Returns the number of receivers that got the message.
     /// Returns Ok(0) if no subscribers exist for the key.
+    ///
+    /// **Does NOT create a channel** — only `subscribe()` creates channels lazily.
+    /// Sending to a nonexistent key is a silent no-op returning Ok(0).
     fn send(&self, key: &K, event: T) -> Result<usize, Error>;
 
     /// Number of active subscribers for a key.
@@ -122,11 +143,13 @@ where
 }
 ```
 
-**Internals:** `Arc<RwLock<HashMap<K, broadcast::Sender<T>>>>`. Channels created lazily on first `subscribe()`. Auto-removed when the last subscriber's `SseStream` is dropped (detected via `broadcast::Sender::receiver_count() == 0` on next operation, or a background cleanup).
+**Internals:** `Arc<RwLock<HashMap<K, broadcast::Sender<T>>>>`. Channels created lazily on first `subscribe()`. Auto-cleanup strategy: on each `send()` or `subscribe()` call, prune channels where `broadcast::Sender::receiver_count() == 0`. This means the map may briefly hold empty entries between operations, which is harmless.
 
 ### `SseStream<T>`
 
-Wraps `broadcast::Receiver<T>`, implements `Stream<Item = Result<SseEvent, Error>>`. Converts `T` to `SseEvent` via `Into<SseEvent>` on each poll.
+Wraps `broadcast::Receiver<T>`, implements `Stream<Item = Result<T, Error>>`.
+
+**Important:** `SseStream<T>` yields raw `T` values, NOT `SseEvent`. The `Into<SseEvent>` conversion happens downstream — either in `from_stream()` or via `SseStreamExt` combinators. This allows handlers to filter and map on the original domain type before conversion.
 
 Handles `RecvError::Lagged` gracefully — logs a warning and continues (slow consumers skip missed messages rather than disconnecting).
 
@@ -141,7 +164,9 @@ where
     E: Into<Error>,
 ```
 
-Main entry point. Wraps any stream as an SSE response with auto keep-alive.
+Main entry point. Wraps any stream of `SseEvent`s as an SSE response with auto keep-alive.
+
+The stream must yield `Result<SseEvent, E>`. Use `SseStreamExt` combinators or `.map()` to convert domain types to `SseEvent` before passing to `from_stream`.
 
 ### `modo::sse::channel`
 
@@ -152,7 +177,9 @@ where
     Fut: Future<Output = Result<(), Error>> + Send,
 ```
 
-Spawns the closure as a tokio task, returns an `SseResponse` backed by the receiver end. When the closure returns or the client disconnects, everything cleans up.
+Spawns the closure as a tokio task, returns an `SseResponse` backed by the `mpsc::Receiver` end.
+
+**Cleanup is cooperative:** The spawned task runs until the closure returns or a `tx.send()` call fails (because the client disconnected and the receiver was dropped). Handlers producing messages in a loop should check the `send()` result and break on error. The task is NOT automatically aborted on client disconnect — it runs until it attempts to send and detects the closed channel.
 
 ## Stream Ergonomics
 
@@ -161,12 +188,16 @@ Spawns the closure as a tokio task, returns an `SseResponse` backed by the recei
 Extension trait on `Stream` for ergonomic event mapping.
 
 ```rust
-pub trait SseStreamExt: Stream {
-    /// Set event name on each item (item must impl Into<SseEvent>).
-    fn sse_event(self, name: &'static str) -> impl Stream<Item = Result<SseEvent, Error>>;
+pub trait SseStreamExt: Stream + Sized {
+    /// Set event name on each item and convert to SseEvent.
+    fn sse_event(self, name: &'static str) -> impl Stream<Item = Result<SseEvent, Error>>
+    where
+        Self::Item: Into<SseEvent>;
 
-    /// Serialize each item as JSON data.
-    fn sse_json(self) -> impl Stream<Item = Result<SseEvent, Error>>;
+    /// Serialize each item as JSON data in an SseEvent.
+    fn sse_json(self) -> impl Stream<Item = Result<SseEvent, Error>>
+    where
+        Self::Item: Serialize;
 
     /// Map each item to an SseEvent with a custom closure.
     fn sse_map<F>(self, f: F) -> impl Stream<Item = Result<SseEvent, Error>>
@@ -177,11 +208,21 @@ pub trait SseStreamExt: Stream {
 
 ## Integration with `modo` Core
 
+### `AppConfig` changes
+
+Add `SseConfig` field gated by feature flag:
+
+```rust
+#[cfg(feature = "sse")]
+#[serde(default)]
+pub sse: crate::sse::SseConfig,
+```
+
 ### `AppBuilder::run()` changes
 
 Within `#[cfg(feature = "sse")]`:
 
-1. Load `SseConfig` from app config (with defaults)
+1. Read `SseConfig` from `AppConfig` (with defaults via `#[serde(default)]`)
 2. Register `SseConfig` as a service
 
 No middleware or layers needed — SSE responses are self-contained.
@@ -204,10 +245,8 @@ Public items from `modo::sse`:
 
 ```toml
 [features]
-sse = []  # no extra deps — uses axum's built-in SSE + tokio broadcast
+sse = ["dep:futures-util"]  # futures-util already an optional dep
 ```
-
-No new dependencies. Everything needed is already in `axum` and `tokio`.
 
 ## File Structure
 
@@ -222,6 +261,22 @@ modo/src/sse/
 └── stream_ext.rs       # SseStreamExt trait
 ```
 
+## Gotchas
+
+### Request timeout layer terminates SSE connections
+
+The global `TimeoutLayer` in `AppBuilder::run()` will kill SSE connections after the configured timeout. Keep-alive events do NOT reset the timer — the timer is set at request start for the full response lifecycle.
+
+**Mitigation:** Apps using SSE should either:
+- Set a long request timeout (e.g., `http.request_timeout: 3600` for 1 hour)
+- Disable the global timeout and apply per-route timeouts to non-SSE handlers instead
+
+This interaction should be documented prominently in the module docs.
+
+### `Last-Event-ID` reconnection flow
+
+When a client reconnects after a disconnect, the browser's `EventSource` sends a `Last-Event-ID` header with the last received event ID. Handlers can read this via `axum::TypedHeader<headers::LastEventId>` (or raw header extraction) to replay missed events. The SSE module does NOT handle replay automatically — this is application logic.
+
 ## Documentation Requirements
 
 Every public type, method, and function must have:
@@ -232,6 +287,7 @@ Every public type, method, and function must have:
 - **`# Examples`** sections: Compilable doc examples for all primary APIs
 - **`# Panics`** / **`# Errors`** sections: Where applicable
 - **Cross-references**: Link related types (e.g., `SseEvent` docs reference `SseBroadcastManager`)
+- **Gotchas section** in module docs: Request timeout interaction, `Last-Event-ID` reconnection flow
 
 ## Examples
 
@@ -256,8 +312,15 @@ async fn chat_stream(
     Service(chat): Service<SseBroadcastManager<String, ChatMessage>>,
 ) -> SseResponse {
     let user_id = auth.user.id.clone();
+    // SseStream<ChatMessage> yields Result<ChatMessage, Error>,
+    // so we can filter on the raw domain type before converting
     let stream = chat.subscribe(&id)
-        .filter(move |msg| msg.sender != user_id)
+        .filter_map(move |result| {
+            match result {
+                Ok(msg) if msg.sender != user_id => Some(msg),
+                _ => None,
+            }
+        })
         .map(move |msg| {
             let html = view.render_to_string(ChatBubbleView::from(&msg))?;
             Ok(SseEvent::new().event("message").html(html))
@@ -295,7 +358,11 @@ async fn dashboard(
     tenant: Tenant<MyTenant>,
     Service(uptime): Service<SseBroadcastManager<TenantId, UptimeCheck>>,
 ) -> SseResponse {
-    modo::sse::from_stream(uptime.subscribe(&tenant.id))
+    // subscribe() yields Result<UptimeCheck, Error>,
+    // sse_map converts each to SseEvent
+    let stream = uptime.subscribe(&tenant.id)
+        .sse_map(|check| Ok(SseEvent::from(check)));
+    modo::sse::from_stream(stream)
 }
 ```
 
@@ -307,7 +374,10 @@ async fn notifications(
     auth: Auth<User>,
     Service(notif): Service<SseBroadcastManager<UserId, Notification>>,
 ) -> SseResponse {
-    modo::sse::from_stream(notif.subscribe(&auth.user.id))
+    // Using SseStreamExt to convert directly
+    modo::sse::from_stream(
+        notif.subscribe(&auth.user.id).sse_json()
+    )
 }
 ```
 
@@ -338,3 +408,4 @@ async fn job_progress(
 - **WebSocket support** — separate feature if ever needed
 - **Authentication/authorization** — use existing `Auth<User>` / `Tenant<T>` extractors
 - **Client-side library** — HTMX `hx-ext="sse"` or native `EventSource` API
+- **Automatic event replay on reconnect** — application logic using `Last-Event-ID` header
