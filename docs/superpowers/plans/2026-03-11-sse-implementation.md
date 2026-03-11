@@ -16,60 +16,60 @@
 
 ### New files (modo/src/sse/)
 
-| File | Responsibility |
-|------|---------------|
-| `modo/src/sse/mod.rs` | Module docs, re-exports, `from_stream()` and `channel()` entry points |
-| `modo/src/sse/config.rs` | `SseConfig` — YAML-deserializable keep-alive config |
-| `modo/src/sse/event.rs` | `SseEvent` — builder for SSE events (data/json/html/event/id/retry) |
-| `modo/src/sse/response.rs` | `SseResponse` — handler return type wrapping axum's `Sse<S>` |
-| `modo/src/sse/sender.rs` | `SseSender` — mpsc-backed sender for `channel()` |
-| `modo/src/sse/broadcast.rs` | `SseBroadcastManager<K,T>` and `SseStream<T>` |
-| `modo/src/sse/last_event_id.rs` | `LastEventId` extractor |
-| `modo/src/sse/stream_ext.rs` | `SseStreamExt` trait for ergonomic stream mapping |
+| File                            | Responsibility                                                        |
+| ------------------------------- | --------------------------------------------------------------------- |
+| `modo/src/sse/mod.rs`           | Module docs, re-exports, `from_stream()` and `channel()` entry points |
+| `modo/src/sse/config.rs`        | `SseConfig` — YAML-deserializable keep-alive config                   |
+| `modo/src/sse/event.rs`         | `SseEvent` — builder for SSE events (data/json/html/event/id/retry)   |
+| `modo/src/sse/response.rs`      | `SseResponse` — handler return type wrapping axum's `Sse<S>`          |
+| `modo/src/sse/sender.rs`        | `SseSender` — mpsc-backed sender for `channel()`                      |
+| `modo/src/sse/broadcast.rs`     | `SseBroadcastManager<K,T>` and `SseStream<T>`                         |
+| `modo/src/sse/last_event_id.rs` | `LastEventId` extractor                                               |
+| `modo/src/sse/stream_ext.rs`    | `SseStreamExt` trait for ergonomic stream mapping                     |
 
 ### Modified files (modo core integration)
 
-| File | Change |
-|------|--------|
-| `modo/Cargo.toml` | Add `sse` feature flag |
-| `modo/src/config.rs` | Add `SseConfig` field to `AppConfig` |
-| `modo/src/app.rs` | Auto-register `SseConfig` as service |
-| `modo/src/lib.rs` | Add `#[cfg(feature = "sse")] pub mod sse;` and re-exports |
+| File                 | Change                                                    |
+| -------------------- | --------------------------------------------------------- |
+| `modo/Cargo.toml`    | Add `sse` feature flag                                    |
+| `modo/src/config.rs` | Add `SseConfig` field to `AppConfig`                      |
+| `modo/src/app.rs`    | Auto-register `SseConfig` as service                      |
+| `modo/src/lib.rs`    | Add `#[cfg(feature = "sse")] pub mod sse;` and re-exports |
 
 ### Test files
 
-| File | Tests |
-|------|-------|
-| `modo/tests/sse_event.rs` | SseEvent builder, mutually exclusive data, conversion |
-| `modo/tests/sse_response.rs` | SseResponse headers, keep-alive override |
-| `modo/tests/sse_last_event_id.rs` | LastEventId extractor with/without header |
-| `modo/tests/sse_channel.rs` | channel() send/receive, disconnect cleanup |
-| `modo/tests/sse_broadcast.rs` | SseBroadcastManager subscribe/send/cleanup |
-| `modo/tests/sse_stream_ext.rs` | SseStreamExt sse_json, sse_map |
+| File                              | Tests                                                 |
+| --------------------------------- | ----------------------------------------------------- |
+| `modo/tests/sse_event.rs`         | SseEvent builder, mutually exclusive data, conversion |
+| `modo/tests/sse_response.rs`      | SseResponse headers, keep-alive override              |
+| `modo/tests/sse_last_event_id.rs` | LastEventId extractor with/without header             |
+| `modo/tests/sse_channel.rs`       | channel() send/receive, disconnect cleanup            |
+| `modo/tests/sse_broadcast.rs`     | SseBroadcastManager subscribe/send/cleanup            |
+| `modo/tests/sse_stream_ext.rs`    | SseStreamExt sse_json, sse_map                        |
 
 ### Example 1: SSE Dashboard
 
-| File | Purpose |
-|------|---------|
-| `examples/sse-dashboard/Cargo.toml` | Dependencies |
-| `examples/sse-dashboard/src/main.rs` | Fake server monitoring with HTMX SSE |
-| `examples/sse-dashboard/config/development.yaml` | Server config |
-| `examples/sse-dashboard/templates/layouts/base.html` | Base layout with HTMX |
-| `examples/sse-dashboard/templates/pages/dashboard.html` | Dashboard page |
-| `examples/sse-dashboard/templates/partials/status_card.html` | Status card partial |
+| File                                                         | Purpose                              |
+| ------------------------------------------------------------ | ------------------------------------ |
+| `examples/sse-dashboard/Cargo.toml`                          | Dependencies                         |
+| `examples/sse-dashboard/src/main.rs`                         | Fake server monitoring with HTMX SSE |
+| `examples/sse-dashboard/config/development.yaml`             | Server config                        |
+| `examples/sse-dashboard/templates/layouts/base.html`         | Base layout with HTMX                |
+| `examples/sse-dashboard/templates/pages/dashboard.html`      | Dashboard page                       |
+| `examples/sse-dashboard/templates/partials/status_card.html` | Status card partial                  |
 
 ### Example 2: SSE Chat
 
-| File | Purpose |
-|------|---------|
-| `examples/sse-chat/Cargo.toml` | Dependencies (modo, modo-db, modo-session) |
-| `examples/sse-chat/src/main.rs` | Chat app with rooms, DB messages, session auth |
-| `examples/sse-chat/config/development.yaml` | Server + DB config |
-| `examples/sse-chat/templates/layouts/base.html` | Base layout with HTMX |
-| `examples/sse-chat/templates/pages/login.html` | Username entry page |
-| `examples/sse-chat/templates/pages/rooms.html` | Room list page |
-| `examples/sse-chat/templates/pages/chat.html` | Chat room page (last 50 messages + SSE) |
-| `examples/sse-chat/templates/partials/message.html` | Single message bubble partial |
+| File                                                | Purpose                                        |
+| --------------------------------------------------- | ---------------------------------------------- |
+| `examples/sse-chat/Cargo.toml`                      | Dependencies (modo, modo-db, modo-session)     |
+| `examples/sse-chat/src/main.rs`                     | Chat app with rooms, DB messages, session auth |
+| `examples/sse-chat/config/development.yaml`         | Server + DB config                             |
+| `examples/sse-chat/templates/layouts/base.html`     | Base layout with HTMX                          |
+| `examples/sse-chat/templates/pages/login.html`      | Username entry page                            |
+| `examples/sse-chat/templates/pages/rooms.html`      | Room list page                                 |
+| `examples/sse-chat/templates/pages/chat.html`       | Chat room page (last 50 messages + SSE)        |
+| `examples/sse-chat/templates/partials/message.html` | Single message bubble partial                  |
 
 ---
 
@@ -78,6 +78,7 @@
 ### Task 1: SseConfig
 
 **Files:**
+
 - Create: `modo/src/sse/config.rs`
 - Test: `modo/tests/sse_config.rs`
 
@@ -117,7 +118,7 @@ Expected: FAIL — module `sse` not found
 
 - [ ] **Step 3: Create SseConfig with minimal module structure**
 
-```rust
+````rust
 // modo/src/sse/config.rs
 use serde::Deserialize;
 use std::time::Duration;
@@ -169,7 +170,7 @@ impl SseConfig {
         Duration::from_secs(self.keep_alive_interval_secs)
     }
 }
-```
+````
 
 ```rust
 // modo/src/sse/mod.rs
@@ -179,12 +180,14 @@ pub use config::SseConfig;
 ```
 
 Add to `modo/src/lib.rs` (after the `templates` module, keeping alphabetical order):
+
 ```rust
 #[cfg(feature = "sse")]
 pub mod sse;
 ```
 
 Add to `modo/Cargo.toml` features section:
+
 ```toml
 sse = ["dep:futures-util"]
 ```
@@ -208,6 +211,7 @@ git commit -m "feat(sse): add SseConfig with keep-alive interval"
 ### Task 2: SseEvent builder
 
 **Files:**
+
 - Create: `modo/src/sse/event.rs`
 - Modify: `modo/src/sse/mod.rs`
 - Test: `modo/tests/sse_event.rs`
@@ -296,7 +300,7 @@ Expected: FAIL — `SseEvent` not found
 
 - [ ] **Step 3: Implement SseEvent**
 
-```rust
+````rust
 // modo/src/sse/event.rs
 use crate::error::Error;
 use serde::Serialize;
@@ -460,9 +464,10 @@ impl TryFrom<SseEvent> for axum::response::sse::Event {
         Ok(event)
     }
 }
-```
+````
 
 Update `modo/src/sse/mod.rs`:
+
 ```rust
 pub mod config;
 pub mod event;
@@ -488,6 +493,7 @@ git commit -m "feat(sse): add SseEvent builder with data/json/html/id/retry"
 ### Task 3: SseResponse + from_stream
 
 **Files:**
+
 - Create: `modo/src/sse/response.rs`
 - Modify: `modo/src/sse/mod.rs`
 - Test: `modo/tests/sse_response.rs`
@@ -537,7 +543,7 @@ Expected: FAIL — `SseResponse` and `from_stream` not found
 
 - [ ] **Step 3: Implement SseResponse and from_stream**
 
-```rust
+````rust
 // modo/src/sse/response.rs
 use super::event::SseEvent;
 use crate::error::Error;
@@ -656,9 +662,10 @@ where
     });
     SseResponse::new(mapped)
 }
-```
+````
 
 Update `modo/src/sse/mod.rs`:
+
 ```rust
 pub mod config;
 pub mod event;
@@ -693,6 +700,7 @@ git commit -m "feat(sse): add SseResponse wrapper and from_stream entry point"
 ### Task 4: SseSender + channel()
 
 **Files:**
+
 - Create: `modo/src/sse/sender.rs`
 - Modify: `modo/src/sse/mod.rs`
 - Test: `modo/tests/sse_channel.rs`
@@ -760,7 +768,7 @@ Expected: FAIL — `channel` not found
 
 - [ ] **Step 3: Implement SseSender and channel()**
 
-```rust
+````rust
 // modo/src/sse/sender.rs
 use super::event::SseEvent;
 use super::response::SseResponse;
@@ -869,9 +877,10 @@ where
     let stream = ReceiverStream { rx };
     super::response::from_stream(stream)
 }
-```
+````
 
 Update `modo/src/sse/mod.rs`:
+
 ```rust
 pub mod config;
 pub mod event;
@@ -901,6 +910,7 @@ git commit -m "feat(sse): add SseSender and channel() entry point"
 ### Task 5: LastEventId extractor
 
 **Files:**
+
 - Create: `modo/src/sse/last_event_id.rs`
 - Modify: `modo/src/sse/mod.rs`
 - Test: `modo/tests/sse_last_event_id.rs`
@@ -962,7 +972,7 @@ Expected: FAIL — `LastEventId` not found
 
 - [ ] **Step 3: Implement LastEventId**
 
-```rust
+````rust
 // modo/src/sse/last_event_id.rs
 use axum::extract::FromRequestParts;
 use http::request::Parts;
@@ -1021,9 +1031,10 @@ where
         Ok(LastEventId(value))
     }
 }
-```
+````
 
 Update `modo/src/sse/mod.rs`:
+
 ```rust
 pub mod config;
 pub mod event;
@@ -1057,6 +1068,7 @@ git commit -m "feat(sse): add LastEventId extractor for reconnection"
 ### Task 6: SseStream and SseBroadcastManager
 
 **Files:**
+
 - Create: `modo/src/sse/broadcast.rs`
 - Modify: `modo/src/sse/mod.rs`
 - Test: `modo/tests/sse_broadcast.rs`
@@ -1166,7 +1178,7 @@ Expected: FAIL — `SseBroadcastManager` not found
 
 - [ ] **Step 3: Implement SseBroadcastManager and SseStream**
 
-```rust
+````rust
 // modo/src/sse/broadcast.rs
 use crate::error::Error;
 use futures_util::Stream;
@@ -1367,9 +1379,10 @@ impl<T> Stream for SseStream<T> {
         self.inner.as_mut().poll_next(cx)
     }
 }
-```
+````
 
 Update `modo/src/sse/mod.rs`:
+
 ```rust
 pub mod broadcast;
 pub mod config;
@@ -1405,6 +1418,7 @@ git commit -m "feat(sse): add SseBroadcastManager and SseStream"
 ### Task 7: SseStreamExt trait
 
 **Files:**
+
 - Create: `modo/src/sse/stream_ext.rs`
 - Modify: `modo/src/sse/mod.rs`
 - Test: `modo/tests/sse_stream_ext.rs`
@@ -1483,7 +1497,7 @@ Expected: FAIL — `SseStreamExt` not found
 
 - [ ] **Step 3: Implement SseStreamExt**
 
-```rust
+````rust
 // modo/src/sse/stream_ext.rs
 use super::event::SseEvent;
 use crate::error::Error;
@@ -1585,9 +1599,10 @@ where
     E: Into<Error>,
 {
 }
-```
+````
 
 Update `modo/src/sse/mod.rs`:
+
 ```rust
 pub mod broadcast;
 pub mod config;
@@ -1623,6 +1638,7 @@ git commit -m "feat(sse): add SseStreamExt trait (sse_json, sse_map, sse_event)"
 ### Task 8: Core integration
 
 **Files:**
+
 - Modify: `modo/Cargo.toml`
 - Modify: `modo/src/config.rs`
 - Modify: `modo/src/app.rs`
@@ -1655,11 +1671,13 @@ self.services.insert(
 - [ ] **Step 3: Verify feature flag and lib.rs re-exports**
 
 Verify `modo/Cargo.toml` has:
+
 ```toml
 sse = ["dep:futures-util"]
 ```
 
 Verify `modo/src/lib.rs` has (in alphabetical position among other modules):
+
 ```rust
 #[cfg(feature = "sse")]
 pub mod sse;
@@ -1692,13 +1710,14 @@ git commit -m "feat(sse): integrate SseConfig into AppConfig and AppBuilder"
 ### Task 9: Module documentation
 
 **Files:**
+
 - Modify: `modo/src/sse/mod.rs`
 
 - [ ] **Step 1: Add comprehensive module-level documentation**
 
 Replace the `mod.rs` content with full docs + re-exports:
 
-```rust
+````rust
 // modo/src/sse/mod.rs
 
 //! Server-Sent Events (SSE) support for modo.
@@ -1829,7 +1848,7 @@ pub use last_event_id::LastEventId;
 pub use response::{SseResponse, from_stream};
 pub use sender::{SseSender, channel};
 pub use stream_ext::SseStreamExt;
-```
+````
 
 - [ ] **Step 2: Run full check**
 
@@ -1852,6 +1871,7 @@ git commit -m "docs(sse): add comprehensive module documentation"
 Fake server monitoring dashboard. A background task generates random status events for multiple services. The HTMX frontend receives HTML partial updates via SSE.
 
 **Files:**
+
 - Create: `examples/sse-dashboard/Cargo.toml`
 - Create: `examples/sse-dashboard/src/main.rs`
 - Create: `examples/sse-dashboard/config/development.yaml`
@@ -1890,12 +1910,12 @@ In root `Cargo.toml`, add `"examples/sse-dashboard"` to the `members` array.
 ```yaml
 # examples/sse-dashboard/config/development.yaml
 server:
-  port: 3002
-  secret_key: ${SECRET_KEY:-sse-dashboard-dev-secret-key-change-in-prod-please}
-  http:
-    request_timeout: 3600
+    port: 3002
+    secret_key: ${SECRET_KEY:-sse-dashboard-dev-secret-key-change-in-prod-please}
+    http:
+        request_timeout: 3600
 templates:
-  path: templates
+    path: templates
 ```
 
 - [ ] **Step 4: Create base layout template**
@@ -1904,50 +1924,97 @@ templates:
 {# examples/sse-dashboard/templates/layouts/base.html #}
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}SSE Dashboard{% endblock %}</title>
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <script src="https://unpkg.com/htmx-ext-sse@2.3.0/sse.js"></script>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 2rem; }
-        h1 { margin-bottom: 1.5rem; font-size: 1.5rem; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-        .card { background: #1e293b; border-radius: 0.5rem; padding: 1.25rem; border-left: 4px solid #475569; }
-        .card.up { border-left-color: #22c55e; }
-        .card.down { border-left-color: #ef4444; }
-        .card.degraded { border-left-color: #f59e0b; }
-        .card h2 { font-size: 1rem; margin-bottom: 0.75rem; }
-        .card .status { font-size: 0.875rem; font-weight: 600; text-transform: uppercase; }
-        .card .status.up { color: #22c55e; }
-        .card .status.down { color: #ef4444; }
-        .card .status.degraded { color: #f59e0b; }
-        .card .metrics { display: flex; gap: 1rem; margin-top: 0.75rem; font-size: 0.8rem; color: #94a3b8; }
-        .card .metric span { font-weight: 600; color: #e2e8f0; }
-        .connected { color: #22c55e; font-size: 0.8rem; margin-bottom: 1rem; }
-    </style>
-</head>
-<body>
-    {% block content %}{% endblock %}
-</body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{% block title %}SSE Dashboard{% endblock %}</title>
+        <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+        <script src="https://unpkg.com/htmx-ext-sse@2.3.0/sse.js"></script>
+        <style>
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                font-family: system-ui, sans-serif;
+                background: #0f172a;
+                color: #e2e8f0;
+                padding: 2rem;
+            }
+            h1 {
+                margin-bottom: 1.5rem;
+                font-size: 1.5rem;
+            }
+            .grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 1rem;
+            }
+            .card {
+                background: #1e293b;
+                border-radius: 0.5rem;
+                padding: 1.25rem;
+                border-left: 4px solid #475569;
+            }
+            .card.up {
+                border-left-color: #22c55e;
+            }
+            .card.down {
+                border-left-color: #ef4444;
+            }
+            .card.degraded {
+                border-left-color: #f59e0b;
+            }
+            .card h2 {
+                font-size: 1rem;
+                margin-bottom: 0.75rem;
+            }
+            .card .status {
+                font-size: 0.875rem;
+                font-weight: 600;
+                text-transform: uppercase;
+            }
+            .card .status.up {
+                color: #22c55e;
+            }
+            .card .status.down {
+                color: #ef4444;
+            }
+            .card .status.degraded {
+                color: #f59e0b;
+            }
+            .card .metrics {
+                display: flex;
+                gap: 1rem;
+                margin-top: 0.75rem;
+                font-size: 0.8rem;
+                color: #94a3b8;
+            }
+            .card .metric span {
+                font-weight: 600;
+                color: #e2e8f0;
+            }
+            .connected {
+                color: #22c55e;
+                font-size: 0.8rem;
+                margin-bottom: 1rem;
+            }
+        </style>
+    </head>
+    <body>
+        {% block content %}{% endblock %}
+    </body>
 </html>
 ```
 
 - [ ] **Step 5: Create dashboard page template**
 
 ```html
-{# examples/sse-dashboard/templates/pages/dashboard.html #}
-{% extends "layouts/base.html" %}
-{% block content %}
+{# examples/sse-dashboard/templates/pages/dashboard.html #} {% extends "layouts/base.html" %} {% block content %}
 <h1>Server Status Dashboard</h1>
 <p class="connected">Live — updates via SSE</p>
-<div class="grid"
-     hx-ext="sse"
-     sse-connect="/events"
-     sse-swap="status_update"
-     hx-swap="innerHTML">
+<div class="grid" hx-ext="sse" sse-connect="/events" sse-swap="status_update" hx-swap="innerHTML">
     <p style="color: #94a3b8;">Waiting for data...</p>
 </div>
 {% endblock %}
@@ -1956,8 +2023,7 @@ templates:
 - [ ] **Step 6: Create status card partial template**
 
 ```html
-{# examples/sse-dashboard/templates/partials/status_card.html #}
-{% for server in servers %}
+{# examples/sse-dashboard/templates/partials/status_card.html #} {% for server in servers %}
 <div class="card {{ server.status }}">
     <h2>{{ server.name }}</h2>
     <div class="status {{ server.status }}">{{ server.status }}</div>
@@ -2112,6 +2178,7 @@ git commit -m "feat: add SSE dashboard example with HTMX and fake server monitor
 Chat application with rooms, session-based username, SQLite message storage, and SSE delivery of HTML partials.
 
 **Files:**
+
 - Create: `examples/sse-chat/Cargo.toml`
 - Create: `examples/sse-chat/src/main.rs`
 - Create: `examples/sse-chat/config/development.yaml`
@@ -2153,16 +2220,16 @@ In root `Cargo.toml`, add `"examples/sse-chat"` to the `members` array.
 ```yaml
 # examples/sse-chat/config/development.yaml
 server:
-  port: 3003
-  secret_key: ${SECRET_KEY:-sse-chat-dev-secret-key-change-in-production-please}
-  http:
-    request_timeout: 3600
+    port: 3003
+    secret_key: ${SECRET_KEY:-sse-chat-dev-secret-key-change-in-production-please}
+    http:
+        request_timeout: 3600
 templates:
-  path: templates
+    path: templates
 database:
-  url: ${DATABASE_URL:-sqlite://chat.db?mode=rwc}
-  max_connections: 5
-  min_connections: 1
+    url: ${DATABASE_URL:-sqlite://chat.db?mode=rwc}
+    max_connections: 5
+    min_connections: 1
 ```
 
 - [ ] **Step 4: Create base layout template**
@@ -2171,60 +2238,161 @@ database:
 {# examples/sse-chat/templates/layouts/base.html #}
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}SSE Chat{% endblock %}</title>
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <script src="https://unpkg.com/htmx-ext-sse@2.3.0/sse.js"></script>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: system-ui, sans-serif; background: #f8fafc; color: #1e293b; }
-        .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
-        h1 { margin-bottom: 1rem; }
-        a { color: #2563eb; }
-        .form-group { margin-bottom: 1rem; }
-        label { display: block; margin-bottom: 0.25rem; font-weight: 600; font-size: 0.875rem; }
-        input[type="text"] { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-size: 1rem; }
-        button { padding: 0.5rem 1rem; background: #2563eb; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem; }
-        button:hover { background: #1d4ed8; }
-        .rooms-list { list-style: none; }
-        .rooms-list li { margin-bottom: 0.5rem; }
-        .rooms-list a { display: block; padding: 0.75rem 1rem; background: white; border: 1px solid #e2e8f0; border-radius: 0.375rem; text-decoration: none; color: #1e293b; }
-        .rooms-list a:hover { background: #f1f5f9; }
-        .chat-container { display: flex; flex-direction: column; height: calc(100vh - 10rem); }
-        .messages { flex: 1; overflow-y: auto; padding: 1rem; background: white; border: 1px solid #e2e8f0; border-radius: 0.375rem 0.375rem 0 0; }
-        .message { margin-bottom: 0.75rem; }
-        .message .meta { font-size: 0.75rem; color: #64748b; margin-bottom: 0.125rem; }
-        .message .meta .username { font-weight: 600; color: #1e293b; }
-        .message .text { font-size: 0.9rem; }
-        .message-form { display: flex; gap: 0.5rem; padding: 0.75rem; background: white; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 0.375rem 0.375rem; }
-        .message-form input { flex: 1; }
-        .nav { display: flex; gap: 1rem; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0; }
-        .nav .user { margin-left: auto; font-size: 0.875rem; color: #64748b; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        {% block content %}{% endblock %}
-    </div>
-    {% block scripts %}{% endblock %}
-</body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{% block title %}SSE Chat{% endblock %}</title>
+        <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+        <script src="https://unpkg.com/htmx-ext-sse@2.3.0/sse.js"></script>
+        <style>
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                font-family: system-ui, sans-serif;
+                background: #f8fafc;
+                color: #1e293b;
+            }
+            .container {
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 2rem;
+            }
+            h1 {
+                margin-bottom: 1rem;
+            }
+            a {
+                color: #2563eb;
+            }
+            .form-group {
+                margin-bottom: 1rem;
+            }
+            label {
+                display: block;
+                margin-bottom: 0.25rem;
+                font-weight: 600;
+                font-size: 0.875rem;
+            }
+            input[type="text"] {
+                width: 100%;
+                padding: 0.5rem;
+                border: 1px solid #cbd5e1;
+                border-radius: 0.375rem;
+                font-size: 1rem;
+            }
+            button {
+                padding: 0.5rem 1rem;
+                background: #2563eb;
+                color: white;
+                border: none;
+                border-radius: 0.375rem;
+                cursor: pointer;
+                font-size: 0.875rem;
+            }
+            button:hover {
+                background: #1d4ed8;
+            }
+            .rooms-list {
+                list-style: none;
+            }
+            .rooms-list li {
+                margin-bottom: 0.5rem;
+            }
+            .rooms-list a {
+                display: block;
+                padding: 0.75rem 1rem;
+                background: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 0.375rem;
+                text-decoration: none;
+                color: #1e293b;
+            }
+            .rooms-list a:hover {
+                background: #f1f5f9;
+            }
+            .chat-container {
+                display: flex;
+                flex-direction: column;
+                height: calc(100vh - 10rem);
+            }
+            .messages {
+                flex: 1;
+                overflow-y: auto;
+                padding: 1rem;
+                background: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 0.375rem 0.375rem 0 0;
+            }
+            .message {
+                margin-bottom: 0.75rem;
+            }
+            .message .meta {
+                font-size: 0.75rem;
+                color: #64748b;
+                margin-bottom: 0.125rem;
+            }
+            .message .meta .username {
+                font-weight: 600;
+                color: #1e293b;
+            }
+            .message .text {
+                font-size: 0.9rem;
+            }
+            .message-form {
+                display: flex;
+                gap: 0.5rem;
+                padding: 0.75rem;
+                background: white;
+                border: 1px solid #e2e8f0;
+                border-top: none;
+                border-radius: 0 0 0.375rem 0.375rem;
+            }
+            .message-form input {
+                flex: 1;
+            }
+            .nav {
+                display: flex;
+                gap: 1rem;
+                align-items: center;
+                margin-bottom: 1.5rem;
+                padding-bottom: 1rem;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            .nav .user {
+                margin-left: auto;
+                font-size: 0.875rem;
+                color: #64748b;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">{% block content %}{% endblock %}</div>
+        {% block scripts %}{% endblock %}
+    </body>
 </html>
 ```
 
 - [ ] **Step 5: Create login page template**
 
 ```html
-{# examples/sse-chat/templates/pages/login.html #}
-{% extends "layouts/base.html" %}
-{% block title %}Login — SSE Chat{% endblock %}
-{% block content %}
+{# examples/sse-chat/templates/pages/login.html #} {% extends "layouts/base.html" %} {% block title %}Login — SSE Chat{%
+endblock %} {% block content %}
 <h1>Enter your username</h1>
 <form method="POST" action="/login">
     <div class="form-group">
         <label for="username">Username</label>
-        <input type="text" id="username" name="username" placeholder="Your name" required minlength="2" maxlength="30" autofocus>
+        <input
+            type="text"
+            id="username"
+            name="username"
+            placeholder="Your name"
+            required
+            minlength="2"
+            maxlength="30"
+            autofocus
+        />
     </div>
     <button type="submit">Join Chat</button>
 </form>
@@ -2234,10 +2402,8 @@ database:
 - [ ] **Step 6: Create rooms page template**
 
 ```html
-{# examples/sse-chat/templates/pages/rooms.html #}
-{% extends "layouts/base.html" %}
-{% block title %}Rooms — SSE Chat{% endblock %}
-{% block content %}
+{# examples/sse-chat/templates/pages/rooms.html #} {% extends "layouts/base.html" %} {% block title %}Rooms — SSE Chat{%
+endblock %} {% block content %}
 <div class="nav">
     <h1>Chat Rooms</h1>
     <span class="user">Logged in as <strong>{{ username }}</strong> · <a href="/logout">Logout</a></span>
@@ -2253,35 +2419,33 @@ database:
 - [ ] **Step 7: Create chat page template**
 
 ```html
-{# examples/sse-chat/templates/pages/chat.html #}
-{% extends "layouts/base.html" %}
-{% block title %}{{ room }} — SSE Chat{% endblock %}
-{% block content %}
+{# examples/sse-chat/templates/pages/chat.html #} {% extends "layouts/base.html" %} {% block title %}{{ room }} — SSE
+Chat{% endblock %} {% block content %}
 <div class="nav">
     <a href="/rooms">&larr; Rooms</a>
     <h1>{{ room }}</h1>
     <span class="user">{{ username }}</span>
 </div>
 <div class="chat-container">
-    <div class="messages" id="messages"
-         hx-ext="sse"
-         sse-connect="/chat/{{ room }}/events"
-         sse-swap="message"
-         hx-swap="beforeend">
-        {% for msg in messages %}
-        {{ msg }}
-        {% endfor %}
+    <div
+        class="messages"
+        id="messages"
+        hx-ext="sse"
+        sse-connect="/chat/{{ room }}/events"
+        sse-swap="message"
+        hx-swap="beforeend"
+    >
+        {% for msg in messages %} {{ msg }} {% endfor %}
     </div>
     <form class="message-form" hx-post="/chat/{{ room }}/send" hx-swap="none" hx-on::after-request="this.reset()">
-        <input type="text" name="text" placeholder="Type a message..." required autocomplete="off" autofocus>
+        <input type="text" name="text" placeholder="Type a message..." required autocomplete="off" autofocus />
         <button type="submit">Send</button>
     </form>
 </div>
-{% endblock %}
-{% block scripts %}
+{% endblock %} {% block scripts %}
 <script>
     // Auto-scroll to bottom on new messages
-    const messages = document.getElementById('messages');
+    const messages = document.getElementById("messages");
     const observer = new MutationObserver(() => {
         messages.scrollTop = messages.scrollHeight;
     });
