@@ -42,7 +42,21 @@ where
         let mut multipart = axum::extract::Multipart::from_request(req, state)
             .await
             .map_err(|e| HttpError::BadRequest.with_message(format!("{e}")))?;
-        let mut value = T::from_multipart(&mut multipart).await?;
+        let default_config = crate::config::UploadConfig::default();
+        let registered_config = state.services.get::<crate::config::UploadConfig>();
+        let config = registered_config.as_deref().unwrap_or(&default_config);
+        let max_file_size = config.max_file_size.as_ref().and_then(|s| {
+            modo::config::parse_size(s)
+                .inspect_err(|e| {
+                    modo::tracing::warn!(
+                        size = %s,
+                        error = %e,
+                        "failed to parse max_file_size from UploadConfig, ignoring limit"
+                    );
+                })
+                .ok()
+        });
+        let mut value = T::from_multipart(&mut multipart, max_file_size).await?;
         modo::sanitize::auto_sanitize(&mut value);
         Ok(MultipartForm(value))
     }

@@ -22,6 +22,9 @@ pub struct UploadConfig {
     pub backend: StorageBackend,
     /// Local directory for file uploads.
     pub path: String,
+    /// Default max file size when no per-field `#[upload(max_size)]` is set.
+    /// Human-readable: "10mb", "500kb". None disables the default limit.
+    pub max_file_size: Option<String>,
     /// S3 configuration (only available with the `opendal` feature).
     #[cfg(feature = "opendal")]
     pub s3: S3Config,
@@ -32,6 +35,7 @@ impl Default for UploadConfig {
         Self {
             backend: StorageBackend::default(),
             path: "./uploads".to_string(),
+            max_file_size: Some("10mb".to_string()),
             #[cfg(feature = "opendal")]
             s3: S3Config::default(),
         }

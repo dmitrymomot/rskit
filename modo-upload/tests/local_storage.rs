@@ -81,7 +81,7 @@ async fn store_stream_writes_file() {
     let dir = tempfile::tempdir().unwrap();
     let storage = LocalStorage::new(dir.path());
 
-    let mut stream = modo_upload::UploadStream::__test_new(
+    let mut stream = modo_upload::BufferedUpload::__test_new(
         "file",
         "test.txt",
         "text/plain",
@@ -95,4 +95,71 @@ async fn store_stream_writes_file() {
     let full_path = dir.path().join(&stored.path);
     let contents = tokio::fs::read_to_string(&full_path).await.unwrap();
     assert_eq!(contents, "hello world");
+}
+
+#[tokio::test]
+async fn store_stream_empty_stream() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = LocalStorage::new(dir.path());
+
+    let mut stream =
+        modo_upload::BufferedUpload::__test_new("file", "empty.txt", "text/plain", vec![]);
+    let stored = storage.store_stream("docs", &mut stream).await.unwrap();
+
+    assert!(stored.path.starts_with("docs/"));
+    assert_eq!(stored.size, 0);
+    let full_path = dir.path().join(&stored.path);
+    let contents = tokio::fs::read(&full_path).await.unwrap();
+    assert!(contents.is_empty());
+}
+
+#[tokio::test]
+async fn delete_nonexistent_file_returns_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = LocalStorage::new(dir.path());
+    assert!(storage.delete("nope/file.txt").await.is_err());
+}
+
+#[tokio::test]
+async fn store_creates_nested_directories() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = LocalStorage::new(dir.path());
+
+    let file = make_file("f", "test.txt", "text/plain", b"nested");
+    let stored = storage.store("deeply/nested/path", &file).await.unwrap();
+
+    assert!(stored.path.starts_with("deeply/nested/path/"));
+    assert!(storage.exists(&stored.path).await.unwrap());
+}
+
+#[tokio::test]
+async fn store_stream_creates_nested_directories() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = LocalStorage::new(dir.path());
+
+    let mut stream = modo_upload::BufferedUpload::__test_new(
+        "file",
+        "test.txt",
+        "text/plain",
+        vec![bytes::Bytes::from("nested stream")],
+    );
+    let stored = storage.store_stream("a/b/c", &mut stream).await.unwrap();
+
+    assert!(stored.path.starts_with("a/b/c/"));
+    assert_eq!(stored.size, 13);
+    assert!(storage.exists(&stored.path).await.unwrap());
+}
+
+#[tokio::test]
+async fn store_and_read_back_content() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = LocalStorage::new(dir.path());
+
+    let data = b"verify round-trip content";
+    let file = make_file("doc", "readme.md", "text/markdown", data);
+    let stored = storage.store("files", &file).await.unwrap();
+
+    let full_path = dir.path().join(&stored.path);
+    let read_back = tokio::fs::read(&full_path).await.unwrap();
+    assert_eq!(read_back, data);
 }

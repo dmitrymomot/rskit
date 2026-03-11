@@ -5,7 +5,7 @@ mod from_multipart;
 /// Derive macro for parsing `multipart/form-data` into a struct.
 ///
 /// Supports `UploadedFile`, `Option<UploadedFile>`, `Vec<UploadedFile>`,
-/// `UploadStream`, `String`, `Option<String>`, and other `FromStr` types.
+/// `BufferedUpload`, `String`, `Option<String>`, and other `FromStr` types.
 ///
 /// Use `#[upload(max_size = "5mb", accept = "image/*")]` on file fields.
 /// Use `#[serde(rename = "...")]` to rename the multipart field.

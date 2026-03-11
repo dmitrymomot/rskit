@@ -5,6 +5,7 @@ fn test_default_config() {
     let config = UploadConfig::default();
     assert_eq!(config.path, "./uploads");
     assert_eq!(config.backend, StorageBackend::Local);
+    assert_eq!(config.max_file_size, Some("10mb".to_string()));
 }
 
 #[tokio::test]
@@ -23,6 +24,21 @@ fn test_config_deserialize_defaults() {
     let config: UploadConfig = serde_json::from_str(json).unwrap();
     assert_eq!(config.path, "./uploads");
     assert_eq!(config.backend, StorageBackend::Local);
+    assert_eq!(config.max_file_size, Some("10mb".to_string()));
+}
+
+#[test]
+fn test_config_custom_max_file_size() {
+    let json = r#"{"max_file_size": "5mb"}"#;
+    let config: UploadConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(config.max_file_size, Some("5mb".to_string()));
+}
+
+#[test]
+fn test_config_null_max_file_size() {
+    let json = r#"{"max_file_size": null}"#;
+    let config: UploadConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(config.max_file_size, None);
 }
 
 #[test]
@@ -31,4 +47,25 @@ fn test_config_deserialize_custom_path() {
     let config: UploadConfig = serde_json::from_str(json).unwrap();
     assert_eq!(config.path, "/data/files");
     assert_eq!(config.backend, StorageBackend::Local);
+}
+
+#[test]
+fn test_config_unknown_fields_ignored() {
+    let json = r#"{"path": "./uploads", "unknown_key": 42, "another": "value"}"#;
+    let config: UploadConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(config.path, "./uploads");
+}
+
+#[test]
+fn test_config_backend_s3() {
+    let json = r#"{"backend": "s3"}"#;
+    let config: UploadConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(config.backend, StorageBackend::S3);
+}
+
+#[test]
+fn test_config_max_file_size_empty_string() {
+    let json = r#"{"max_file_size": ""}"#;
+    let config: UploadConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(config.max_file_size, Some("".to_string()));
 }

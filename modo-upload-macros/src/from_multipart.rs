@@ -8,7 +8,7 @@ enum FieldKind {
     UploadedFile,
     OptionUploadedFile,
     VecUploadedFile,
-    UploadStream,
+    BufferedUpload,
     String,
     OptionString,
     /// Other type implementing FromStr.
@@ -130,7 +130,7 @@ fn classify_type(ty: &Type) -> FieldKind {
 
     match last.ident.to_string().as_str() {
         "UploadedFile" => FieldKind::UploadedFile,
-        "UploadStream" => FieldKind::UploadStream,
+        "BufferedUpload" => FieldKind::BufferedUpload,
         "String" => FieldKind::String,
         "Option" => classify_inner_type(last, |name| match name {
             "UploadedFile" => Some(FieldKind::OptionUploadedFile),
@@ -188,7 +188,7 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
         let field_name = field.ident.clone().unwrap();
         let kind = classify_type(&field.ty);
 
-        if matches!(kind, FieldKind::UploadStream) {
+        if matches!(kind, FieldKind::BufferedUpload) {
             has_stream = true;
         }
 
@@ -220,12 +220,12 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
     if has_stream {
         let stream_count = multipart_fields
             .iter()
-            .filter(|f| matches!(f.kind, FieldKind::UploadStream))
+            .filter(|f| matches!(f.kind, FieldKind::BufferedUpload))
             .count();
         if stream_count > 1 {
             return Err(syn::Error::new_spanned(
                 &input,
-                "only one UploadStream field is allowed",
+                "only one BufferedUpload field is allowed",
             ));
         }
     }
@@ -245,8 +245,8 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
                 FieldKind::VecUploadedFile => {
                     quote! { let mut #var: Vec<modo_upload::UploadedFile> = Vec::new(); }
                 }
-                FieldKind::UploadStream => {
-                    quote! { let mut #var: Option<modo_upload::UploadStream> = None; }
+                FieldKind::BufferedUpload => {
+                    quote! { let mut #var: Option<modo_upload::BufferedUpload> = None; }
                 }
                 FieldKind::String => quote! { let mut #var: Option<String> = None; },
                 FieldKind::OptionString => quote! { let mut #var: Option<String> = None; },
@@ -261,20 +261,24 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
         .map(|f| {
             let var = quote::format_ident!("__{}", f.field_name);
             let name = &f.multipart_name;
+            // For file fields: use per-field max_size if set, otherwise fall back to __max_file_size
+            // Always pass the global limit to from_field for streaming enforcement.
+            // Per-field limits are checked post-collection with proper validation errors.
+            let file_size_limit = quote! { __max_file_size };
             match &f.kind {
                 FieldKind::UploadedFile | FieldKind::OptionUploadedFile => quote! {
                     Some(#name) => {
-                        #var = Some(modo_upload::UploadedFile::from_field(__field).await?);
+                        #var = Some(modo_upload::UploadedFile::from_field(__field, #file_size_limit).await?);
                     }
                 },
                 FieldKind::VecUploadedFile => quote! {
                     Some(#name) => {
-                        #var.push(modo_upload::UploadedFile::from_field(__field).await?);
+                        #var.push(modo_upload::UploadedFile::from_field(__field, #file_size_limit).await?);
                     }
                 },
-                FieldKind::UploadStream => quote! {
+                FieldKind::BufferedUpload => quote! {
                     Some(#name) => {
-                        #var = Some(modo_upload::UploadStream::from_field(__field).await?);
+                        #var = Some(modo_upload::BufferedUpload::from_field(__field, #file_size_limit).await?);
                     }
                 },
                 FieldKind::String | FieldKind::OptionString | FieldKind::FromStr => quote! {
@@ -392,7 +396,7 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
                 }
                 field_assignments.push(quote! { #field_name: #var });
             }
-            FieldKind::UploadStream => {
+            FieldKind::BufferedUpload => {
                 validation_stmts.push(quote! {
                     let #var = #var.ok_or_else(|| {
                         modo::validate::validation_error(vec![(#name_str, vec!["is required".into()])])
@@ -433,6 +437,7 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
         impl #impl_generics modo_upload::FromMultipart for #struct_name #ty_generics #where_clause {
             async fn from_multipart(
                 multipart: &mut modo_upload::__internal::axum::extract::Multipart,
+                __max_file_size: Option<usize>,
             ) -> Result<Self, modo::Error> {
                 #(#var_decls)*
 
@@ -464,5 +469,109 @@ fn format_size_for_codegen(bytes: usize) -> String {
         format!("{}KB", bytes / 1024)
     } else {
         format!("{bytes}B")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- parse_size_str --
+
+    #[test]
+    fn parse_size_bytes() {
+        assert_eq!(parse_size_str("100b").unwrap(), 100);
+    }
+
+    #[test]
+    fn parse_size_kilobytes() {
+        assert_eq!(parse_size_str("5kb").unwrap(), 5 * 1024);
+    }
+
+    #[test]
+    fn parse_size_megabytes() {
+        assert_eq!(parse_size_str("10mb").unwrap(), 10 * 1024 * 1024);
+    }
+
+    #[test]
+    fn parse_size_gigabytes() {
+        assert_eq!(parse_size_str("2gb").unwrap(), 2 * 1024 * 1024 * 1024);
+    }
+
+    #[test]
+    fn parse_size_case_insensitive() {
+        assert_eq!(parse_size_str("5MB").unwrap(), 5 * 1024 * 1024);
+    }
+
+    #[test]
+    fn parse_size_whitespace() {
+        assert_eq!(parse_size_str("  10mb  ").unwrap(), 10 * 1024 * 1024);
+    }
+
+    #[test]
+    fn parse_size_plain_number() {
+        assert_eq!(parse_size_str("1024").unwrap(), 1024);
+    }
+
+    #[test]
+    fn parse_size_invalid() {
+        assert!(parse_size_str("abcmb").is_err());
+    }
+
+    #[test]
+    fn parse_size_zero() {
+        assert_eq!(parse_size_str("0mb").unwrap(), 0);
+    }
+
+    // -- format_size_for_codegen --
+
+    #[test]
+    fn format_codegen_bytes() {
+        assert_eq!(format_size_for_codegen(500), "500B");
+    }
+
+    #[test]
+    fn format_codegen_kilobytes() {
+        assert_eq!(format_size_for_codegen(1024), "1KB");
+    }
+
+    #[test]
+    fn format_codegen_megabytes() {
+        assert_eq!(format_size_for_codegen(5 * 1024 * 1024), "5MB");
+    }
+
+    #[test]
+    fn format_codegen_gigabytes() {
+        assert_eq!(format_size_for_codegen(2 * 1024 * 1024 * 1024), "2GB");
+    }
+
+    #[test]
+    fn format_codegen_non_aligned() {
+        assert_eq!(format_size_for_codegen(1025), "1025B");
+    }
+
+    #[test]
+    fn parse_size_negative() {
+        assert!(parse_size_str("-5mb").is_err());
+    }
+
+    #[test]
+    fn parse_size_fractional() {
+        assert!(parse_size_str("1.5mb").is_err());
+    }
+
+    #[test]
+    fn parse_size_space_between_number_and_unit() {
+        assert_eq!(parse_size_str("5 mb").unwrap(), 5 * 1024 * 1024);
+    }
+
+    #[test]
+    fn parse_size_empty_string() {
+        assert!(parse_size_str("").is_err());
+    }
+
+    #[test]
+    fn format_codegen_zero() {
+        assert_eq!(format_size_for_codegen(0), "0B");
     }
 }

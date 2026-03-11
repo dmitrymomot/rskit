@@ -1,6 +1,6 @@
 use super::{FileStorage, StoredFile, generate_filename, validate_logical_path};
 use crate::file::UploadedFile;
-use crate::stream::UploadStream;
+use crate::stream::BufferedUpload;
 
 /// Storage backend powered by Apache OpenDAL (S3, GCS, Azure, etc.).
 ///
@@ -39,18 +39,13 @@ impl FileStorage for OpendalStorage {
     async fn store_stream(
         &self,
         prefix: &str,
-        stream: &mut UploadStream,
+        stream: &mut BufferedUpload,
     ) -> Result<StoredFile, modo::Error> {
         validate_logical_path(prefix)?;
         let filename = generate_filename(stream.file_name());
         let path = format!("{prefix}/{filename}");
 
-        let mut data = Vec::new();
-        while let Some(chunk) = stream.chunk().await {
-            let chunk =
-                chunk.map_err(|e| modo::Error::internal(format!("Failed to read chunk: {e}")))?;
-            data.extend_from_slice(&chunk);
-        }
+        let data = stream.to_bytes();
         let size = data.len() as u64;
 
         self.operator

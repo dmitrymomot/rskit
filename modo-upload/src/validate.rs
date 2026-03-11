@@ -68,11 +68,11 @@ pub fn mime_matches(content_type: &str, pattern: &str) -> bool {
 }
 
 fn format_size(bytes: usize) -> String {
-    if bytes >= 1024 * 1024 * 1024 {
+    if bytes >= 1024 * 1024 * 1024 && bytes.is_multiple_of(1024 * 1024 * 1024) {
         format!("{}GB", bytes / (1024 * 1024 * 1024))
-    } else if bytes >= 1024 * 1024 {
+    } else if bytes >= 1024 * 1024 && bytes.is_multiple_of(1024 * 1024) {
         format!("{}MB", bytes / (1024 * 1024))
-    } else if bytes >= 1024 {
+    } else if bytes >= 1024 && bytes.is_multiple_of(1024) {
         format!("{}KB", bytes / 1024)
     } else {
         format!("{bytes}B")
@@ -148,5 +148,114 @@ mod tests {
         assert_eq!(format_size(1024), "1KB");
         assert_eq!(format_size(5 * 1024 * 1024), "5MB");
         assert_eq!(format_size(2 * 1024 * 1024 * 1024), "2GB");
+    }
+
+    #[test]
+    fn format_size_non_aligned_falls_back_to_bytes() {
+        assert_eq!(format_size(2047), "2047B");
+        assert_eq!(format_size(1025), "1025B");
+        assert_eq!(format_size(1024 * 1024 + 1), "1048577B");
+    }
+
+    // -- UploadValidator --
+
+    #[test]
+    fn validator_max_size_pass() {
+        let f = UploadedFile::__test_new("f", "a.bin", "application/octet-stream", &[0u8; 5]);
+        f.validate().max_size(10).check().unwrap();
+    }
+
+    #[test]
+    fn validator_max_size_fail() {
+        let f = UploadedFile::__test_new("f", "a.bin", "application/octet-stream", &[0u8; 20]);
+        assert!(f.validate().max_size(10).check().is_err());
+    }
+
+    #[test]
+    fn validator_max_size_exact_boundary() {
+        let f = UploadedFile::__test_new("f", "a.bin", "application/octet-stream", &[0u8; 10]);
+        // size == max should pass (not >)
+        f.validate().max_size(10).check().unwrap();
+    }
+
+    #[test]
+    fn validator_accept_pass() {
+        let f = UploadedFile::__test_new("f", "img.png", "image/png", b"img");
+        f.validate().accept("image/*").check().unwrap();
+    }
+
+    #[test]
+    fn validator_accept_fail() {
+        let f = UploadedFile::__test_new("f", "doc.txt", "text/plain", b"text");
+        assert!(f.validate().accept("image/*").check().is_err());
+    }
+
+    #[test]
+    fn validator_chain_both_fail() {
+        let f = UploadedFile::__test_new("f", "doc.txt", "text/plain", &[0u8; 20]);
+        let err = f
+            .validate()
+            .max_size(10)
+            .accept("image/*")
+            .check()
+            .unwrap_err();
+        // Both errors should be collected
+        let details = err.details();
+        let messages = details
+            .get("f")
+            .expect("expected details for field 'f'")
+            .as_array()
+            .expect("expected JSON array");
+        assert_eq!(
+            messages.len(),
+            2,
+            "expected 2 validation messages, got: {messages:?}"
+        );
+    }
+
+    #[test]
+    fn validator_chain_both_pass() {
+        let f = UploadedFile::__test_new("f", "img.png", "image/png", &[0u8; 5]);
+        f.validate().max_size(10).accept("image/*").check().unwrap();
+    }
+
+    #[test]
+    fn mime_semicolon_no_params() {
+        assert!(mime_matches("image/png;", "image/png"));
+    }
+
+    #[test]
+    fn mime_case_sensitive() {
+        assert!(!mime_matches("Image/PNG", "image/png"));
+    }
+
+    #[test]
+    fn mime_wildcard_invalid_form() {
+        assert!(!mime_matches("image/png", "*/image"));
+    }
+
+    #[test]
+    fn mime_leading_trailing_whitespace() {
+        assert!(mime_matches(" image/png ", "image/png"));
+    }
+
+    #[test]
+    fn mime_wildcard_partial_type_rejected() {
+        assert!(!mime_matches("imageX/png", "image/*"));
+    }
+
+    #[test]
+    fn format_size_zero() {
+        assert_eq!(format_size(0), "0B");
+    }
+
+    #[test]
+    fn format_size_boundary_1023() {
+        assert_eq!(format_size(1023), "1023B");
+    }
+
+    #[test]
+    fn format_size_boundary_below_mb() {
+        assert_eq!(format_size(1024 * 1024 - 1), "1048575B");
     }
 }
