@@ -45,6 +45,8 @@ pub use error::{
 #[cfg(feature = "templates")]
 pub use error::ViewResult;
 pub use middleware::{ClientIp, RateLimitInfo};
+#[cfg(feature = "templates")]
+pub use templates::{ViewRenderer, ViewResponse};
 pub use request_id::RequestId;
 pub use shutdown::{GracefulShutdown, ShutdownPhase};
 
