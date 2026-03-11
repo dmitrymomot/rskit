@@ -1,6 +1,6 @@
 use modo::AppConfig;
 use modo::extractors::service::Service;
-use modo::sse::{SseBroadcastManager, SseEvent, SseResponse, SseStreamExt};
+use modo::sse::{Sse, SseBroadcastManager, SseEvent, SseResponse, SseStreamExt};
 use modo::templates::ViewRenderer;
 use modo_db::{DatabaseConfig, Db};
 use modo_session::SessionManager;
@@ -196,10 +196,15 @@ async fn chat_page(
 #[modo::handler(GET, "/chat/{room}/events")]
 async fn chat_events(
     room: String,
+    sse: Sse,
     session: SessionManager,
     view: ViewRenderer,
     Service(bc): Service<ChatBroadcaster>,
-) -> SseResponse {
+) -> modo::HandlerResult<SseResponse> {
+    if !ROOMS.contains(&room.as_str()) {
+        return Err(modo::HttpError::NotFound.into());
+    }
+
     let current_user = session.user_id().await.unwrap_or_default();
     let stream = bc.subscribe(&room).sse_map(move |evt| {
         let is_own = evt.username == current_user;
@@ -211,7 +216,7 @@ async fn chat_events(
         })?;
         Ok(SseEvent::new().event("message").html(html))
     });
-    modo::sse::from_stream(stream)
+    Ok(sse.from_stream(stream))
 }
 
 #[modo::handler(POST, "/chat/{room}/send")]
@@ -273,11 +278,8 @@ async fn main(
     let db = modo_db::connect(&config.database).await?;
     modo_db::sync_and_migrate(&db).await?;
 
-    let session_store = modo_session::SessionStore::new(
-        &db,
-        modo_session::SessionConfig::default(),
-        config.cookie,
-    );
+    let session_store =
+        modo_session::SessionStore::new(&db, modo_session::SessionConfig::default(), config.cookie);
 
     let bc: ChatBroadcaster = SseBroadcastManager::new(128);
 

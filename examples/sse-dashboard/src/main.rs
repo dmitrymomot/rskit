@@ -1,6 +1,6 @@
 use modo::AppConfig;
 use modo::extractors::service::Service;
-use modo::sse::{SseBroadcastManager, SseEvent, SseResponse, SseStreamExt};
+use modo::sse::{Sse, SseBroadcastManager, SseEvent, SseResponse, SseStreamExt};
 use modo::templates::ViewRenderer;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -96,12 +96,16 @@ async fn dashboard() -> DashboardPage {
 }
 
 #[modo::handler(GET, "/events")]
-async fn events(view: ViewRenderer, Service(bc): Service<StatusBroadcaster>) -> SseResponse {
+async fn events(
+    sse: Sse,
+    view: ViewRenderer,
+    Service(bc): Service<StatusBroadcaster>,
+) -> SseResponse {
     let stream = bc.subscribe(&()).sse_map(move |servers| {
         let html = view.render_to_string(StatusCards { servers })?;
         Ok(SseEvent::new().event("status_update").html(html))
     });
-    modo::sse::from_stream(stream)
+    sse.from_stream(stream)
 }
 
 #[modo::view("partials/status_card.html")]
