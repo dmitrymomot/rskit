@@ -28,6 +28,8 @@ pub mod request_id;
 pub mod router;
 pub mod sanitize;
 pub mod shutdown;
+#[cfg(feature = "sse")]
+pub mod sse;
 #[cfg(any(feature = "static-fs", feature = "static-embed"))]
 pub(crate) mod static_files;
 #[cfg(feature = "templates")]
