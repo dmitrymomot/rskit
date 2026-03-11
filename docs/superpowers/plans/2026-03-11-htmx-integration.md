@@ -12,23 +12,23 @@
 
 ## File Structure
 
-| Action | File | Responsibility |
-|--------|------|---------------|
-| Create | `modo/src/templates/view_render.rs` | `ViewRender` trait + tuple impls via macro |
-| Create | `modo/src/templates/view_response.rs` | `ViewResponse` type (HTML / redirect) |
-| Create | `modo/src/templates/view_renderer.rs` | `ViewRenderer` extractor (`FromRequestParts`) |
-| Modify | `modo/src/templates/context.rs` | Add `merge_with()` method |
-| Modify | `modo/src/templates/render.rs` | Refactor to use `merge_with()` |
-| Modify | `modo/src/templates/error.rs` | Add `From<TemplateError> for crate::Error` |
-| Modify | `modo/src/templates/mod.rs` | Add submodules, re-exports |
-| Modify | `modo/src/error.rs` | Add `ViewResult` type alias |
-| Modify | `modo/src/lib.rs` | Re-export `ViewResult`, `ViewRenderer`, `ViewResponse` |
-| Modify | `modo-macros/src/view.rs` | Generate `ViewRender` trait impl |
-| Modify | `modo/src/app.rs:509` | Add `Extension(engine_arc)` for ViewRenderer |
-| Modify | `modo/Cargo.toml` | Add `tempfile` dev-dependency |
-| Create | `modo/tests/templates_view_render_trait.rs` | ViewRender trait tests |
-| Create | `modo/tests/templates_view_response.rs` | ViewResponse tests |
-| Create | `modo/tests/templates_view_renderer.rs` | ViewRenderer extractor tests |
+| Action | File                                        | Responsibility                                         |
+| ------ | ------------------------------------------- | ------------------------------------------------------ |
+| Create | `modo/src/templates/view_render.rs`         | `ViewRender` trait + tuple impls via macro             |
+| Create | `modo/src/templates/view_response.rs`       | `ViewResponse` type (HTML / redirect)                  |
+| Create | `modo/src/templates/view_renderer.rs`       | `ViewRenderer` extractor (`FromRequestParts`)          |
+| Modify | `modo/src/templates/context.rs`             | Add `merge_with()` method                              |
+| Modify | `modo/src/templates/render.rs`              | Refactor to use `merge_with()`                         |
+| Modify | `modo/src/templates/error.rs`               | Add `From<TemplateError> for crate::Error`             |
+| Modify | `modo/src/templates/mod.rs`                 | Add submodules, re-exports                             |
+| Modify | `modo/src/error.rs`                         | Add `ViewResult` type alias                            |
+| Modify | `modo/src/lib.rs`                           | Re-export `ViewResult`, `ViewRenderer`, `ViewResponse` |
+| Modify | `modo-macros/src/view.rs`                   | Generate `ViewRender` trait impl                       |
+| Modify | `modo/src/app.rs:509`                       | Add `Extension(engine_arc)` for ViewRenderer           |
+| Modify | `modo/Cargo.toml`                           | Add `tempfile` dev-dependency                          |
+| Create | `modo/tests/templates_view_render_trait.rs` | ViewRender trait tests                                 |
+| Create | `modo/tests/templates_view_response.rs`     | ViewResponse tests                                     |
+| Create | `modo/tests/templates_view_renderer.rs`     | ViewRenderer extractor tests                           |
 
 ---
 
@@ -37,6 +37,7 @@
 ### Task 1: Add `merge_with` method to TemplateContext
 
 **Files:**
+
 - Modify: `modo/src/templates/context.rs`
 - Create: `modo/tests/templates_context_merge.rs`
 
@@ -138,6 +139,7 @@ git commit -m "feat(templates): add TemplateContext::merge_with method"
 ### Task 2: Define ViewRender trait + tuple impls
 
 **Files:**
+
 - Create: `modo/src/templates/view_render.rs`
 - Modify: `modo/src/templates/mod.rs`
 - Create: `modo/tests/templates_view_render_trait.rs`
@@ -330,6 +332,7 @@ git commit -m "feat(templates): add ViewRender trait with tuple implementations"
 ### Task 3: Refactor render layer to use merge_with
 
 **Files:**
+
 - Modify: `modo/src/templates/render.rs`
 
 - [ ] **Step 1: Replace merge_contexts with TemplateContext::merge_with**
@@ -364,6 +367,7 @@ git commit -m "refactor(templates): use TemplateContext::merge_with in render la
 ### Task 4: ViewResponse type
 
 **Files:**
+
 - Create: `modo/src/templates/view_response.rs`
 - Modify: `modo/src/templates/mod.rs`
 - Create: `modo/tests/templates_view_response.rs`
@@ -537,6 +541,7 @@ git commit -m "feat(templates): add ViewResponse type"
 ### Task 5: ViewResult type alias + error conversion
 
 **Files:**
+
 - Modify: `modo/src/error.rs`
 - Modify: `modo/src/lib.rs`
 
@@ -594,6 +599,7 @@ git commit -m "feat: add ViewResult type alias and TemplateError conversion"
 ### Task 6: Generate ViewRender trait implementation in view macro
 
 **Files:**
+
 - Modify: `modo-macros/src/view.rs`
 - Create: `modo/tests/templates_view_render_macro.rs`
 
@@ -756,6 +762,7 @@ git commit -m "feat(macros): generate ViewRender trait impl in view macro"
 ### Task 7: ViewRenderer extractor
 
 **Files:**
+
 - Create: `modo/src/templates/view_renderer.rs`
 - Modify: `modo/src/templates/mod.rs`
 - Modify: `modo/src/lib.rs`
@@ -1008,7 +1015,7 @@ Expected: FAIL — `ViewRenderer` does not exist
 
 Create `modo/src/templates/view_renderer.rs`:
 
-```rust
+````rust
 use std::sync::Arc;
 
 use axum::extract::FromRequestParts;
@@ -1118,7 +1125,7 @@ impl<S: Send + Sync> FromRequestParts<S> for ViewRenderer {
         })
     }
 }
-```
+````
 
 **Note on FromRequestParts:** The extractor is generic over state `S` (like `SessionManager`) because it reads the `TemplateEngine` from request extensions (set by Task 8 as `Extension(Arc<TemplateEngine>)`) rather than from `AppState.services`. This keeps it decoupled from `AppState` and testable with plain `Router` + `Extension`.
 
@@ -1169,6 +1176,7 @@ git commit -m "feat(templates): add ViewRenderer extractor"
 ### Task 8: Add TemplateEngine as Extension in app builder
 
 **Files:**
+
 - Modify: `modo/src/app.rs:509`
 
 The `TemplateEngine` is currently only in the `ServiceRegistry` (line 348-351 of app.rs). The `ViewRenderer` extractor reads it from request extensions via `parts.extensions.get::<Arc<TemplateEngine>>()`. We must add it as an `Extension` layer on the router.
@@ -1182,6 +1190,7 @@ router = router.layer(axum::extract::Extension(engine.clone()));
 ```
 
 The existing code already has:
+
 ```rust
 let template_engine: Option<Arc<TemplateEngine>> = state.services.get::<TemplateEngine>();
 // ...
@@ -1231,14 +1240,14 @@ git commit -m "chore: formatting and lint fixes for HTMX integration"
 
 ## Summary
 
-| Task | What | Files |
-|------|------|-------|
-| 1 | `TemplateContext::merge_with` | context.rs, test |
-| 2 | `ViewRender` trait + tuples | view_render.rs, mod.rs, test |
-| 3 | Refactor render layer | render.rs |
-| 4 | `ViewResponse` type | view_response.rs, mod.rs, test |
-| 5 | `ViewResult` alias + error conv | error.rs, lib.rs |
-| 6 | View macro `ViewRender` impl | view.rs (macros), test |
-| 7 | `ViewRenderer` extractor | view_renderer.rs, mod.rs, lib.rs, test |
-| 8 | TemplateEngine Extension layer | app.rs |
-| 9 | Format + full check | all |
+| Task | What                            | Files                                  |
+| ---- | ------------------------------- | -------------------------------------- |
+| 1    | `TemplateContext::merge_with`   | context.rs, test                       |
+| 2    | `ViewRender` trait + tuples     | view_render.rs, mod.rs, test           |
+| 3    | Refactor render layer           | render.rs                              |
+| 4    | `ViewResponse` type             | view_response.rs, mod.rs, test         |
+| 5    | `ViewResult` alias + error conv | error.rs, lib.rs                       |
+| 6    | View macro `ViewRender` impl    | view.rs (macros), test                 |
+| 7    | `ViewRenderer` extractor        | view_renderer.rs, mod.rs, lib.rs, test |
+| 8    | TemplateEngine Extension layer  | app.rs                                 |
+| 9    | Format + full check             | all                                    |

@@ -9,6 +9,7 @@
 modo already has basic HTMX support: dual-template rendering via `#[view("page.html", htmx = "partial.html")]`, `hx-request` detection in the render layer, non-200 pass-through, and status forcing. This design extends that foundation with two additions: a `ViewRenderer` extractor for explicit view rendering and response composition, and a `ViewResult` type alias for consistent return types.
 
 **Key principles:**
+
 - OOB swap targeting (`hx-swap-oob`, `id` attributes) lives entirely in HTML templates
 - Server-side code handles response composition, smart redirects, and rendering to string
 - Minimal additions — no new macros, no response builders, no HTMX header helpers
@@ -45,6 +46,7 @@ impl ViewRenderer {
 ```
 
 **`ViewRender` trait** — implemented for:
+
 - Any single `#[view]` struct
 - Tuples `(V1, V2)`, `(V1, V2, V3)`, etc. where each `V` is a `#[view]` struct
 - Each view in a tuple can be a different type
@@ -73,7 +75,7 @@ struct ToastSuccess { message: String, ttl: u32 }
 ```html
 <!-- partials/toast_success.html -->
 <div id="notifications" hx-swap-oob="innerHTML">
-  <div class="toast toast-success" data-ttl="{{ ttl }}">{{ message }}</div>
+    <div class="toast toast-success" data-ttl="{{ ttl }}">{{ message }}</div>
 </div>
 ```
 
@@ -85,17 +87,18 @@ pub type ViewResult<E = Error> = Result<ViewResponse, E>;        // views + redi
 pub type JsonResult<T = Value, E = Error> = Result<Json<T>, E>;  // JSON
 ```
 
-| Pattern | Return type | When to use |
-|---|---|---|
-| Direct | `MyView` | Simple view, no errors possible |
-| `HandlerResult<T>` | `Result<T, Error>` | Single response type, needs `?` |
-| `ViewResult` | `Result<ViewResponse, Error>` | Views, OOB composition, redirects |
-| `JsonResult` | `Result<Json<Value>, Error>` | Ad-hoc JSON |
-| `JsonResult<T>` | `Result<Json<T>, Error>` | Typed JSON |
+| Pattern            | Return type                   | When to use                       |
+| ------------------ | ----------------------------- | --------------------------------- |
+| Direct             | `MyView`                      | Simple view, no errors possible   |
+| `HandlerResult<T>` | `Result<T, Error>`            | Single response type, needs `?`   |
+| `ViewResult`       | `Result<ViewResponse, Error>` | Views, OOB composition, redirects |
+| `JsonResult`       | `Result<Json<Value>, Error>`  | Ad-hoc JSON                       |
+| `JsonResult<T>`    | `Result<Json<T>, Error>`      | Typed JSON                        |
 
 ## Handler Examples
 
 ### Simple view — no change (uses render layer)
+
 ```rust
 #[modo::view("pages/home.html", htmx = "partials/clock.html")]
 struct HomePage { time: String, date: String }
@@ -111,6 +114,7 @@ async fn home() -> HomePage {
 ```
 
 ### Single view with error handling (uses render layer)
+
 ```rust
 #[modo::handler(GET, "/items")]
 async fn list_items(Db(db): Db) -> HandlerResult<ItemList> {
@@ -121,6 +125,7 @@ async fn list_items(Db(db): Db) -> HandlerResult<ItemList> {
 ```
 
 ### Multiple views — main + OOB toast
+
 ```rust
 #[modo::view("partials/items.html")]
 struct ItemList { items: Vec<Item> }
@@ -141,6 +146,7 @@ async fn create_item(view: ViewRenderer, Db(db): Db, form: Form<CreateItem>) -> 
 ```
 
 ### Polymorphic — form, error toast, or redirect
+
 ```rust
 #[modo::view("partials/login_form.html")]
 struct LoginForm { values: LoginInput, errors: ValidationErrors }
@@ -168,6 +174,7 @@ async fn login(view: ViewRenderer, form: Form<LoginInput>) -> ViewResult {
 ```
 
 ### OOB-only response (toast without main view)
+
 ```rust
 #[modo::handler(DELETE, "/items/{id}")]
 async fn delete_item(view: ViewRenderer, Db(db): Db, id: String) -> ViewResult {
@@ -180,6 +187,7 @@ async fn delete_item(view: ViewRenderer, Db(db): Db, id: String) -> ViewResult {
 ```
 
 ### Smart redirect
+
 ```rust
 #[modo::handler(POST, "/logout")]
 async fn logout(view: ViewRenderer, session: SessionManager) -> ViewResult {
@@ -189,6 +197,7 @@ async fn logout(view: ViewRenderer, session: SessionManager) -> ViewResult {
 ```
 
 ### Render to string (SSE, WebSocket, email)
+
 ```rust
 let html = view.render_to_string(WelcomeEmail { name: user.name.clone() })?;
 send_email(&user.email, "Welcome!", &html).await?;
@@ -204,6 +213,7 @@ The `ViewRenderer` operates alongside the existing `RenderLayer`, not replacing 
 - **`ViewRenderer.render()`** — renders explicitly, bypasses the render layer. The response is already rendered HTML, so the render layer passes it through unchanged.
 
 Handlers choose one or the other based on their needs:
+
 - Simple single-view handlers: return the struct directly (existing pattern)
 - Multi-view, polymorphic, or redirect handlers: use `ViewRenderer`
 
@@ -226,6 +236,7 @@ No other macro changes.
 ### No New Crates or Feature Flags
 
 All changes live in:
+
 - `modo-macros/` — `ViewRender` trait implementation
 - `modo/src/templates/` — `ViewRenderer`, `ViewResponse`, `ViewRender` trait, tuple impls
 - `modo/src/` — `ViewResult` alias, `Redirect` type
