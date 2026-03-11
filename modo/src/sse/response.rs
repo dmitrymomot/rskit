@@ -63,9 +63,12 @@ impl SseResponse {
 
 impl IntoResponse for SseResponse {
     fn into_response(self) -> Response {
-        axum::response::sse::Sse::new(self.stream)
+        let mut resp = axum::response::sse::Sse::new(self.stream)
             .keep_alive(axum::response::sse::KeepAlive::new().interval(self.keep_alive_interval))
-            .into_response()
+            .into_response();
+        resp.headers_mut()
+            .insert("X-Accel-Buffering", http::HeaderValue::from_static("no"));
+        resp
     }
 }
 
