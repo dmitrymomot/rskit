@@ -32,7 +32,10 @@ where
     /// Items must already be [`SseEvent`]s (or convertible via `Into<SseEvent>`).
     /// This is useful when you have a stream of pre-built events and want to
     /// override or set the event name uniformly.
-    fn sse_event(self, name: &'static str) -> impl Stream<Item = Result<SseEvent, Error>> + Send
+    fn with_event_name(
+        self,
+        name: &'static str,
+    ) -> impl Stream<Item = Result<SseEvent, Error>> + Send
     where
         T: Into<SseEvent> + Send,
         E: Send,
