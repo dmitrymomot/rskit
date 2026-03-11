@@ -40,3 +40,16 @@ async fn sse_response_with_keep_alive_override() {
         .into_response();
     assert_eq!(resp.status(), http::StatusCode::OK);
 }
+
+#[tokio::test]
+async fn sse_response_has_x_accel_buffering_header() {
+    let s = stream::empty::<Result<SseEvent, modo::Error>>();
+    let resp = modo::sse::from_stream(s).into_response();
+    let val = resp
+        .headers()
+        .get("x-accel-buffering")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(val, "no");
+}

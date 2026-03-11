@@ -56,10 +56,10 @@ async fn sse_map_propagates_stream_errors() {
 }
 
 #[tokio::test]
-async fn sse_event_sets_name_and_converts() {
+async fn with_event_name_sets_name_and_converts() {
     let items = vec![Ok::<_, modo::Error>(SseEvent::new().data("hello"))];
     let s = stream::iter(items);
-    let events: Vec<_> = s.sse_event("ping").collect().await;
+    let events: Vec<_> = s.with_event_name("ping").collect().await;
     assert_eq!(events.len(), 1);
     assert!(events[0].is_ok());
 }
