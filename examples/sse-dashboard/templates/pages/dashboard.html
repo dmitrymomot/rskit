@@ -1,0 +1,9 @@
+{# examples/sse-dashboard/templates/pages/dashboard.html #}
+{% extends "layouts/base.html" %}
+{% block content %}
+<h1>Server Status Dashboard</h1>
+<p class="connected">Live — updates via SSE</p>
+<div class="grid" hx-ext="sse" sse-connect="/events" sse-swap="status_update" hx-swap="innerHTML">
+    <p style="color: #94a3b8;">Waiting for data...</p>
+</div>
+{% endblock %}

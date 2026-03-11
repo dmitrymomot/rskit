@@ -1,0 +1,12 @@
+{# examples/sse-dashboard/templates/partials/status_card.html #}
+{% for server in servers %}
+<div class="card {{ server.status }}">
+    <h2>{{ server.name }}</h2>
+    <div class="status {{ server.status }}">{{ server.status }}</div>
+    <div class="metrics">
+        <div class="metric">CPU: <span>{{ server.cpu }}%</span></div>
+        <div class="metric">MEM: <span>{{ server.memory }}%</span></div>
+        <div class="metric">Latency: <span>{{ server.latency_ms }}ms</span></div>
+    </div>
+</div>
+{% endfor %}

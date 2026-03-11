@@ -1,0 +1,85 @@
+{# examples/sse-dashboard/templates/layouts/base.html #}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{% block title %}SSE Dashboard{% endblock %}</title>
+        <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+        <script src="https://unpkg.com/htmx-ext-sse@2.3.0/sse.js"></script>
+        <style>
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                font-family: system-ui, sans-serif;
+                background: #0f172a;
+                color: #e2e8f0;
+                padding: 2rem;
+            }
+            h1 {
+                margin-bottom: 1.5rem;
+                font-size: 1.5rem;
+            }
+            .grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 1rem;
+            }
+            .card {
+                background: #1e293b;
+                border-radius: 0.5rem;
+                padding: 1.25rem;
+                border-left: 4px solid #475569;
+            }
+            .card.up {
+                border-left-color: #22c55e;
+            }
+            .card.down {
+                border-left-color: #ef4444;
+            }
+            .card.degraded {
+                border-left-color: #f59e0b;
+            }
+            .card h2 {
+                font-size: 1rem;
+                margin-bottom: 0.75rem;
+            }
+            .card .status {
+                font-size: 0.875rem;
+                font-weight: 600;
+                text-transform: uppercase;
+            }
+            .card .status.up {
+                color: #22c55e;
+            }
+            .card .status.down {
+                color: #ef4444;
+            }
+            .card .status.degraded {
+                color: #f59e0b;
+            }
+            .card .metrics {
+                display: flex;
+                gap: 1rem;
+                margin-top: 0.75rem;
+                font-size: 0.8rem;
+                color: #94a3b8;
+            }
+            .card .metric span {
+                font-weight: 600;
+                color: #e2e8f0;
+            }
+            .connected {
+                color: #22c55e;
+                font-size: 0.8rem;
+                margin-bottom: 1rem;
+            }
+        </style>
+    </head>
+    <body>
+        {% block content %}{% endblock %}
+    </body>
+</html>

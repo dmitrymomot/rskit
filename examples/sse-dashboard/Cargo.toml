@@ -1,0 +1,15 @@
+[package]
+name = "sse-dashboard"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+modo = { path = "../../modo", features = ["templates", "sse"] }
+chrono = "0.4"
+rand = "0.9"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("templates", "sse"))'] }

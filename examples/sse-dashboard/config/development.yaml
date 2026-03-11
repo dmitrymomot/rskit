@@ -1,0 +1,7 @@
+server:
+  port: 3002
+  secret_key: ${SECRET_KEY:-sse-dashboard-dev-secret-key-change-in-prod-please}
+  http:
+    timeout: 3600
+templates:
+  path: templates
