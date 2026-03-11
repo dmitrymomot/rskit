@@ -3,6 +3,10 @@ server:
     secret_key: ${SECRET_KEY:-sse-chat-dev-secret-key-change-in-production-please}
     http:
         timeout: 3600
+    security_headers:
+        content_security_policy: "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'"
+    static_files:
+        prefix: /static
 templates:
     path: templates
 database:
