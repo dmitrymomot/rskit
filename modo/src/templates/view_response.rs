@@ -57,17 +57,17 @@ impl IntoResponse for ViewResponse {
             ViewResponseKind::Redirect { url } => {
                 let mut resp = Response::new(axum::body::Body::empty());
                 *resp.status_mut() = StatusCode::FOUND;
-                if let Ok(val) = HeaderValue::from_str(&url) {
-                    resp.headers_mut().insert("location", val);
-                }
+                let val =
+                    HeaderValue::try_from(&url).expect("redirect URL must be a valid header value");
+                resp.headers_mut().insert("location", val);
                 resp
             }
             ViewResponseKind::HxRedirect { url } => {
                 let mut resp = Response::new(axum::body::Body::empty());
                 *resp.status_mut() = StatusCode::OK;
-                if let Ok(val) = HeaderValue::from_str(&url) {
-                    resp.headers_mut().insert("hx-redirect", val);
-                }
+                let val = HeaderValue::try_from(&url)
+                    .expect("HX-Redirect URL must be a valid header value");
+                resp.headers_mut().insert("hx-redirect", val);
                 resp
             }
         }

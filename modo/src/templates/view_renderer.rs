@@ -36,6 +36,9 @@ impl ViewRenderer {
 
     /// Smart redirect — returns 302 for normal requests,
     /// `HX-Redirect` header + 200 for HTMX requests.
+    ///
+    /// Returns `Result` for ergonomic consistency with `render()` so handlers
+    /// can use `?` uniformly across all branches without wrapping in `Ok(...)`.
     pub fn redirect(&self, url: &str) -> Result<ViewResponse, Error> {
         if self.is_htmx {
             Ok(ViewResponse::hx_redirect(url))

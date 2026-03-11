@@ -48,7 +48,7 @@ pub use middleware::{ClientIp, RateLimitInfo};
 pub use request_id::RequestId;
 pub use shutdown::{GracefulShutdown, ShutdownPhase};
 #[cfg(feature = "templates")]
-pub use templates::{ViewRenderer, ViewResponse};
+pub use templates::{ViewRender, ViewRenderer, ViewResponse};
 
 // Re-exports for macro-generated code
 pub use axum;

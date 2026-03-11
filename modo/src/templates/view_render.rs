@@ -41,7 +41,6 @@ macro_rules! impl_view_render_tuple {
     };
 }
 
-impl_view_render_tuple!(0: A);
 impl_view_render_tuple!(0: A, 1: B);
 impl_view_render_tuple!(0: A, 1: B, 2: C);
 impl_view_render_tuple!(0: A, 1: B, 2: C, 3: D);

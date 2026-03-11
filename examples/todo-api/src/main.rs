@@ -2,7 +2,7 @@ use modo::HttpError;
 use modo::JsonResult;
 use modo_db::{DatabaseConfig, Db};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 // --- Config ---
 
@@ -84,10 +84,7 @@ async fn create_todo(
 }
 
 #[modo::handler(DELETE, "/todos/{id}")]
-async fn delete_todo(
-    Db(db): Db,
-    id: String,
-) -> JsonResult<Value> {
+async fn delete_todo(Db(db): Db, id: String) -> JsonResult<Value> {
     use modo_db::sea_orm::{EntityTrait, ModelTrait};
     let todo = todo::Entity::find_by_id(&id)
         .one(&*db)

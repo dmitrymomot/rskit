@@ -3,7 +3,7 @@ use modo::{HandlerResult, JsonResult};
 use modo_db::DatabaseConfig;
 use modo_jobs::JobQueue;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 // --- Config ---
 
@@ -51,21 +51,13 @@ async fn heartbeat() -> HandlerResult<()> {
 // --- Handlers ---
 
 #[modo::handler(POST, "/jobs/greet")]
-async fn enqueue_greet(
-    queue: JobQueue,
-    input: modo::Json<GreetingPayload>,
-) -> JsonResult<Value> {
+async fn enqueue_greet(queue: JobQueue, input: modo::Json<GreetingPayload>) -> JsonResult<Value> {
     let job_id = SayHelloJob::enqueue(&queue, &input).await?;
-    Ok(modo::Json(
-        json!({ "job_id": job_id.to_string() }),
-    ))
+    Ok(modo::Json(json!({ "job_id": job_id.to_string() })))
 }
 
 #[modo::handler(POST, "/jobs/remind")]
-async fn enqueue_remind(
-    queue: JobQueue,
-    input: modo::Json<ReminderPayload>,
-) -> JsonResult<Value> {
+async fn enqueue_remind(queue: JobQueue, input: modo::Json<ReminderPayload>) -> JsonResult<Value> {
     let run_at = chrono::Utc::now() + chrono::Duration::seconds(10);
     let job_id = RemindJob::enqueue_at(&queue, &input, run_at).await?;
     Ok(modo::Json(
