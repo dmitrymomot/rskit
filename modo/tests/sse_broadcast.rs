@@ -94,3 +94,19 @@ async fn broadcast_stream_closed_when_sender_dropped() {
     let next = stream.next().await;
     assert!(next.is_none());
 }
+
+#[tokio::test]
+async fn broadcast_lagging_subscriber_skips_and_continues() {
+    let mgr: SseBroadcastManager<String, String> = SseBroadcastManager::new(2);
+    let mut stream = mgr.subscribe(&"room".into());
+
+    // Send 4 messages without reading — buffer is 2, so subscriber will lag
+    for i in 0..4 {
+        let _ = mgr.send(&"room".into(), format!("msg-{i}"));
+    }
+
+    // Stream should still yield values (lagged messages are skipped, not errored)
+    let item = stream.next().await;
+    assert!(item.is_some(), "stream should still yield after lagging");
+    assert!(item.unwrap().is_ok(), "lagged stream item should be Ok");
+}
