@@ -34,10 +34,14 @@ pub(crate) mod static_files;
 pub mod templates;
 pub mod validate;
 
+pub use axum::Json;
 pub use config::{AppConfig, HttpConfig, RateLimitConfig, SecurityHeadersConfig, TrailingSlash};
 pub use cookies::{CookieConfig, CookieManager, CookieOptions, SameSite};
 pub use cors::CorsConfig;
-pub use error::{Error, ErrorContext, ErrorHandlerFn, ErrorHandlerRegistration, HttpError};
+pub use error::{
+    Error, ErrorContext, ErrorHandlerFn, ErrorHandlerRegistration, HandlerResult, HttpError,
+    JsonResult,
+};
 pub use middleware::{ClientIp, RateLimitInfo};
 pub use request_id::RequestId;
 pub use shutdown::{GracefulShutdown, ShutdownPhase};

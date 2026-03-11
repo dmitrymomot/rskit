@@ -318,6 +318,14 @@ impl ErrorContext {
     }
 }
 
+/// Convenience alias for JSON API handlers.
+/// Defaults to `Result<axum::Json<T>, Error>`, but the error type can be overridden.
+pub type JsonResult<T, E = Error> = Result<axum::Json<T>, E>;
+
+/// Convenience alias for generic handler results.
+/// Defaults to `Result<T, Error>`, but the error type can be overridden.
+pub type HandlerResult<T, E = Error> = Result<T, E>;
+
 /// Signature for custom error handler functions.
 pub type ErrorHandlerFn = fn(Error, &ErrorContext) -> Response;
 
