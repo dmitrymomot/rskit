@@ -1,0 +1,33 @@
+{# examples/sse-chat/templates/pages/chat.html #}
+{% extends "layouts/base.html" %}
+{% block title %}{{ room }} — SSE Chat{% endblock %}
+{% block content %}
+<div class="nav">
+    <a href="/rooms">&larr; Rooms</a>
+    <h1>{{ room }}</h1>
+    <span class="user">{{ username }}</span>
+</div>
+<div class="chat-container">
+    <div class="messages" id="messages" hx-ext="sse" sse-connect="/chat/{{ room }}/events" sse-swap="message" hx-swap="beforeend">
+        {% for msg in messages %}
+        {{ msg }}
+        {% endfor %}
+    </div>
+    <form class="message-form" hx-post="/chat/{{ room }}/send" hx-swap="none" hx-on::after-request="this.reset()">
+        <input type="text" name="text" placeholder="Type a message..." required autocomplete="off" autofocus />
+        <button type="submit">Send</button>
+    </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    // Auto-scroll to bottom on new messages
+    const messages = document.getElementById("messages");
+    const observer = new MutationObserver(() => {
+        messages.scrollTop = messages.scrollHeight;
+    });
+    observer.observe(messages, { childList: true });
+    // Scroll to bottom on load
+    messages.scrollTop = messages.scrollHeight;
+</script>
+{% endblock %}

@@ -1,0 +1,13 @@
+{# examples/sse-chat/templates/pages/login.html #}
+{% extends "layouts/base.html" %}
+{% block title %}Login — SSE Chat{% endblock %}
+{% block content %}
+<h1>Enter your username</h1>
+<form method="POST" action="/login">
+    <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" placeholder="Your name" required minlength="2" maxlength="30" autofocus />
+    </div>
+    <button type="submit">Join Chat</button>
+</form>
+{% endblock %}

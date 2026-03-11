@@ -1,0 +1,11 @@
+server:
+    port: 3003
+    secret_key: ${SECRET_KEY:-sse-chat-dev-secret-key-change-in-production-please}
+    http:
+        timeout: 3600
+templates:
+    path: templates
+database:
+    url: ${DATABASE_URL:-sqlite://chat.db?mode=rwc}
+    max_connections: 5
+    min_connections: 1
