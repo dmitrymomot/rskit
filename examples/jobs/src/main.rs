@@ -1,7 +1,9 @@
 use modo::app::ServiceRegistry;
+use modo::{HandlerResult, JsonResult};
 use modo_db::DatabaseConfig;
 use modo_jobs::JobQueue;
 use serde::Deserialize;
+use serde_json::{json, Value};
 
 // --- Config ---
 
@@ -29,19 +31,19 @@ struct ReminderPayload {
 // --- Jobs ---
 
 #[modo_jobs::job(queue = "default")]
-async fn say_hello(payload: GreetingPayload) -> Result<(), modo::Error> {
+async fn say_hello(payload: GreetingPayload) -> HandlerResult<()> {
     tracing::info!(name = %payload.name, "Hello, {}!", payload.name);
     Ok(())
 }
 
 #[modo_jobs::job(queue = "default")]
-async fn remind(payload: ReminderPayload) -> Result<(), modo::Error> {
+async fn remind(payload: ReminderPayload) -> HandlerResult<()> {
     tracing::info!(reminder_message = %payload.message, "Reminder: {}", payload.message);
     Ok(())
 }
 
 #[modo_jobs::job(cron = "0 */1 * * * *", timeout = "30s")]
-async fn heartbeat() -> Result<(), modo::Error> {
+async fn heartbeat() -> HandlerResult<()> {
     tracing::info!("heartbeat tick");
     Ok(())
 }
@@ -51,23 +53,23 @@ async fn heartbeat() -> Result<(), modo::Error> {
 #[modo::handler(POST, "/jobs/greet")]
 async fn enqueue_greet(
     queue: JobQueue,
-    input: modo::extractors::Json<GreetingPayload>,
-) -> Result<modo::axum::Json<modo::serde_json::Value>, modo::Error> {
+    input: modo::Json<GreetingPayload>,
+) -> JsonResult<Value> {
     let job_id = SayHelloJob::enqueue(&queue, &input).await?;
-    Ok(modo::axum::Json(
-        modo::serde_json::json!({ "job_id": job_id.to_string() }),
+    Ok(modo::Json(
+        json!({ "job_id": job_id.to_string() }),
     ))
 }
 
 #[modo::handler(POST, "/jobs/remind")]
 async fn enqueue_remind(
     queue: JobQueue,
-    input: modo::extractors::Json<ReminderPayload>,
-) -> Result<modo::axum::Json<modo::serde_json::Value>, modo::Error> {
+    input: modo::Json<ReminderPayload>,
+) -> JsonResult<Value> {
     let run_at = chrono::Utc::now() + chrono::Duration::seconds(10);
     let job_id = RemindJob::enqueue_at(&queue, &input, run_at).await?;
-    Ok(modo::axum::Json(
-        modo::serde_json::json!({ "job_id": job_id.to_string(), "run_at": run_at.to_rfc3339() }),
+    Ok(modo::Json(
+        json!({ "job_id": job_id.to_string(), "run_at": run_at.to_rfc3339() }),
     ))
 }
 

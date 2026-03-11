@@ -1,3 +1,4 @@
+use modo::JsonResult;
 use modo_upload::{FileStorage, FromMultipart, MultipartForm, UploadConfig, UploadedFile};
 use serde::Deserialize;
 
@@ -19,10 +20,10 @@ struct ProfileForm {
 async fn update_profile(
     storage: modo::extractors::service::Service<Box<dyn FileStorage>>,
     form: MultipartForm<ProfileForm>,
-) -> Result<modo::extractors::Json<serde_json::Value>, modo::Error> {
+) -> JsonResult<serde_json::Value> {
     form.validate()?;
     let stored = storage.store("avatars", &form.avatar).await?;
-    Ok(modo::extractors::Json(serde_json::json!({
+    Ok(modo::Json(serde_json::json!({
         "name": form.name,
         "avatar_path": stored.path,
     })))

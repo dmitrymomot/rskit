@@ -1,6 +1,8 @@
-use modo::error::HttpError;
+use modo::HttpError;
+use modo::JsonResult;
 use modo_db::{DatabaseConfig, Db};
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 // --- Config ---
 
@@ -52,13 +54,13 @@ impl From<todo::Model> for TodoResponse {
 // --- Handlers ---
 
 #[modo::handler(GET, "/todos")]
-async fn list_todos(Db(db): Db) -> Result<modo::axum::Json<Vec<TodoResponse>>, modo::Error> {
+async fn list_todos(Db(db): Db) -> JsonResult<Vec<TodoResponse>> {
     use modo_db::sea_orm::EntityTrait;
     let todos = todo::Entity::find()
         .all(&*db)
         .await
         .map_err(|e| modo::Error::internal(format!("Failed to list todos: {e}")))?;
-    Ok(modo::axum::Json(
+    Ok(modo::Json(
         todos.into_iter().map(TodoResponse::from).collect(),
     ))
 }
@@ -67,7 +69,7 @@ async fn list_todos(Db(db): Db) -> Result<modo::axum::Json<Vec<TodoResponse>>, m
 async fn create_todo(
     Db(db): Db,
     input: modo::validate::Json<CreateTodo>,
-) -> Result<modo::axum::Json<TodoResponse>, modo::Error> {
+) -> JsonResult<TodoResponse> {
     input.validate()?;
     use modo_db::sea_orm::{ActiveModelTrait, Set};
     let model = todo::ActiveModel {
@@ -78,14 +80,14 @@ async fn create_todo(
         .insert(&*db)
         .await
         .map_err(|e| modo::Error::internal(format!("Failed to create todo: {e}")))?;
-    Ok(modo::axum::Json(TodoResponse::from(result)))
+    Ok(modo::Json(TodoResponse::from(result)))
 }
 
 #[modo::handler(DELETE, "/todos/{id}")]
 async fn delete_todo(
     Db(db): Db,
     id: String,
-) -> Result<modo::axum::Json<modo::serde_json::Value>, modo::Error> {
+) -> JsonResult<Value> {
     use modo_db::sea_orm::{EntityTrait, ModelTrait};
     let todo = todo::Entity::find_by_id(&id)
         .one(&*db)
@@ -95,7 +97,7 @@ async fn delete_todo(
     todo.delete(&*db)
         .await
         .map_err(|e| modo::Error::internal(format!("Failed to delete todo: {e}")))?;
-    Ok(modo::axum::Json(modo::serde_json::json!({"deleted": id})))
+    Ok(modo::Json(json!({"deleted": id})))
 }
 
 // --- Main ---
