@@ -84,7 +84,7 @@ where
         E: Send,
         Self: Send,
     {
-        self.map(move |result| result.map_err(Into::into).and_then(|item| f(item)))
+        self.map(move |result| result.map_err(Into::into).and_then(&mut f))
     }
 }
 

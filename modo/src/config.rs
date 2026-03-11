@@ -236,6 +236,9 @@ pub struct AppConfig {
     pub i18n: crate::i18n::I18nConfig,
     #[cfg(feature = "csrf")]
     pub csrf: crate::csrf::CsrfConfig,
+    #[cfg(feature = "sse")]
+    #[serde(default)]
+    pub sse: crate::sse::SseConfig,
 }
 
 // ---------------------------------------------------------------------------
