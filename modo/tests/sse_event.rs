@@ -27,9 +27,7 @@ fn event_with_json() {
 
 #[test]
 fn event_with_html() {
-    let event = SseEvent::new()
-        .event("update")
-        .html("<div>hello</div>");
+    let event = SseEvent::new().event("update").html("<div>hello</div>");
     let _axum_event: axum::response::sse::Event = event.try_into().unwrap();
 }
 
