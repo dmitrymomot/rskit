@@ -92,6 +92,35 @@ impl SseConfig {
 
 Uses `u64` seconds (not `Duration`) for YAML deserialization, matching the pattern used by `CsrfConfig.cookie_max_age`.
 
+### `LastEventId`
+
+Extractor for the `Last-Event-ID` header sent by the browser's `EventSource` on reconnection. Follows modo's extractor pattern (like `Auth<User>`, `Tenant<T>`).
+
+```rust
+/// Extracts the `Last-Event-ID` header from the request.
+/// Contains `None` on first connection (header absent).
+pub struct LastEventId(pub Option<String>);
+```
+
+Implements `FromRequestParts` — extracts the raw header value as a `String`. No parsing or validation (event IDs are application-defined, could be ULIDs, sequence numbers, timestamps, etc.).
+
+Usage:
+
+```rust
+#[modo::handler(GET, "/chat/{id}/events")]
+async fn chat_stream(
+    id: String,
+    last_event_id: LastEventId,
+    Service(chat): Service<SseBroadcastManager<String, ChatMessage>>,
+) -> SseResponse {
+    let mut stream = chat.subscribe(&id);
+    if let Some(last_id) = last_event_id.0 {
+        // Application logic: replay missed events from storage
+    }
+    modo::sse::from_stream(stream.sse_map(|msg| Ok(SseEvent::from(msg))))
+}
+```
+
 ### `SseSender`
 
 Channel sender for imperative message production within a `modo::sse::channel()` closure.
@@ -236,7 +265,7 @@ pub mod sse;
 
 Public items from `modo::sse`:
 - `SseEvent`, `SseResponse`, `SseConfig`
-- `SseSender`
+- `SseSender`, `LastEventId`
 - `SseBroadcastManager`, `SseStream`
 - `SseStreamExt` (trait)
 - `from_stream`, `channel`
@@ -258,6 +287,7 @@ modo/src/sse/
 ├── config.rs           # SseConfig
 ├── sender.rs           # SseSender for channel()
 ├── broadcast.rs        # SseBroadcastManager<K, T>, SseStream<T>
+├── last_event_id.rs    # LastEventId extractor
 └── stream_ext.rs       # SseStreamExt trait
 ```
 
@@ -275,7 +305,7 @@ This interaction should be documented prominently in the module docs.
 
 ### `Last-Event-ID` reconnection flow
 
-When a client reconnects after a disconnect, the browser's `EventSource` sends a `Last-Event-ID` header with the last received event ID. Handlers can read this via `axum::TypedHeader<headers::LastEventId>` (or raw header extraction) to replay missed events. The SSE module does NOT handle replay automatically — this is application logic.
+When a client reconnects after a disconnect, the browser's `EventSource` sends a `Last-Event-ID` header with the last received event ID. Handlers can read this via the `LastEventId` extractor to replay missed events. The SSE module does NOT handle replay automatically — replay logic (e.g., fetching missed messages from a database) is application responsibility.
 
 ## Documentation Requirements
 
