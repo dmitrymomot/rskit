@@ -115,10 +115,7 @@ where
     /// Returns 0 if the key has no channel.
     pub fn subscriber_count(&self, key: &K) -> usize {
         let channels = self.channels.read().unwrap();
-        channels
-            .get(key)
-            .map(|s| s.receiver_count())
-            .unwrap_or(0)
+        channels.get(key).map(|s| s.receiver_count()).unwrap_or(0)
     }
 
     /// Manually remove a channel and disconnect all its subscribers.
@@ -171,10 +168,7 @@ impl<T: Clone + Send + 'static> SseStream<T> {
                 match rx.recv().await {
                     Ok(item) => return Some((Ok(item), rx)),
                     Err(broadcast::error::RecvError::Lagged(n)) => {
-                        tracing::warn!(
-                            skipped = n,
-                            "SSE subscriber lagged, skipping {n} messages"
-                        );
+                        tracing::warn!(skipped = n, "SSE subscriber lagged, skipping {n} messages");
                         continue;
                     }
                     Err(broadcast::error::RecvError::Closed) => return None,
