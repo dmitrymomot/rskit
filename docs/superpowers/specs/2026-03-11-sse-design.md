@@ -33,7 +33,7 @@ No new external crates. The `sse` feature activates `dep:futures-util` (already 
 - `axum::response::sse` — built-in SSE response types (requires axum's `"json"` feature for `Event::json_data()`, which is enabled by axum's default features and already active in modo)
 - `tokio::sync::broadcast` — multi-producer, multi-consumer channels (for `SseBroadcastManager`)
 - `tokio::sync::mpsc` — single-producer channel (for `SseSender` in `channel()`)
-- `tokio::sync::RwLock` — concurrent access to channel registry
+- `std::sync::RwLock` — concurrent access to channel registry (safe in async context for brief HashMap ops)
 - `futures-util` — `Stream` trait and combinators
 
 ## Types
