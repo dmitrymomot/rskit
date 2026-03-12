@@ -14,12 +14,12 @@ modo --version
 
 ### Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `<name>` | yes | Project directory and crate name |
-| `--template, -t` | no | Template preset: `minimal`, `api`, `web`, `worker`. Default: `web` |
-| `--postgres` | no | Use Postgres DB driver |
-| `--sqlite` | no | Use SQLite DB driver (default) |
+| Argument         | Required | Description                                                        |
+| ---------------- | -------- | ------------------------------------------------------------------ |
+| `<name>`         | yes      | Project directory and crate name                                   |
+| `--template, -t` | no       | Template preset: `minimal`, `api`, `web`, `worker`. Default: `web` |
+| `--postgres`     | no       | Use Postgres DB driver                                             |
+| `--sqlite`       | no       | Use SQLite DB driver (default)                                     |
 
 ### Error Behavior
 
@@ -33,44 +33,45 @@ modo --version
 
 ### Template Descriptions
 
-| Template | Description |
-|----------|-------------|
-| `minimal` | Bare modo app with a single handler. Config, env, justfile included. No database. |
-| `api` | REST API with database, entities, and JSON handlers. |
-| `web` | Full web app: db, auth, sessions, templates, jobs, uploads, email, i18n, tenants — everything. **(default)** |
-| `worker` | Background job processor with a health-check HTTP endpoint (no app routes). |
+| Template  | Description                                                                                                  |
+| --------- | ------------------------------------------------------------------------------------------------------------ |
+| `minimal` | Bare modo app with a single handler. Config, env, justfile included. No database.                            |
+| `api`     | REST API with database, entities, and JSON handlers.                                                         |
+| `web`     | Full web app: db, auth, sessions, templates, jobs, uploads, email, i18n, tenants — everything. **(default)** |
+| `worker`  | Background job processor with a health-check HTTP endpoint (no app routes).                                  |
 
 ### Generated Structure Per Template
 
-| Directory/File | minimal | api | web | worker |
-|---|---|---|---|---|
-| `src/main.rs` | yes | yes | yes | yes |
-| `src/config.rs` | yes | yes | yes | yes |
-| `src/handlers/` | - | yes | yes | - |
-| `src/handlers/mod.rs` | - | yes | yes | - |
-| `src/models/` | - | yes | yes | - |
-| `src/models/mod.rs` | - | yes | yes | - |
-| `src/tasks/` | - | - | yes | yes |
-| `src/tasks/mod.rs` | - | - | yes | yes |
-| `src/views/` | - | - | yes | - |
-| `src/views/mod.rs` | - | - | yes | - |
-| `config/development.yaml` | yes | yes | yes | yes |
-| `config/production.yaml` | yes | yes | yes | yes |
-| `assets/src/app.css` | - | - | yes | - |
-| `assets/static/css/` | - | - | yes | - |
-| `assets/static/js/` | - | - | yes | - |
-| `assets/static/img/` | - | - | yes | - |
-| `templates/app/` | - | - | yes | - |
-| `templates/app/base.html` | - | - | yes | - |
-| `templates/app/index.html` | - | - | yes | - |
-| `templates/emails/` | - | - | yes | - |
-| `locales/en/` | - | - | yes | - |
-| `justfile` | yes | yes | yes | yes |
-| `.env` | yes | yes | yes | yes |
-| `.env.example` | yes | yes | yes | yes |
-| `.gitignore` | yes | yes | yes | yes |
-| `CLAUDE.md` | yes | yes | yes | yes |
-| `Cargo.toml` | yes | yes | yes | yes |
+| Directory/File             | minimal | api | web | worker |
+| -------------------------- | ------- | --- | --- | ------ |
+| `src/main.rs`              | yes     | yes | yes | yes    |
+| `src/config.rs`            | yes     | yes | yes | yes    |
+| `src/handlers/`            | -       | yes | yes | -      |
+| `src/handlers/mod.rs`      | -       | yes | yes | -      |
+| `src/models/`              | -       | yes | yes | -      |
+| `src/models/mod.rs`        | -       | yes | yes | -      |
+| `src/tasks/`               | -       | -   | yes | yes    |
+| `src/tasks/mod.rs`         | -       | -   | yes | yes    |
+| `src/views/`               | -       | -   | yes | -      |
+| `src/views/mod.rs`         | -       | -   | yes | -      |
+| `config/development.yaml`  | yes     | yes | yes | yes    |
+| `config/production.yaml`   | yes     | yes | yes | yes    |
+| `assets/src/app.css`       | -       | -   | yes | -      |
+| `assets/static/css/`       | -       | -   | yes | -      |
+| `assets/static/js/`        | -       | -   | yes | -      |
+| `assets/static/img/`       | -       | -   | yes | -      |
+| `templates/app/`           | -       | -   | yes | -      |
+| `templates/app/base.html`  | -       | -   | yes | -      |
+| `templates/app/index.html` | -       | -   | yes | -      |
+| `templates/emails/`        | -       | -   | yes | -      |
+| `locales/en/`              | -       | -   | yes | -      |
+| `docker-compose.yaml`      | -       | pg  | pg  | pg     |
+| `justfile`                 | yes     | yes | yes | yes    |
+| `.env`                     | yes     | yes | yes | yes    |
+| `.env.example`             | yes     | yes | yes | yes    |
+| `.gitignore`               | yes     | yes | yes | yes    |
+| `CLAUDE.md`                | yes     | yes | yes | yes    |
+| `Cargo.toml`               | yes     | yes | yes | yes    |
 
 ### Config Split
 
@@ -84,23 +85,37 @@ The web template's generated `config/development.yaml` and `config/production.ya
 - `email.templates_path: "templates/emails"` — overrides modo-email default of `"emails"` to match the `templates/emails/` directory structure
 - `i18n.path: "locales"` — matches the `locales/{lang}/` directory structure
 
+### Storage Configuration (web template)
+
+- **Development** (`config/development.yaml`): local filesystem storage (no external dependencies)
+- **Production** (`config/production.yaml`): S3-compatible storage (configured via env vars in `.env`)
+
+### Docker Compose (postgres variant only)
+
+When `--postgres` is used with `api`, `web`, or `worker` templates, a `docker-compose.yaml` is generated with:
+
+- **postgres** service: `postgres:18-alpine`, port `5432`, volume for data persistence
+- Justfile gains `docker-up` / `docker-down` recipes
+- `.env` includes `DATABASE_URL` pointing to the containerized Postgres
+- `dev` recipe chains: `docker-up` → `cargo watch -x run`
+
 ### Template Feature Matrix
 
-| Feature | minimal | api | web | worker |
-|---------|---------|-----|-----|--------|
-| modo core | yes | yes | yes | yes |
-| modo-db | - | yes | yes | yes |
-| modo-auth | - | - | yes | - |
-| modo-session | - | - | yes | - |
-| modo-jobs | - | - | yes | yes |
-| modo-email | - | - | yes | - |
-| modo-upload | - | - | yes | - |
-| modo-tenant | - | - | yes | - |
-| templates feature | - | - | yes | - |
-| csrf feature | - | - | yes | - |
-| i18n feature | - | - | yes | - |
-| sse feature | - | - | yes | - |
-| static-embed feature | - | - | yes | - |
+| Feature              | minimal | api | web | worker |
+| -------------------- | ------- | --- | --- | ------ |
+| modo core            | yes     | yes | yes | yes    |
+| modo-db              | -       | yes | yes | yes    |
+| modo-auth            | -       | -   | yes | -      |
+| modo-session         | -       | -   | yes | -      |
+| modo-jobs            | -       | -   | yes | yes    |
+| modo-email           | -       | -   | yes | -      |
+| modo-upload          | -       | -   | yes | -      |
+| modo-tenant          | -       | -   | yes | -      |
+| templates feature    | -       | -   | yes | -      |
+| csrf feature         | -       | -   | yes | -      |
+| i18n feature         | -       | -   | yes | -      |
+| sse feature          | -       | -   | yes | -      |
+| static-embed feature | -       | -   | yes | -      |
 
 ### Worker Template Architecture
 
@@ -115,27 +130,29 @@ This approach requires no framework changes and provides a production-ready heal
 
 ### Justfile Recipes Per Template
 
-| Recipe | minimal | api | web | worker | Description |
-|--------|---------|-----|-----|--------|-------------|
-| `dev` | yes | yes | yes | yes | Run with cargo-watch for hot reload |
-| `build` | yes | yes | yes | yes | Release build |
-| `fmt` | yes | yes | yes | yes | `cargo fmt` |
-| `lint` | yes | yes | yes | yes | `cargo clippy -D warnings` |
-| `test` | yes | yes | yes | yes | `cargo test` |
-| `check` | yes | yes | yes | yes | fmt-check + lint + test |
-| `css` | - | - | yes | - | Build Tailwind CSS via standalone CLI |
-| `assets-download` | - | - | yes | - | Download HTMX, Alpine.js, etc. via curl |
-| `tailwind-download` | - | - | yes | - | Download Tailwind CSS standalone CLI |
+| Recipe              | minimal | api | web | worker | Description                             |
+| ------------------- | ------- | --- | --- | ------ | --------------------------------------- |
+| `dev`               | yes     | yes | yes | yes    | `cargo watch -x run` for auto-reload    |
+| `build`             | yes     | yes | yes | yes    | Release build                           |
+| `fmt`               | yes     | yes | yes | yes    | `cargo fmt`                             |
+| `lint`              | yes     | yes | yes | yes    | `cargo clippy -D warnings`              |
+| `test`              | yes     | yes | yes | yes    | `cargo test`                            |
+| `check`             | yes     | yes | yes | yes    | fmt-check + lint + test                 |
+| `css`               | -       | -   | yes | -      | Build Tailwind CSS via standalone CLI   |
+| `assets-download`   | -       | -   | yes | -      | Download HTMX, Alpine.js, etc. via curl |
+| `tailwind-download` | -       | -   | yes | -      | Download Tailwind CSS standalone CLI    |
+| `docker-up`         | -       | pg  | pg  | pg     | Start Postgres container                |
+| `docker-down`       | -       | pg  | pg  | pg     | Stop Postgres container                 |
 
 ### Frontend Assets (web template only)
 
 **Vendored locally via `just assets-download`:**
 
-| Library | Destination |
-|---------|-------------|
-| HTMX | `assets/static/js/htmx.min.js` |
-| HTMX SSE extension | `assets/static/js/htmx-sse.js` |
-| Alpine.js | `assets/static/js/alpine.min.js` |
+| Library            | Destination                      |
+| ------------------ | -------------------------------- |
+| HTMX               | `assets/static/js/htmx.min.js`   |
+| HTMX SSE extension | `assets/static/js/htmx-sse.js`   |
+| Alpine.js          | `assets/static/js/alpine.min.js` |
 
 **Tailwind CSS:**
 
@@ -187,12 +204,12 @@ Each template has its own complete set of files (Cargo.toml, main.rs, config.rs,
 
 ### Dependencies
 
-| Crate | Purpose |
-|-------|---------|
-| `clap` | CLI argument parsing with derive |
-| `minijinja` | Template rendering (already in modo's dep tree) |
-| `include_dir` | Embed template directories at compile time |
-| `anyhow` | Error handling |
+| Crate         | Purpose                                         |
+| ------------- | ----------------------------------------------- |
+| `clap`        | CLI argument parsing with derive                |
+| `minijinja`   | Template rendering (already in modo's dep tree) |
+| `include_dir` | Embed template directories at compile time      |
+| `anyhow`      | Error handling                                  |
 
 ### Template Engine
 
@@ -202,10 +219,10 @@ Each template has its own complete set of files (Cargo.toml, main.rs, config.rs,
 
 ### Template Context Variables
 
-| Variable | Type | Description |
-|----------|------|-------------|
+| Variable       | Type   | Description                          |
+| -------------- | ------ | ------------------------------------ |
 | `project_name` | string | Project/crate name from CLI argument |
-| `db_driver` | string | `"sqlite"` or `"postgres"` |
+| `db_driver`    | string | `"sqlite"` or `"postgres"`           |
 
 ### Scaffold Process
 
@@ -247,8 +264,8 @@ Next steps:
 
 - Unit tests: template rendering with known context produces expected output
 - Integration tests: run `modo new testapp --template <each>` in a temp dir, verify:
-  - All expected files exist
-  - `Cargo.toml` is valid TOML with correct dependencies for the template
-  - Generated `.gitignore` contains expected entries
+    - All expected files exist
+    - `Cargo.toml` is valid TOML with correct dependencies for the template
+    - Generated `.gitignore` contains expected entries
 - Error case tests: missing args, conflicting flags, existing directory, DB flag with minimal
 - Note: `cargo check` on generated projects requires modo crates to be published to crates.io. During development, integration tests verify file structure and content correctness only.
