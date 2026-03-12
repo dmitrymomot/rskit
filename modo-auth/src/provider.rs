@@ -5,11 +5,12 @@ use std::sync::Arc;
 /// Trait for loading a user by their session-stored ID.
 ///
 /// Implement this on your own type (e.g., a repository struct that holds a DB pool)
-/// and register it via `UserProviderService::new(your_impl)` as a service.
+/// and register it via `app.service(UserProviderService::new(your_impl))`.
 pub trait UserProvider: Send + Sync + 'static {
     type User: Clone + Send + Sync + 'static;
 
     /// Look up a user by their ID (as stored in the session).
+    ///
     /// Return `Ok(None)` if the user doesn't exist.
     /// Return `Err` only for infrastructure failures (DB errors, etc.).
     fn find_by_id(
@@ -35,10 +36,11 @@ impl<P: UserProvider> UserProviderDyn<P::User> for P {
     }
 }
 
-/// Type-erased wrapper around a `UserProvider` implementation.
+/// Type-erased wrapper around a [`UserProvider`] implementation.
 ///
-/// Stored in the service registry keyed by user type `U`, so that
-/// `Auth<U>` can look up `Service<UserProviderService<U>>` by `TypeId`.
+/// Register with `app.service(UserProviderService::new(your_impl))`. The service
+/// is stored in the registry keyed by user type `U` so that `Auth<U>` and
+/// `OptionalAuth<U>` can retrieve it by `TypeId` at request time.
 pub struct UserProviderService<U: Clone + Send + Sync + 'static> {
     inner: Arc<dyn UserProviderDyn<U>>,
 }
@@ -58,14 +60,14 @@ impl<U: Clone + Send + Sync + 'static> std::fmt::Debug for UserProviderService<U
 }
 
 impl<U: Clone + Send + Sync + 'static> UserProviderService<U> {
-    /// Wrap a `UserProvider` implementation for registration in the service registry.
+    /// Wrap a [`UserProvider`] implementation for registration in the service registry.
     pub fn new<P: UserProvider<User = U>>(provider: P) -> Self {
         Self {
             inner: Arc::new(provider),
         }
     }
 
-    /// Delegate to the wrapped provider.
+    /// Look up a user by their session-stored ID, delegating to the wrapped provider.
     pub async fn find_by_id(&self, id: &str) -> Result<Option<U>, modo::Error> {
         self.inner.find_by_id(id).await
     }

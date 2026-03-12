@@ -8,8 +8,17 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
-/// Layer that injects the authenticated user into TemplateContext.
-/// Graceful: injects nothing if not authenticated.
+/// Tower layer that injects the authenticated user into the minijinja template context.
+///
+/// When a session is active and the user is found, this layer:
+/// - inserts the user under the key `"user"` into the request's [`TemplateContext`], and
+/// - caches the resolved user in request extensions so subsequent [`Auth<U>`](crate::Auth)
+///   or [`OptionalAuth<U>`](crate::OptionalAuth) calls skip a second DB lookup.
+///
+/// If there is no session or the user is not found, the layer passes the request through
+/// unchanged (graceful — no rejection).
+///
+/// Requires feature `"templates"`.
 pub struct UserContextLayer<U>
 where
     U: Clone + Send + Sync + serde::Serialize + 'static,
@@ -32,6 +41,7 @@ impl<U> UserContextLayer<U>
 where
     U: Clone + Send + Sync + serde::Serialize + 'static,
 {
+    /// Create the layer wrapping the given [`UserProviderService<U>`].
     pub fn new(user_svc: UserProviderService<U>) -> Self {
         Self { user_svc }
     }
@@ -51,6 +61,9 @@ where
     }
 }
 
+/// Tower service produced by [`UserContextLayer`].
+///
+/// Requires feature `"templates"`.
 #[derive(Clone)]
 pub struct UserContextMiddleware<S, U>
 where

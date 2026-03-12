@@ -51,10 +51,18 @@ async fn resolve_user<U: Clone + Send + Sync + 'static>(
 
 /// Extractor that requires an authenticated user.
 ///
-/// Returns 401 if no session exists or the user is not found.
-/// Returns 500 if the session middleware or `UserProviderService` is not registered.
+/// Resolves the user from the session via [`UserProviderService<U>`].
+/// Results are cached in request extensions so subsequent extractors in the
+/// same request do not trigger a second DB lookup.
+///
+/// Returns `401 Unauthorized` if no session exists or the user is not found.
+/// Returns `500 Internal Server Error` if session middleware or
+/// [`UserProviderService<U>`] is not registered, or if the provider returns an error.
 #[derive(Clone)]
-pub struct Auth<U: Clone + Send + Sync + 'static>(pub U);
+pub struct Auth<U: Clone + Send + Sync + 'static>(
+    /// The resolved user.
+    pub U,
+);
 
 impl<U: Clone + Send + Sync + 'static> Deref for Auth<U> {
     type Target = U;
@@ -80,11 +88,17 @@ impl<U: Clone + Send + Sync + 'static> FromRequestParts<AppState> for Auth<U> {
 
 /// Extractor that optionally loads the authenticated user.
 ///
-/// Never rejects — returns `OptionalAuth(None)` if not authenticated or user not found.
-/// Still returns 500 if session middleware or `UserProviderService` is missing,
-/// or if the provider returns an error (infrastructure failure).
+/// Never rejects — returns `OptionalAuth(None)` if there is no active session
+/// or the session's user ID is not found by the provider.
+///
+/// Returns `500 Internal Server Error` if session middleware or
+/// [`UserProviderService<U>`] is not registered, or if the provider returns an
+/// infrastructure error.
 #[derive(Clone)]
-pub struct OptionalAuth<U: Clone + Send + Sync + 'static>(pub Option<U>);
+pub struct OptionalAuth<U: Clone + Send + Sync + 'static>(
+    /// `Some(user)` when authenticated, `None` otherwise.
+    pub Option<U>,
+);
 
 impl<U: Clone + Send + Sync + 'static> Deref for OptionalAuth<U> {
     type Target = Option<U>;

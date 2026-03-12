@@ -8,12 +8,19 @@ use serde::Deserialize;
 
 /// Configuration for Argon2id password hashing.
 ///
-/// Defaults follow OWASP recommendations for Argon2id.
+/// Defaults follow OWASP recommendations for Argon2id:
+/// 19 MiB memory, 2 iterations, 1 degree of parallelism.
+///
+/// Can be deserialized from YAML/TOML with partial overrides — unset fields
+/// fall back to their defaults.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct PasswordConfig {
+    /// Memory cost in kibibytes (default: 19456 — 19 MiB).
     pub memory_cost_kib: u32,
+    /// Number of iterations (default: 2).
     pub time_cost: u32,
+    /// Degree of parallelism (default: 1).
     pub parallelism: u32,
 }
 
@@ -29,14 +36,22 @@ impl Default for PasswordConfig {
 
 /// Argon2id password hashing service.
 ///
-/// Construct with config, register as a service via `app.service(hasher)`,
-/// and extract in handlers via `Service<PasswordHasher>`.
+/// Construct with [`PasswordConfig`] (or use `Default` for OWASP-recommended settings),
+/// register with `app.service(hasher)`, and extract in handlers via
+/// `modo::extractors::Service<PasswordHasher>`.
+///
+/// Both [`hash_password`](PasswordHasher::hash_password) and
+/// [`verify_password`](PasswordHasher::verify_password) run on a blocking thread
+/// via `tokio::task::spawn_blocking` to avoid stalling the async runtime.
 #[derive(Debug, Clone)]
 pub struct PasswordHasher {
     params: Params,
 }
 
 impl PasswordHasher {
+    /// Create a new hasher with the given Argon2id parameters.
+    ///
+    /// Returns an error if the parameter values are invalid (e.g., zero memory or parallelism).
     pub fn new(config: PasswordConfig) -> Result<Self, modo::Error> {
         let params = Params::new(
             config.memory_cost_kib,
@@ -51,7 +66,9 @@ impl PasswordHasher {
 
     /// Hash a password using Argon2id with a random salt.
     ///
-    /// Returns a PHC-formatted string that embeds algorithm, params, salt, and hash.
+    /// Returns a PHC-formatted string that embeds the algorithm, parameters, salt,
+    /// and hash. Each call produces a unique output even for the same input.
+    ///
     /// Runs on a blocking thread to avoid stalling the Tokio runtime.
     pub async fn hash_password(&self, password: &str) -> Result<String, modo::Error> {
         let params = self.params.clone();
@@ -75,7 +92,9 @@ impl PasswordHasher {
     /// Returns `Ok(true)` on match, `Ok(false)` on mismatch.
     /// Returns `Err` only for malformed hash strings.
     ///
-    /// Note: uses the params embedded in the hash, not `self.params`.
+    /// The parameters embedded in the hash are used for verification, not
+    /// the parameters this hasher was constructed with.
+    ///
     /// Runs on a blocking thread to avoid stalling the Tokio runtime.
     pub async fn verify_password(&self, password: &str, hash: &str) -> Result<bool, modo::Error> {
         let params = self.params.clone();
