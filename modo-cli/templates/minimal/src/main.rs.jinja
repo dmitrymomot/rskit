@@ -1,0 +1,19 @@
+mod config;
+
+#[modo::handler(GET, "/")]
+async fn index() -> &'static str {
+    "Hello from {{ project_name }}!"
+}
+
+#[modo::handler(GET, "/health")]
+async fn health() -> &'static str {
+    "ok"
+}
+
+#[modo::main]
+async fn main(
+    app: modo::app::AppBuilder,
+    config: config::Config,
+) -> Result<(), Box<dyn std::error::Error>> {
+    app.config(config.core).run().await
+}
