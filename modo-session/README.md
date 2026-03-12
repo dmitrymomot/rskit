@@ -10,8 +10,8 @@ Accept-Encoding) is used to detect session hijacking.
 
 ## Features
 
-| Feature | Description |
-|---|---|
+| Feature       | Description                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
 | `cleanup-job` | Registers a `modo-jobs` cron job that deletes expired sessions every 15 minutes. Requires `modo-jobs`. |
 
 ## Usage
@@ -113,25 +113,25 @@ let user_id = user_id_from_extensions(request.extensions());
 `SessionConfig` deserialises from YAML/TOML with `#[serde(default)]`:
 
 ```yaml
-session_ttl_secs: 2592000      # 30 days (default)
-cookie_name: "_session"        # default
-validate_fingerprint: true     # default
-touch_interval_secs: 300       # 5 minutes (default)
-max_sessions_per_user: 10      # default; LRU eviction when exceeded
-trusted_proxies:               # default: empty (trust all proxy headers)
-  - "10.0.0.0/8"
+session_ttl_secs: 2592000 # 30 days (default)
+cookie_name: "_session" # default
+validate_fingerprint: true # default
+touch_interval_secs: 300 # 5 minutes (default)
+max_sessions_per_user: 10 # default; LRU eviction when exceeded
+trusted_proxies: # default: empty (trust all proxy headers)
+    - "10.0.0.0/8"
 ```
 
 ## Key Types
 
-| Type | Description |
-|---|---|
-| `SessionConfig` | Tunable parameters: TTL, cookie name, fingerprint, proxies. |
-| `SessionStore` | Low-level DB store; use as a managed service for background jobs. |
-| `SessionManager` | Axum extractor for request-scoped session operations. |
-| `SessionData` | Full session record (ID, user, device info, JSON payload, timestamps). |
-| `SessionId` | Opaque ULID-based session identifier. |
-| `SessionToken` | 32-byte random token; serialises as hex; `Debug`/`Display` are redacted. |
-| `SessionMeta` | Request metadata (IP, UA, device) captured by the middleware. |
-| `layer` | Creates the Tower middleware layer from a `SessionStore`. |
-| `user_id_from_extensions` | Non-blocking helper to read user ID in Tower layers. |
+| Type                      | Description                                                              |
+| ------------------------- | ------------------------------------------------------------------------ |
+| `SessionConfig`           | Tunable parameters: TTL, cookie name, fingerprint, proxies.              |
+| `SessionStore`            | Low-level DB store; use as a managed service for background jobs.        |
+| `SessionManager`          | Axum extractor for request-scoped session operations.                    |
+| `SessionData`             | Full session record (ID, user, device info, JSON payload, timestamps).   |
+| `SessionId`               | Opaque ULID-based session identifier.                                    |
+| `SessionToken`            | 32-byte random token; serialises as hex; `Debug`/`Display` are redacted. |
+| `SessionMeta`             | Request metadata (IP, UA, device) captured by the middleware.            |
+| `layer`                   | Creates the Tower middleware layer from a `SessionStore`.                |
+| `user_id_from_extensions` | Non-blocking helper to read user ID in Tower layers.                     |

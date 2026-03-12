@@ -6,7 +6,7 @@ Session-based authentication and Argon2id password hashing for modo applications
 
 | Feature     | What it enables                                                                           |
 | ----------- | ----------------------------------------------------------------------------------------- |
-| `templates` | [`UserContextLayer`] — injects the authenticated user into the minijinja template context |
+| `templates` | `UserContextLayer` — injects the authenticated user into the minijinja template context |
 
 ## Key Types
 
