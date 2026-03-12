@@ -30,17 +30,17 @@ modo-email = { path = "../modo-email" }
 ```yaml
 # config.yaml (or however your app loads config)
 email:
-  transport: smtp          # or "resend"
-  templates_path: "emails"
-  default_from_name: "My App"
-  default_from_email: "hello@myapp.com"
-  default_reply_to: "support@myapp.com"
-  smtp:
-    host: "smtp.example.com"
-    port: 587
-    username: "user"
-    password: "pass"
-    tls: true
+    transport: smtp # or "resend"
+    templates_path: "emails"
+    default_from_name: "My App"
+    default_from_email: "hello@myapp.com"
+    default_reply_to: "support@myapp.com"
+    smtp:
+        host: "smtp.example.com"
+        port: 587
+        username: "user"
+        password: "pass"
+        tls: true
 ```
 
 All fields have defaults (`templates_path` defaults to `"emails"`, `smtp.port` to `587`, `smtp.tls` to `true`). Only specify what you need to override.
@@ -52,22 +52,20 @@ use modo_email::{mailer, EmailConfig, SendEmail};
 
 // Build the mailer from config (uses FilesystemProvider + configured transport).
 let config: EmailConfig = load_config(); // your config loading
-let mailer = mailer(&config)?;
+let m = mailer(&config)?;
 
 // Send a templated email.
-mailer
-    .send(
-        SendEmail::new("welcome", "user@example.com")
-            .var("name", "Alice")
-            .var("dashboard_url", "https://app.com/dashboard"),
-    )
-    .await?;
+m.send(
+    &SendEmail::new("welcome", "user@example.com")
+        .var("name", "Alice")
+        .var("dashboard_url", "https://app.com/dashboard"),
+).await?;
 ```
 
 ### Render Without Sending
 
 ```rust
-let message = mailer.render(
+let message = m.render(
     &SendEmail::new("welcome", "user@example.com")
         .var("name", "Alice"),
 )?;
@@ -98,9 +96,9 @@ If you have questions, just reply to this email.
 
 ### Frontmatter Fields
 
-| Field     | Required | Description                                                       |
-|-----------|----------|-------------------------------------------------------------------|
-| `subject` | Yes      | Email subject line. Supports `{{var}}` placeholders.              |
+| Field     | Required | Description                                                          |
+| --------- | -------- | -------------------------------------------------------------------- |
+| `subject` | Yes      | Email subject line. Supports `{{var}}` placeholders.                 |
 | `layout`  | No       | Layout name to wrap the body in. Falls back to `"default"` built-in. |
 
 ### Variable Substitution
@@ -174,13 +172,13 @@ SendEmail::new("welcome", "user@example.com")
 
 The built-in `default` layout provides a responsive, dark-mode-aware HTML email wrapper. It supports these context variables:
 
-| Variable       | Description                          |
-|----------------|--------------------------------------|
+| Variable       | Description                                 |
+| -------------- | ------------------------------------------- |
 | `content`      | Rendered HTML body (injected automatically) |
-| `subject`      | Email subject (injected automatically) |
-| `logo_url`     | Optional logo image URL              |
-| `product_name` | Optional product name (logo alt text) |
-| `footer_text`  | Optional footer text                 |
+| `subject`      | Email subject (injected automatically)      |
+| `logo_url`     | Optional logo image URL                     |
+| `product_name` | Optional product name (logo alt text)       |
+| `footer_text`  | Optional footer text                        |
 
 To override the built-in layout or add custom ones, place `.html` files in `{templates_path}/layouts/`:
 
@@ -194,9 +192,9 @@ Layouts use [MiniJinja](https://docs.rs/minijinja) syntax. All email context var
 ```html
 <!-- emails/layouts/minimal.html -->
 <html>
-<body style="font-family: sans-serif; padding: 20px;">
-  {{content}}
-</body>
+    <body style="font-family: sans-serif; padding: 20px;">
+        {{content}}
+    </body>
 </html>
 ```
 
@@ -222,13 +220,11 @@ let tenant_sender = SenderProfile {
     reply_to: Some("support@tenant.com".to_string()),
 };
 
-mailer
-    .send(
-        SendEmail::new("welcome", "user@example.com")
-            .sender(&tenant_sender)
-            .var("name", "Bob"),
-    )
-    .await?;
+m.send(
+    &SendEmail::new("welcome", "user@example.com")
+        .sender(&tenant_sender)
+        .var("name", "Bob"),
+).await?;
 ```
 
 Without `.sender()`, the mailer uses the default sender from `EmailConfig`.
@@ -246,13 +242,11 @@ brand.insert("product_name".to_string(), serde_json::json!("Tenant Corp"));
 brand.insert("brand_color".to_string(), serde_json::json!("#E11D48"));
 brand.insert("footer_text".to_string(), serde_json::json!("(c) 2026 Tenant Corp"));
 
-mailer
-    .send(
-        SendEmail::new("welcome", "user@example.com")
-            .context(&brand)
-            .var("name", "Alice"),
-    )
-    .await?;
+m.send(
+    &SendEmail::new("welcome", "user@example.com")
+        .context(&brand)
+        .var("name", "Alice"),
+).await?;
 ```
 
 ## Async Sending via modo-jobs
@@ -278,7 +272,7 @@ async fn send_email(
     Json(payload): Json<SendEmailPayload>,
 ) -> Result<(), modo::Error> {
     let email = SendEmail::from(payload);
-    mailer.send(email).await
+    mailer.send(&email).await
 }
 ```
 
@@ -288,24 +282,25 @@ Implement the `TemplateProvider` trait to load templates from a database, API, o
 
 ```rust
 use modo_email::{EmailConfig, TemplateProvider, EmailTemplate, mailer_with};
+use std::sync::Arc;
 
 struct DbTemplateProvider {
-    pool: DatabasePool,
+    // your DB pool or client here
 }
 
 impl TemplateProvider for DbTemplateProvider {
     fn get(&self, name: &str, locale: &str) -> Result<EmailTemplate, modo::Error> {
         // Query your database for the template.
-        let raw = self.pool.query_template(name, locale)?;
+        let raw = todo!("load raw template string");
 
-        // Return a parsed template (or build one manually).
+        // Parse the raw frontmatter + body string.
         EmailTemplate::parse(&raw)
     }
 }
 
 // Use it:
-let provider = Box::new(DbTemplateProvider { pool });
-let mailer = mailer_with(&config, provider)?;
+let provider = Arc::new(DbTemplateProvider { /* ... */ });
+let m = mailer_with(&config, provider)?;
 ```
 
 `EmailTemplate` fields if you want to build one without parsing:
@@ -320,10 +315,10 @@ EmailTemplate {
 
 ## Transports and Feature Flags
 
-| Feature  | Default | Transport            | Dependency |
-|----------|---------|----------------------|------------|
-| `smtp`   | Yes     | SMTP via lettre      | `lettre`   |
-| `resend` | No      | Resend HTTP API      | `reqwest`  |
+| Feature  | Default | Transport       | Dependency |
+| -------- | ------- | --------------- | ---------- |
+| `smtp`   | Yes     | SMTP via lettre | `lettre`   |
+| `resend` | No      | Resend HTTP API | `reqwest`  |
 
 Both features can be enabled simultaneously. The active transport is selected by `transport` in config.
 
@@ -342,40 +337,56 @@ modo-email = { path = "../modo-email", features = ["resend"] }
 
 ```yaml
 email:
-  transport: resend
-  templates_path: "emails"
-  default_from_name: "My App"
-  default_from_email: "hello@myapp.com"
-  resend:
-    api_key: "re_..."
+    transport: resend
+    templates_path: "emails"
+    default_from_name: "My App"
+    default_from_email: "hello@myapp.com"
+    resend:
+        api_key: "re_..."
 ```
 
 ## Configuration Reference
 
 ### `EmailConfig`
 
-| Field                | Type              | Default       | Description                          |
-|----------------------|-------------------|---------------|--------------------------------------|
-| `transport`          | `smtp` / `resend` | `smtp`        | Which transport backend to use       |
-| `templates_path`     | `String`          | `"emails"`    | Directory containing `.md` templates |
-| `default_from_name`  | `String`          | `""`          | Default sender display name          |
-| `default_from_email` | `String`          | `""`          | Default sender email address         |
-| `default_reply_to`   | `Option<String>`  | `None`        | Default reply-to address             |
-| `smtp`               | `SmtpConfig`      | see below     | SMTP settings (requires `smtp` feature) |
-| `resend`             | `ResendConfig`    | see below     | Resend settings (requires `resend` feature) |
+| Field                | Type              | Default    | Description                                 |
+| -------------------- | ----------------- | ---------- | ------------------------------------------- |
+| `transport`          | `smtp` / `resend` | `smtp`     | Which transport backend to use              |
+| `templates_path`     | `String`          | `"emails"` | Directory containing `.md` templates        |
+| `default_from_name`  | `String`          | `""`       | Default sender display name                 |
+| `default_from_email` | `String`          | `""`       | Default sender email address                |
+| `default_reply_to`   | `Option<String>`  | `None`     | Default reply-to address                    |
+| `smtp`               | `SmtpConfig`      | see below  | SMTP settings (requires `smtp` feature)     |
+| `resend`             | `ResendConfig`    | see below  | Resend settings (requires `resend` feature) |
 
 ### `SmtpConfig`
 
-| Field      | Type     | Default       | Description                 |
-|------------|----------|---------------|-----------------------------|
-| `host`     | `String` | `"localhost"` | SMTP server hostname        |
-| `port`     | `u16`    | `587`         | SMTP server port            |
-| `username` | `String` | `""`          | SMTP auth username          |
-| `password` | `String` | `""`          | SMTP auth password          |
-| `tls`      | `bool`   | `true`        | Enable TLS (STARTTLS)       |
+| Field      | Type     | Default       | Description          |
+| ---------- | -------- | ------------- | -------------------- |
+| `host`     | `String` | `"localhost"` | SMTP server hostname |
+| `port`     | `u16`    | `587`         | SMTP server port     |
+| `username` | `String` | `""`          | SMTP auth username   |
+| `password` | `String` | `""`          | SMTP auth password   |
+| `tls`      | `bool`   | `true`        | Enable STARTTLS      |
 
 ### `ResendConfig`
 
-| Field     | Type     | Default | Description        |
-|-----------|----------|---------|--------------------|
-| `api_key` | `String` | `""`    | Resend API key     |
+| Field     | Type     | Default | Description    |
+| --------- | -------- | ------- | -------------- |
+| `api_key` | `String` | `""`    | Resend API key |
+
+## Key Types
+
+| Type / Trait         | Description                                                      |
+| -------------------- | ---------------------------------------------------------------- |
+| `Mailer`             | Central service: render and deliver emails                       |
+| `SendEmail`          | Builder for a single email send request                          |
+| `SendEmailPayload`   | Serializable mirror of `SendEmail` for job queues                |
+| `MailMessage`        | Fully-rendered email ready for delivery (html, text, subject...) |
+| `SenderProfile`      | Sender identity (`from_name`, `from_email`, `reply_to`)          |
+| `EmailTemplate`      | Parsed template (subject, body, optional layout name)            |
+| `TemplateProvider`   | Trait for custom template sources                                |
+| `MailTransport`      | Async trait for custom delivery backends                         |
+| `FilesystemProvider` | Built-in filesystem template provider                            |
+| `LayoutEngine`       | MiniJinja-based HTML layout renderer                             |
+| `EmailConfig`        | Top-level config struct (transport, paths, defaults)             |
