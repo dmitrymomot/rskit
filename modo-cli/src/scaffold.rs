@@ -11,21 +11,24 @@ pub fn scaffold(
     shared_dir: &Dir<'static>,
     context: &HashMap<&str, &str>,
 ) -> Result<()> {
+    let env = Environment::new();
+
     // Process shared files first, then template-specific files
-    write_dir(shared_dir, target_dir, context, Path::new(""))?;
-    write_dir(template_dir, target_dir, context, Path::new(""))?;
+    write_dir(&env, shared_dir, target_dir, context, Path::new(""))?;
+    write_dir(&env, template_dir, target_dir, context, Path::new(""))?;
 
     Ok(())
 }
 
 fn write_dir(
+    env: &Environment,
     dir: &Dir<'static>,
     target_dir: &Path,
     context: &HashMap<&str, &str>,
     prefix: &Path,
 ) -> Result<()> {
     for file in dir.files() {
-        let file_name = file.path().file_name().unwrap();
+        let file_name = file.path().file_name().expect("include_dir path missing file_name");
         let relative = prefix.join(file_name);
         let relative_str = relative.to_string_lossy();
 
@@ -33,8 +36,7 @@ fn write_dir(
             .contents_utf8()
             .with_context(|| format!("non-UTF8 template: {relative_str}"))?;
 
-        // Render through MiniJinja using render_str (no template registration needed)
-        let env = Environment::new();
+        // Render through MiniJinja
         let rendered = env
             .render_str(
                 content,
@@ -52,11 +54,10 @@ fn write_dir(
         }
 
         // Strip .jinja extension
-        let out_path = if relative_str.ends_with(".jinja") {
-            relative_str[..relative_str.len() - 6].to_string()
-        } else {
-            relative_str.to_string()
-        };
+        let out_path = relative_str
+            .strip_suffix(".jinja")
+            .unwrap_or(&relative_str)
+            .to_string();
 
         let dest = target_dir.join(&out_path);
         if let Some(parent) = dest.parent() {
@@ -69,9 +70,9 @@ fn write_dir(
 
     // Recurse into subdirectories with updated prefix
     for subdir in dir.dirs() {
-        let dir_name = subdir.path().file_name().unwrap();
+        let dir_name = subdir.path().file_name().expect("include_dir path missing file_name");
         let sub_prefix = prefix.join(dir_name);
-        write_dir(subdir, target_dir, context, &sub_prefix)?;
+        write_dir(env, subdir, target_dir, context, &sub_prefix)?;
     }
 
     Ok(())

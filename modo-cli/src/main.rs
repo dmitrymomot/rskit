@@ -92,10 +92,13 @@ fn main() -> anyhow::Result<()> {
             scaffold::scaffold(target, template_dir, shared_dir, &context)?;
 
             // git init
-            std::process::Command::new("git")
+            let status = std::process::Command::new("git")
                 .arg("init")
                 .current_dir(target)
-                .output()?;
+                .status()?;
+            if !status.success() {
+                eprintln!("warning: git init failed (exit {})", status);
+            }
 
             println!(
                 "Created modo project '{}' with template '{}' ({})\n",
