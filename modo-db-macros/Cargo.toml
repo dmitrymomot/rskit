@@ -3,6 +3,8 @@ name = "modo-db-macros"
 version = "0.1.0"
 edition = "2024"
 license.workspace = true
+repository.workspace = true
+description = "Procedural macros for modo-db"
 
 [lib]
 proc-macro = true

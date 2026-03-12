@@ -3,6 +3,8 @@ name = "modo-db"
 version = "0.1.0"
 edition = "2024"
 license.workspace = true
+repository.workspace = true
+description = "Database layer for modo using SeaORM"
 
 [features]
 default = ["sqlite"]
@@ -10,8 +12,8 @@ sqlite = ["sea-orm/sqlx-sqlite"]
 postgres = ["sea-orm/sqlx-postgres"]
 
 [dependencies]
-modo = { path = "../modo" }
-modo-db-macros = { path = "../modo-db-macros" }
+modo = { path = "../modo", version = "0.1.0" }
+modo-db-macros = { path = "../modo-db-macros", version = "0.1.0" }
 
 sea-orm = { version = "2.0.0-rc", features = [
     "runtime-tokio-native-tls",

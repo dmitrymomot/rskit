@@ -4,3 +4,4 @@ members = ["modo", "modo-macros", "modo-db", "modo-db-macros", "modo-email", "mo
 
 [workspace.package]
 license = "Apache-2.0"
+repository = "https://github.com/dmitrymomot/modo"

@@ -3,9 +3,11 @@ name = "modo"
 version = "0.1.0"
 edition = "2024"
 license.workspace = true
+repository.workspace = true
+description = "Ergonomic Rust web framework for small monolithic apps"
 
 [dependencies]
-modo-macros = { path = "../modo-macros" }
+modo-macros = { path = "../modo-macros", version = "0.1.0" }
 
 # Core
 axum = "0.8"

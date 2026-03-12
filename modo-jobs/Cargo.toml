@@ -3,11 +3,13 @@ name = "modo-jobs"
 version = "0.1.0"
 edition = "2024"
 license.workspace = true
+repository.workspace = true
+description = "Background jobs and cron scheduling for modo"
 
 [dependencies]
-modo = { path = "../modo" }
-modo-db = { path = "../modo-db" }
-modo-jobs-macros = { path = "../modo-jobs-macros" }
+modo = { path = "../modo", version = "0.1.0" }
+modo-db = { path = "../modo-db", version = "0.1.0" }
+modo-jobs-macros = { path = "../modo-jobs-macros", version = "0.1.0" }
 
 inventory = "0.3"
 serde = { version = "1", features = ["derive"] }

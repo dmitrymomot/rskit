@@ -3,15 +3,17 @@ name = "modo-session"
 version = "0.1.0"
 edition = "2024"
 license.workspace = true
+repository.workspace = true
+description = "Database-backed session management for modo"
 
 [features]
 default = []
 cleanup-job = ["dep:modo-jobs"]
 
 [dependencies]
-modo = { path = "../modo" }
-modo-db = { path = "../modo-db" }
-modo-jobs = { path = "../modo-jobs", optional = true }
+modo = { path = "../modo", version = "0.1.0" }
+modo-db = { path = "../modo-db", version = "0.1.0" }
+modo-jobs = { path = "../modo-jobs", version = "0.1.0", optional = true }
 
 sha2 = "0.10"
 rand = "0.9"

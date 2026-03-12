@@ -3,6 +3,8 @@ name = "modo-upload"
 version = "0.1.0"
 edition = "2024"
 license.workspace = true
+repository.workspace = true
+description = "File upload handling for modo with local and S3 storage"
 
 [features]
 default = ["local"]
@@ -10,8 +12,8 @@ local = []
 opendal = ["dep:opendal"]
 
 [dependencies]
-modo = { path = "../modo" }
-modo-upload-macros = { path = "../modo-upload-macros" }
+modo = { path = "../modo", version = "0.1.0" }
+modo-upload-macros = { path = "../modo-upload-macros", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 axum = { version = "0.8", features = ["multipart"] }
 async-trait = "0.1"
