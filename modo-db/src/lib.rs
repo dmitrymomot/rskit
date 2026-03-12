@@ -1,3 +1,36 @@
+//! Database integration for the modo framework.
+//!
+//! Provides SeaORM-backed connection pooling, schema synchronisation, versioned
+//! migrations, pagination helpers, and a compile-time entity/migration
+//! registration system built on [`inventory`].
+//!
+//! # Features
+//!
+//! - `sqlite` *(default)* — enables SQLite support via `sqlx-sqlite`.
+//! - `postgres` — enables PostgreSQL support via `sqlx-postgres`.
+//!
+//! # Quick start
+//!
+//! ```rust,ignore
+//! #[modo_db::entity(table = "todos")]
+//! #[entity(timestamps)]
+//! pub struct Todo {
+//!     #[entity(primary_key, auto = "ulid")]
+//!     pub id: String,
+//!     pub title: String,
+//! }
+//!
+//! #[modo::main]
+//! async fn main(
+//!     app: modo::app::AppBuilder,
+//!     config: Config,
+//! ) -> Result<(), Box<dyn std::error::Error>> {
+//!     let db = modo_db::connect(&config.database).await?;
+//!     modo_db::sync_and_migrate(&db).await?;
+//!     app.config(config.core).managed_service(db).run().await
+//! }
+//! ```
+
 pub mod config;
 pub mod connect;
 pub mod entity;

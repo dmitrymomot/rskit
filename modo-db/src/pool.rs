@@ -5,8 +5,11 @@ use std::pin::Pin;
 
 /// Newtype around `sea_orm::DatabaseConnection`.
 ///
-/// Registered as a service via `app.service(db)` and extracted
-/// in handlers via the `Db` extractor.
+/// Registered as a managed service via `app.managed_service(db)` (which also
+/// handles graceful pool shutdown) and extracted in handlers via the [`Db`]
+/// extractor.
+///
+/// [`Db`]: crate::extractor::Db
 #[derive(Debug, Clone)]
 pub struct DbPool(pub(crate) DatabaseConnection);
 

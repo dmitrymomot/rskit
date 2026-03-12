@@ -8,7 +8,7 @@ use modo::error::Error;
 ///
 /// Usage: `Db(db): Db` in handler parameters.
 ///
-/// Requires `DbPool` to be registered via `app.service(db)`.
+/// Requires `DbPool` to be registered via `app.managed_service(db)`.
 #[derive(Debug, Clone)]
 pub struct Db(pub DbPool);
 
@@ -24,7 +24,7 @@ impl FromRequestParts<AppState> for Db {
             .get::<DbPool>()
             .map(|pool| Db((*pool).clone()))
             .ok_or_else(|| {
-                Error::internal("Database not configured. Register DbPool via app.service(db).")
+                Error::internal("Database not configured. Register DbPool via app.managed_service(db).")
             })
     }
 }

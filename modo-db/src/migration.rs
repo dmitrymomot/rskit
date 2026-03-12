@@ -21,11 +21,19 @@ pub(crate) mod migration_entity {
 }
 
 /// Type alias for migration handler functions.
+///
+/// The function receives a reference to the database connection and returns a
+/// boxed future that resolves to `Result<(), modo::Error>`. This is the shape
+/// expected by the `#[modo_db::migration]` macro.
 pub type MigrationFn = fn(
     &sea_orm::DatabaseConnection,
 ) -> Pin<Box<dyn Future<Output = Result<(), modo::Error>> + Send + '_>>;
 
 /// Registration info for a migration, collected via `inventory`.
+///
+/// Use the `#[modo_db::migration(version = N, description = "...")]` attribute
+/// macro to register migrations automatically — do not construct this struct
+/// directly.
 pub struct MigrationRegistration {
     pub version: u64,
     pub description: &'static str,

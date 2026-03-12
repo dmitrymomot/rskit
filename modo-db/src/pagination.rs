@@ -151,7 +151,8 @@ impl<T> CursorResult<T> {
 
 /// Run a cursor-based paginated query.
 ///
-/// Uses SeaORM's [`Cursor`] with the **limit + 1** trick.
+/// Uses SeaORM's cursor API with the **limit + 1** trick to detect boundaries
+/// without an extra COUNT query.
 ///
 /// - `cursor_column` — the column to paginate on (e.g. `Column::Id`).
 /// - `cursor_fn` — extracts the cursor string from a model instance.
