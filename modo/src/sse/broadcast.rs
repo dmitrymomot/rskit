@@ -104,10 +104,9 @@ where
             let mut channels = channels_ref.write().unwrap_or_else(|e| e.into_inner());
             if let std::collections::hash_map::Entry::Occupied(entry) =
                 channels.entry(key_owned.clone())
+                && entry.get().receiver_count() == 0
             {
-                if entry.get().receiver_count() == 0 {
-                    entry.remove();
-                }
+                entry.remove();
             }
         };
 
@@ -133,10 +132,9 @@ where
                     let mut channels = self.channels.write().unwrap_or_else(|e| e.into_inner());
                     if let std::collections::hash_map::Entry::Occupied(entry) =
                         channels.entry(key.clone())
+                        && entry.get().receiver_count() == 0
                     {
-                        if entry.get().receiver_count() == 0 {
-                            entry.remove();
-                        }
+                        entry.remove();
                     }
                     Ok(0)
                 }
@@ -208,16 +206,17 @@ pub struct SseStream<T> {
 }
 
 impl<T: Clone + Send + 'static> SseStream<T> {
-    pub(crate) fn with_cleanup(rx: broadcast::Receiver<T>, cleanup: impl FnOnce() + Send + 'static) -> Self {
+    pub(crate) fn with_cleanup(
+        rx: broadcast::Receiver<T>,
+        cleanup: impl FnOnce() + Send + 'static,
+    ) -> Self {
         Self {
             inner: Box::pin(Self::unfold_stream(rx)),
             _cleanup: Some(Box::new(cleanup)),
         }
     }
 
-    fn unfold_stream(
-        rx: broadcast::Receiver<T>,
-    ) -> impl Stream<Item = Result<T, Error>> {
+    fn unfold_stream(rx: broadcast::Receiver<T>) -> impl Stream<Item = Result<T, Error>> {
         futures_util::stream::unfold(rx, |mut rx| async move {
             loop {
                 match rx.recv().await {
