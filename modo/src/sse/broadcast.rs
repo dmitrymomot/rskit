@@ -29,8 +29,10 @@ use tokio::sync::broadcast;
 /// # Channel lifecycle
 ///
 /// - Channels are created lazily on first [`subscribe()`](Self::subscribe)
-/// - Channels are auto-cleaned when the last subscriber drops (detected on
-///   next [`send()`](Self::send) or [`subscribe()`](Self::subscribe) call)
+/// - Channels are auto-cleaned when the last subscriber's [`SseStream`] is
+///   dropped — each stream carries a cleanup closure that removes the channel
+///   entry if `receiver_count() == 0`
+/// - [`send()`](Self::send) also removes a channel on send failure (O(1) targeted)
 /// - [`remove()`](Self::remove) forces immediate cleanup
 ///
 /// # Filtering
@@ -74,17 +76,42 @@ where
     /// Creates the channel lazily on first subscription. Returns a stream of
     /// raw `T` values -- convert to [`SseEvent`](super::SseEvent) downstream
     /// using [`SseStreamExt`](super::SseStreamExt) or `.map()`.
+    ///
+    /// The returned [`SseStream`] carries a cleanup closure that removes the
+    /// channel entry when the last subscriber is dropped — no O(n) scan needed.
     pub fn subscribe(&self, key: &K) -> SseStream<T> {
         let mut channels = self.channels.write().unwrap_or_else(|e| e.into_inner());
-
-        // Prune dead channels while we have the lock
-        channels.retain(|_, sender| sender.receiver_count() > 0);
 
         let sender = channels
             .entry(key.clone())
             .or_insert_with(|| broadcast::channel(self.buffer).0);
         let rx = sender.subscribe();
-        SseStream::new(rx)
+
+        let channels_ref = Arc::clone(&self.channels);
+        let key_owned = key.clone();
+        let cleanup = move || {
+            // Read-lock fast path: if receivers remain, nothing to do
+            {
+                let channels = channels_ref.read().unwrap_or_else(|e| e.into_inner());
+                if channels
+                    .get(&key_owned)
+                    .is_none_or(|s| s.receiver_count() > 0)
+                {
+                    return;
+                }
+            }
+            // Write-lock: double-check before removing (a new subscriber may have joined)
+            let mut channels = channels_ref.write().unwrap_or_else(|e| e.into_inner());
+            if let std::collections::hash_map::Entry::Occupied(entry) =
+                channels.entry(key_owned.clone())
+            {
+                if entry.get().receiver_count() == 0 {
+                    entry.remove();
+                }
+            }
+        };
+
+        SseStream::with_cleanup(rx, cleanup)
     }
 
     /// Send an event to all subscribers of a keyed channel.
@@ -101,10 +128,16 @@ where
             match sender.send(event) {
                 Ok(count) => Ok(count),
                 Err(_) => {
-                    // All receivers dropped — upgrade to write lock and prune
+                    // All receivers dropped — targeted removal (O(1))
                     drop(channels);
                     let mut channels = self.channels.write().unwrap_or_else(|e| e.into_inner());
-                    channels.retain(|_, s| s.receiver_count() > 0);
+                    if let std::collections::hash_map::Entry::Occupied(entry) =
+                        channels.entry(key.clone())
+                    {
+                        if entry.get().receiver_count() == 0 {
+                            entry.remove();
+                        }
+                    }
                     Ok(0)
                 }
             }
@@ -160,13 +193,32 @@ where
 ///
 /// The stream ends (`None`) when the broadcast sender is dropped -- either
 /// via [`SseBroadcastManager::remove()`] or when the manager itself is dropped.
+///
+/// # Cleanup
+///
+/// When created via [`SseBroadcastManager::subscribe()`], the stream carries a
+/// cleanup closure that fires on drop. If this was the last subscriber, the
+/// closure removes the channel entry from the manager — no O(n) scan needed.
 pub struct SseStream<T> {
+    // IMPORTANT: `inner` must be declared before `_cleanup`. Rust drops fields
+    // in declaration order — the broadcast `Receiver` inside `inner` must drop
+    // first (decrementing `receiver_count`) before the cleanup closure checks it.
     inner: Pin<Box<dyn Stream<Item = Result<T, Error>> + Send>>,
+    _cleanup: Option<Box<dyn FnOnce() + Send>>,
 }
 
 impl<T: Clone + Send + 'static> SseStream<T> {
-    pub(crate) fn new(rx: broadcast::Receiver<T>) -> Self {
-        let stream = futures_util::stream::unfold(rx, |mut rx| async move {
+    pub(crate) fn with_cleanup(rx: broadcast::Receiver<T>, cleanup: impl FnOnce() + Send + 'static) -> Self {
+        Self {
+            inner: Box::pin(Self::unfold_stream(rx)),
+            _cleanup: Some(Box::new(cleanup)),
+        }
+    }
+
+    fn unfold_stream(
+        rx: broadcast::Receiver<T>,
+    ) -> impl Stream<Item = Result<T, Error>> {
+        futures_util::stream::unfold(rx, |mut rx| async move {
             loop {
                 match rx.recv().await {
                     Ok(item) => return Some((Ok(item), rx)),
@@ -177,9 +229,14 @@ impl<T: Clone + Send + 'static> SseStream<T> {
                     Err(broadcast::error::RecvError::Closed) => return None,
                 }
             }
-        });
-        Self {
-            inner: Box::pin(stream),
+        })
+    }
+}
+
+impl<T> Drop for SseStream<T> {
+    fn drop(&mut self) {
+        if let Some(cleanup) = self._cleanup.take() {
+            cleanup();
         }
     }
 }

@@ -110,3 +110,44 @@ async fn broadcast_lagging_subscriber_skips_and_continues() {
     assert!(item.is_some(), "stream should still yield after lagging");
     assert!(item.unwrap().is_ok(), "lagged stream item should be Ok");
 }
+
+#[tokio::test]
+async fn broadcast_cleanup_on_stream_drop() {
+    let mgr: SseBroadcastManager<String, String> = SseBroadcastManager::new(16);
+    let s = mgr.subscribe(&"room".into());
+    assert_eq!(mgr.subscriber_count(&"room".into()), 1);
+
+    drop(s);
+
+    // Channel should be removed immediately by the drop cleanup — no send() needed
+    assert_eq!(mgr.subscriber_count(&"room".into()), 0);
+}
+
+#[tokio::test]
+async fn broadcast_drop_with_remaining_subscribers_keeps_channel() {
+    let mgr: SseBroadcastManager<String, String> = SseBroadcastManager::new(16);
+    let s1 = mgr.subscribe(&"room".into());
+    let _s2 = mgr.subscribe(&"room".into());
+    assert_eq!(mgr.subscriber_count(&"room".into()), 2);
+
+    drop(s1);
+
+    // One subscriber remains — channel must stay
+    assert_eq!(mgr.subscriber_count(&"room".into()), 1);
+}
+
+#[tokio::test]
+async fn broadcast_cleanup_targets_only_dropped_channel() {
+    let mgr: SseBroadcastManager<String, String> = SseBroadcastManager::new(16);
+    let s_a = mgr.subscribe(&"a".into());
+    let _s_b = mgr.subscribe(&"b".into());
+
+    assert_eq!(mgr.subscriber_count(&"a".into()), 1);
+    assert_eq!(mgr.subscriber_count(&"b".into()), 1);
+
+    drop(s_a);
+
+    // Only "a" should be cleaned up, "b" untouched
+    assert_eq!(mgr.subscriber_count(&"a".into()), 0);
+    assert_eq!(mgr.subscriber_count(&"b".into()), 1);
+}

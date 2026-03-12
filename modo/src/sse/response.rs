@@ -67,7 +67,10 @@ impl IntoResponse for SseResponse {
             .keep_alive(axum::response::sse::KeepAlive::new().interval(self.keep_alive_interval))
             .into_response();
         resp.headers_mut()
-            .insert("X-Accel-Buffering", http::HeaderValue::from_static("no"));
+            .insert(
+                "X-Accel-Buffering",
+                axum::http::HeaderValue::from_static("no"),
+            );
         resp
     }
 }
