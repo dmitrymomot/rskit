@@ -1,3 +1,13 @@
+//! Pluggable storage backends for persisted file uploads.
+//!
+//! Use [`storage()`] to construct the appropriate backend from
+//! [`UploadConfig`](crate::UploadConfig), or instantiate a backend directly:
+//!
+//! - [`local::LocalStorage`] — writes files to the local filesystem
+//!   (requires the `local` feature, enabled by default).
+//! - `opendal::OpendalStorage` — delegates to any Apache OpenDAL operator,
+//!   including S3-compatible services (requires the `opendal` feature).
+
 #[cfg(feature = "local")]
 pub mod local;
 #[cfg(feature = "opendal")]
@@ -7,7 +17,7 @@ use crate::file::UploadedFile;
 use crate::stream::BufferedUpload;
 use std::path::{Component, Path, PathBuf};
 
-/// Metadata for a stored file.
+/// Metadata returned after a file has been successfully stored.
 pub struct StoredFile {
     /// Relative path within the storage backend (e.g. `avatars/01HXK3Q1A2B3.jpg`).
     pub path: String,
@@ -16,22 +26,32 @@ pub struct StoredFile {
 }
 
 /// Trait for persisting uploaded files to a storage backend.
+///
+/// Both in-memory ([`UploadedFile`]) and chunked ([`BufferedUpload`]) uploads
+/// are supported.  Implementors must be `Send + Sync + 'static` so they can be
+/// shared across async tasks.
 #[async_trait::async_trait]
 pub trait FileStorage: Send + Sync + 'static {
-    /// Store a buffered file under `prefix/`. Returns the stored path and size.
+    /// Store a buffered in-memory file under `prefix/`.
+    ///
+    /// A ULID-based unique filename is generated automatically.
+    /// Returns the stored path and size on success.
     async fn store(&self, prefix: &str, file: &UploadedFile) -> Result<StoredFile, modo::Error>;
 
-    /// Store a buffered-chunked file under `prefix/`. Returns the stored path and size.
+    /// Store a chunked upload under `prefix/`.
+    ///
+    /// Chunks are consumed from `stream` sequentially.
+    /// Returns the stored path and size on success.
     async fn store_stream(
         &self,
         prefix: &str,
         stream: &mut BufferedUpload,
     ) -> Result<StoredFile, modo::Error>;
 
-    /// Delete a file by its storage path.
+    /// Delete a file by its storage path (as returned by [`store`](Self::store)).
     async fn delete(&self, path: &str) -> Result<(), modo::Error>;
 
-    /// Check if a file exists at the given storage path.
+    /// Return `true` if a file exists at the given storage path.
     async fn exists(&self, path: &str) -> Result<bool, modo::Error>;
 }
 
@@ -74,11 +94,17 @@ pub(crate) fn generate_filename(original: &str) -> String {
     }
 }
 
-/// Create a [`FileStorage`] backend from the given [`UploadConfig`](crate::config::UploadConfig).
+/// Construct a [`FileStorage`] backend from [`UploadConfig`](crate::UploadConfig).
 ///
-/// The appropriate implementation is selected based on `config.backend`:
-/// - `Local` — requires the `local` feature
-/// - `S3` — requires the `opendal` feature
+/// The backend is chosen based on `config.backend`:
+///
+/// - [`StorageBackend::Local`](crate::StorageBackend::Local) — requires the
+///   `local` feature (default).
+/// - [`StorageBackend::S3`](crate::StorageBackend::S3) — requires the
+///   `opendal` feature.
+///
+/// Returns an error if the required feature is not enabled for the selected
+/// backend, or if the S3 operator cannot be configured.
 pub fn storage(config: &crate::config::UploadConfig) -> Result<Box<dyn FileStorage>, modo::Error> {
     match config.backend {
         #[cfg(feature = "local")]

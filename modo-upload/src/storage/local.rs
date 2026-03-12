@@ -5,11 +5,21 @@ use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
 
 /// Local filesystem storage backend.
+///
+/// Files are written under `base_dir/<prefix>/<ulid>.<ext>`.  Path traversal
+/// is rejected at the storage layer — `..` components and absolute paths
+/// return an error before any filesystem operation is attempted.
+///
+/// Requires the `local` feature (enabled by default).
 pub struct LocalStorage {
     base_dir: PathBuf,
 }
 
 impl LocalStorage {
+    /// Create a new `LocalStorage` rooted at `base_dir`.
+    ///
+    /// The directory does not need to exist at construction time; it is
+    /// created on the first [`store`](FileStorage::store) call.
     pub fn new(base_dir: impl Into<PathBuf>) -> Self {
         Self {
             base_dir: base_dir.into(),

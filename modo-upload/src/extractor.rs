@@ -6,8 +6,17 @@ use modo::error::{Error, HttpError};
 use modo::validate::Validate;
 use std::ops::Deref;
 
-/// Extractor that parses `multipart/form-data`, auto-sanitizes text fields,
-/// and provides manual `.validate()`.
+/// Axum extractor that parses `multipart/form-data`, auto-sanitizes text
+/// fields, and exposes optional field-level validation.
+///
+/// `T` must implement [`FromMultipart`], which is derived automatically with
+/// `#[derive(FromMultipart)]`.  When `T` also implements [`modo::validate::Validate`]
+/// (derived with `#[derive(modo::Validate)]`), the `.validate()` method becomes
+/// available after extraction.
+///
+/// The global `max_file_size` from [`crate::UploadConfig`] is applied to every
+/// file field unless a per-field `#[upload(max_size = "...")]` attribute
+/// overrides it.
 pub struct MultipartForm<T>(pub T);
 
 impl<T> Deref for MultipartForm<T> {
@@ -18,12 +27,17 @@ impl<T> Deref for MultipartForm<T> {
 }
 
 impl<T> MultipartForm<T> {
+    /// Unwrap the inner parsed value.
     pub fn into_inner(self) -> T {
         self.0
     }
 }
 
 impl<T: Validate> MultipartForm<T> {
+    /// Run field-level validation rules defined on `T`.
+    ///
+    /// Returns `Ok(())` when all rules pass, or a validation error whose
+    /// details map each failing field name to its error messages.
     pub fn validate(&self) -> Result<(), Error> {
         self.0.validate()
     }
