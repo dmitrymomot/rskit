@@ -78,11 +78,38 @@ fn main() -> anyhow::Result<()> {
             }
 
             let db_driver = if postgres { "postgres" } else { "sqlite" };
+            let template_name = template.to_string();
+
+            let template_dir = templates::get(&template_name)
+                .ok_or_else(|| anyhow::anyhow!("unknown template: {}", template_name))?;
+            let shared_dir = templates::shared();
+
+            let mut context = std::collections::HashMap::new();
+            context.insert("project_name", name.as_str());
+            context.insert("db_driver", db_driver);
+
+            std::fs::create_dir_all(target)?;
+            scaffold::scaffold(target, template_dir, shared_dir, &context)?;
+
+            // git init
+            std::process::Command::new("git")
+                .arg("init")
+                .current_dir(target)
+                .output()?;
 
             println!(
-                "Created modo project '{}' with template '{}' ({})",
-                name, template, db_driver
+                "Created modo project '{}' with template '{}' ({})\n",
+                name, template_name, db_driver
             );
+
+            println!("Next steps:");
+            println!("  cd {}", name);
+            if matches!(template, Template::Web) {
+                println!("  just tailwind-download   # download Tailwind CSS CLI");
+                println!("  just assets-download     # download HTMX, Alpine.js");
+                println!("  just css                 # build CSS");
+            }
+            println!("  just dev                 # start dev server");
         }
     }
 
