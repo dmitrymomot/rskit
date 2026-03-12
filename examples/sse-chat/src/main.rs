@@ -13,8 +13,6 @@ struct Config {
     #[serde(flatten)]
     core: AppConfig,
     database: DatabaseConfig,
-    #[serde(default)]
-    cookie: modo::CookieConfig,
 }
 
 // --- Entity ---
@@ -279,7 +277,7 @@ async fn main(
     modo_db::sync_and_migrate(&db).await?;
 
     let session_store =
-        modo_session::SessionStore::new(&db, modo_session::SessionConfig::default(), config.cookie);
+        modo_session::SessionStore::new(&db, modo_session::SessionConfig::default(), config.core.cookies.clone());
 
     let bc: ChatBroadcaster = SseBroadcastManager::new(128);
 
