@@ -35,7 +35,7 @@ css:
 
 # Download Tailwind CSS standalone CLI
 tailwind-download:
-	#\!/usr/bin/env bash
+	#!/usr/bin/env bash
 	set -euo pipefail
 	PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
 	ARCH=$(uname -m)
@@ -51,7 +51,7 @@ tailwind-download:
 
 # Download frontend JS dependencies
 assets-download:
-	#\!/usr/bin/env bash
+	#!/usr/bin/env bash
 	set -euo pipefail
 	mkdir -p assets/static/js
 	curl -sLo assets/static/js/htmx.min.js "https://unpkg.com/htmx.org/dist/htmx.min.js"
