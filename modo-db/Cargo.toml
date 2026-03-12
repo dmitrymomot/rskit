@@ -1,6 +1,6 @@
 [package]
 name = "modo-db"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license.workspace = true
 repository.workspace = true
@@ -13,7 +13,7 @@ postgres = ["sea-orm/sqlx-postgres"]
 
 [dependencies]
 modo = { path = "../modo", version = "0.1.0" }
-modo-db-macros = { path = "../modo-db-macros", version = "0.1.0" }
+modo-db-macros = { path = "../modo-db-macros", version = "0.1.1" }
 
 sea-orm = { version = "2.0.0-rc", features = [
     "runtime-tokio-native-tls",

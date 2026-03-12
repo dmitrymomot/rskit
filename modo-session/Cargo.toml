@@ -12,8 +12,8 @@ cleanup-job = ["dep:modo-jobs"]
 
 [dependencies]
 modo = { path = "../modo", version = "0.1.0" }
-modo-db = { path = "../modo-db", version = "0.1.0" }
-modo-jobs = { path = "../modo-jobs", version = "0.1.0", optional = true }
+modo-db = { path = "../modo-db", version = "0.1.1" }
+modo-jobs = { path = "../modo-jobs", version = "0.1.1", optional = true }
 
 sha2 = "0.10"
 rand = "0.9"
