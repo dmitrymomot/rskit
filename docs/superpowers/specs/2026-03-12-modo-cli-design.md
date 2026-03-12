@@ -52,6 +52,7 @@ modo --version
 | `src/models/mod.rs`        | -       | yes | yes | -      |
 | `src/tasks/`               | -       | -   | yes | yes    |
 | `src/tasks/mod.rs`         | -       | -   | yes | yes    |
+| `src/types.rs`             | -       | yes | yes | -      |
 | `src/views/`               | -       | -   | yes | -      |
 | `src/views/mod.rs`         | -       | -   | yes | -      |
 | `config/development.yaml`  | yes     | yes | yes | yes    |
