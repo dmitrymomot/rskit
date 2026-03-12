@@ -99,7 +99,7 @@
 //! ```yaml
 //! server:
 //!     http:
-//!         request_timeout: 3600  # 1 hour, suitable for SSE
+//!         timeout: 3600  # 1 hour, suitable for SSE
 //! ```
 //!
 //! ## Reconnection and `Last-Event-ID`
