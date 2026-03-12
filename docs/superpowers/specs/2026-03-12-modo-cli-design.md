@@ -17,16 +17,16 @@ modo --version
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `<name>` | yes | Project directory and crate name |
-| `--template, -t` | yes | Template preset: `minimal`, `api`, `web`, `worker` |
+| `--template, -t` | no | Template preset: `minimal`, `api`, `web`, `worker`. Default: `web` |
 | `--postgres` | no | Use Postgres DB driver |
 | `--sqlite` | no | Use SQLite DB driver (default) |
 
 ### Error Behavior
 
 - Missing `<name>` — error with usage message
-- Missing `--template` — error listing available templates with brief descriptions
-- Invalid template name — error listing valid options
+- Invalid template name — error listing valid options with brief descriptions
 - Both `--postgres` and `--sqlite` — error: "conflicting flags"
+- `--postgres` or `--sqlite` with `--template minimal` — error: "minimal template does not use a database"
 - Target directory already exists — error: "directory already exists"
 
 ## Templates
@@ -35,10 +35,10 @@ modo --version
 
 | Template | Description |
 |----------|-------------|
-| `minimal` | Bare modo app with a single handler. Config, env, justfile included. |
+| `minimal` | Bare modo app with a single handler. Config, env, justfile included. No database. |
 | `api` | REST API with database, entities, and JSON handlers. |
-| `web` | Full web app: db, auth, sessions, templates, jobs, uploads, email, tenants — everything. |
-| `worker` | Background job processor only, no HTTP server. |
+| `web` | Full web app: db, auth, sessions, templates, jobs, uploads, email, i18n, tenants — everything. **(default)** |
+| `worker` | Background job processor with a health-check HTTP endpoint (no app routes). |
 
 ### Generated Structure Per Template
 
@@ -54,8 +54,8 @@ modo --version
 | `src/tasks/mod.rs` | - | - | yes | yes |
 | `src/views/` | - | - | yes | - |
 | `src/views/mod.rs` | - | - | yes | - |
-| `config/development.yml` | yes | yes | yes | yes |
-| `config/production.yml` | yes | yes | yes | yes |
+| `config/development.yaml` | yes | yes | yes | yes |
+| `config/production.yaml` | yes | yes | yes | yes |
 | `assets/src/app.css` | - | - | yes | - |
 | `assets/static/css/` | - | - | yes | - |
 | `assets/static/js/` | - | - | yes | - |
@@ -73,7 +73,7 @@ modo --version
 
 ### Config Split
 
-- `config/development.yml` / `config/production.yml` — server settings, feature flags, non-secret configuration
+- `config/development.yaml` / `config/production.yaml` — server settings, feature flags, non-secret configuration
 - `.env` — secrets, API keys, DB connection strings (gitignored via `.gitignore`)
 
 ### Template Feature Matrix
@@ -90,8 +90,20 @@ modo --version
 | modo-tenant | - | - | yes | - |
 | templates feature | - | - | yes | - |
 | csrf feature | - | - | yes | - |
+| i18n feature | - | - | yes | - |
 | sse feature | - | - | yes | - |
 | static-embed feature | - | - | yes | - |
+
+### Worker Template Architecture
+
+The worker template uses `#[modo::main]` and `app.run()` like other templates. It includes:
+
+- A single `/health` endpoint for liveness/readiness checks (useful in k8s/docker)
+- Database connection (required by `modo-jobs`)
+- Job runner started via `modo_jobs::start()`
+- No application routes beyond the health check
+
+This approach requires no framework changes and provides a production-ready health check endpoint out of the box.
 
 ### Justfile Recipes Per Template
 
@@ -116,7 +128,6 @@ modo --version
 | HTMX | `assets/static/js/htmx.min.js` |
 | HTMX SSE extension | `assets/static/js/htmx-sse.js` |
 | Alpine.js | `assets/static/js/alpine.min.js` |
-| Tailwind Elements | `assets/static/js/elements.min.js` |
 
 **Tailwind CSS:**
 
@@ -147,22 +158,24 @@ modo --version
 
 ### Crate Structure
 
-New workspace member: `modo-cli/`
+New workspace member: `modo-cli/` (must be added to root `Cargo.toml` workspace members).
 
 ```
 modo-cli/
-├── Cargo.toml
+├── Cargo.toml            # [[bin]] name = "modo"
 ├── src/
-│   ├── main.rs         # Entry point, clap argument parsing, error display
-│   ├── scaffold.rs     # Template rendering + file writing logic
-│   └── templates.rs    # Embed template directory, load by template name
+│   ├── main.rs           # Entry point, clap argument parsing, error display
+│   ├── scaffold.rs       # Template rendering + file writing logic
+│   └── templates.rs      # Embed template directory, load by template name
 └── templates/
-    ├── shared/         # Files common to all templates (.gitignore, etc.)
+    ├── shared/           # .gitignore, CLAUDE.md (common to all templates)
     ├── minimal/
     ├── api/
     ├── web/
     └── worker/
 ```
+
+Each template has its own complete set of files (Cargo.toml, main.rs, config.rs, etc.). The `shared/` directory contains only files that are truly identical across all templates (`.gitignore`, `CLAUDE.md`). No shared Cargo.toml — each template owns its own to avoid complex conditionals.
 
 ### Dependencies
 
@@ -189,16 +202,30 @@ modo-cli/
 ### Scaffold Process
 
 1. Parse CLI arguments via clap
-2. Validate: target directory doesn't exist, flags don't conflict
+2. Validate: target directory doesn't exist, flags don't conflict, DB flags not used with `minimal`
 3. Load embedded template files for selected template + shared files
 4. Build MiniJinja context from CLI arguments
 5. For each template file:
    a. Render through MiniJinja
    b. Strip `.jinja` extension
    c. Write to target directory (creating parent dirs as needed)
-6. Print success message with next steps
+6. Initialize git repository (`git init`)
+7. Print success message with next steps
 
 ### Output on Success
+
+```
+Created modo project 'myapp' with template 'web' (sqlite)
+
+Next steps:
+  cd myapp
+  just tailwind-download   # download Tailwind CSS CLI
+  just assets-download     # download HTMX, Alpine.js
+  just css                 # build CSS
+  just dev                 # start dev server
+```
+
+For non-web templates:
 
 ```
 Created modo project 'myapp' with template 'api' (sqlite)
@@ -208,19 +235,12 @@ Next steps:
   just dev
 ```
 
-For `web` template, additionally:
-
-```
-  just tailwind-download   # download Tailwind CSS CLI
-  just assets-download     # download HTMX, Alpine.js
-  just css                 # build CSS
-```
-
 ## Testing Strategy
 
 - Unit tests: template rendering with known context produces expected output
 - Integration tests: run `modo new testapp --template <each>` in a temp dir, verify:
   - All expected files exist
-  - `Cargo.toml` is valid TOML
-  - `cargo check` passes on generated project
-- Error case tests: missing args, conflicting flags, existing directory
+  - `Cargo.toml` is valid TOML with correct dependencies for the template
+  - Generated `.gitignore` contains expected entries
+- Error case tests: missing args, conflicting flags, existing directory, DB flag with minimal
+- Note: `cargo check` on generated projects requires modo crates to be published to crates.io. During development, integration tests verify file structure and content correctness only.
