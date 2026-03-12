@@ -1,0 +1,17 @@
+server:
+    port: 3003
+    secret_key: ${SECRET_KEY:-sse-chat-dev-secret-key-change-in-production-please}
+    http:
+        timeout: 3600
+    security_headers:
+        content_security_policy: "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'"
+    static_files:
+        prefix: /static
+templates:
+    path: templates
+cookie:
+    secure: false
+database:
+    url: ${DATABASE_URL:-sqlite://chat.db?mode=rwc}
+    max_connections: 5
+    min_connections: 1

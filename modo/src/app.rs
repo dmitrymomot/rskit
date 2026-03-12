@@ -366,6 +366,13 @@ impl AppBuilder {
             Arc::new(app_config.csrf.clone()),
         );
 
+        // --- Auto-wire SseConfig ---
+        #[cfg(feature = "sse")]
+        self.services.insert(
+            TypeId::of::<crate::sse::SseConfig>(),
+            Arc::new(app_config.sse.clone()),
+        );
+
         // --- Pre-parse trusted proxies (avoids per-request CIDR parsing) ---
         self.services.insert(
             TypeId::of::<middleware::TrustedProxies>(),

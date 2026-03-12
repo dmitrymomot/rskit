@@ -1,0 +1,8 @@
+{# examples/sse-chat/templates/partials/message.html #}
+<div class="message{% if is_own %} own{% endif %}">
+    <div class="meta">
+        <span class="username">{{ username }}</span>
+        · {{ created_at }}
+    </div>
+    <div class="text">{{ text }}</div>
+</div>

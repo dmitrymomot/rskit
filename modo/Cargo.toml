@@ -63,6 +63,7 @@ default = []
 templates = ["dep:minijinja", "dep:futures-util", "dep:http"]
 csrf = ["dep:rand", "dep:hmac", "dep:sha2", "dep:subtle", "dep:form_urlencoded", "dep:http"]
 i18n = ["dep:futures-util", "dep:http"]
+sse = ["dep:futures-util"]
 static-fs = ["tower-http/fs"]
 static-embed = ["dep:rust-embed", "dep:mime_guess", "modo-macros/static-embed"]
 
@@ -74,3 +75,4 @@ http = "1"
 minijinja = "2"
 serde = { version = "1", features = ["derive"] }
 tempfile = "3"
+futures-util = "0.3"

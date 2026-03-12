@@ -1,0 +1,21 @@
+{# examples/sse-chat/templates/pages/chat.html #}
+{% extends "layouts/base.html" %}
+{% block title %}{{ room }} — SSE Chat{% endblock %}
+{% block content %}
+<div class="nav">
+    <a href="/rooms">&larr; Rooms</a>
+    <h1>{{ room }}</h1>
+    <span class="user">{{ username }}</span>
+</div>
+<div class="chat-container">
+    <div class="messages" id="messages" hx-ext="sse" sse-connect="/chat/{{ room }}/events" sse-swap="message" hx-swap="beforeend">
+        {% for msg in messages %}
+        {{ msg|safe }}
+        {% endfor %}
+    </div>
+    {% include "partials/send_form.html" %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/chat.js"></script>
+{% endblock %}
