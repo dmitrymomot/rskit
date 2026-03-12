@@ -64,6 +64,7 @@ modo --version
 | `templates/app/base.html` | - | - | yes | - |
 | `templates/app/index.html` | - | - | yes | - |
 | `templates/emails/` | - | - | yes | - |
+| `locales/en/` | - | - | yes | - |
 | `justfile` | yes | yes | yes | yes |
 | `.env` | yes | yes | yes | yes |
 | `.env.example` | yes | yes | yes | yes |
@@ -75,6 +76,13 @@ modo --version
 
 - `config/development.yaml` / `config/production.yaml` — server settings, feature flags, non-secret configuration
 - `.env` — secrets, API keys, DB connection strings (gitignored via `.gitignore`)
+
+### Config Overrides (web template)
+
+The web template's generated `config/development.yaml` and `config/production.yaml` must include:
+
+- `email.templates_path: "templates/emails"` — overrides modo-email default of `"emails"` to match the `templates/emails/` directory structure
+- `i18n.path: "locales"` — matches the `locales/{lang}/` directory structure
 
 ### Template Feature Matrix
 
