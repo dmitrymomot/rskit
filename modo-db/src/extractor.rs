@@ -24,7 +24,9 @@ impl FromRequestParts<AppState> for Db {
             .get::<DbPool>()
             .map(|pool| Db((*pool).clone()))
             .ok_or_else(|| {
-                Error::internal("Database not configured. Register DbPool via app.managed_service(db).")
+                Error::internal(
+                    "Database not configured. Register DbPool via app.managed_service(db).",
+                )
             })
     }
 }
