@@ -23,6 +23,17 @@ fn test_entity_is_framework() {
 }
 
 #[test]
+fn test_entity_group_is_jobs() {
+    let reg = inventory::iter::<EntityRegistration>()
+        .find(|r| r.table_name == "modo_jobs")
+        .expect("modo_jobs entity not found");
+    assert_eq!(
+        reg.group, "jobs",
+        "modo_jobs entity should be in 'jobs' group"
+    );
+}
+
+#[test]
 fn test_entity_has_claim_index() {
     let reg = inventory::iter::<EntityRegistration>()
         .find(|r| r.table_name == "modo_jobs")
