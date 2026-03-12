@@ -1,0 +1,27 @@
+mod config;
+mod tasks;
+
+use modo::app::ServiceRegistry;
+
+#[modo::handler(GET, "/health")]
+async fn health() -> &'static str {
+    "ok"
+}
+
+#[modo::main]
+async fn main(
+    app: modo::app::AppBuilder,
+    config: config::Config,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let db = modo_db::connect(&config.database).await?;
+    modo_db::sync_and_migrate(&db).await?;
+
+    let services = ServiceRegistry::new().with(db.clone());
+    let jobs = modo_jobs::start(&db, &config.jobs, services).await?;
+
+    app.config(config.core)
+        .managed_service(db)
+        .managed_service(jobs)
+        .run()
+        .await
+}
