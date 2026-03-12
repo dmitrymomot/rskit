@@ -5,12 +5,14 @@ use syn::{ItemFn, LitInt, LitStr, Result, Token, parse2};
 struct MigrationArgs {
     version: u64,
     description: String,
+    group: Option<String>,
 }
 
 impl syn::parse::Parse for MigrationArgs {
     fn parse(input: syn::parse::ParseStream) -> Result<Self> {
         let mut version = None;
         let mut description = None;
+        let mut group = None;
 
         while !input.is_empty() {
             let ident: syn::Ident = input.parse()?;
@@ -24,6 +26,10 @@ impl syn::parse::Parse for MigrationArgs {
                 "description" => {
                     let val: LitStr = input.parse()?;
                     description = Some(val.value());
+                }
+                "group" => {
+                    let val: LitStr = input.parse()?;
+                    group = Some(val.value());
                 }
                 other => {
                     return Err(syn::Error::new_spanned(
@@ -45,6 +51,7 @@ impl syn::parse::Parse for MigrationArgs {
         Ok(MigrationArgs {
             version,
             description,
+            group,
         })
     }
 }
@@ -56,6 +63,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     let func_name = &func.sig.ident;
     let version = args.version;
     let description = &args.description;
+    let group_str = args.group.as_deref().unwrap_or("default");
 
     Ok(quote! {
         #func
@@ -64,6 +72,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             modo_db::MigrationRegistration {
                 version: #version,
                 description: #description,
+                group: #group_str,
                 handler: |db| Box::pin(#func_name(db)),
             }
         }

@@ -59,8 +59,6 @@ cannot have `queue`, `priority`, or `max_attempts` attributes.
 ### Starting the Runner
 
 ```rust
-use modo::app::ServiceRegistry;
-
 #[modo::main]
 async fn main(
     app: modo::app::AppBuilder,
@@ -69,8 +67,10 @@ async fn main(
     let db = modo_db::connect(&config.database).await?;
     modo_db::sync_and_migrate(&db).await?;
 
-    let services = ServiceRegistry::new().with(db.clone());
-    let jobs = modo_jobs::start(&db, &config.jobs, services).await?;
+    let jobs = modo_jobs::new(&db, &config.jobs)
+        .service(db.clone())
+        .run()
+        .await?;
 
     app.config(config.core)
         .managed_service(db)
@@ -78,6 +78,26 @@ async fn main(
         .run()
         .await
 }
+```
+
+#### Separate database for jobs (SQLite)
+
+The `modo_jobs::Job` entity uses `group = "jobs"`, allowing it to be synced to a
+separate database. This is useful with SQLite where concurrent writes to a single
+database can cause lock contention:
+
+```rust
+let db = modo_db::connect(&config.database).await?;
+
+// Sync jobs entity to a separate SQLite database
+let jobs_db = modo_db::connect(&config.jobs_database).await?;
+modo_db::sync_and_migrate_group(&jobs_db, "jobs").await?;
+modo_db::sync_and_migrate(&db).await?;
+
+let jobs = modo_jobs::new(&jobs_db, &config.jobs)
+    .service(db.clone())
+    .run()
+    .await?;
 ```
 
 `managed_service(jobs)` registers `JobsHandle` for graceful shutdown in the
@@ -151,9 +171,10 @@ Queue names in YAML must match the `queue` attribute used in `#[job(queue = "...
 ## Database Schema
 
 The `modo_jobs` table is created and migrated automatically by
-`modo_db::sync_and_migrate`. A composite index on
-`(state, queue, run_at, priority)` is created alongside the table to support
-efficient atomic job claiming.
+`modo_db::sync_and_migrate` (or `modo_db::sync_and_migrate_group(db, "jobs")`
+when using a separate jobs database). The entity is registered with
+`group = "jobs"`. A composite index on `(state, queue, run_at, priority)` is
+created alongside the table to support efficient atomic job claiming.
 
 ## `#[job]` Macro Parameters
 

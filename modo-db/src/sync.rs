@@ -4,7 +4,7 @@ use crate::pool::DbPool;
 use sea_orm::{ConnectionTrait, Schema};
 use tracing::info;
 
-/// Synchronize database schema from registered entities, then run pending migrations.
+/// Synchronize database schema from all registered entities, then run all pending migrations.
 ///
 /// 1. Bootstrap `_modo_migrations` table (must exist before schema sync)
 /// 2. Collect all `EntityRegistration` entries from `inventory`
@@ -13,6 +13,19 @@ use tracing::info;
 /// 5. Execute extra SQL (composite indices, partial unique indices)
 /// 6. Run pending migrations (version-ordered, tracked in `_modo_migrations`)
 pub async fn sync_and_migrate(db: &DbPool) -> Result<(), modo::Error> {
+    do_sync(db, None).await
+}
+
+/// Synchronize database schema for entities and migrations belonging to the named group only.
+///
+/// This is useful when entities in a specific group live in a separate database (e.g.
+/// SQLite jobs database). The `_modo_migrations` table is always bootstrapped in the
+/// target database.
+pub async fn sync_and_migrate_group(db: &DbPool, group: &str) -> Result<(), modo::Error> {
+    do_sync(db, Some(group)).await
+}
+
+async fn do_sync(db: &DbPool, group_filter: Option<&str>) -> Result<(), modo::Error> {
     let conn = db.connection();
 
     // 1. Bootstrap _modo_migrations (BIGINT + CURRENT_TIMESTAMP work on both SQLite and Postgres)
@@ -26,9 +39,13 @@ pub async fn sync_and_migrate(db: &DbPool) -> Result<(), modo::Error> {
     .await
     .map_err(|e| modo::Error::internal(format!("Failed to bootstrap migrations table: {e}")))?;
 
-    // 2. Collect all entities in a single pass, partitioned by framework vs user
+    // 2. Collect entities, optionally filtered by group
     let (framework, user): (Vec<_>, Vec<_>) = inventory::iter::<EntityRegistration>
         .into_iter()
+        .filter(|r| match group_filter {
+            Some(g) => r.group == g,
+            None => true,
+        })
         .partition(|r| r.is_framework);
 
     let backend = conn.get_database_backend();
@@ -69,18 +86,25 @@ pub async fn sync_and_migrate(db: &DbPool) -> Result<(), modo::Error> {
     }
 
     // 5. Run pending migrations
-    run_pending_migrations(conn).await?;
+    run_pending_migrations(conn, group_filter).await?;
 
     Ok(())
 }
 
-async fn run_pending_migrations(db: &sea_orm::DatabaseConnection) -> Result<(), modo::Error> {
+async fn run_pending_migrations(
+    db: &sea_orm::DatabaseConnection,
+    group_filter: Option<&str>,
+) -> Result<(), modo::Error> {
     use crate::migration::migration_entity;
     use sea_orm::EntityTrait;
     use std::collections::HashSet;
 
     let mut migrations: Vec<&MigrationRegistration> = inventory::iter::<MigrationRegistration>
         .into_iter()
+        .filter(|m| match group_filter {
+            Some(g) => m.group == g,
+            None => true,
+        })
         .collect();
 
     if migrations.is_empty() {

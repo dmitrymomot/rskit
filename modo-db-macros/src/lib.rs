@@ -13,6 +13,11 @@ mod migration;
 ///
 /// - `table = "<name>"` — SQL table name.
 ///
+/// # Optional argument
+///
+/// - `group = "<name>"` — assigns the entity to a named group (default: `"default"`).
+///   Entities in a group can be synced separately via `modo_db::sync_and_migrate_group`.
+///
 /// # Struct-level options (applied as a second `#[entity(...)]` attribute)
 ///
 /// - `timestamps` — injects `created_at` and `updated_at` columns of type
@@ -76,6 +81,12 @@ pub fn entity(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// - `version = <u64>` — monotonically increasing migration version number.
 /// - `description = "<text>"` — human-readable description shown in logs.
+///
+/// # Optional argument
+///
+/// - `group = "<name>"` — assigns the migration to a named group (default: `"default"`).
+///   Migrations in a group run only when `modo_db::sync_and_migrate_group` is called
+///   with the matching group name.
 ///
 /// # Function signature
 ///

@@ -1,0 +1,38 @@
+server:
+  port: 3000
+  secret_key: ${SECRET_KEY:-{{ project_name }}-dev-secret-change-in-production}
+  http:
+    timeout: 3600
+  static_files:
+    prefix: /static
+templates:
+  path: templates/app
+database:
+{%- if db_driver == "sqlite" %}
+  url: ${DATABASE_URL:-sqlite://data/main.db?mode=rwc}
+{%- else %}
+  url: ${DATABASE_URL:-postgres://postgres:postgres@localhost:5432/{{ project_name }}}
+{%- endif %}
+  max_connections: 5
+  min_connections: 1
+{%- if db_driver == "sqlite" %}
+jobs_database:
+  url: ${JOBS_DATABASE_URL:-sqlite://data/jobs.db?mode=rwc}
+  max_connections: 5
+  min_connections: 1
+{%- endif %}
+cookie:
+  secure: false
+email:
+  templates_path: templates/emails
+  default_from_name: {{ project_name }}
+  default_from_email: noreply@localhost
+  smtp:
+    host: localhost
+    port: 1025
+i18n:
+  path: locales
+  default_locale: en
+upload:
+  backend: local
+  path: ./uploads

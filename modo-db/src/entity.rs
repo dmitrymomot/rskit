@@ -10,6 +10,7 @@ use sea_orm::schema::SchemaBuilder;
 /// attribute macro instead.
 pub struct EntityRegistration {
     pub table_name: &'static str,
+    pub group: &'static str,
     pub register_fn: fn(SchemaBuilder) -> SchemaBuilder,
     pub is_framework: bool,
     pub extra_sql: &'static [&'static str],

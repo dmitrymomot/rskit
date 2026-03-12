@@ -53,11 +53,13 @@ fn validate_fk_action(action: &str) -> Result<()> {
 
 struct EntityArgs {
     table_name: String,
+    group: Option<String>,
 }
 
 impl syn::parse::Parse for EntityArgs {
     fn parse(input: syn::parse::ParseStream) -> Result<Self> {
         let mut table_name = None;
+        let mut group = None;
 
         while !input.is_empty() {
             let ident: Ident = input.parse()?;
@@ -67,6 +69,10 @@ impl syn::parse::Parse for EntityArgs {
                 "table" => {
                     let val: LitStr = input.parse()?;
                     table_name = Some(val.value());
+                }
+                "group" => {
+                    let val: LitStr = input.parse()?;
+                    group = Some(val.value());
                 }
                 other => {
                     return Err(syn::Error::new_spanned(
@@ -82,7 +88,7 @@ impl syn::parse::Parse for EntityArgs {
         }
 
         let table_name = table_name.ok_or_else(|| input.error("missing `table` argument"))?;
-        Ok(EntityArgs { table_name })
+        Ok(EntityArgs { table_name, group })
     }
 }
 
@@ -313,6 +319,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     let struct_name = input.ident.clone();
     let mod_name = format_ident!("{}", to_snake_case(&struct_name.to_string()));
     let table_name = &args.table_name;
+    let group_str = args.group.as_deref().unwrap_or("default");
 
     let struct_attrs = parse_struct_attrs(&mut input)?;
 
@@ -740,6 +747,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         modo_db::inventory::submit! {
             modo_db::EntityRegistration {
                 table_name: #table_name,
+                group: #group_str,
                 register_fn: |sb| sb.register(#mod_name::Entity),
                 is_framework: #is_framework,
                 extra_sql: #extra_sql_tokens,

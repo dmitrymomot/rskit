@@ -17,7 +17,7 @@ use tokio::sync::{Notify, Semaphore};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
-/// Handle returned from [`start`].  Provides job enqueuing and graceful shutdown.
+/// Handle returned from [`JobsBuilder::run`].  Provides job enqueuing and graceful shutdown.
 ///
 /// `JobsHandle` implements [`Deref<Target = JobQueue>`] so all enqueue/cancel
 /// methods are available directly on the handle.  It also implements
@@ -86,22 +86,65 @@ struct PollContext {
     poll_interval: Duration,
 }
 
-/// Start the job runner: spawns poll loops, stale reaper, cleanup, and cron scheduler.
+/// Builder for configuring and starting the job runner.
 ///
-/// Call this once during application startup, passing:
-/// - `db` — the active database pool
-/// - `config` — queue and timing configuration (validated before any task is spawned)
-/// - `services` — service registry made available inside job handlers via [`JobContext`]
+/// Created via [`new()`]. Use [`.service()`](JobsBuilder::service) to register
+/// services available inside job handlers, then call [`.run()`](JobsBuilder::run)
+/// to start the runner.
 ///
-/// Returns a [`JobsHandle`] that should be registered with
-/// `app.managed_service(jobs)` to enable graceful shutdown.
+/// # Example
 ///
-/// # Errors
+/// ```rust,no_run
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let db = modo_db::connect(&Default::default()).await?;
+/// let jobs = modo_jobs::new(&db, &Default::default())
+///     .service(db.clone())
+///     .run()
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
+pub struct JobsBuilder<'a> {
+    db: &'a modo_db::pool::DbPool,
+    config: &'a JobsConfig,
+    services: ServiceRegistry,
+}
+
+/// Create a new [`JobsBuilder`] for the given database pool and configuration.
 ///
-/// Returns an error if:
-/// - The configuration fails validation (see [`JobsConfig::validate`])
-/// - A registered job references a queue not present in `config.queues`
-pub async fn start(
+/// This is the entry point for starting the job runner. Chain `.service()`
+/// calls to register services, then call `.run()` to start processing.
+pub fn new<'a>(db: &'a modo_db::pool::DbPool, config: &'a JobsConfig) -> JobsBuilder<'a> {
+    JobsBuilder {
+        db,
+        config,
+        services: ServiceRegistry::new(),
+    }
+}
+
+impl<'a> JobsBuilder<'a> {
+    /// Register a service that will be available inside job handlers via [`JobContext`].
+    pub fn service<T: Send + Sync + 'static>(mut self, svc: T) -> Self {
+        self.services = self.services.with(svc);
+        self
+    }
+
+    /// Start the job runner, spawning poll loops, stale reaper, cleanup, and cron scheduler.
+    ///
+    /// Returns a [`JobsHandle`] that should be registered with
+    /// `app.managed_service(jobs)` to enable graceful shutdown.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The configuration fails validation (see [`JobsConfig::validate`])
+    /// - A registered job references a queue not present in `config.queues`
+    pub async fn run(self) -> Result<JobsHandle, modo::Error> {
+        start_inner(self.db, self.config, self.services).await
+    }
+}
+
+async fn start_inner(
     db: &modo_db::pool::DbPool,
     config: &JobsConfig,
     services: ServiceRegistry,

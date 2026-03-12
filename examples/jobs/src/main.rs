@@ -3,8 +3,6 @@ mod handlers;
 mod jobs;
 mod payloads;
 
-use modo::app::ServiceRegistry;
-
 #[modo::main]
 async fn main(
     app: modo::app::AppBuilder,
@@ -13,8 +11,10 @@ async fn main(
     let db = modo_db::connect(&config.database).await?;
     modo_db::sync_and_migrate(&db).await?;
 
-    let services = ServiceRegistry::new().with(db.clone());
-    let jobs = modo_jobs::start(&db, &config.jobs, services).await?;
+    let jobs = modo_jobs::new(&db, &config.jobs)
+        .service(db.clone())
+        .run()
+        .await?;
 
     app.config(config.core)
         .managed_service(db)

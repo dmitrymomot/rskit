@@ -1,0 +1,28 @@
+server:
+  port: ${PORT:-8080}
+  secret_key: ${SECRET_KEY}
+  static_files:
+    prefix: /static
+templates:
+  path: templates/app
+database:
+  url: ${DATABASE_URL}
+  max_connections: 20
+  min_connections: 5
+email:
+  templates_path: templates/emails
+  default_from_name: ${EMAIL_FROM_NAME}
+  default_from_email: ${EMAIL_FROM_ADDRESS}
+  resend:
+    api_key: ${RESEND_API_KEY}
+i18n:
+  path: locales
+  default_locale: en
+upload:
+  backend: s3
+  s3:
+    bucket: ${STORAGE_BUCKET}
+    region: ${STORAGE_REGION}
+    endpoint: ${STORAGE_ENDPOINT}
+    access_key_id: ${STORAGE_ACCESS_KEY_ID}
+    secret_access_key: ${STORAGE_SECRET_ACCESS_KEY}

@@ -25,3 +25,22 @@ async fn test_sync_and_migrate_empty() {
         .await
         .unwrap();
 }
+
+#[tokio::test]
+async fn test_sync_and_migrate_group() {
+    let config = DatabaseConfig {
+        url: "sqlite::memory:".to_string(),
+        ..Default::default()
+    };
+    let db = modo_db::connect(&config).await.unwrap();
+    // Syncing a group that has no entities should succeed without error
+    modo_db::sync_and_migrate_group(&db, "nonexistent")
+        .await
+        .unwrap();
+
+    use sea_orm::ConnectionTrait;
+    // _modo_migrations table should still be bootstrapped
+    db.execute_unprepared("SELECT * FROM _modo_migrations")
+        .await
+        .unwrap();
+}

@@ -29,12 +29,12 @@ Example `config.yaml`:
 
 ```yaml
 database:
-    url: "sqlite://data.db?mode=rwc"
+    url: "sqlite://data/main.db?mode=rwc"
     max_connections: 5
     min_connections: 1
 ```
 
-Defaults: `sqlite://data.db?mode=rwc`, `max_connections: 5`, `min_connections: 1`.
+Defaults: `sqlite://data/main.db?mode=rwc`, `max_connections: 5`, `min_connections: 1`.
 
 ### Connecting and migrating
 
@@ -55,9 +55,21 @@ async fn main(
 1. Schema sync — creates or adds columns for all registered entities (addition-only).
 2. Migration runner — executes pending versioned migrations tracked in `_modo_migrations`.
 
+#### Group-scoped sync
+
+Use `sync_and_migrate_group` to sync only entities and migrations belonging to a named group. This is useful when entities in a group live in a separate database (e.g. SQLite jobs database):
+
+```rust
+let jobs_db = modo_db::connect(&config.jobs_database).await?;
+modo_db::sync_and_migrate_group(&jobs_db, "jobs").await?;  // syncs only "jobs" group
+modo_db::sync_and_migrate(&db).await?;                     // syncs all entities to main DB
+```
+
 ### Defining entities
 
 Apply `#[modo_db::entity(table = "...")]` to a plain struct. The macro generates a SeaORM entity module and auto-registers it with `inventory`.
+
+Optionally assign an entity to a named group with `group = "<name>"` (defaults to `"default"`). Entities in a group can be synced to a separate database via `sync_and_migrate_group`.
 
 ```rust
 #[modo_db::entity(table = "todos")]
@@ -115,6 +127,8 @@ async fn backfill_slugs(db: &sea_orm::DatabaseConnection) -> Result<(), modo::Er
 ```
 
 Migrations are executed in ascending `version` order. Each version is recorded in `_modo_migrations` and runs exactly once.
+
+Migrations can also be assigned to a group with `group = "<name>"` so they only run when `sync_and_migrate_group` is called with the matching group.
 
 ### Extracting the pool in handlers
 

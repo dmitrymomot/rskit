@@ -1,6 +1,6 @@
 [package]
 name = "modo-jobs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license.workspace = true
 repository.workspace = true
@@ -8,7 +8,7 @@ description = "Background jobs and cron scheduling for modo"
 
 [dependencies]
 modo = { path = "../modo", version = "0.1.0" }
-modo-db = { path = "../modo-db", version = "0.1.0" }
+modo-db = { path = "../modo-db", version = "0.1.1" }
 modo-jobs-macros = { path = "../modo-jobs-macros", version = "0.1.0" }
 
 inventory = "0.3"

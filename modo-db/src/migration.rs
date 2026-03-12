@@ -37,6 +37,7 @@ pub type MigrationFn = fn(
 pub struct MigrationRegistration {
     pub version: u64,
     pub description: &'static str,
+    pub group: &'static str,
     pub handler: MigrationFn,
 }
 
@@ -46,6 +47,7 @@ inventory::collect!(MigrationRegistration);
 inventory::submit! {
     crate::EntityRegistration {
         table_name: "_modo_migrations",
+        group: "default",
         register_fn: |sb| sb.register(migration_entity::Entity),
         is_framework: true,
         extra_sql: &[],

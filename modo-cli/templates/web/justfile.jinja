@@ -1,0 +1,63 @@
+# Run dev server with auto-reload
+{%- if db_driver == "postgres" %}
+dev: docker-up css
+	cargo watch -x run
+{%- else %}
+dev: css
+	cargo watch -x run
+{%- endif %}
+
+# Release build
+build:
+	cargo build --release
+
+# Format code
+fmt:
+	cargo fmt --all
+
+# Check formatting (CI-friendly, fails on diff)
+fmt-check:
+	cargo fmt --all -- --check
+
+# Lint with clippy
+lint:
+	cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+# Run tests
+test:
+	cargo test --workspace --all-targets
+
+# Format check + lint + test
+check: fmt-check lint test
+
+# Build Tailwind CSS
+css:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if ! command -v tailwindcss &> /dev/null; then
+		echo "Error: tailwindcss CLI not found."
+		echo "Install it from: https://tailwindcss.com/docs/installation/tailwind-cli"
+		exit 1
+	fi
+	tailwindcss -i assets/src/app.css -o assets/static/css/app.css --minify
+
+# Download frontend JS dependencies
+assets-download:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	mkdir -p assets/static/js
+	curl -sL https://unpkg.com/htmx.org@2.0.8/dist/htmx.min.js -o assets/static/js/htmx.min.js
+	curl -sL https://unpkg.com/htmx.org@2.0.8/dist/ext/sse.js -o assets/static/js/htmx-sse.js
+	curl -sL https://unpkg.com/alpinejs@3.15.8/dist/cdn.min.js -o assets/static/js/alpine.min.js
+	curl -sL "https://cdn.jsdelivr.net/npm/@tailwindplus/elements@1" | sed '/^\/\/# sourceMappingURL=/d' > "assets/static/js/elements.min.js"
+	echo "Assets downloaded successfully."
+{%- if db_driver == "postgres" %}
+
+# Start Postgres container
+docker-up:
+	docker compose up -d
+
+# Stop Postgres container
+docker-down:
+	docker compose down
+{%- endif %}

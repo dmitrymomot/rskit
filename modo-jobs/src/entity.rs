@@ -6,7 +6,7 @@
 ///
 /// Fields that are managed by the runner (e.g. `locked_by`, `state`) should not
 /// be written directly by application code — use [`crate::JobQueue`] instead.
-#[modo_db::entity(table = "modo_jobs")]
+#[modo_db::entity(table = "modo_jobs", group = "jobs")]
 #[entity(timestamps, framework)]
 #[entity(index(columns = ["state", "queue", "run_at", "priority"]))]
 pub struct Job {

@@ -8,10 +8,13 @@ This crate is an implementation detail of `modo-db`. Consume these macros throug
 
 ## Macros
 
-### `#[modo_db::entity(table = "...")]`
+### `#[modo_db::entity(table = "...", group = "...")]`
 
 Transforms an annotated struct into a fully-formed SeaORM entity module and registers it
 with the `inventory` collector so `modo_db::sync_and_migrate` discovers it at startup.
+
+The optional `group` parameter (defaults to `"default"`) assigns the entity to a named group.
+Entities in a group can be synced separately via `modo_db::sync_and_migrate_group`.
 
 #### Struct-level options
 
@@ -114,10 +117,14 @@ pub struct Membership {
 
 ---
 
-### `#[modo_db::migration(version = <u64>, description = "...")]`
+### `#[modo_db::migration(version = <u64>, description = "...", group = "...")]`
 
 Registers an async SQL migration function. `modo_db::sync_and_migrate` runs all
 registered migrations in ascending `version` order after schema sync.
+
+The optional `group` parameter (defaults to `"default"`) assigns the migration to a named group.
+Migrations in a group run only when `modo_db::sync_and_migrate_group` is called with the
+matching group name.
 
 The annotated function must be `async fn(db: &impl ConnectionTrait) -> Result<(), DbErr>`.
 

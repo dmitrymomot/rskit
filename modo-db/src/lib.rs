@@ -20,13 +20,22 @@
 //!     pub title: String,
 //! }
 //!
+//! // Entity in a named group (synced separately)
+//! #[modo_db::entity(table = "analytics", group = "analytics")]
+//! pub struct Event {
+//!     #[entity(primary_key, auto = "ulid")]
+//!     pub id: String,
+//!     pub name: String,
+//! }
+//!
 //! #[modo::main]
 //! async fn main(
 //!     app: modo::app::AppBuilder,
 //!     config: Config,
 //! ) -> Result<(), Box<dyn std::error::Error>> {
 //!     let db = modo_db::connect(&config.database).await?;
-//!     modo_db::sync_and_migrate(&db).await?;
+//!     modo_db::sync_and_migrate(&db).await?;           // syncs all entities
+//!     // modo_db::sync_and_migrate_group(&other_db, "analytics").await?;  // syncs only "analytics" group
 //!     app.config(config.core).managed_service(db).run().await
 //! }
 //! ```
@@ -52,7 +61,7 @@ pub use pagination::{
     CursorParams, CursorResult, PageParams, PageResult, paginate, paginate_cursor,
 };
 pub use pool::DbPool;
-pub use sync::sync_and_migrate;
+pub use sync::{sync_and_migrate, sync_and_migrate_group};
 
 // Re-export proc macros
 pub use modo_db_macros::{entity, migration};

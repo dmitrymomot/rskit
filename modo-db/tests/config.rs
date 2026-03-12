@@ -3,7 +3,7 @@ use modo_db::DatabaseConfig;
 #[test]
 fn test_default_config() {
     let config = DatabaseConfig::default();
-    assert_eq!(config.url, "sqlite://data.db?mode=rwc");
+    assert_eq!(config.url, "sqlite://data/main.db?mode=rwc");
     assert_eq!(config.max_connections, 5);
     assert_eq!(config.min_connections, 1);
 }

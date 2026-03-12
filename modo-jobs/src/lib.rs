@@ -36,11 +36,11 @@
 //!
 //! ```rust,no_run
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! use modo::app::ServiceRegistry;
-//!
 //! let db = modo_db::connect(&Default::default()).await?;
-//! let services = ServiceRegistry::new().with(db.clone());
-//! let jobs = modo_jobs::start(&db, &Default::default(), services).await?;
+//! let jobs = modo_jobs::new(&db, &Default::default())
+//!     .service(db.clone())
+//!     .run()
+//!     .await?;
 //!
 //! // app.managed_service(jobs) registers for graceful shutdown
 //! # Ok(())
@@ -60,7 +60,7 @@ pub mod types;
 pub use config::{CleanupConfig, JobsConfig, QueueConfig};
 pub use handler::{JobContext, JobHandler, JobHandlerDyn, JobRegistration};
 pub use queue::JobQueue;
-pub use runner::{JobsHandle, start};
+pub use runner::{JobsBuilder, JobsHandle, new};
 pub use types::{JobId, JobState};
 
 // Re-export proc macros

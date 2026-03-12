@@ -1,0 +1,22 @@
+use modo::config::AppConfig;
+use modo_db::DatabaseConfig;
+use modo_email::EmailConfig;
+use modo_jobs::JobsConfig;
+use modo_upload::UploadConfig;
+use serde::Deserialize;
+
+#[derive(Default, Deserialize)]
+pub(crate) struct Config {
+    #[serde(flatten)]
+    pub(crate) core: AppConfig,
+    pub(crate) database: DatabaseConfig,
+{%- if db_driver == "sqlite" %}
+    pub(crate) jobs_database: DatabaseConfig,
+{%- endif %}
+    #[serde(default)]
+    pub(crate) jobs: JobsConfig,
+    #[serde(default)]
+    pub(crate) email: EmailConfig,
+    #[serde(default)]
+    pub(crate) upload: UploadConfig,
+}
