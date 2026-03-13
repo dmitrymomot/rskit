@@ -18,8 +18,6 @@ impl SmtpTransport {
     /// When `config.tls` is `true`, uses STARTTLS via `relay()`.
     /// When `false`, connects without TLS (useful for local dev or trusted relays).
     pub fn new(config: &SmtpConfig) -> Result<Self, modo::Error> {
-        let creds = Credentials::new(config.username.clone(), config.password.clone());
-
         let builder = if config.tls {
             AsyncSmtpTransport::<Tokio1Executor>::relay(&config.host)
                 .map_err(|e| modo::Error::internal(format!("SMTP config error: {e}")))?
@@ -28,7 +26,12 @@ impl SmtpTransport {
             AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&config.host).port(config.port)
         };
 
-        let mailer = builder.credentials(creds).build();
+        let mailer = if !config.username.is_empty() {
+            let creds = Credentials::new(config.username.clone(), config.password.clone());
+            builder.credentials(creds).build()
+        } else {
+            builder.build()
+        };
 
         Ok(Self { mailer })
     }
