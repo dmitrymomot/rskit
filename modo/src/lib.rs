@@ -37,21 +37,34 @@ pub(crate) mod static_files;
 pub mod templates;
 pub mod validate;
 
+pub use app::{AppBuilder, AppState, ServiceRegistry};
 pub use axum::Json;
-pub use config::{AppConfig, HttpConfig, RateLimitConfig, SecurityHeadersConfig, TrailingSlash};
+pub use config::{
+    AppConfig, HttpConfig, RateLimitConfig, SecurityHeadersConfig, ServerConfig, TrailingSlash,
+};
 pub use cookies::{CookieConfig, CookieManager, CookieOptions, SameSite};
 pub use cors::CorsConfig;
+#[cfg(feature = "csrf")]
+pub use csrf::{CsrfConfig, CsrfToken};
 #[cfg(feature = "templates")]
 pub use error::ViewResult;
 pub use error::{
     Error, ErrorContext, ErrorHandlerFn, ErrorHandlerRegistration, HandlerResult, HttpError,
     JsonResult,
 };
+pub use extractors::Service;
+#[cfg(feature = "i18n")]
+pub use i18n::{I18n, I18nConfig};
 pub use middleware::{ClientIp, RateLimitInfo};
 pub use request_id::RequestId;
+pub use router::Method;
+pub use sanitize::Sanitize;
 pub use shutdown::{GracefulShutdown, ShutdownPhase};
 #[cfg(feature = "templates")]
-pub use templates::{ViewRender, ViewRenderer, ViewResponse};
+pub use templates::{
+    TemplateConfig, TemplateContext, TemplateEngine, ViewRender, ViewRenderer, ViewResponse,
+};
+pub use validate::Validate;
 
 // Re-exports for macro-generated code
 pub use axum;
