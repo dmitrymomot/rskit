@@ -26,6 +26,7 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 - HTMX views: htmx template rendered on HX-Request, always HTTP 200, non-200 skips render
 - Template layers: auto-registered when `TemplateEngine` is a service — no manual `.layer()` needed
 - File organization: `mod.rs` is ONLY for `mod` imports and re-exports — all code (handlers, views, tasks) goes in separate files
+- Extractors: always import with `use modo::extractors::{Json, Form};` and use short form in handler signatures — never inline `modo::extractors::Json<T>`
 
 ## Gotchas
 
