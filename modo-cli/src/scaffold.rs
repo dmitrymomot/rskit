@@ -4,11 +4,21 @@ use minijinja::Environment;
 use std::fs;
 use std::path::Path;
 
+/// Template variables passed to every MiniJinja template during scaffolding.
 pub struct ScaffoldContext<'a> {
+    /// The project name, used as the crate name and in generated file content.
     pub project_name: &'a str,
+    /// Database driver to activate: `"postgres"`, `"sqlite"`, or `""` for no DB.
     pub db_driver: &'a str,
 }
 
+/// Renders `template_dir` (and `shared_dir`) into `target_dir` using `context`.
+///
+/// Shared files are written first so template-specific files can override them.
+/// Files with a `.jinja` extension are rendered through MiniJinja and the
+/// extension is stripped from the output path. Conditional `.jinja` files that
+/// render to empty output are skipped (e.g. `docker-compose.yaml.jinja` when
+/// using SQLite).
 pub fn scaffold(
     target_dir: &Path,
     template_dir: &Dir<'static>,
