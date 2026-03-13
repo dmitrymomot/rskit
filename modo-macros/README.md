@@ -150,7 +150,8 @@ struct CreateTodo {
 }
 
 // In a handler:
-async fn create(input: modo::validate::Json<CreateTodo>) -> modo::JsonResult<()> {
+use modo::extractors::Json;
+async fn create(input: Json<CreateTodo>) -> modo::JsonResult<()> {
     input.validate()?;
     Ok(modo::Json(()))
 }

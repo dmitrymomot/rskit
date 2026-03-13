@@ -276,12 +276,13 @@ Patterns drawn from `examples/todo-api/src/`:
 ### Create
 
 ```rust
+use modo::extractors::Json;
 use modo_db::sea_orm::{ActiveModelTrait, Set};
 
 #[modo::handler(POST, "/todos")]
 async fn create_todo(
     Db(db): Db,
-    input: modo::extractors::Json<CreateTodo>,
+    input: Json<CreateTodo>,
 ) -> modo::JsonResult<TodoResponse> {
     input.validate()?;
     let model = todo::ActiveModel {
