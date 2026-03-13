@@ -1,11 +1,11 @@
-use modo::extractors::{Json, Service};
+use modo::extractors::Service;
 use modo::HandlerResult;
 use modo_email::{Mailer, SendEmail, SendEmailPayload};
 
 #[modo_jobs::job(queue = "email", max_attempts = 3, timeout = "30s")]
 async fn send_email(
     Service(mailer): Service<Mailer>,
-    Json(payload): Json<SendEmailPayload>,
+    payload: SendEmailPayload,
 ) -> HandlerResult<()> {
     let email = SendEmail::from(payload);
     mailer.send(&email).await?;

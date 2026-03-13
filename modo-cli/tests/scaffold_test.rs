@@ -120,6 +120,10 @@ fn scaffold_web() {
     assert!(dir.join("src/tasks/mod.rs").exists());
     assert!(dir.join("src/views/mod.rs").exists());
     assert!(dir.join("assets/src/app.css").exists());
+    assert!(
+        dir.join("static/.gitkeep").exists(),
+        "web scaffold should create static/.gitkeep for RustEmbed"
+    );
     assert!(dir.join("templates/app/base.html").exists());
     assert!(dir.join("templates/app/index.html").exists());
 

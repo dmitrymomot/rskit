@@ -39,17 +39,17 @@ css:
 		echo "Install it from: https://tailwindcss.com/docs/installation/tailwind-cli"
 		exit 1
 	fi
-	tailwindcss -i assets/src/app.css -o assets/static/css/app.css --minify
+	tailwindcss -i assets/src/app.css -o static/css/app.css --minify
 
 # Download frontend JS dependencies
 assets-download:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	mkdir -p assets/static/js
-	curl -sL https://unpkg.com/htmx.org@2.0.8/dist/htmx.min.js -o assets/static/js/htmx.min.js
-	curl -sL https://unpkg.com/htmx.org@2.0.8/dist/ext/sse.js -o assets/static/js/htmx-sse.js
-	curl -sL https://unpkg.com/alpinejs@3.15.8/dist/cdn.min.js -o assets/static/js/alpine.min.js
-	curl -sL "https://cdn.jsdelivr.net/npm/@tailwindplus/elements@1" | sed '/^\/\/# sourceMappingURL=/d' > "assets/static/js/elements.min.js"
+	mkdir -p static/js
+	curl -sL https://unpkg.com/htmx.org@2.0.8/dist/htmx.min.js -o static/js/htmx.min.js
+	curl -sL https://unpkg.com/htmx.org@2.0.8/dist/ext/sse.js -o static/js/htmx-sse.js
+	curl -sL https://unpkg.com/alpinejs@3.15.8/dist/cdn.min.js -o static/js/alpine.min.js
+	curl -sL "https://cdn.jsdelivr.net/npm/@tailwindplus/elements@1" | sed '/^\/\/# sourceMappingURL=/d' > "static/js/elements.min.js"
 	echo "Assets downloaded successfully."
 {%- if db_driver == "postgres" %}
 
