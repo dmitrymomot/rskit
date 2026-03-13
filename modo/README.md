@@ -80,7 +80,7 @@ async fn list_users() -> JsonResult<Vec<String>> {
 ### Registering services and extractors
 
 ```rust
-use modo::extractors::service::Service;
+use modo::Service;
 
 struct MyDatabase { /* ... */ }
 

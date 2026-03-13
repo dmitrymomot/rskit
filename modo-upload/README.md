@@ -62,7 +62,7 @@ Call `.validate()` when `T` also derives `modo::Validate`.
 
 ```rust
 use modo::JsonResult;
-use modo::extractors::service::Service;
+use modo::Service;
 use modo_upload::{FileStorage, MultipartForm};
 
 #[modo::handler(POST, "/profile")]

@@ -93,7 +93,7 @@ async fn home(OptionalAuth(user): OptionalAuth<MyUser>) -> String {
 
 ```rust
 use modo_auth::{PasswordHasher, PasswordConfig};
-use modo::extractors::Service;
+use modo::Service;
 
 // Use default OWASP-recommended settings
 let hasher = PasswordHasher::default();
