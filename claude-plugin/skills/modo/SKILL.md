@@ -51,7 +51,7 @@ All macros listed below have been verified against the proc-macro source files
 
 | Macro | Crate | Purpose |
 |---|---|---|
-| `#[handler(METHOD, "/path")]` | modo-macros | Route registration; supports partial path-param extraction; optional `middleware = [...]` arg |
+| `#[handler(METHOD, "/path")]` | modo-macros | Route registration; supports partial path-param extraction; handler-level middleware uses a separate `#[middleware(...)]` attribute on the function |
 | `#[module(prefix = "/path")]` | modo-macros | Groups handlers under a URL prefix; optional `middleware = [...]` for module-scoped middleware |
 | `#[main]` / `#[main(static_assets = "path/")]` | modo-macros | App bootstrap, Tokio runtime, tracing init; optional embedded static assets via `rust_embed` |
 | `#[error_handler]` | modo-macros | Registers a sync `fn(modo::Error, &modo::ErrorContext) -> Response` as the app-wide error handler |

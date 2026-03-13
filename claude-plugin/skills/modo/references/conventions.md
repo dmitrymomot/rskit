@@ -221,16 +221,20 @@ Declared on the `#[module]` attribute. Applied to all routes within the module's
 
 ```rust
 #[modo::module(prefix = "/api/v1", middleware = [require_auth])]
-pub struct ApiV1Module;
+mod api_v1 {
+    #[modo::handler(GET, "/users")]
+    async fn list_users() -> &'static str { "users" }
+}
 ```
 
 ### Handler-Level Middleware
 
-Declared on the `#[handler]` attribute. Applied only to that specific route:
+Declared via a separate `#[middleware(...)]` attribute on the handler function. Applied only to that specific route:
 
 ```rust
-#[modo::handler(GET "/users/:id", middleware = [rate_limit_strict])]
-async fn get_user(/* ... */) -> JsonResult<UserResponse> { /* ... */ }
+#[modo::handler(GET, "/users/{id}")]
+#[middleware(rate_limit_strict)]
+async fn get_user(id: String, /* ... */) -> JsonResult<UserResponse> { /* ... */ }
 ```
 
 ### Stacking Rules
@@ -248,9 +252,9 @@ async fn get_user(/* ... */) -> JsonResult<UserResponse> { /* ... */ }
 Return `JsonResult<T>` and use `HttpError` variants or `Error::internal()` for failures:
 
 ```rust
-#[modo::handler(GET "/users/:id")]
+#[modo::handler(GET, "/users/{id}")]
 async fn get_user(
-    Path(id): Path<String>,
+    id: String,
     Service(db): Service<DatabaseService>,
 ) -> JsonResult<UserResponse> {
     let user = db.find_user(&id).await
