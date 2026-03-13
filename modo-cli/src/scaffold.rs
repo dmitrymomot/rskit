@@ -10,6 +10,8 @@ pub struct ScaffoldContext<'a> {
     pub project_name: &'a str,
     /// Database driver to activate: `"postgres"`, `"sqlite"`, or `""` for no DB.
     pub db_driver: &'a str,
+    /// Whether to use S3 storage with RustFS.
+    pub s3: bool,
 }
 
 /// Renders `template_dir` (and `shared_dir`) into `target_dir` using `context`.
@@ -60,6 +62,7 @@ fn write_dir(
                 minijinja::context! {
                     project_name => context.project_name,
                     db_driver => context.db_driver,
+                    s3 => context.s3,
                 },
             )
             .with_context(|| format!("render failed: {}", relative.display()))?;

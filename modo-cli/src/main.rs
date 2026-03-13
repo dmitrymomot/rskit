@@ -28,6 +28,10 @@ enum Commands {
         /// Use SQLite database driver (default)
         #[arg(long, conflicts_with = "postgres")]
         sqlite: bool,
+
+        /// Use S3 storage with RustFS (local S3-compatible server)
+        #[arg(long)]
+        s3: bool,
     },
 }
 
@@ -103,6 +107,7 @@ fn main() -> anyhow::Result<()> {
             template,
             postgres,
             sqlite,
+            s3,
         } => {
             validate_project_name(&name)?;
 
@@ -110,6 +115,10 @@ fn main() -> anyhow::Result<()> {
                 anyhow::bail!(
                     "minimal template does not use a database. Remove --postgres/--sqlite flags."
                 );
+            }
+
+            if s3 && !matches!(template, Template::Web) {
+                anyhow::bail!("--s3 flag is only supported with the web template");
             }
 
             let target = std::path::Path::new(&name);
@@ -133,6 +142,7 @@ fn main() -> anyhow::Result<()> {
             let context = scaffold::ScaffoldContext {
                 project_name: &name,
                 db_driver,
+                s3,
             };
 
             std::fs::create_dir_all(target)?;
@@ -165,8 +175,7 @@ fn main() -> anyhow::Result<()> {
             println!("Next steps:");
             println!("  cd {}", name);
             if matches!(template, Template::Web) {
-                println!("  just assets-download     # download HTMX, Alpine.js");
-                println!("  just css                 # build CSS");
+                println!("  just assets-download     # download HTMX, Alpine.js (first time only)");
             }
             println!("  just dev                 # start dev server");
         }
@@ -187,11 +196,13 @@ mod tests {
                 name,
                 template,
                 postgres,
+                s3,
                 ..
             } => {
                 assert_eq!(name, "myapp");
                 assert!(matches!(template, Template::Api));
                 assert!(postgres);
+                assert!(!s3);
             }
         }
     }
@@ -204,11 +215,23 @@ mod tests {
                 template,
                 postgres,
                 sqlite,
+                s3,
                 ..
             } => {
                 assert!(matches!(template, Template::Web));
                 assert!(!postgres);
                 assert!(!sqlite);
+                assert!(!s3);
+            }
+        }
+    }
+
+    #[test]
+    fn parse_new_with_s3() {
+        let cli = Cli::parse_from(["modo", "new", "myapp", "--s3"]);
+        match cli.command {
+            Commands::New { s3, .. } => {
+                assert!(s3);
             }
         }
     }
