@@ -281,7 +281,7 @@ use modo_db::sea_orm::{ActiveModelTrait, Set};
 #[modo::handler(POST, "/todos")]
 async fn create_todo(
     Db(db): Db,
-    input: modo::validate::Json<CreateTodo>,
+    input: modo::extractors::Json<CreateTodo>,
 ) -> modo::JsonResult<TodoResponse> {
     input.validate()?;
     let model = todo::ActiveModel {
