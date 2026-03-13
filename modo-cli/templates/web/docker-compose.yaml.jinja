@@ -1,16 +1,57 @@
-{% if db_driver == "postgres" %}
 services:
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+{% if db_driver == "postgres" %}
   postgres:
     image: postgres:18-alpine
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: {{ project_name }}
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: {{ project_name }}
+      POSTGRES_PASSWORD: {{ project_name }}
+      POSTGRES_DB: {{ project_name }}_development
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ project_name }} -d {{ project_name }}_development"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+{% endif %}
+{% if s3 %}
+  rustfs:
+    image: rustfs/rustfs:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      RUSTFS_ACCESS_KEY: admin
+      RUSTFS_SECRET_KEY: admin123
+    volumes:
+      - rustfs_data:/data
 
+  rustfs-bucket-init:
+    image: minio/mc:latest
+    depends_on:
+      - rustfs
+    entrypoint: >
+      /bin/sh -c "
+      sleep 3;
+      mc alias set rustfs http://rustfs:9000 admin admin123;
+      mc mb --ignore-existing rustfs/uploads;
+      mc anonymous set download rustfs/uploads;
+      exit 0;
+      "
+{% endif %}
+{% if db_driver == "postgres" or s3 %}
 volumes:
-  pgdata:
+{%- if db_driver == "postgres" %}
+  postgres_data:
+{%- endif %}
+{%- if s3 %}
+  rustfs_data:
+{%- endif %}
 {% endif %}

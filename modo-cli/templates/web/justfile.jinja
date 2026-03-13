@@ -1,11 +1,6 @@
 # Run dev server with auto-reload
-{%- if db_driver == "postgres" %}
 dev: docker-up css
 	cargo watch -x run
-{%- else %}
-dev: css
-	cargo watch -x run
-{%- endif %}
 
 # Release build
 build:
@@ -51,13 +46,30 @@ assets-download:
 	curl -sL https://unpkg.com/alpinejs@3.15.8/dist/cdn.min.js -o static/js/alpine.min.js
 	curl -sL "https://cdn.jsdelivr.net/npm/@tailwindplus/elements@1" | sed '/^\/\/# sourceMappingURL=/d' > "static/js/elements.min.js"
 	echo "Assets downloaded successfully."
-{%- if db_driver == "postgres" %}
 
-# Start Postgres container
+# Start dev services (starts Docker if needed)
 docker-up:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if ! docker info &>/dev/null 2>&1; then
+	    echo "Docker is not running. Starting..."
+	    if [[ "$(uname)" == "Darwin" ]]; then
+	        open -a Docker
+	    else
+	        sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
+	    fi
+	    for i in $(seq 1 30); do
+	        docker info &>/dev/null 2>&1 && break
+	        sleep 1
+	    done
+	    if ! docker info &>/dev/null 2>&1; then
+	        echo "Error: Docker failed to start. Please start it manually."
+	        exit 1
+	    fi
+	    echo "Docker is ready."
+	fi
 	docker compose up -d
 
-# Stop Postgres container
+# Stop dev services
 docker-down:
 	docker compose down
-{%- endif %}
