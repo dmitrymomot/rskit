@@ -1,6 +1,10 @@
 # modo Conventions Reference
 
-**Documentation:** https://docs.rs/modo
+## Documentation
+
+- **modo (umbrella crate):** https://docs.rs/modo
+
+The `modo` crate is the umbrella re-export that application code depends on. It re-exports types from internal sub-crates (`modo-macros`, `modo-db`, `modo-jobs`, etc.) so you rarely import sub-crates directly. When in doubt, check the modo docs.rs page for the canonical public API surface. All macro attributes (`#[handler]`, `#[module]`, `#[view]`, etc.) are also re-exported through modo, so the only time you import a sub-crate directly is when using `modo_db`, `modo_jobs`, or similar standalone crate macros.
 
 ---
 
