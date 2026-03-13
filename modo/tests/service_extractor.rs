@@ -1,4 +1,4 @@
-use modo::extractors::service::Service;
+use modo::Service;
 
 #[allow(dead_code)]
 struct MyService {

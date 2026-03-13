@@ -2,7 +2,7 @@ use modo::router::RouteRegistration;
 
 inventory::submit! {
     RouteRegistration {
-        method: modo::router::Method::GET,
+        method: modo::Method::GET,
         path: "/test",
         handler: || modo::axum::routing::get(|| async { "test" }),
         middleware: vec![],

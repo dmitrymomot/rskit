@@ -1,9 +1,7 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use modo::app::AppState;
-use modo::config::ServerConfig;
-use modo::error::HttpError;
 use modo::router::RouteRegistration;
+use modo::{AppState, HttpError, ServerConfig};
 use tower::ServiceExt;
 
 #[modo::handler(GET, "/test")]

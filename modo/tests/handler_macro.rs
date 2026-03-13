@@ -1,4 +1,5 @@
-use modo::router::{Method, RouteRegistration};
+use modo::Method;
+use modo::router::RouteRegistration;
 
 // -- Basic HTTP method handlers --
 

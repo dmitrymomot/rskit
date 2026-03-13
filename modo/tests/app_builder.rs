@@ -1,5 +1,4 @@
-use modo::app::AppBuilder;
-use modo::config::ServerConfig;
+use modo::{AppBuilder, ServerConfig};
 
 #[test]
 fn test_default_server_config() {

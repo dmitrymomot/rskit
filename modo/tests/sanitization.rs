@@ -1,5 +1,4 @@
-use modo::sanitize::Sanitize;
-use modo::validate::Validate;
+use modo::{Sanitize, Validate};
 
 // =============================================================================
 // Built-in rule tests

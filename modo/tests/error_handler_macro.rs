@@ -1,4 +1,4 @@
-use modo::error::{Error, ErrorContext, ErrorHandlerRegistration, HttpError};
+use modo::{Error, ErrorContext, ErrorHandlerRegistration, HttpError};
 
 #[modo::error_handler]
 fn custom_error_handler(err: Error, _ctx: &ErrorContext) -> axum::response::Response {

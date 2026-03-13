@@ -1,6 +1,6 @@
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use modo::error::{Error, ErrorContext, HttpError};
+use modo::{Error, ErrorContext, HttpError};
 use serde_json::json;
 
 #[test]

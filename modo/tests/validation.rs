@@ -1,4 +1,4 @@
-use modo::validate::Validate;
+use modo::Validate;
 
 // --- Helper for custom validation ---
 
