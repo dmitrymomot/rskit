@@ -54,6 +54,7 @@ Scaffold a new project:
 
 ```sh
 modo new my-app                       # web app (default)
+modo new my-app --postgres --s3       # web app with PostgreSQL + S3
 modo new my-api --template api        # JSON API
 modo new my-worker --template worker  # background worker
 modo new my-app --template minimal    # bare-bones, no database
@@ -66,7 +67,7 @@ modo new my-app --template minimal    # bare-bones, no database
 | `worker`  | Background job worker, no HTTP handlers                | Optional |
 | `minimal` | Bare-bones, config only                                | None     |
 
-Database defaults to SQLite. Pass `--postgres` for PostgreSQL.
+Database defaults to SQLite. Pass `--postgres` for PostgreSQL. Pass `--s3` to use RustFS (S3-compatible) for file uploads in development (web template only).
 
 Then:
 

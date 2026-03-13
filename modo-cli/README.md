@@ -23,6 +23,7 @@ modo new <NAME> [OPTIONS]
 | `-t, --template <TEMPLATE>` | `web`   | Template preset to use                                |
 | `--postgres`                | —       | Use PostgreSQL database driver                        |
 | `--sqlite`                  | —       | Use SQLite database driver (default for DB templates) |
+| `--s3`                      | —       | Use S3 storage with RustFS in development (web only)  |
 
 `--postgres` and `--sqlite` are mutually exclusive.
 
@@ -62,15 +63,20 @@ modo new my-app
 # equivalent to: modo new my-app --template web --sqlite
 ```
 
+Web app with PostgreSQL and S3 storage:
+
+```bash
+modo new my-app --postgres --s3
+```
+
 ### After scaffolding
 
 The CLI prints the recommended next steps. For a `web` project:
 
 ```
 cd my-app
-just assets-download     # download HTMX, Alpine.js
-just css                 # build CSS
-just dev                 # start dev server
+just assets-download     # download HTMX, Alpine.js (first time only)
+just dev                 # start Docker, build CSS, run dev server
 ```
 
 For other templates:
@@ -97,6 +103,6 @@ Every project receives a shared `CLAUDE.md` (AI coding instructions for the proj
 - `.env` and `.env.example`
 - `.gitignore`
 - `justfile` — development task runner
-- `docker-compose.yaml` — included for PostgreSQL projects only
+- `docker-compose.yaml` — development services (Mailpit for email; PostgreSQL when `--postgres`; RustFS when `--s3`)
 
 A `git init` is run automatically in the new directory after scaffolding.
