@@ -1,5 +1,6 @@
 use modo::HttpError;
 use modo::JsonResult;
+use modo::extractors::Json;
 use modo_db::Db;
 use serde_json::{Value, json};
 
@@ -19,10 +20,7 @@ async fn list_todos(Db(db): Db) -> JsonResult<Vec<TodoResponse>> {
 }
 
 #[modo::handler(POST, "/todos")]
-async fn create_todo(
-    Db(db): Db,
-    input: modo::validate::Json<CreateTodo>,
-) -> JsonResult<TodoResponse> {
+async fn create_todo(Db(db): Db, input: Json<CreateTodo>) -> JsonResult<TodoResponse> {
     input.validate()?;
     use modo_db::sea_orm::{ActiveModelTrait, Set};
     let model = todo::ActiveModel {

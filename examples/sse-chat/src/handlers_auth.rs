@@ -1,4 +1,5 @@
 use modo::ViewRenderer;
+use modo::extractors::Form;
 use modo_session::SessionManager;
 
 use crate::types::ROOMS;
@@ -25,7 +26,7 @@ async fn login_page(session: SessionManager, view: ViewRenderer) -> modo::ViewRe
 async fn login_submit(
     session: SessionManager,
     view: ViewRenderer,
-    form: modo::extractors::Form<LoginForm>,
+    form: Form<LoginForm>,
 ) -> modo::ViewResult {
     let username = form.username.trim().to_string();
     if username.len() < 2 || username.len() > 30 {

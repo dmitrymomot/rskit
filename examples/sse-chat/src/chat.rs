@@ -3,6 +3,7 @@
 mod chat {
     use modo::handler;
 
+    use modo::extractors::Form;
     use modo::sse::{Sse, SseEvent, SseResponse, SseStreamExt};
     use modo::{Service, ViewRenderer};
     use modo_db::Db;
@@ -93,7 +94,7 @@ mod chat {
         view: ViewRenderer,
         Db(db): Db,
         Service(bc): Service<ChatBroadcaster>,
-        form: modo::extractors::Form<SendForm>,
+        form: Form<SendForm>,
     ) -> modo::ViewResult {
         let username = session
             .user_id()
