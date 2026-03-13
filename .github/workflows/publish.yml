@@ -76,24 +76,7 @@ jobs:
               exit 1
             fi
             published=$((published + 1))
-
-            # Wait for crates.io API to reflect the new version before publishing dependents.
-            echo "Waiting for $name $new_version to appear on crates.io..."
-            indexed_ok=false
-            for i in $(seq 1 18); do
-              sleep 10
-              indexed=$(crate_version "$name") || indexed=""
-              if [ "$indexed" = "$new_version" ]; then
-                echo "$name $new_version is live."
-                indexed_ok=true
-                break
-              fi
-              echo "Attempt $i/18: crates.io shows '${indexed:-<none>}', waiting..."
-            done
-            if [ "$indexed_ok" = false ]; then
-              echo "::error::$name $new_version not on crates.io after 180s — aborting to prevent dependent publish failures"
-              exit 1
-            fi
+            sleep 5
           done
 
           echo "Done. Published $published crate(s)."
