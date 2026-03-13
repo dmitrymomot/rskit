@@ -12,6 +12,7 @@ pub use modo_macros::{Sanitize, Validate, error_handler, handler, main, module};
 pub(crate) mod cookie_util;
 
 pub mod app;
+pub(crate) mod banner;
 pub mod config;
 pub mod cookies;
 pub mod cors;

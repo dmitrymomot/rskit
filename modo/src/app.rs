@@ -718,7 +718,15 @@ impl AppBuilder {
 
         let bind_addr = state.server_config.bind_address();
         let listener = TcpListener::bind(&bind_addr).await?;
-        info!("Listening on {}", bind_addr);
+
+        // Print startup banner (if enabled)
+        let total_routes = root_routes.len()
+            + module_routes.values().map(|v| v.len()).sum::<usize>();
+        if server_config.show_banner {
+            crate::banner::print(&server_config, total_routes, modules.len());
+        } else {
+            info!("Listening on {}", bind_addr);
+        }
 
         // Graceful shutdown with configurable timeout
         let shutdown_timeout = Duration::from_secs(server_config.shutdown_timeout_secs);

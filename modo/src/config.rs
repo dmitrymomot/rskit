@@ -223,8 +223,15 @@ pub struct ServerConfig {
     pub rate_limit: Option<RateLimitConfig>,
     #[cfg(any(feature = "static-fs", feature = "static-embed"))]
     pub static_files: Option<crate::static_files::StaticConfig>,
+    /// Show the startup banner with version, environment, and route info. Default: `true`.
+    #[serde(default = "default_true")]
+    pub show_banner: bool,
     #[serde(skip)]
     pub environment: Environment,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for ServerConfig {
@@ -244,6 +251,7 @@ impl Default for ServerConfig {
             rate_limit: None,
             #[cfg(any(feature = "static-fs", feature = "static-embed"))]
             static_files: None,
+            show_banner: true,
             environment: Environment::Development,
         }
     }
