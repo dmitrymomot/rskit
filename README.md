@@ -44,6 +44,39 @@ MiniJinja templates, HTMX support, Server-Sent Events, CSRF protection, i18n, fl
 
 ## Quick Start
 
+Install the CLI:
+
+```sh
+cargo install modo-cli
+```
+
+Scaffold a new project:
+
+```sh
+modo new my-app                       # web app (default)
+modo new my-api --template api        # JSON API
+modo new my-worker --template worker  # background worker
+modo new my-app --template minimal    # bare-bones, no database
+```
+
+| Template  | Description                                            | Database |
+| --------- | ------------------------------------------------------ | -------- |
+| `web`     | Full-stack with HTMX, auth, jobs, email, uploads, i18n | Optional |
+| `api`     | JSON API with handlers and models                      | Optional |
+| `worker`  | Background job worker, no HTTP handlers                | Optional |
+| `minimal` | Bare-bones, config only                                | None     |
+
+Database defaults to SQLite. Pass `--postgres` for PostgreSQL.
+
+Then:
+
+```sh
+cd my-app
+just dev
+```
+
+Here's what a handler looks like:
+
 ```rust
 use modo::HandlerResult;
 use modo::HttpError;
@@ -198,6 +231,7 @@ async fn update_profile(
 | `modo-tenant`        | Multi-tenancy — subdomain/header/path resolution, template context injection |
 | `modo-upload`        | File uploads — local and S3 storage via OpenDAL                              |
 | `modo-upload-macros` | `#[derive(FromMultipart)]` proc macro                                        |
+| `modo-cli`           | CLI tool for scaffolding modo projects                                       |
 
 ## Examples
 
