@@ -28,8 +28,9 @@ Session-based authentication and Argon2id password hashing for modo applications
 
 ```rust
 use modo_auth::{UserProvider, UserProviderService};
+use serde::Serialize;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 struct MyUser {
     id: String,
     name: String,
@@ -48,6 +49,8 @@ impl UserProvider for UserRepo {
     }
 }
 ```
+
+Note: `serde::Serialize` is required on the user type only when using `UserContextLayer` (feature `templates`).
 
 ### 2. Register services in `main`
 
@@ -91,7 +94,7 @@ async fn home(OptionalAuth(user): OptionalAuth<MyUser>) -> String {
 ### 4. Hash and verify passwords
 
 ```rust
-use modo_auth::{PasswordHasher, PasswordConfig};
+use modo_auth::PasswordHasher;
 use modo::Service;
 
 // Extract the hasher in a handler
@@ -110,12 +113,14 @@ async fn register(
 ```rust
 use modo_auth::{PasswordConfig, PasswordHasher};
 
-let config = PasswordConfig {
-    memory_cost_kib: 32768, // 32 MiB
-    time_cost: 3,
-    parallelism: 1,
-};
-let hasher = PasswordHasher::new(config)?;
+fn build_hasher() -> Result<PasswordHasher, modo::Error> {
+    let config = PasswordConfig {
+        memory_cost_kib: 32768, // 32 MiB
+        time_cost: 3,
+        parallelism: 1,
+    };
+    PasswordHasher::new(config)
+}
 ```
 
 `PasswordConfig` implements `serde::Deserialize` with `#[serde(default)]`, so you can load it from YAML with partial overrides:
@@ -127,6 +132,8 @@ password:
 ```
 
 ### 6. Inject user into template context (feature `templates`)
+
+The user type must implement `serde::Serialize` for this layer.
 
 ```rust
 use modo_auth::{UserContextLayer, UserProviderService};

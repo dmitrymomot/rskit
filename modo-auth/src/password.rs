@@ -38,7 +38,7 @@ impl Default for PasswordConfig {
 ///
 /// Construct with [`PasswordConfig`] (or use `Default` for OWASP-recommended settings),
 /// register with `app.service(hasher)`, and extract in handlers via
-/// `modo::extractor::Service<PasswordHasher>`.
+/// `modo::Service<PasswordHasher>`.
 ///
 /// Both [`hash_password`](PasswordHasher::hash_password) and
 /// [`verify_password`](PasswordHasher::verify_password) run on a blocking thread
