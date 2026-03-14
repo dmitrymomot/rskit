@@ -45,11 +45,11 @@ pub(crate) struct SessionManagerState {
 // --- Layer ---
 
 #[derive(Clone)]
-pub struct SessionLayer {
+pub struct SessionContextLayer {
     store: Arc<SessionStore>,
 }
 
-impl SessionLayer {
+impl SessionContextLayer {
     fn new(store: SessionStore) -> Self {
         Self {
             store: Arc::new(store),
@@ -57,7 +57,7 @@ impl SessionLayer {
     }
 }
 
-impl<S> Layer<S> for SessionLayer {
+impl<S> Layer<S> for SessionContextLayer {
     type Service = SessionMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
@@ -69,8 +69,8 @@ impl<S> Layer<S> for SessionLayer {
 }
 
 /// Create a session middleware layer from a `SessionStore`.
-pub fn layer(store: SessionStore) -> SessionLayer {
-    SessionLayer::new(store)
+pub fn layer(store: SessionStore) -> SessionContextLayer {
+    SessionContextLayer::new(store)
 }
 
 // --- Service ---

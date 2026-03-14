@@ -24,6 +24,11 @@ impl SessionId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Consume the ID, returning the inner `String`.
+    pub fn into_string(self) -> String {
+        self.0
+    }
 }
 
 impl Default for SessionId {

@@ -4,7 +4,7 @@
 //! `modo-jobs` and runs every 15 minutes.
 
 use crate::store::SessionStore;
-use modo::extractors::service::Service;
+use modo::extractor::service::Service;
 
 /// Cron job that deletes all expired sessions.
 ///
