@@ -1,4 +1,4 @@
-use modo::extractors::FormReq;
+use modo::extractor::FormReq;
 use modo::{AppConfig, HandlerResult, HttpError, RequestId};
 
 #[derive(serde::Deserialize, modo::Sanitize, modo::Validate)]

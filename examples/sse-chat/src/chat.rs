@@ -1,7 +1,7 @@
 #[allow(clippy::module_inception)]
 #[modo::module(prefix = "/chat")]
 mod chat {
-    use modo::extractors::FormReq;
+    use modo::extractor::FormReq;
     use modo::handler;
     use modo::sse::{Sse, SseEvent, SseResponse, SseStreamExt};
     use modo::{Error, HandlerResult, HttpError, Service, ViewRenderer, ViewResult};

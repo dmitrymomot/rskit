@@ -1,4 +1,4 @@
-use modo::extractors::FormReq;
+use modo::extractor::FormReq;
 use modo::{ViewRenderer, ViewResponse, ViewResult};
 use modo_session::SessionManager;
 

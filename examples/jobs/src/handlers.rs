@@ -1,4 +1,4 @@
-use modo::extractors::JsonReq;
+use modo::extractor::JsonReq;
 use modo::{Json, JsonResult};
 use modo_jobs::JobQueue;
 use serde_json::{Value, json};

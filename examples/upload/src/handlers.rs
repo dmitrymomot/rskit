@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use modo::{Json, JsonResult, Service};
 use modo_upload::{FileStorage, MultipartForm};
 
@@ -5,7 +7,7 @@ use crate::types::ProfileForm;
 
 #[modo::handler(POST, "/profile")]
 async fn update_profile(
-    storage: Service<Box<dyn FileStorage>>,
+    storage: Service<Arc<dyn FileStorage>>,
     form: MultipartForm<ProfileForm>,
 ) -> JsonResult<serde_json::Value> {
     form.validate()?;

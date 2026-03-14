@@ -1,4 +1,4 @@
-use modo::extractors::JsonReq;
+use modo::extractor::JsonReq;
 use modo::{Error, HttpError, Json, JsonResult};
 use modo_db::Db;
 use serde_json::{Value, json};
