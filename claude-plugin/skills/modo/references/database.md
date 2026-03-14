@@ -276,7 +276,7 @@ Patterns drawn from `examples/todo-api/src/`:
 ### Create
 
 ```rust
-use modo::extractors::JsonReq;
+use modo::extractor::JsonReq;
 use modo::{Error, Json, JsonResult};
 use modo_db::sea_orm::{ActiveModelTrait, Set};
 

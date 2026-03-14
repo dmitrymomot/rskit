@@ -87,7 +87,7 @@ In an axum/modo handler, use `MultipartForm<T>` from `modo_upload` to extract an
 
 ```rust
 use modo_upload::{FileStorage, FromMultipart, MultipartForm, UploadedFile};
-use modo::extractors::service::Service;
+use modo::extractor::service::Service;
 use modo::JsonResult;
 
 #[derive(FromMultipart)]
@@ -99,7 +99,7 @@ struct ProfileForm {
 
 #[modo::handler(POST, "/profile")]
 async fn update_profile(
-    storage: Service<Box<dyn FileStorage>>,
+    storage: Service<Arc<dyn FileStorage>>,
     form: MultipartForm<ProfileForm>,
 ) -> JsonResult<serde_json::Value> {
     form.validate()?;

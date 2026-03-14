@@ -45,7 +45,7 @@ async fn main(
 
 ```rust
 use modo::{HandlerResult, JsonResult};
-use modo::extractors::{Form, Json};
+use modo::extractor::{Form, Json};
 
 #[derive(serde::Deserialize, modo::Sanitize, modo::Validate)]
 struct CreateUser {

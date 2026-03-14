@@ -81,7 +81,7 @@ Here's what a handler looks like:
 ```rust
 use modo::HandlerResult;
 use modo::HttpError;
-use modo::extractors::FormReq;
+use modo::extractor::FormReq;
 
 #[derive(serde::Deserialize, modo::Sanitize, modo::Validate)]
 struct ContactForm {
@@ -202,7 +202,7 @@ Handle the upload:
 ```rust
 #[modo::handler(POST, "/profile")]
 async fn update_profile(
-    storage: Service<Box<dyn FileStorage>>,
+    storage: Service<Arc<dyn FileStorage>>,
     form: MultipartForm<ProfileForm>,
 ) -> JsonResult<serde_json::Value> {
     form.validate()?;

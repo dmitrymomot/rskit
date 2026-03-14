@@ -67,7 +67,7 @@ use modo_upload::{FileStorage, MultipartForm};
 
 #[modo::handler(POST, "/profile")]
 async fn update_profile(
-    storage: Service<Box<dyn FileStorage>>,
+    storage: Service<Arc<dyn FileStorage>>,
     form: MultipartForm<ProfileForm>,
 ) -> JsonResult<serde_json::Value> {
     form.validate()?;
@@ -155,5 +155,5 @@ upload:
 | `StoredFile`                     | Result of a store operation: `path` and `size`                   |
 | `UploadConfig`                   | Deserialized upload configuration                                |
 | `StorageBackend`                 | Enum: `Local` or `S3`                                            |
-| `storage()`                      | Factory function: `UploadConfig` → `Box<dyn FileStorage>`        |
+| `storage()`                      | Factory function: `UploadConfig` → `Arc<dyn FileStorage>`        |
 | `kb` / `mb` / `gb`               | Size helper functions (return `usize` bytes)                     |

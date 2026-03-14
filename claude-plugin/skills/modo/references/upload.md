@@ -82,7 +82,7 @@ use crate::types::ProfileForm;
 
 #[modo::handler(POST, "/profile")]
 async fn update_profile(
-    storage: Service<Box<dyn FileStorage>>,
+    storage: Service<Arc<dyn FileStorage>>,
     form: MultipartForm<ProfileForm>,
 ) -> JsonResult<serde_json::Value> {
     form.validate()?;
@@ -263,7 +263,7 @@ Serializes/deserializes as lowercase strings (`"local"`, `"s3"`).
 
 ### `storage()` factory function
 
-Construct a `Box<dyn FileStorage>` from config, then register it as a service:
+Construct a `Arc<dyn FileStorage>` from config, then register it as a service:
 
 ```rust
 #[modo::main]
@@ -276,7 +276,7 @@ async fn main(
 }
 ```
 
-After registration, inject it into handlers via `Service<Box<dyn FileStorage>>`.
+After registration, inject it into handlers via `Service<Arc<dyn FileStorage>>`.
 
 ### `FileStorage` trait
 
@@ -360,7 +360,7 @@ Logical path safety: object-store keys are validated before every operation — 
 ### Full upload handler with validation
 
 The upload example shows the complete pattern combining `#[derive(FromMultipart)]`, `MultipartForm`,
-`Service<Box<dyn FileStorage>>`, and runtime validation:
+`Service<Arc<dyn FileStorage>>`, and runtime validation:
 
 ```rust
 use modo::JsonResult;
@@ -383,7 +383,7 @@ pub struct ProfileForm {
 
 #[modo::handler(POST, "/profile")]
 async fn update_profile(
-    storage: Service<Box<dyn FileStorage>>,
+    storage: Service<Arc<dyn FileStorage>>,
     form: MultipartForm<ProfileForm>,
 ) -> JsonResult<serde_json::Value> {
     form.validate()?;
@@ -455,7 +455,7 @@ struct VideoForm {
 
 #[modo::handler(POST, "/video")]
 async fn upload_video(
-    storage: Service<Box<dyn FileStorage>>,
+    storage: Service<Arc<dyn FileStorage>>,
     form: MultipartForm<VideoForm>,
 ) -> JsonResult<serde_json::Value> {
     let mut form = form.into_inner();
@@ -508,8 +508,8 @@ if storage.exists(&old_path).await? {
   If the process does not have write permission to the parent, the first upload will fail at
   runtime, not at startup.
 
-- **`service(storage)` registers `Box<dyn FileStorage>`.** Inject it exactly as
-  `Service<Box<dyn FileStorage>>` in handlers. Using `Service<LocalStorage>` or
+- **`service(storage)` registers `Arc<dyn FileStorage>`.** Inject it exactly as
+  `Service<Arc<dyn FileStorage>>` in handlers. Using `Service<LocalStorage>` or
   `Service<OpendalStorage>` directly will fail to resolve.
 
 - **Auto-sanitization.** `MultipartForm` calls `modo::sanitize::auto_sanitize` on the parsed

@@ -373,12 +373,12 @@ Current public re-exports (from `lib.rs`):
 - `GracefulShutdown`, `ShutdownPhase`
 - `ViewRender`, `ViewRenderer`, `ViewResponse` (behind `#[cfg(feature = "templates")]`)
 
-### Use `modo::Json` for Responses, `modo::extractors::JsonReq` for Requests
+### Use `modo::Json` for Responses, `modo::extractor::JsonReq` for Requests
 
 `modo::Json` re-exports `axum::Json` — use it for **response** wrapping (e.g. `Ok(Json(value))`).
-`modo::extractors::JsonReq<T>` is the **request** extractor with auto-sanitization and validation.
-`modo::extractors::FormReq<T>` is the form **request** extractor with auto-sanitization.
-`modo::extractors::QueryReq<T>` re-exports `axum::extract::Query<T>` for query parameter extraction.
+`modo::extractor::JsonReq<T>` is the **request** extractor with auto-sanitization and validation.
+`modo::extractor::FormReq<T>` is the form **request** extractor with auto-sanitization.
+`modo::extractor::QueryReq<T>` re-exports `axum::extract::Query<T>` for query parameter extraction.
 
 ### ULID Session IDs — Never UUID
 

@@ -27,7 +27,7 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 - Template layers: auto-registered when `TemplateEngine` is a service — no manual `.layer()` needed
 - File organization: `mod.rs` is ONLY for `mod` imports and re-exports — all code (handlers, views, tasks) goes in separate files
 - File organization applies to ALL crates: struct/trait definitions, impl blocks, functions, and tests must be in separate files — not in `mod.rs`
-- Extractors: import with `use modo::extractors::{JsonReq, FormReq, QueryReq};` and use short form in handler signatures — `JsonReq<T>` for request extraction (with sanitization), `Json<T>` for response wrapping
+- Extractors: import with `use modo::extractor::{JsonReq, FormReq, QueryReq};` and use short form in handler signatures — `JsonReq<T>` for request extraction (with sanitization), `Json<T>` for response wrapping
 
 ## Gotchas
 

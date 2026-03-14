@@ -415,7 +415,7 @@ This pattern from the sse-chat example shows a complete session-based auth flow 
 `UserProvider` (the "user" is identified only by their session-stored ID).
 
 ```rust
-use modo::extractors::FormReq;
+use modo::extractor::FormReq;
 use modo_session::SessionManager;
 
 // Login
