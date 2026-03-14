@@ -288,6 +288,13 @@ impl From<crate::templates::TemplateError> for Error {
     }
 }
 
+#[cfg(feature = "i18n")]
+impl From<crate::i18n::I18nError> for Error {
+    fn from(e: crate::i18n::I18nError) -> Self {
+        Error::internal(e.to_string())
+    }
+}
+
 impl From<anyhow::Error> for Error {
     fn from(err: anyhow::Error) -> Self {
         let message = err.to_string();

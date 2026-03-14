@@ -19,7 +19,7 @@ pub mod cors;
 #[cfg(feature = "csrf")]
 pub mod csrf;
 pub mod error;
-pub mod extractors;
+pub mod extractor;
 pub mod health;
 #[cfg(feature = "i18n")]
 pub mod i18n;
@@ -52,7 +52,7 @@ pub use error::{
     Error, ErrorContext, ErrorHandlerFn, ErrorHandlerRegistration, HandlerResult, HttpError,
     JsonResult,
 };
-pub use extractors::Service;
+pub use extractor::Service;
 #[cfg(feature = "i18n")]
 pub use i18n::{I18n, I18nConfig};
 pub use middleware::{ClientIp, RateLimitInfo};
