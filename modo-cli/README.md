@@ -29,12 +29,12 @@ modo new <NAME> [OPTIONS]
 
 ### Templates
 
-| Template  | Database          | Description                                                              |
-| --------- | ----------------- | ------------------------------------------------------------------------ |
-| `minimal` | none              | Bare-bones project with configuration only, no database                  |
-| `api`     | sqlite / postgres | JSON API with handlers and models                                        |
-| `web`     | sqlite / postgres | Full-stack web app with HTMX, Tailwind CSS, jobs, email, auth, and i18n  |
-| `worker`  | sqlite / postgres | Background-job worker with no HTTP handlers                              |
+| Template  | Database          | Description                                                             |
+| --------- | ----------------- | ----------------------------------------------------------------------- |
+| `minimal` | none              | Bare-bones project with configuration only, no database                 |
+| `api`     | sqlite / postgres | JSON API with handlers and models                                       |
+| `web`     | sqlite / postgres | Full-stack web app with HTMX, Tailwind CSS, jobs, email, auth, and i18n |
+| `worker`  | sqlite / postgres | Background-job worker with no HTTP handlers                             |
 
 ### Examples
 
@@ -109,10 +109,12 @@ Template-specific files (vary by template):
 
 The `api` and `web` templates also generate `src/handlers/` and `src/models/`. The `web` template additionally generates `src/views/`, `src/tasks/`, `assets/`, `templates/`, and `locales/`. The `worker` template generates `src/tasks/`.
 
+The `web` and `worker` templates create a `data/` directory (with a `.gitkeep`) as the default SQLite database location.
+
 A `docker-compose.yaml` is generated when it has content to include:
 
-- `web` template: always includes Mailpit (email); adds Postgres when `--postgres`; adds RustFS when `--s3`
-- `api` and `worker` templates: only when `--postgres` is passed (Postgres only)
+- `web` template: always generated (always includes Mailpit for email); adds Postgres when `--postgres`; adds RustFS when `--s3`
+- `api` and `worker` templates: only generated when `--postgres` is passed (Postgres service only)
 - `minimal` template: never generated
 
 A `git init` is run automatically in the new directory after scaffolding.
@@ -121,10 +123,10 @@ A `git init` is run automatically in the new directory after scaffolding.
 
 Templates are rendered with [MiniJinja](https://docs.rs/minijinja). The scaffold-time variables available in `.jinja` files are:
 
-| Variable       | Type    | Description                                                  |
-| -------------- | ------- | ------------------------------------------------------------ |
-| `project_name` | string  | The project name passed to `modo new`                        |
+| Variable       | Type    | Description                                                   |
+| -------------- | ------- | ------------------------------------------------------------- |
+| `project_name` | string  | The project name passed to `modo new`                         |
 | `db_driver`    | string  | `"sqlite"`, `"postgres"`, or `""` for templates without a DB |
-| `s3`           | boolean | `true` when `--s3` is passed                                 |
+| `s3`           | boolean | `true` when `--s3` is passed                                  |
 
 Email templates under `templates/emails/` use `{% raw %}...{% endraw %}` blocks to preserve runtime Jinja variables (such as `{{name}}` and `{{subject}}`) so they are not consumed during scaffolding.

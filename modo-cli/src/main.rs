@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 mod scaffold;
 mod templates;
 
+/// Top-level CLI entry point for the `modo` binary.
 #[derive(Parser)]
 #[command(name = "modo", version, about = "modo framework CLI")]
 struct Cli {
@@ -10,6 +11,7 @@ struct Cli {
     command: Commands,
 }
 
+/// Subcommands exposed by the `modo` binary.
 #[derive(Subcommand)]
 enum Commands {
     /// Create a new modo project
@@ -29,17 +31,25 @@ enum Commands {
         #[arg(long, conflicts_with = "postgres")]
         sqlite: bool,
 
-        /// Use S3 storage with RustFS (local S3-compatible server)
+        /// Use S3 storage with RustFS (local S3-compatible server, web template only)
         #[arg(long)]
         s3: bool,
     },
 }
 
+/// Available project template presets.
+///
+/// `Minimal` does not include a database; all others default to SQLite and accept
+/// `--postgres` to switch to PostgreSQL.
 #[derive(Clone, ValueEnum)]
 enum Template {
+    /// Bare-bones project with configuration only, no database.
     Minimal,
+    /// JSON API with handlers and models.
     Api,
+    /// Full-stack web app with HTMX, Tailwind CSS, jobs, email, auth, and i18n.
     Web,
+    /// Background-job worker with no HTTP handlers.
     Worker,
 }
 
@@ -55,12 +65,13 @@ impl std::fmt::Display for Template {
 }
 
 impl Template {
+    /// Returns `true` for templates that include a database dependency.
     fn uses_db(&self) -> bool {
         !matches!(self, Template::Minimal)
     }
 }
 
-// Strict keywords + reserved-for-future-use keywords
+// Both strict Rust keywords and reserved-for-future-use keywords.
 const RUST_KEYWORDS: &[&str] = &[
     "abstract", "as", "async", "await", "become", "box", "break", "const", "continue", "crate",
     "do", "dyn", "else", "enum", "extern", "false", "final", "fn", "for", "if", "impl", "in",
@@ -69,6 +80,13 @@ const RUST_KEYWORDS: &[&str] = &[
     "typeof", "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
 ];
 
+/// Validates that `name` is a legal Rust crate name.
+///
+/// Rules enforced:
+/// - Not empty.
+/// - Starts with an ASCII letter or underscore.
+/// - Contains only `[a-zA-Z0-9_-]`.
+/// - Is not a Rust keyword (strict or reserved).
 fn validate_project_name(name: &str) -> anyhow::Result<()> {
     if name.is_empty() {
         anyhow::bail!("project name cannot be empty");
