@@ -24,6 +24,20 @@ async fn create_todo(Db(db): Db, input: JsonReq<CreateTodo>) -> JsonResult<TodoR
     Ok(Json(TodoResponse::from(todo)))
 }
 
+#[modo::handler(GET, "/todos/{id}")]
+async fn get_todo(Db(db): Db, id: String) -> JsonResult<TodoResponse> {
+    let todo = Todo::find_by_id(&id, &*db).await?;
+    Ok(Json(TodoResponse::from(todo)))
+}
+
+#[modo::handler(PATCH, "/todos/{id}")]
+async fn toggle_todo(Db(db): Db, id: String) -> JsonResult<TodoResponse> {
+    let mut todo = Todo::find_by_id(&id, &*db).await?;
+    todo.completed = !todo.completed;
+    todo.update(&*db).await?;
+    Ok(Json(TodoResponse::from(todo)))
+}
+
 #[modo::handler(DELETE, "/todos/{id}")]
 async fn delete_todo(Db(db): Db, id: String) -> JsonResult<Value> {
     Todo::delete_by_id(&id, &*db).await?;
