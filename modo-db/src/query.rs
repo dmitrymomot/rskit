@@ -107,11 +107,7 @@ where
 
     /// Return the number of rows that match the current query.
     pub async fn count(self, db: &impl ConnectionTrait) -> Result<u64, modo::Error> {
-        self.select
-            .paginate(db, 1)
-            .num_items()
-            .await
-            .map_err(db_err_to_error)
+        self.select.count(db).await.map_err(db_err_to_error)
     }
 
     /// Offset-based pagination. Results are auto-converted to `T`.

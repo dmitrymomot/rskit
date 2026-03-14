@@ -8,11 +8,15 @@
 /// | SeaORM error                    | HTTP status |
 /// |---------------------------------|-------------|
 /// | `UniqueConstraintViolation`     | 409 Conflict |
+/// | `ForeignKeyConstraintViolation` | 409 Conflict |
 /// | `RecordNotFound`                | 404 Not Found |
 /// | anything else                   | 500 Internal Server Error |
 pub fn db_err_to_error(e: sea_orm::DbErr) -> modo::Error {
     match e.sql_err() {
         Some(sea_orm::error::SqlErr::UniqueConstraintViolation(_)) => {
+            modo::Error::from(modo::HttpError::Conflict)
+        }
+        Some(sea_orm::error::SqlErr::ForeignKeyConstraintViolation(_)) => {
             modo::Error::from(modo::HttpError::Conflict)
         }
         _ => match e {

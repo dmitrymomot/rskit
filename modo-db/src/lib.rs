@@ -59,8 +59,10 @@ pub mod sync;
 pub use config::DatabaseConfig;
 pub use connect::connect;
 pub use entity::EntityRegistration;
+#[doc(hidden)]
 pub use error::db_err_to_error;
 pub use extractor::Db;
+#[doc(hidden)]
 pub use helpers::{do_delete, do_insert, do_update};
 pub use hooks::DefaultHooks;
 pub use id::{generate_nanoid, generate_ulid};
@@ -77,7 +79,6 @@ pub use sync::{sync_and_migrate, sync_and_migrate_group};
 pub use modo_db_macros::{entity, migration};
 
 // Re-exports for macro-generated code
-pub use async_trait;
 pub use chrono;
 pub use inventory;
 pub use sea_orm;
