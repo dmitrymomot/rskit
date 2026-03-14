@@ -19,7 +19,6 @@ mod view;
 ///
 /// ```text
 /// #[handler(METHOD, "/path")]
-/// #[handler(METHOD, "/path", middleware = [mw_fn, factory("arg")])]
 /// ```
 ///
 /// Supported methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`.
@@ -29,8 +28,16 @@ mod view;
 /// the signature to use `axum::extract::Path` under the hood. Undeclared path
 /// params are captured but silently ignored (partial extraction).
 ///
-/// Handler-level middleware is attached with `#[middleware(...)]` on the
-/// function, separate from the route registration attribute.
+/// Handler-level middleware is attached with a separate `#[middleware(...)]`
+/// attribute on the function. Bare paths are wrapped with
+/// `axum::middleware::from_fn`; paths followed by `(args)` are called as layer
+/// factories.
+///
+/// ```text
+/// #[handler(GET, "/items/{id}")]
+/// #[middleware(require_auth, require_role("admin"))]
+/// async fn get_item(id: String) -> modo::JsonResult<Item> { ... }
+/// ```
 #[proc_macro_attribute]
 pub fn handler(attr: TokenStream, item: TokenStream) -> TokenStream {
     handler::expand(attr.into(), item.into())
@@ -42,11 +49,14 @@ pub fn handler(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The decorated function must be named `main`, be `async`, and accept exactly
 /// two parameters: an `AppBuilder` and a config type that implements
-/// `modo::config::FromEnv` (or `Default`).
+/// `serde::de::DeserializeOwned + Default`.
 ///
-/// The macro wraps the body in a multi-threaded Tokio runtime, initialises a
-/// `tracing_subscriber` with an `RUST_LOG` environment filter, loads the config
-/// via `modo::config::load_or_default`, and exits with code 1 on error.
+/// The macro replaces the function with a sync `fn main()` that:
+/// - builds a multi-threaded Tokio runtime,
+/// - initialises `tracing_subscriber` with a `RUST_LOG` / `info` filter,
+/// - loads the config via `modo::config::load_or_default`,
+/// - runs the async body, and
+/// - exits with code 1 if an error is returned.
 ///
 /// # Optional attribute
 ///
@@ -70,7 +80,7 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 ///
 /// All `#[handler]` attributes inside the module are automatically rewritten to
-/// include `module = "module_name"` so they are grouped correctly at startup.
+/// include the module association so they are grouped correctly at startup.
 /// The module is registered via `inventory` and collected by `AppBuilder`.
 #[proc_macro_attribute]
 pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -88,6 +98,7 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Only one error handler may be registered per binary. The handler receives
 /// every `modo::Error` that propagates out of a route and can inspect the
 /// request context (method, URI, headers) to produce a suitable response.
+/// Call `err.default_response()` to delegate back to the built-in JSON rendering.
 #[proc_macro_attribute]
 pub fn error_handler(attr: TokenStream, item: TokenStream) -> TokenStream {
     error_handler::expand(attr.into(), item.into())
@@ -112,7 +123,7 @@ pub fn error_handler(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Fields with no `#[clean]` attribute are left untouched.
 ///
 /// The macro also registers a `SanitizerRegistration` entry via `inventory`
-/// so extractors can invoke `Sanitize::sanitize` automatically.
+/// so extractors (`JsonReq`, `FormReq`) can invoke `Sanitize::sanitize` automatically.
 #[proc_macro_derive(Sanitize, attributes(clean))]
 pub fn derive_sanitize(input: TokenStream) -> TokenStream {
     sanitize::expand(input.into())
@@ -134,8 +145,8 @@ pub fn derive_sanitize(input: TokenStream) -> TokenStream {
 /// Each rule accepts an optional `(message = "...")` override. A field-level
 /// `message = "..."` key acts as a fallback for all rules on that field.
 ///
-/// `validate()` returns `Ok(())` or `Err(modo::Error)` containing all
-/// collected error messages keyed by field name.
+/// The generated `validate()` method returns `Ok(())` or `Err(modo::Error)`
+/// containing all collected error messages keyed by field name.
 #[proc_macro_derive(Validate, attributes(validate))]
 pub fn derive_validate(input: TokenStream) -> TokenStream {
     validate::expand(input.into())
@@ -153,12 +164,12 @@ pub fn derive_validate(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// The first argument is an expression that resolves to the i18n context
-/// (typically `&i18n` extracted from a handler parameter). The second argument
-/// is a string literal key. Additional `name = value` pairs are substituted
-/// into the translation string.
+/// (typically an `I18n` value extracted from a handler parameter). The second
+/// argument is a string literal key. Additional `name = value` pairs are
+/// substituted into the translation string.
 ///
-/// When a `count` variable is present the macro calls `t_plural` instead of
-/// `t` to select the correct plural form.
+/// When a `count` variable is present the macro calls `.t_plural` instead of
+/// `.t` to select the correct plural form.
 ///
 /// Requires the `i18n` feature on `modo`.
 #[proc_macro]
@@ -168,8 +179,8 @@ pub fn t(input: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Derives `IntoResponse` and `ViewRender` for a struct, linking it to a
-/// MiniJinja template.
+/// Adds `serde::Serialize`, `axum::response::IntoResponse`, and `ViewRender`
+/// implementations to a struct, linking it to a MiniJinja template.
 ///
 /// # Syntax
 ///
@@ -180,8 +191,9 @@ pub fn t(input: TokenStream) -> TokenStream {
 ///
 /// The macro derives `serde::Serialize` on the struct and implements
 /// `axum::response::IntoResponse` by serializing the struct as the template
-/// context and rendering the template. When the optional `htmx` template path
-/// is provided, HTMX requests render the partial instead of the full page.
+/// context and rendering the named template. When the optional `htmx` path is
+/// provided, HTMX requests (`HX-Request` header present) render the partial
+/// instead of the full-page template.
 ///
 /// Requires the `templates` feature on `modo`.
 #[proc_macro_attribute]
@@ -191,17 +203,20 @@ pub fn view(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Registers a function as a named MiniJinja template function.
+/// Registers a function as a named MiniJinja global function.
 ///
 /// # Syntax
 ///
 /// ```text
-/// #[template_function]               // uses the Rust function name
-/// #[template_function(name = "fn_name")]  // explicit template name
+/// #[template_function]                    // uses the Rust function name
+/// #[template_function(name = "fn_name")] // explicit template name
 /// ```
 ///
 /// The function is submitted via `inventory` and registered into the
 /// MiniJinja environment when the `TemplateEngine` service starts.
+/// The `inventory::submit!` registration is guarded by `#[cfg(feature = "templates")]`
+/// on `modo`, so the function definition is always compiled but the registration
+/// only takes effect when that feature is enabled.
 ///
 /// Requires the `templates` feature on `modo`.
 #[proc_macro_attribute]
@@ -216,12 +231,15 @@ pub fn template_function(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Syntax
 ///
 /// ```text
-/// #[template_filter]               // uses the Rust function name
-/// #[template_filter(name = "filter_name")]  // explicit filter name
+/// #[template_filter]                       // uses the Rust function name
+/// #[template_filter(name = "filter_name")] // explicit filter name
 /// ```
 ///
 /// The function is submitted via `inventory` and registered into the
 /// MiniJinja environment when the `TemplateEngine` service starts.
+/// The `inventory::submit!` registration is guarded by `#[cfg(feature = "templates")]`
+/// on `modo`, so the function definition is always compiled but the registration
+/// only takes effect when that feature is enabled.
 ///
 /// Requires the `templates` feature on `modo`.
 #[proc_macro_attribute]

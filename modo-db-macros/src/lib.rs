@@ -90,16 +90,14 @@ pub fn entity(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Function signature
 ///
-/// The annotated function must be `async` and accept a single `&C` parameter where
-/// `C: ConnectionTrait`. Return type must be `Result<(), DbErr>`.
+/// The annotated function must be `async` and accept a single `&sea_orm::DatabaseConnection`
+/// parameter. Return type must be `Result<(), modo::Error>`.
 ///
 /// # Example
 ///
 /// ```rust,ignore
 /// #[modo_db::migration(version = 1, description = "seed default roles")]
-/// async fn seed_roles(db: &impl modo_db::sea_orm::ConnectionTrait)
-///     -> Result<(), modo_db::sea_orm::DbErr>
-/// {
+/// async fn seed_roles(db: &sea_orm::DatabaseConnection) -> Result<(), modo::Error> {
 ///     // run raw SQL or SeaORM operations
 ///     Ok(())
 /// }
