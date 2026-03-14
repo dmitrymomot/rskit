@@ -1,7 +1,5 @@
 # modo-macros
 
-[![docs.rs](https://img.shields.io/docsrs/modo-macros)](https://docs.rs/modo-macros)
-
 Procedural macros for the modo web framework. Provides attribute macros for
 route registration and application bootstrap, plus derive macros for input
 validation and sanitization.
@@ -27,7 +25,7 @@ on the `modo` crate.
 #[modo::main]
 async fn main(
     app: modo::app::AppBuilder,
-    config: modo::config::AppConfig,
+    config: modo::AppConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     app.config(config).run().await
 }
@@ -37,8 +35,12 @@ The function must be named `main`, be `async`, and accept exactly two
 parameters: an `AppBuilder` and a config type that implements
 `serde::de::DeserializeOwned + Default`. The macro replaces the function with a
 sync `fn main()` that bootstraps a multi-threaded Tokio runtime, configures
-`tracing_subscriber`, loads config via `modo::config::load_or_default`, and
-exits with code 1 on error.
+`tracing_subscriber` (using `RUST_LOG` or falling back to
+`"info,sqlx::query=warn"`), loads config via `modo::config::load_or_default`,
+and exits with code 1 on error.
+
+The return type annotation on the `async fn main` is not enforced by the macro;
+write it for readability but the body is wrapped internally.
 
 ### Embedding static files
 
@@ -46,7 +48,7 @@ exits with code 1 on error.
 #[modo::main(static_assets = "static/")]
 async fn main(
     app: modo::app::AppBuilder,
-    config: modo::config::AppConfig,
+    config: modo::AppConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     app.config(config).run().await
 }
@@ -95,7 +97,7 @@ async fn dashboard() -> &'static str {
 
 Bare middleware paths are wrapped with `axum::middleware::from_fn`. Paths
 followed by `(args)` are called as layer factories. Multiple middleware entries
-are applied innermost-first.
+are applied in the order listed.
 
 ### Route modules
 

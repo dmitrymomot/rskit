@@ -53,10 +53,14 @@ pub fn handler(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The macro replaces the function with a sync `fn main()` that:
 /// - builds a multi-threaded Tokio runtime,
-/// - initialises `tracing_subscriber` with a `RUST_LOG` / `info` filter,
+/// - initialises `tracing_subscriber` using `RUST_LOG`, falling back to
+///   `"info,sqlx::query=warn"` when the environment variable is unset,
 /// - loads the config via `modo::config::load_or_default`,
 /// - runs the async body, and
 /// - exits with code 1 if an error is returned.
+///
+/// The return type annotation on the `async fn main` is not enforced by the
+/// macro; the body is wrapped in an internal `Result<(), Box<dyn std::error::Error>>`.
 ///
 /// # Optional attribute
 ///
@@ -214,9 +218,9 @@ pub fn view(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The function is submitted via `inventory` and registered into the
 /// MiniJinja environment when the `TemplateEngine` service starts.
-/// The `inventory::submit!` registration is guarded by `#[cfg(feature = "templates")]`
-/// on `modo`, so the function definition is always compiled but the registration
-/// only takes effect when that feature is enabled.
+/// The `inventory::submit!` call is guarded by `#[cfg(feature = "templates")]`
+/// in the generated code, so the function definition is always compiled but
+/// the registration only takes effect when that feature is enabled on `modo`.
 ///
 /// Requires the `templates` feature on `modo`.
 #[proc_macro_attribute]
@@ -237,9 +241,9 @@ pub fn template_function(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The function is submitted via `inventory` and registered into the
 /// MiniJinja environment when the `TemplateEngine` service starts.
-/// The `inventory::submit!` registration is guarded by `#[cfg(feature = "templates")]`
-/// on `modo`, so the function definition is always compiled but the registration
-/// only takes effect when that feature is enabled.
+/// The `inventory::submit!` call is guarded by `#[cfg(feature = "templates")]`
+/// in the generated code, so the function definition is always compiled but
+/// the registration only takes effect when that feature is enabled on `modo`.
 ///
 /// Requires the `templates` feature on `modo`.
 #[proc_macro_attribute]
