@@ -45,12 +45,14 @@ pub mod connect;
 pub mod entity;
 mod error;
 pub mod extractor;
+mod helpers;
 pub mod hooks;
 pub mod id;
 pub mod migration;
 pub mod pagination;
 pub mod pool;
 pub mod query;
+mod record;
 pub mod sync;
 
 // Public API
@@ -59,6 +61,7 @@ pub use connect::connect;
 pub use entity::EntityRegistration;
 pub use error::db_err_to_error;
 pub use extractor::Db;
+pub use helpers::{do_delete, do_insert, do_update};
 pub use hooks::DefaultHooks;
 pub use id::{generate_nanoid, generate_ulid};
 pub use migration::MigrationRegistration;
@@ -67,6 +70,7 @@ pub use pagination::{
 };
 pub use pool::DbPool;
 pub use query::{EntityDeleteMany, EntityQuery, EntityUpdateMany};
+pub use record::Record;
 pub use sync::{sync_and_migrate, sync_and_migrate_group};
 
 // Re-export proc macros
