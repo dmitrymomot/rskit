@@ -401,7 +401,7 @@ job runner.
 
 In `Cargo.toml`:
 ```toml
-modo-session = { version = "0.1", features = ["cleanup-job"] }
+modo-session = { version = "0.2", features = ["cleanup-job"] }
 ```
 
 The job is named `cleanup_expired_sessions`, runs on the cron expression `0 */15 * * * *`,
