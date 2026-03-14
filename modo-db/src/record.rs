@@ -11,6 +11,7 @@ use crate::query::{EntityDeleteMany, EntityQuery, EntityUpdateMany};
 ///
 /// Most methods are macro-generated (not default impls) because they need
 /// either PK-specific signatures or concrete type context for hook resolution.
+#[allow(clippy::wrong_self_convention)]
 pub trait Record: Sized + Send + Sync + 'static {
     type Entity: EntityTrait;
     type ActiveModel: ActiveModelTrait<Entity = Self::Entity> + ActiveModelBehavior + Send + 'static;

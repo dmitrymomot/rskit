@@ -47,6 +47,20 @@ fn validate_fk_action(action: &str) -> Result<()> {
     }
 }
 
+/// Extract the outermost type name from a `syn::Type`.
+/// For `Option<String>` returns `"Option"`, for `String` returns `"String"`, etc.
+fn type_name_str(ty: &Type) -> Option<String> {
+    match ty {
+        Type::Path(tp) => tp.path.segments.last().map(|seg| seg.ident.to_string()),
+        _ => None,
+    }
+}
+
+/// Check if a type is `Option<T>`.
+fn is_option_type(ty: &Type) -> bool {
+    type_name_str(ty).as_deref() == Some("Option")
+}
+
 // ---------------------------------------------------------------------------
 // Parsing types
 // ---------------------------------------------------------------------------
@@ -309,6 +323,39 @@ fn parse_field_attrs(field: &mut syn::Field) -> Result<FieldAttrs> {
 }
 
 // ---------------------------------------------------------------------------
+// Default value generation
+// ---------------------------------------------------------------------------
+
+/// Generate a default-value expression for a field based on its type and attributes.
+fn default_expr_for_field(f: &ParsedField) -> TokenStream {
+    // Auto-ID fields
+    if let Some(ref strategy) = f.attrs.auto {
+        return match strategy.as_str() {
+            "ulid" => quote! { modo_db::generate_ulid() },
+            "nanoid" => quote! { modo_db::generate_nanoid() },
+            _ => unreachable!(),
+        };
+    }
+
+    // Option<T> => None
+    if is_option_type(&f.ty) {
+        return quote! { None };
+    }
+
+    // Type-based defaults
+    match type_name_str(&f.ty).as_deref() {
+        Some("String") => quote! { String::new() },
+        Some("bool") => quote! { false },
+        Some(
+            "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128"
+            | "usize",
+        ) => quote! { 0 },
+        Some("f32" | "f64") => quote! { 0.0 },
+        _ => quote! { Default::default() },
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Code generation
 // ---------------------------------------------------------------------------
 
@@ -399,6 +446,10 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         }
     }
 
+    // =========================================================================
+    // 1. SeaORM model fields (same logic as before)
+    // =========================================================================
+
     let mut model_fields = Vec::new();
     for f in &parsed_fields {
         if matches!(f.kind, FieldKind::RelationOnly) {
@@ -459,6 +510,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         });
     }
 
+    // Timestamp and soft-delete model fields
     if struct_attrs.timestamps {
         model_fields.push(quote! {
             pub created_at: modo_db::chrono::DateTime<modo_db::chrono::Utc>,
@@ -473,6 +525,10 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             pub deleted_at: Option<modo_db::chrono::DateTime<modo_db::chrono::Utc>>,
         });
     }
+
+    // =========================================================================
+    // 2. Relations (same logic as before)
+    // =========================================================================
 
     let mut relation_variants = Vec::new();
     let mut related_impls = Vec::new();
@@ -557,158 +613,9 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         }
     }
 
-    let auto_id_stmts: Vec<_> = parsed_fields
-        .iter()
-        .filter_map(|f| {
-            f.attrs.auto.as_ref().map(|strategy| {
-                let name = &f.name;
-                let gen_call = match strategy.as_str() {
-                    "ulid" => quote! { modo_db::generate_ulid() },
-                    "nanoid" => quote! { modo_db::generate_nanoid() },
-                    _ => unreachable!(),
-                };
-                quote! {
-                    if modo_db::sea_orm::ActiveValue::is_not_set(&this.#name) {
-                        this.#name = modo_db::sea_orm::ActiveValue::Set(#gen_call);
-                    }
-                }
-            })
-        })
-        .collect();
-
-    let needs_before_save = struct_attrs.timestamps || !auto_id_stmts.is_empty();
-
-    let active_model_behavior = if needs_before_save {
-        let timestamp_stmts = if struct_attrs.timestamps {
-            quote! {
-                let now = modo_db::chrono::Utc::now();
-                if insert {
-                    this.created_at = modo_db::sea_orm::ActiveValue::Set(now);
-                }
-                this.updated_at = modo_db::sea_orm::ActiveValue::Set(now);
-            }
-        } else {
-            quote! {}
-        };
-
-        let auto_id_block = if !auto_id_stmts.is_empty() {
-            quote! {
-                if insert {
-                    #(#auto_id_stmts)*
-                }
-            }
-        } else {
-            quote! {}
-        };
-
-        quote! {
-            #[async_trait::async_trait]
-            impl ActiveModelBehavior for ActiveModel {
-                async fn before_save<C>(self, _db: &C, insert: bool) -> std::result::Result<Self, DbErr>
-                where
-                    C: ConnectionTrait,
-                {
-                    let mut this = self;
-                    #auto_id_block
-                    #timestamp_stmts
-                    Ok(this)
-                }
-            }
-        }
-    } else {
-        quote! {
-            impl ActiveModelBehavior for ActiveModel {}
-        }
-    };
-
-    let soft_delete_helpers = if struct_attrs.soft_delete {
-        quote! {
-            /// Returns a select query that filters out soft-deleted records (`deleted_at IS NULL`).
-            pub fn find() -> modo_db::sea_orm::Select<Entity> {
-                use modo_db::sea_orm::EntityTrait;
-                use modo_db::sea_orm::QueryFilter;
-                use modo_db::sea_orm::ColumnTrait;
-                Entity::find().filter(Column::DeletedAt.is_null())
-            }
-
-            /// Returns a select query for a single record by primary key, excluding soft-deleted records.
-            pub fn find_by_id<T>(id: T) -> modo_db::sea_orm::Select<Entity>
-            where
-                T: Into<<<Entity as modo_db::sea_orm::EntityTrait>::PrimaryKey as modo_db::sea_orm::PrimaryKeyTrait>::ValueType>,
-            {
-                use modo_db::sea_orm::EntityTrait;
-                use modo_db::sea_orm::QueryFilter;
-                use modo_db::sea_orm::ColumnTrait;
-                Entity::find_by_id(id).filter(Column::DeletedAt.is_null())
-            }
-
-            /// Returns a select query that includes all records, including soft-deleted ones.
-            pub fn with_deleted() -> modo_db::sea_orm::Select<Entity> {
-                use modo_db::sea_orm::EntityTrait;
-                Entity::find()
-            }
-
-            /// Returns a select query that returns only soft-deleted records (`deleted_at IS NOT NULL`).
-            pub fn only_deleted() -> modo_db::sea_orm::Select<Entity> {
-                use modo_db::sea_orm::EntityTrait;
-                use modo_db::sea_orm::QueryFilter;
-                use modo_db::sea_orm::ColumnTrait;
-                Entity::find().filter(Column::DeletedAt.is_not_null())
-            }
-
-            /// Sets `deleted_at` to the current timestamp, marking the record as soft-deleted.
-            pub async fn soft_delete<C: modo_db::sea_orm::ConnectionTrait>(
-                mut model: ActiveModel,
-                db: &C,
-            ) -> std::result::Result<Model, modo_db::sea_orm::DbErr> {
-                use modo_db::sea_orm::ActiveModelTrait;
-                model.deleted_at = modo_db::sea_orm::ActiveValue::Set(Some(modo_db::chrono::Utc::now()));
-                model.update(db).await
-            }
-
-            /// Clears `deleted_at`, restoring a soft-deleted record.
-            pub async fn restore<C: modo_db::sea_orm::ConnectionTrait>(
-                mut model: ActiveModel,
-                db: &C,
-            ) -> std::result::Result<Model, modo_db::sea_orm::DbErr> {
-                use modo_db::sea_orm::ActiveModelTrait;
-                model.deleted_at = modo_db::sea_orm::ActiveValue::Set(None);
-                model.update(db).await
-            }
-
-            /// Permanently deletes the record from the database (hard delete).
-            pub async fn force_delete<C: modo_db::sea_orm::ConnectionTrait>(
-                model: Model,
-                db: &C,
-            ) -> std::result::Result<modo_db::sea_orm::DeleteResult, modo_db::sea_orm::DbErr> {
-                use modo_db::sea_orm::ModelTrait;
-                model.delete(db).await
-            }
-        }
-    } else {
-        quote! {}
-    };
-
-    let mut extra_sql_stmts = Vec::new();
-    for idx in &struct_attrs.indices {
-        let cols = idx.columns.join(", ");
-        let col_names = idx.columns.join("_");
-        let idx_name = format!("idx_{table_name}_{col_names}");
-        let sql = if idx.unique {
-            format!("CREATE UNIQUE INDEX IF NOT EXISTS {idx_name} ON {table_name}({cols})")
-        } else {
-            format!("CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name}({cols})")
-        };
-        extra_sql_stmts.push(sql);
-    }
-
-    let is_framework = struct_attrs.framework;
-
-    let extra_sql_tokens = if extra_sql_stmts.is_empty() {
-        quote! { &[] }
-    } else {
-        quote! { &[#(#extra_sql_stmts),*] }
-    };
+    // =========================================================================
+    // 3. Relation enum
+    // =========================================================================
 
     let relation_enum = if relation_variants.is_empty() {
         quote! {
@@ -724,7 +631,544 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         }
     };
 
+    // =========================================================================
+    // 4. Extra SQL for indices
+    // =========================================================================
+
+    let mut extra_sql_stmts = Vec::new();
+    for idx in &struct_attrs.indices {
+        let cols = idx.columns.join(", ");
+        let col_names = idx.columns.join("_");
+        let idx_name = format!("idx_{table_name}_{col_names}");
+        let sql = if idx.unique {
+            format!("CREATE UNIQUE INDEX IF NOT EXISTS {idx_name} ON {table_name}({cols})")
+        } else {
+            format!("CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name}({cols})")
+        };
+        extra_sql_stmts.push(sql);
+    }
+
+    // Add deleted_at index for soft-delete entities
+    if struct_attrs.soft_delete {
+        let idx_name = format!("idx_{table_name}_deleted_at");
+        extra_sql_stmts.push(format!(
+            "CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name}(deleted_at)"
+        ));
+    }
+
+    let is_framework = struct_attrs.framework;
+
+    let extra_sql_tokens = if extra_sql_stmts.is_empty() {
+        quote! { &[] }
+    } else {
+        quote! { &[#(#extra_sql_stmts),*] }
+    };
+
+    // =========================================================================
+    // 5. Preserved user struct
+    // =========================================================================
+
+    // Collect column fields (not relation-only) for the domain struct
+    let column_fields: Vec<&ParsedField> = parsed_fields
+        .iter()
+        .filter(|f| matches!(f.kind, FieldKind::Column))
+        .collect();
+
+    let struct_field_defs: Vec<TokenStream> = column_fields
+        .iter()
+        .map(|f| {
+            let name = &f.name;
+            let ty = &f.ty;
+            quote! { pub #name: #ty, }
+        })
+        .collect();
+
+    let timestamp_struct_fields = if struct_attrs.timestamps {
+        quote! {
+            pub created_at: modo_db::chrono::DateTime<modo_db::chrono::Utc>,
+            pub updated_at: modo_db::chrono::DateTime<modo_db::chrono::Utc>,
+        }
+    } else {
+        quote! {}
+    };
+
+    let soft_delete_struct_field = if struct_attrs.soft_delete {
+        quote! {
+            pub deleted_at: Option<modo_db::chrono::DateTime<modo_db::chrono::Utc>>,
+        }
+    } else {
+        quote! {}
+    };
+
+    let vis = &input.vis;
+    let preserved_struct = quote! {
+        #[derive(Clone, Debug, serde::Serialize)]
+        #vis struct #struct_name {
+            #(#struct_field_defs)*
+            #timestamp_struct_fields
+            #soft_delete_struct_field
+        }
+    };
+
+    // =========================================================================
+    // 6. Default impl
+    // =========================================================================
+
+    let mut default_field_stmts: Vec<TokenStream> = column_fields
+        .iter()
+        .map(|f| {
+            let name = &f.name;
+            let expr = default_expr_for_field(f);
+            quote! { #name: #expr, }
+        })
+        .collect();
+
+    if struct_attrs.timestamps {
+        default_field_stmts.push(quote! { created_at: modo_db::chrono::Utc::now(), });
+        default_field_stmts.push(quote! { updated_at: modo_db::chrono::Utc::now(), });
+    }
+
+    if struct_attrs.soft_delete {
+        default_field_stmts.push(quote! { deleted_at: None, });
+    }
+
+    let default_impl = quote! {
+        impl Default for #struct_name {
+            fn default() -> Self {
+                Self {
+                    #(#default_field_stmts)*
+                }
+            }
+        }
+    };
+
+    // =========================================================================
+    // 7. From<Model> impl
+    // =========================================================================
+
+    let mut from_field_stmts: Vec<TokenStream> = column_fields
+        .iter()
+        .map(|f| {
+            let name = &f.name;
+            quote! { #name: model.#name, }
+        })
+        .collect();
+
+    if struct_attrs.timestamps {
+        from_field_stmts.push(quote! { created_at: model.created_at, });
+        from_field_stmts.push(quote! { updated_at: model.updated_at, });
+    }
+
+    if struct_attrs.soft_delete {
+        from_field_stmts.push(quote! { deleted_at: model.deleted_at, });
+    }
+
+    let from_model_impl = quote! {
+        impl From<#mod_name::Model> for #struct_name {
+            fn from(model: #mod_name::Model) -> Self {
+                Self {
+                    #(#from_field_stmts)*
+                }
+            }
+        }
+    };
+
+    // =========================================================================
+    // 8. Record impl
+    // =========================================================================
+
+    // into_active_model_full: set ALL column fields + timestamps + soft_delete
+    let mut am_full_stmts: Vec<TokenStream> = column_fields
+        .iter()
+        .map(|f| {
+            let name = &f.name;
+            quote! { #name: modo_db::sea_orm::ActiveValue::Set(self.#name.clone()), }
+        })
+        .collect();
+
+    if struct_attrs.timestamps {
+        am_full_stmts
+            .push(quote! { created_at: modo_db::sea_orm::ActiveValue::Set(self.created_at), });
+        am_full_stmts
+            .push(quote! { updated_at: modo_db::sea_orm::ActiveValue::Set(self.updated_at), });
+    }
+
+    if struct_attrs.soft_delete {
+        am_full_stmts
+            .push(quote! { deleted_at: modo_db::sea_orm::ActiveValue::Set(self.deleted_at), });
+    }
+
+    // into_active_model: set only PK fields, rest use Default (NotSet)
+    let am_pk_stmts: Vec<TokenStream> = parsed_fields
+        .iter()
+        .filter(|f| f.attrs.primary_key)
+        .map(|f| {
+            let name = &f.name;
+            quote! { #name: modo_db::sea_orm::ActiveValue::Set(self.#name.clone()), }
+        })
+        .collect();
+
+    // apply_auto_fields: handle auto-ID and timestamps
+    let auto_field_stmts: Vec<TokenStream> = parsed_fields
+        .iter()
+        .filter_map(|f| {
+            f.attrs.auto.as_ref().map(|strategy| {
+                let name = &f.name;
+                let gen_call = match strategy.as_str() {
+                    "ulid" => quote! { modo_db::generate_ulid() },
+                    "nanoid" => quote! { modo_db::generate_nanoid() },
+                    _ => unreachable!(),
+                };
+                quote! {
+                    if is_insert {
+                        if let modo_db::sea_orm::ActiveValue::Set(ref id) = am.#name {
+                            if id.is_empty() {
+                                am.#name = modo_db::sea_orm::ActiveValue::Set(#gen_call);
+                            }
+                        } else {
+                            am.#name = modo_db::sea_orm::ActiveValue::Set(#gen_call);
+                        }
+                    }
+                }
+            })
+        })
+        .collect();
+
+    let timestamp_auto_stmts = if struct_attrs.timestamps {
+        quote! {
+            let now = modo_db::chrono::Utc::now();
+            if is_insert {
+                am.created_at = modo_db::sea_orm::ActiveValue::Set(now);
+            }
+            am.updated_at = modo_db::sea_orm::ActiveValue::Set(now);
+        }
+    } else {
+        quote! {}
+    };
+
+    // Determine PK types for find_by_id / delete_by_id signatures
+    let pk_fields: Vec<&ParsedField> = parsed_fields
+        .iter()
+        .filter(|f| f.attrs.primary_key)
+        .collect();
+
+    // Generate find_by_id and delete_by_id based on PK configuration
+    let (find_by_id_method, delete_by_id_method) =
+        gen_pk_methods(&pk_fields, &mod_name, &struct_attrs);
+
+    // CRUD methods: insert, update, delete
+    let delete_method = if struct_attrs.soft_delete {
+        // Soft-delete: set deleted_at = now instead of real delete
+        let update_stmts = if struct_attrs.timestamps {
+            quote! {
+                let now = modo_db::chrono::Utc::now();
+                self.deleted_at = Some(now);
+                self.updated_at = now;
+            }
+        } else {
+            quote! {
+                self.deleted_at = Some(modo_db::chrono::Utc::now());
+            }
+        };
+
+        quote! {
+            pub async fn delete(mut self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+                use modo_db::DefaultHooks;
+                self.before_delete()?;
+                #update_stmts
+                let mut am = <Self as modo_db::Record>::into_active_model_full(&self);
+                <Self as modo_db::Record>::apply_auto_fields(&mut am, false);
+                use modo_db::sea_orm::ActiveModelTrait;
+                am.update(db).await.map_err(modo_db::db_err_to_error)?;
+                Ok(())
+            }
+        }
+    } else {
+        quote! {
+            pub async fn delete(self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+                use modo_db::DefaultHooks;
+                self.before_delete()?;
+                modo_db::do_delete(self, db).await
+            }
+        }
+    };
+
+    // Override find_all and query for soft-delete to filter out deleted records
+    let find_all_override = if struct_attrs.soft_delete {
+        quote! {
+            fn find_all(
+                db: &impl modo_db::sea_orm::ConnectionTrait,
+            ) -> impl std::future::Future<Output = Result<Vec<Self>, modo::Error>> + Send {
+                async {
+                    use modo_db::sea_orm::EntityTrait as _;
+                    use modo_db::sea_orm::QueryFilter;
+                    use modo_db::sea_orm::ColumnTrait;
+                    let models = #mod_name::Entity::find()
+                        .filter(#mod_name::Column::DeletedAt.is_null())
+                        .all(db)
+                        .await
+                        .map_err(modo_db::db_err_to_error)?;
+                    Ok(models.into_iter().map(Self::from_model).collect())
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let query_override = if struct_attrs.soft_delete {
+        quote! {
+            fn query() -> modo_db::EntityQuery<Self, #mod_name::Entity> {
+                use modo_db::sea_orm::EntityTrait as _;
+                use modo_db::sea_orm::QueryFilter;
+                use modo_db::sea_orm::ColumnTrait;
+                modo_db::EntityQuery::new(
+                    #mod_name::Entity::find().filter(#mod_name::Column::DeletedAt.is_null())
+                )
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let record_impl = quote! {
+        impl modo_db::Record for #struct_name {
+            type Entity = #mod_name::Entity;
+            type ActiveModel = #mod_name::ActiveModel;
+
+            fn from_model(model: <#mod_name::Entity as modo_db::sea_orm::EntityTrait>::Model) -> Self {
+                Self::from(model)
+            }
+
+            fn into_active_model_full(&self) -> #mod_name::ActiveModel {
+                #mod_name::ActiveModel {
+                    #(#am_full_stmts)*
+                }
+            }
+
+            fn into_active_model(&self) -> #mod_name::ActiveModel {
+                #mod_name::ActiveModel {
+                    #(#am_pk_stmts)*
+                    ..Default::default()
+                }
+            }
+
+            fn apply_auto_fields(am: &mut #mod_name::ActiveModel, is_insert: bool) {
+                #(#auto_field_stmts)*
+                #timestamp_auto_stmts
+            }
+
+            #find_all_override
+
+            #query_override
+        }
+    };
+
+    // CRUD methods as inherent methods on the struct (not trait methods)
+    let crud_impl = quote! {
+        impl #struct_name {
+            #find_by_id_method
+
+            #delete_by_id_method
+
+            pub async fn insert(mut self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Self, modo::Error> {
+                use modo_db::DefaultHooks;
+                self.before_save()?;
+                let result = modo_db::do_insert(self, db).await?;
+                result.after_save()?;
+                Ok(result)
+            }
+
+            pub async fn update(&mut self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+                use modo_db::DefaultHooks;
+                self.before_save()?;
+                let refreshed = modo_db::do_update(self, db).await?;
+                *self = refreshed;
+                self.after_save()?;
+                Ok(())
+            }
+
+            #delete_method
+        }
+    };
+
+    // =========================================================================
+    // 9. Relation accessor methods
+    // =========================================================================
+
+    let mut relation_accessors = Vec::new();
+
+    for f in &parsed_fields {
+        if let Some(ref target) = f.attrs.belongs_to {
+            // belongs_to accessor: field `user_id` -> method `user()`
+            let fk_field_name = f.name.to_string();
+            let method_name_str = fk_field_name.strip_suffix("_id").unwrap_or(&fk_field_name);
+            let method_name = format_ident!("{method_name_str}");
+            let target_ident = format_ident!("{target}");
+            let target_mod = format_ident!("{}", to_snake_case(target));
+            let fk_field = &f.name;
+
+            let is_string_fk = type_name_str(&f.ty).as_deref() == Some("String");
+            let accessor = if is_string_fk {
+                quote! {
+                    pub async fn #method_name(&self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Option<#target_ident>, modo::Error> {
+                        use modo_db::sea_orm::EntityTrait;
+                        #target_mod::Entity::find_by_id(&self.#fk_field)
+                            .one(db)
+                            .await
+                            .map_err(modo_db::db_err_to_error)
+                            .map(|opt| opt.map(#target_ident::from))
+                    }
+                }
+            } else {
+                quote! {
+                    pub async fn #method_name(&self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Option<#target_ident>, modo::Error> {
+                        use modo_db::sea_orm::EntityTrait;
+                        #target_mod::Entity::find_by_id(self.#fk_field.clone())
+                            .one(db)
+                            .await
+                            .map_err(modo_db::db_err_to_error)
+                            .map(|opt| opt.map(#target_ident::from))
+                    }
+                }
+            };
+
+            relation_accessors.push(accessor);
+        }
+    }
+
+    for f in &parsed_fields {
+        if !matches!(f.kind, FieldKind::RelationOnly) {
+            continue;
+        }
+
+        let field_name = &f.name;
+        let pascal = to_pascal_case(&field_name.to_string());
+        let target = if f.attrs.has_many {
+            pascal.trim_end_matches('s').to_string()
+        } else {
+            pascal.clone()
+        };
+
+        let target_ident = format_ident!("{target}");
+        let target_mod = format_ident!("{}", to_snake_case(&target));
+
+        // The FK column on the target table: {snake_case(struct_name)}_id
+        let fk_col_name = format!("{}_id", to_snake_case(&struct_name.to_string()));
+        let fk_col_pascal = format_ident!("{}", to_pascal_case(&fk_col_name));
+
+        if f.attrs.has_many {
+            let accessor = quote! {
+                pub async fn #field_name(&self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Vec<#target_ident>, modo::Error> {
+                    use modo_db::sea_orm::EntityTrait;
+                    use modo_db::sea_orm::QueryFilter;
+                    use modo_db::sea_orm::ColumnTrait;
+                    #target_mod::Entity::find()
+                        .filter(#target_mod::Column::#fk_col_pascal.eq(&self.id))
+                        .all(db)
+                        .await
+                        .map_err(modo_db::db_err_to_error)
+                        .map(|models| models.into_iter().map(#target_ident::from).collect())
+                }
+            };
+            relation_accessors.push(accessor);
+        } else if f.attrs.has_one {
+            let accessor = quote! {
+                pub async fn #field_name(&self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Option<#target_ident>, modo::Error> {
+                    use modo_db::sea_orm::EntityTrait;
+                    use modo_db::sea_orm::QueryFilter;
+                    use modo_db::sea_orm::ColumnTrait;
+                    #target_mod::Entity::find()
+                        .filter(#target_mod::Column::#fk_col_pascal.eq(&self.id))
+                        .one(db)
+                        .await
+                        .map_err(modo_db::db_err_to_error)
+                        .map(|opt| opt.map(#target_ident::from))
+                }
+            };
+            relation_accessors.push(accessor);
+        }
+    }
+
+    let relation_accessor_impl = if relation_accessors.is_empty() {
+        quote! {}
+    } else {
+        quote! {
+            impl #struct_name {
+                #(#relation_accessors)*
+            }
+        }
+    };
+
+    // =========================================================================
+    // 10. Soft-delete extra methods on the struct
+    // =========================================================================
+
+    let soft_delete_methods = if struct_attrs.soft_delete {
+        let force_delete_by_id_method = gen_force_delete_by_id(&pk_fields, &mod_name);
+
+        quote! {
+            impl #struct_name {
+                /// Query that includes soft-deleted records.
+                pub fn with_deleted() -> modo_db::EntityQuery<Self, #mod_name::Entity> {
+                    use modo_db::sea_orm::EntityTrait as _;
+                    modo_db::EntityQuery::new(#mod_name::Entity::find())
+                }
+
+                /// Query that returns only soft-deleted records.
+                pub fn only_deleted() -> modo_db::EntityQuery<Self, #mod_name::Entity> {
+                    use modo_db::sea_orm::EntityTrait as _;
+                    use modo_db::sea_orm::QueryFilter;
+                    use modo_db::sea_orm::ColumnTrait;
+                    modo_db::EntityQuery::new(
+                        #mod_name::Entity::find().filter(#mod_name::Column::DeletedAt.is_not_null())
+                    )
+                }
+
+                /// Restore a soft-deleted record by clearing `deleted_at`.
+                pub async fn restore(&mut self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+                    self.deleted_at = None;
+                    let mut am = <Self as modo_db::Record>::into_active_model_full(self);
+                    <Self as modo_db::Record>::apply_auto_fields(&mut am, false);
+                    use modo_db::sea_orm::ActiveModelTrait;
+                    let model = am.update(db).await.map_err(modo_db::db_err_to_error)?;
+                    *self = Self::from(model);
+                    Ok(())
+                }
+
+                /// Permanently delete this record from the database (hard delete).
+                pub async fn force_delete(self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+                    modo_db::do_delete(self, db).await
+                }
+
+                #force_delete_by_id_method
+
+                /// Bulk hard-delete builder (bypasses soft-delete).
+                pub fn force_delete_many() -> modo_db::EntityDeleteMany<#mod_name::Entity> {
+                    use modo_db::sea_orm::EntityTrait as _;
+                    modo_db::EntityDeleteMany::new(#mod_name::Entity::delete_many())
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    // =========================================================================
+    // Assemble final output
+    // =========================================================================
+
+    // ActiveModelBehavior is now always empty -- auto-ID and timestamps
+    // are handled by Record::apply_auto_fields
+    let active_model_behavior = quote! {
+        impl ActiveModelBehavior for ActiveModel {}
+    };
+
     Ok(quote! {
+        // 1. Preserved user struct
+        #preserved_struct
+
+        // 2. SeaORM module
         pub mod #mod_name {
             use modo_db::sea_orm;
             use modo_db::sea_orm::entity::prelude::*;
@@ -740,10 +1184,27 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             #(#related_impls)*
 
             #active_model_behavior
-
-            #soft_delete_helpers
         }
 
+        // 3. Default impl
+        #default_impl
+
+        // 4. From<Model> impl
+        #from_model_impl
+
+        // 5. Record impl
+        #record_impl
+
+        // 6. CRUD methods (inherent)
+        #crud_impl
+
+        // 7. Relation accessors
+        #relation_accessor_impl
+
+        // 8. Soft-delete methods
+        #soft_delete_methods
+
+        // 9. Entity registration
         modo_db::inventory::submit! {
             modo_db::EntityRegistration {
                 table_name: #table_name,
@@ -754,4 +1215,313 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             }
         }
     })
+}
+
+// ---------------------------------------------------------------------------
+// PK-dependent method generation helpers
+// ---------------------------------------------------------------------------
+
+/// Generate `find_by_id` and `delete_by_id` method bodies based on PK configuration.
+fn gen_pk_methods(
+    pk_fields: &[&ParsedField],
+    mod_name: &Ident,
+    struct_attrs: &StructAttrs,
+) -> (TokenStream, TokenStream) {
+    if pk_fields.len() == 1 {
+        let pk_field = pk_fields[0];
+        let pk_ty = &pk_field.ty;
+        let pk_name = &pk_field.name;
+        let is_string_pk = type_name_str(pk_ty).as_deref() == Some("String");
+        let pk_col_pascal = format_ident!("{}", to_pascal_case(&pk_name.to_string()));
+
+        if is_string_pk {
+            gen_string_pk_methods(mod_name, struct_attrs, &pk_col_pascal)
+        } else {
+            gen_typed_pk_methods(mod_name, struct_attrs, pk_ty, &pk_col_pascal)
+        }
+    } else {
+        gen_composite_pk_methods(pk_fields, mod_name, struct_attrs)
+    }
+}
+
+/// String PK: `find_by_id(id: &str, ...)` and `delete_by_id(id: &str, ...)`
+fn gen_string_pk_methods(
+    mod_name: &Ident,
+    struct_attrs: &StructAttrs,
+    pk_col_pascal: &Ident,
+) -> (TokenStream, TokenStream) {
+    let find_body = if struct_attrs.soft_delete {
+        quote! {
+            use modo_db::sea_orm::EntityTrait;
+            use modo_db::sea_orm::QueryFilter;
+            use modo_db::sea_orm::ColumnTrait;
+            #mod_name::Entity::find_by_id(id)
+                .filter(#mod_name::Column::DeletedAt.is_null())
+                .one(db)
+                .await
+                .map_err(modo_db::db_err_to_error)?
+                .map(Self::from)
+                .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))
+        }
+    } else {
+        quote! {
+            use modo_db::sea_orm::EntityTrait;
+            #mod_name::Entity::find_by_id(id)
+                .one(db)
+                .await
+                .map_err(modo_db::db_err_to_error)?
+                .map(Self::from)
+                .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))
+        }
+    };
+
+    let delete_body = if struct_attrs.soft_delete {
+        quote! {
+            use modo_db::sea_orm::EntityTrait;
+            use modo_db::sea_orm::ColumnTrait;
+            use modo_db::sea_orm::QueryFilter;
+            let now = modo_db::chrono::Utc::now();
+            let result = #mod_name::Entity::update_many()
+                .filter(#mod_name::Column::#pk_col_pascal.eq(id))
+                .filter(#mod_name::Column::DeletedAt.is_null())
+                .col_expr(#mod_name::Column::DeletedAt, modo_db::sea_orm::sea_query::Expr::value(Some(now)))
+                .exec(db)
+                .await
+                .map_err(modo_db::db_err_to_error)?;
+            if result.rows_affected == 0 {
+                return Err(modo::Error::from(modo::HttpError::NotFound));
+            }
+            Ok(())
+        }
+    } else {
+        quote! {
+            let record = Self::find_by_id(id, db).await?;
+            record.delete(db).await
+        }
+    };
+
+    (
+        quote! {
+            pub async fn find_by_id(id: &str, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Self, modo::Error> {
+                #find_body
+            }
+        },
+        quote! {
+            pub async fn delete_by_id(id: &str, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+                #delete_body
+            }
+        },
+    )
+}
+
+/// Non-String single PK: `find_by_id(id: T, ...)` and `delete_by_id(id: T, ...)`
+fn gen_typed_pk_methods(
+    mod_name: &Ident,
+    struct_attrs: &StructAttrs,
+    pk_ty: &Type,
+    pk_col_pascal: &Ident,
+) -> (TokenStream, TokenStream) {
+    let find_body = if struct_attrs.soft_delete {
+        quote! {
+            use modo_db::sea_orm::EntityTrait;
+            use modo_db::sea_orm::QueryFilter;
+            use modo_db::sea_orm::ColumnTrait;
+            #mod_name::Entity::find_by_id(id)
+                .filter(#mod_name::Column::DeletedAt.is_null())
+                .one(db)
+                .await
+                .map_err(modo_db::db_err_to_error)?
+                .map(Self::from)
+                .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))
+        }
+    } else {
+        quote! {
+            use modo_db::sea_orm::EntityTrait;
+            #mod_name::Entity::find_by_id(id)
+                .one(db)
+                .await
+                .map_err(modo_db::db_err_to_error)?
+                .map(Self::from)
+                .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))
+        }
+    };
+
+    let delete_body = if struct_attrs.soft_delete {
+        quote! {
+            use modo_db::sea_orm::EntityTrait;
+            use modo_db::sea_orm::ColumnTrait;
+            use modo_db::sea_orm::QueryFilter;
+            let now = modo_db::chrono::Utc::now();
+            let result = #mod_name::Entity::update_many()
+                .filter(#mod_name::Column::#pk_col_pascal.eq(id))
+                .filter(#mod_name::Column::DeletedAt.is_null())
+                .col_expr(#mod_name::Column::DeletedAt, modo_db::sea_orm::sea_query::Expr::value(Some(now)))
+                .exec(db)
+                .await
+                .map_err(modo_db::db_err_to_error)?;
+            if result.rows_affected == 0 {
+                return Err(modo::Error::from(modo::HttpError::NotFound));
+            }
+            Ok(())
+        }
+    } else {
+        quote! {
+            let record = Self::find_by_id(id, db).await?;
+            record.delete(db).await
+        }
+    };
+
+    (
+        quote! {
+            pub async fn find_by_id(id: #pk_ty, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Self, modo::Error> {
+                #find_body
+            }
+        },
+        quote! {
+            pub async fn delete_by_id(id: #pk_ty, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+                #delete_body
+            }
+        },
+    )
+}
+
+/// Composite PK: `find_by_id(id: (T1, T2), ...)` and `delete_by_id(id: (T1, T2), ...)`
+fn gen_composite_pk_methods(
+    pk_fields: &[&ParsedField],
+    mod_name: &Ident,
+    struct_attrs: &StructAttrs,
+) -> (TokenStream, TokenStream) {
+    let pk_types: Vec<&Type> = pk_fields.iter().map(|f| &f.ty).collect();
+
+    let find_body = if struct_attrs.soft_delete {
+        quote! {
+            use modo_db::sea_orm::EntityTrait;
+            use modo_db::sea_orm::QueryFilter;
+            use modo_db::sea_orm::ColumnTrait;
+            #mod_name::Entity::find_by_id(id.clone())
+                .filter(#mod_name::Column::DeletedAt.is_null())
+                .one(db)
+                .await
+                .map_err(modo_db::db_err_to_error)?
+                .map(Self::from)
+                .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))
+        }
+    } else {
+        quote! {
+            use modo_db::sea_orm::EntityTrait;
+            #mod_name::Entity::find_by_id(id.clone())
+                .one(db)
+                .await
+                .map_err(modo_db::db_err_to_error)?
+                .map(Self::from)
+                .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))
+        }
+    };
+
+    let delete_body = if struct_attrs.soft_delete {
+        let pk_names: Vec<&Ident> = pk_fields.iter().map(|f| &f.name).collect();
+        let pk_col_pascals: Vec<Ident> = pk_names
+            .iter()
+            .map(|n| format_ident!("{}", to_pascal_case(&n.to_string())))
+            .collect();
+        let pk_indices: Vec<syn::Index> = (0..pk_fields.len()).map(syn::Index::from).collect();
+
+        quote! {
+            use modo_db::sea_orm::EntityTrait;
+            use modo_db::sea_orm::ColumnTrait;
+            use modo_db::sea_orm::QueryFilter;
+            let now = modo_db::chrono::Utc::now();
+            let mut update = #mod_name::Entity::update_many();
+            #(
+                update = modo_db::sea_orm::QueryFilter::filter(
+                    update,
+                    #mod_name::Column::#pk_col_pascals.eq(id.#pk_indices.clone()),
+                );
+            )*
+            let result = update
+                .filter(#mod_name::Column::DeletedAt.is_null())
+                .col_expr(#mod_name::Column::DeletedAt, modo_db::sea_orm::sea_query::Expr::value(Some(now)))
+                .exec(db)
+                .await
+                .map_err(modo_db::db_err_to_error)?;
+            if result.rows_affected == 0 {
+                return Err(modo::Error::from(modo::HttpError::NotFound));
+            }
+            Ok(())
+        }
+    } else {
+        quote! {
+            let record = Self::find_by_id(id, db).await?;
+            record.delete(db).await
+        }
+    };
+
+    (
+        quote! {
+            pub async fn find_by_id(id: (#(#pk_types),*), db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Self, modo::Error> {
+                #find_body
+            }
+        },
+        quote! {
+            pub async fn delete_by_id(id: (#(#pk_types),*), db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+                #delete_body
+            }
+        },
+    )
+}
+
+/// Generate `force_delete_by_id` method for soft-delete entities.
+fn gen_force_delete_by_id(pk_fields: &[&ParsedField], mod_name: &Ident) -> TokenStream {
+    if pk_fields.len() == 1 {
+        let pk_ty = &pk_fields[0].ty;
+        let is_string_pk = type_name_str(pk_ty).as_deref() == Some("String");
+
+        if is_string_pk {
+            quote! {
+                /// Permanently delete a record by ID, bypassing soft-delete.
+                pub async fn force_delete_by_id(id: &str, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+                    use modo_db::sea_orm::EntityTrait;
+                    use modo_db::sea_orm::ModelTrait;
+                    let model = #mod_name::Entity::find_by_id(id)
+                        .one(db)
+                        .await
+                        .map_err(modo_db::db_err_to_error)?
+                        .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))?;
+                    model.delete(db).await.map_err(modo_db::db_err_to_error)?;
+                    Ok(())
+                }
+            }
+        } else {
+            quote! {
+                /// Permanently delete a record by ID, bypassing soft-delete.
+                pub async fn force_delete_by_id(id: #pk_ty, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+                    use modo_db::sea_orm::EntityTrait;
+                    use modo_db::sea_orm::ModelTrait;
+                    let model = #mod_name::Entity::find_by_id(id)
+                        .one(db)
+                        .await
+                        .map_err(modo_db::db_err_to_error)?
+                        .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))?;
+                    model.delete(db).await.map_err(modo_db::db_err_to_error)?;
+                    Ok(())
+                }
+            }
+        }
+    } else {
+        let pk_types: Vec<&Type> = pk_fields.iter().map(|f| &f.ty).collect();
+        quote! {
+            /// Permanently delete a record by composite ID, bypassing soft-delete.
+            pub async fn force_delete_by_id(id: (#(#pk_types),*), db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+                use modo_db::sea_orm::EntityTrait;
+                use modo_db::sea_orm::ModelTrait;
+                let model = #mod_name::Entity::find_by_id(id)
+                    .one(db)
+                    .await
+                    .map_err(modo_db::db_err_to_error)?
+                    .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))?;
+                model.delete(db).await.map_err(modo_db::db_err_to_error)?;
+                Ok(())
+            }
+        }
+    }
 }
