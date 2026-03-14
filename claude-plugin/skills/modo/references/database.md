@@ -276,14 +276,15 @@ Patterns drawn from `examples/todo-api/src/`:
 ### Create
 
 ```rust
-use modo::extractors::Json;
+use modo::extractors::JsonReq;
+use modo::{Error, Json, JsonResult};
 use modo_db::sea_orm::{ActiveModelTrait, Set};
 
 #[modo::handler(POST, "/todos")]
 async fn create_todo(
     Db(db): Db,
-    input: Json<CreateTodo>,
-) -> modo::JsonResult<TodoResponse> {
+    input: JsonReq<CreateTodo>,
+) -> JsonResult<TodoResponse> {
     input.validate()?;
     let model = todo::ActiveModel {
         title: Set(input.title.clone()),
@@ -292,8 +293,8 @@ async fn create_todo(
     let result = model
         .insert(&*db)
         .await
-        .map_err(|e| modo::Error::internal(format!("Failed to create todo: {e}")))?;
-    Ok(modo::Json(TodoResponse::from(result)))
+        .map_err(|e| Error::internal(format!("Failed to create todo: {e}")))?;
+    Ok(Json(TodoResponse::from(result)))
 }
 ```
 

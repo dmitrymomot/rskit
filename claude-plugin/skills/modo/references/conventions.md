@@ -362,7 +362,7 @@ The template render layer only renders HTMX responses when the HTTP status is 20
 All `pub use` re-exports in `modo/src/lib.rs` must be sorted alphabetically. `cargo fmt` enforces this ordering. If you add a new re-export and `cargo fmt` reorders it, that is correct behavior.
 
 Current public re-exports (from `lib.rs`):
-- `axum::Json` — the canonical JSON extractor/responder
+- `axum::Json` — the canonical JSON responder (re-exported as `modo::Json`)
 - `AppConfig`, `HttpConfig`, `RateLimitConfig`, `SecurityHeadersConfig`, `TrailingSlash`
 - `CookieConfig`, `CookieManager`, `CookieOptions`, `SameSite`
 - `CorsConfig`
@@ -373,9 +373,12 @@ Current public re-exports (from `lib.rs`):
 - `GracefulShutdown`, `ShutdownPhase`
 - `ViewRender`, `ViewRenderer`, `ViewResponse` (behind `#[cfg(feature = "templates")]`)
 
-### Use `modo::Json`, Not `axum::Json`
+### Use `modo::Json` for Responses, `modo::extractors::JsonReq` for Requests
 
-Always import and use `modo::Json` (which re-exports `axum::Json`). Do not use `modo::axum::Json` even though both resolve to the same type. The re-export path is the convention.
+`modo::Json` re-exports `axum::Json` — use it for **response** wrapping (e.g. `Ok(Json(value))`).
+`modo::extractors::JsonReq<T>` is the **request** extractor with auto-sanitization and validation.
+`modo::extractors::FormReq<T>` is the form **request** extractor with auto-sanitization.
+`modo::extractors::QueryReq<T>` re-exports `axum::extract::Query<T>` for query parameter extraction.
 
 ### ULID Session IDs — Never UUID
 

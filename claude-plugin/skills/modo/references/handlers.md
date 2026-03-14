@@ -146,10 +146,10 @@ Extractors appear as function parameters and are resolved by axum before the han
 
 ### Query Parameters
 
-Use `axum::extract::Query<T>` directly (re-exported via `modo::axum`):
+Use `modo::extractors::QueryReq<T>` (re-export of `axum::extract::Query<T>`):
 
 ```rust
-use modo::axum::extract::Query;
+use modo::extractors::QueryReq;
 
 #[derive(serde::Deserialize)]
 struct Pagination {
@@ -158,41 +158,42 @@ struct Pagination {
 }
 
 #[modo::handler(GET, "/items")]
-async fn list_items(Query(pagination): Query<Pagination>) -> String {
+async fn list_items(QueryReq(pagination): QueryReq<Pagination>) -> String {
     format!("page {:?}", pagination.page)
 }
 ```
 
 ### JSON Body
 
-Two JSON extractors are available:
+Two JSON types are available:
 
-- `modo::Json<T>` (re-export of `axum::Json<T>`) — plain JSON extraction/response with no sanitization or validation.
-- `modo::extractors::Json<T>` — auto-sanitizes if `#[derive(Sanitize)]` is present on `T`, and exposes `.validate()` if `#[derive(Validate)]` is present.
+- `modo::Json<T>` (re-export of `axum::Json<T>`) — JSON **response** wrapper, no sanitization or validation.
+- `modo::extractors::JsonReq<T>` — JSON **request** extractor that auto-sanitizes if `#[derive(Sanitize)]` is present on `T`, and exposes `.validate()` if `#[derive(Validate)]` is present.
 
-Use `modo::extractors::Json<T>` when you need sanitization and validation:
+Use `JsonReq<T>` for request extraction and `Json<T>` for responses:
 
 ```rust
-use modo::extractors::Json;
+use modo::extractors::JsonReq;
+use modo::{Json, JsonResult};
 
 #[modo::handler(POST, "/users")]
-async fn create_user(body: Json<CreateUser>) -> modo::JsonResult<User> {
+async fn create_user(body: JsonReq<CreateUser>) -> JsonResult<User> {
     body.validate()?;
     // body.0 gives the inner T; or use Deref: body.email
-    Ok(modo::Json(User { /* ... */ }))
+    Ok(Json(User { /* ... */ }))
 }
 ```
 
 ### Form Data
 
-`modo::extractors::Form<T>` deserializes `application/x-www-form-urlencoded`, auto-sanitizes,
+`modo::extractors::FormReq<T>` deserializes `application/x-www-form-urlencoded`, auto-sanitizes,
 and provides `.validate()`:
 
 ```rust
-use modo::extractors::Form;
+use modo::extractors::FormReq;
 
 #[modo::handler(POST, "/contact")]
-async fn contact(form: Form<ContactForm>) -> modo::HandlerResult<&'static str> {
+async fn contact(form: FormReq<ContactForm>) -> modo::HandlerResult<&'static str> {
     form.validate()?;
     Ok("submitted")
 }
@@ -312,7 +313,7 @@ email: String,
 ### `#[derive(Sanitize)]`
 
 Generates `impl modo::sanitize::Sanitize` and auto-registers it. Sanitization runs
-automatically when data is extracted via `modo::extractors::Json<T>` or `modo::extractors::Form<T>`.
+automatically when data is extracted via `modo::extractors::JsonReq<T>` or `modo::extractors::FormReq<T>`.
 
 Field attribute: `#[clean(rule1, rule2, ...)]`
 
@@ -614,6 +615,9 @@ async fn main(
 ### JSON API with Validation
 
 ```rust
+use modo::extractors::JsonReq;
+use modo::{Json, JsonResult};
+
 #[derive(serde::Deserialize, modo::Sanitize, modo::Validate)]
 struct CreateTodo {
     #[clean(trim)]
@@ -622,10 +626,10 @@ struct CreateTodo {
 }
 
 #[modo::handler(POST, "/todos")]
-async fn create_todo(input: modo::Json<CreateTodo>) -> modo::JsonResult<TodoResponse> {
+async fn create_todo(input: JsonReq<CreateTodo>) -> JsonResult<TodoResponse> {
     input.validate()?;
     // ...
-    Ok(modo::Json(TodoResponse { /* ... */ }))
+    Ok(Json(TodoResponse { /* ... */ }))
 }
 ```
 
@@ -646,8 +650,8 @@ mod api_v1 {
 
 ## Gotchas
 
-- **`modo::Json` vs `modo::extractors::Json`**: `modo::Json` is `axum::Json` — it does NOT auto-sanitize.
-  Use `modo::extractors::Json<T>` for auto-sanitization. `modo::extractors::Form<T>` similarly auto-sanitizes forms.
+- **`modo::Json` vs `modo::extractors::JsonReq`**: `modo::Json` is `axum::Json` — it is the **response** wrapper with no sanitization.
+  Use `modo::extractors::JsonReq<T>` for request extraction with auto-sanitization. `modo::extractors::FormReq<T>` similarly auto-sanitizes forms.
 
 - **Path param partial extraction**: Declare only the params you need in the function
   signature. The macro generates a struct with all params; missing ones default to `String`
@@ -665,8 +669,8 @@ mod api_v1 {
   compile error if the `static-embed` feature is not enabled.
 
 - **`#[derive(Sanitize)]` auto-registers globally**: The macro submits a `SanitizerRegistration`
-  to `inventory`. This means sanitization applies automatically via `modo::extractors::Json` and
-  `modo::extractors::Form` without any explicit call in the handler.
+  to `inventory`. This means sanitization applies automatically via `modo::extractors::JsonReq` and
+  `modo::extractors::FormReq` without any explicit call in the handler.
 
 - **`TrailingSlash::Strip`/`Add` issues 301 redirects**: This means POST bodies are lost on
   redirect. Prefer consistent URL shapes in your API rather than relying on redirect normalization.
@@ -695,8 +699,10 @@ mod api_v1 {
 | `ClientIp` | `modo::middleware::ClientIp` |
 | `RequestId` | `modo::RequestId` |
 | `Service<T>` | `modo::Service` |
-| `Json<T>` (plain) | `modo::Json` |
-| `Json<T>` (sanitizing) | `modo::extractors::Json` |
-| `Form<T>` | `modo::extractors::Form` |
+| `Json<T>` (response) | `modo::Json` |
+| `JsonReq<T>` (request, sanitizing) | `modo::extractors::JsonReq` |
+| `FormReq<T>` (request, sanitizing) | `modo::extractors::FormReq` |
+| `QueryReq<T>` (request) | `modo::extractors::QueryReq` |
+| `PathReq<T>` (request) | `modo::extractors::PathReq` |
 | `HandlerResult<T>` | `modo::HandlerResult` |
 | `JsonResult<T>` | `modo::JsonResult` |

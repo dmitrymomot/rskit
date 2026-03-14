@@ -415,7 +415,7 @@ This pattern from the sse-chat example shows a complete session-based auth flow 
 `UserProvider` (the "user" is identified only by their session-stored ID).
 
 ```rust
-use modo::extractors::Form;
+use modo::extractors::FormReq;
 use modo_session::SessionManager;
 
 // Login
@@ -423,7 +423,7 @@ use modo_session::SessionManager;
 async fn login_submit(
     session: SessionManager,
     view: ViewRenderer,
-    form: Form<LoginForm>,
+    form: FormReq<LoginForm>,
 ) -> modo::ViewResult {
     // Validate form fields...
     session.authenticate(&form.username).await?;

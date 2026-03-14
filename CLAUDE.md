@@ -21,12 +21,13 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 
 - Path params: partial extraction supported — declare only the params you need, others ignored via `..`
 - Errors: prefer `HandlerResult<T>` alias; for JSON: `JsonResult<T>` (both accept optional custom error type as 2nd param)
-- JSON wrapper: use `modo::Json` not `modo::axum::Json`
+- JSON response: use `modo::Json` (re-export of `axum::Json`) for responses, not `modo::axum::Json`
 - Middleware stacking order: Global (outermost) → Module → Handler (innermost)
 - HTMX views: htmx template rendered on HX-Request, always HTTP 200, non-200 skips render
 - Template layers: auto-registered when `TemplateEngine` is a service — no manual `.layer()` needed
 - File organization: `mod.rs` is ONLY for `mod` imports and re-exports — all code (handlers, views, tasks) goes in separate files
-- Extractors: always import with `use modo::extractors::{Json, Form};` and use short form in handler signatures — never inline `modo::extractors::Json<T>`
+- File organization applies to ALL crates: struct/trait definitions, impl blocks, functions, and tests must be in separate files — not in `mod.rs`
+- Extractors: import with `use modo::extractors::{JsonReq, FormReq, QueryReq};` and use short form in handler signatures — `JsonReq<T>` for request extraction (with sanitization), `Json<T>` for response wrapping
 
 ## Gotchas
 
@@ -45,3 +46,4 @@ Rust web framework for micro-SaaS. Single binary, compile-time magic, multi-DB s
 - Session user ID access: use `modo_session::user_id_from_extensions(&parts.extensions)` — returns `Option<String>`
 - modo-cli templates: scaffold-time Jinja vars (`{{ project_name }}`) and runtime email vars (`{{name}}`) share syntax — use raw blocks if both appear in one file
 - modo-email in web template: mailer is registered as a jobs service (`.service(email)` on the jobs builder), NOT on the app — app enqueues `SendEmailPayload`, job worker sends
+- `#[modo::main]` macro: the `app: modo::app::AppBuilder` parameter is rewritten by the macro — do NOT import `AppBuilder` separately, always use the full path `modo::app::AppBuilder` in the function signature
