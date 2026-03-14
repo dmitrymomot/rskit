@@ -44,6 +44,7 @@ pub mod config;
 pub mod connect;
 pub mod entity;
 pub mod extractor;
+pub mod hooks;
 pub mod id;
 pub mod migration;
 pub mod pagination;
@@ -55,6 +56,7 @@ pub use config::DatabaseConfig;
 pub use connect::connect;
 pub use entity::EntityRegistration;
 pub use extractor::Db;
+pub use hooks::DefaultHooks;
 pub use id::{generate_nanoid, generate_ulid};
 pub use migration::MigrationRegistration;
 pub use pagination::{
