@@ -1,14 +1,12 @@
 # modo-session
 
-[![docs.rs](https://img.shields.io/docsrs/modo-session)](https://docs.rs/modo-session)
-
 Database-backed HTTP session management for the modo framework.
 
 Sessions are identified by a ULID, authenticated via a cryptographically random
 32-byte token stored in a browser cookie, and persisted in the `modo_sessions`
 table. Only the SHA-256 hash of the token is written to the database. A
-server-side fingerprint (SHA-256 of User-Agent + Accept-Language +
-Accept-Encoding) is used to detect session hijacking.
+server-side fingerprint (SHA-256 of `User-Agent + Accept-Language + Accept-Encoding`)
+is used to detect session hijacking.
 
 ## Features
 
@@ -20,24 +18,26 @@ Accept-Encoding) is used to detect session hijacking.
 
 ### Register the middleware
 
+Create a `SessionStore`, register it as a service, and install the middleware layer.
+Both steps are required: the service makes the store available to background jobs;
+the layer handles cookie reading and writing per request.
+
 ```rust
 use modo_session::{SessionConfig, SessionStore, layer};
 
-// In your app entry point:
 let session_store = SessionStore::new(
     &db,
     SessionConfig::default(),
     config.core.cookies.clone(),
 );
 
-app.service(session_store.clone())
+app.config(config.core)
+   .managed_service(db)
+   .service(session_store.clone())
    .layer(layer(session_store))
    .run()
    .await?;
 ```
-
-Registering the store as a `.service()` makes it available to background jobs
-(e.g. the `cleanup-job` cron job).
 
 ### Authentication
 
@@ -126,6 +126,18 @@ trusted_proxies:            # default: empty (trust all proxy headers)
   - "10.0.0.0/8"
 ```
 
+## Enabling the cleanup job
+
+Add the `cleanup-job` feature to remove expired sessions automatically every 15 minutes.
+Requires `modo-jobs` and a running job runner.
+
+```toml
+modo-session = { version = "0.2", features = ["cleanup-job"] }
+```
+
+The job is auto-registered via `inventory` — no explicit startup call is needed,
+but `SessionStore` must be registered as a service with `app.service(session_store)`.
+
 ## Key Types
 
 | Type                      | Description                                                              |
@@ -138,4 +150,4 @@ trusted_proxies:            # default: empty (trust all proxy headers)
 | `SessionToken`            | 32-byte random token; serialises as hex; `Debug`/`Display` are redacted. |
 | `SessionMeta`             | Request metadata (IP, UA, device) captured by the middleware.            |
 | `layer`                   | Creates the Tower middleware layer from a `SessionStore`.                |
-| `user_id_from_extensions` | Non-blocking helper to read user ID in Tower layers.                     |
+| `user_id_from_extensions` | Non-blocking helper to read user ID from request extensions in Tower layers. |

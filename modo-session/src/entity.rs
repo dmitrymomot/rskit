@@ -1,3 +1,8 @@
+/// SeaORM entity for the `modo_sessions` table.
+///
+/// This is an internal storage type.  Application code should use
+/// [`crate::SessionData`] (returned by [`crate::SessionStore`] and
+/// [`crate::SessionManager`]) rather than this entity directly.
 #[modo_db::entity(table = "modo_sessions")]
 #[entity(framework)]
 #[entity(index(columns = ["token_hash"], unique))]

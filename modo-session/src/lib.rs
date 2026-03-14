@@ -9,15 +9,22 @@
 //!
 //! # Quick start
 //!
+//! Create a [`SessionStore`], register it as a managed service, and install the
+//! middleware layer.  Both steps are required: the service makes the store
+//! available to background jobs; the layer handles cookie reading/writing per
+//! request.
+//!
 //! ```rust,no_run
-//! // In your app entry point:
+//! // In your #[modo::main] entry point:
 //! let session_store = modo_session::SessionStore::new(
 //!     &db,
 //!     modo_session::SessionConfig::default(),
 //!     config.core.cookies.clone(),
 //! );
 //!
-//! app.service(session_store.clone())
+//! app.config(config.core)
+//!    .managed_service(db)
+//!    .service(session_store.clone())
 //!    .layer(modo_session::layer(session_store))
 //!    .run()
 //!    .await?;
