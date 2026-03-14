@@ -43,6 +43,7 @@
 pub mod config;
 pub mod connect;
 pub mod entity;
+mod error;
 pub mod extractor;
 pub mod hooks;
 pub mod id;
@@ -55,6 +56,7 @@ pub mod sync;
 pub use config::DatabaseConfig;
 pub use connect::connect;
 pub use entity::EntityRegistration;
+pub use error::db_err_to_error;
 pub use extractor::Db;
 pub use hooks::DefaultHooks;
 pub use id::{generate_nanoid, generate_ulid};
