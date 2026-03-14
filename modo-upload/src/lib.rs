@@ -37,6 +37,7 @@ pub use modo_upload_macros::FromMultipart;
 mod config;
 mod extractor;
 mod file;
+mod from_multipart;
 pub mod storage;
 mod stream;
 mod validate;
@@ -46,25 +47,10 @@ pub use config::S3Config;
 pub use config::{StorageBackend, UploadConfig};
 pub use extractor::MultipartForm;
 pub use file::UploadedFile;
+pub use from_multipart::FromMultipart;
 pub use storage::{FileStorage, StoredFile, storage};
 pub use stream::BufferedUpload;
 pub use validate::{gb, kb, mb};
-
-/// Trait for parsing a struct from `multipart/form-data`.
-///
-/// Implement this trait (or derive it with `#[derive(FromMultipart)]`) to
-/// describe how multipart fields map to struct fields.  The
-/// [`MultipartForm`] extractor calls this automatically during request
-/// extraction.
-#[async_trait::async_trait]
-pub trait FromMultipart: Sized {
-    /// Parse `multipart` into `Self`, enforcing `max_file_size` on every file
-    /// field when `Some`.
-    async fn from_multipart(
-        multipart: &mut axum::extract::Multipart,
-        max_file_size: Option<usize>,
-    ) -> Result<Self, modo::Error>;
-}
 
 /// Internal helpers exposed for use by generated code. Not public API.
 #[doc(hidden)]
