@@ -263,6 +263,33 @@ async fn test_restore() {
 }
 
 #[tokio::test]
+async fn test_restore_on_active_record() {
+    let db = setup_db().await;
+
+    let item = SoftItem {
+        name: "active_item".to_string(),
+        ..Default::default()
+    }
+    .insert(&db)
+    .await
+    .unwrap();
+    let id = item.id.clone();
+
+    // Record is not deleted — deleted_at should be None
+    assert!(item.deleted_at.is_none());
+
+    // Restore on non-deleted record should be a no-op
+    let mut active = SoftItem::find_by_id(&id, &db).await.unwrap();
+    active.restore(&db).await.unwrap();
+
+    // Record should still be accessible and unchanged
+    let found = SoftItem::find_by_id(&id, &db).await.unwrap();
+    assert_eq!(found.id, id);
+    assert!(found.deleted_at.is_none());
+    assert_eq!(found.name, "active_item");
+}
+
+#[tokio::test]
 async fn test_force_delete_removes_completely() {
     let db = setup_db().await;
 

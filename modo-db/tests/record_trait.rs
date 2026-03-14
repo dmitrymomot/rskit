@@ -69,15 +69,23 @@ async fn test_update() {
     };
     let mut record = record.insert(&db).await.unwrap();
     let id = record.id.clone();
+    let updated_at_before = record.updated_at;
 
     record.name = "after".to_string();
     record.score = 99;
+    // Small delay to ensure timestamp differs
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     record.update(&db).await.unwrap();
 
     // record is mutated in-place with refreshed values
     assert_eq!(record.id, id);
     assert_eq!(record.name, "after");
     assert_eq!(record.score, 99);
+
+    assert!(
+        record.updated_at > updated_at_before,
+        "updated_at should advance after update"
+    );
 
     let found = TestRecord::find_by_id(&id, &db).await.unwrap();
     assert_eq!(found.name, "after");

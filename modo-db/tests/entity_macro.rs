@@ -241,9 +241,20 @@ fn test_composite_index_generates_extra_sql() {
         .find(|r| r.table_name == "test_indexed")
         .expect("test_indexed not registered");
     assert_eq!(reg.extra_sql.len(), 2);
-    assert!(reg.extra_sql[0].contains("idx_test_indexed_user_id_created_at"));
-    assert!(reg.extra_sql[1].contains("UNIQUE"));
-    assert!(reg.extra_sql[1].contains("idx_test_indexed_slug"));
+    assert!(
+        reg.extra_sql
+            .iter()
+            .any(|s| s.contains("idx_test_indexed_user_id_created_at")),
+        "Expected composite index. Found: {:?}",
+        reg.extra_sql
+    );
+    assert!(
+        reg.extra_sql
+            .iter()
+            .any(|s| s.contains("UNIQUE") && s.contains("idx_test_indexed_slug")),
+        "Expected unique slug index. Found: {:?}",
+        reg.extra_sql
+    );
 }
 
 // --- Composite primary key (junction table) ---
