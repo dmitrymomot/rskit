@@ -2,7 +2,6 @@ use crate::app::AppState;
 use crate::error::{Error, HttpError};
 use axum::extract::FromRequest;
 use axum::http::{Request, StatusCode};
-use axum::response::{IntoResponse, Response};
 use std::ops::Deref;
 
 /// Trait implemented by `#[derive(modo::Validate)]` to validate struct fields.
@@ -39,28 +38,28 @@ pub fn is_valid_email(s: &str) -> bool {
 /// Works with just `T: DeserializeOwned`. If `#[derive(Sanitize)]` is present,
 /// sanitization happens automatically. If `#[derive(Validate)]` is present,
 /// `.validate()` becomes available.
-pub struct Form<T>(pub T);
+pub struct FormReq<T>(pub T);
 
-impl<T> Deref for Form<T> {
+impl<T> Deref for FormReq<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<T> Form<T> {
+impl<T> FormReq<T> {
     pub fn into_inner(self) -> T {
         self.0
     }
 }
 
-impl<T: Validate> Form<T> {
+impl<T: Validate> FormReq<T> {
     pub fn validate(&self) -> Result<(), Error> {
         self.0.validate()
     }
 }
 
-impl<T> FromRequest<AppState> for Form<T>
+impl<T> FromRequest<AppState> for FormReq<T>
 where
     T: serde::de::DeserializeOwned + 'static,
 {
@@ -74,7 +73,7 @@ where
             .await
             .map_err(|e| HttpError::BadRequest.with_message(format!("{e}")))?;
         crate::sanitize::auto_sanitize(&mut value);
-        Ok(Form(value))
+        Ok(FormReq(value))
     }
 }
 
@@ -83,28 +82,28 @@ where
 /// Works with just `T: DeserializeOwned`. If `#[derive(Sanitize)]` is present,
 /// sanitization happens automatically. If `#[derive(Validate)]` is present,
 /// `.validate()` becomes available.
-pub struct Json<T>(pub T);
+pub struct JsonReq<T>(pub T);
 
-impl<T> Deref for Json<T> {
+impl<T> Deref for JsonReq<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<T> Json<T> {
+impl<T> JsonReq<T> {
     pub fn into_inner(self) -> T {
         self.0
     }
 }
 
-impl<T: Validate> Json<T> {
+impl<T: Validate> JsonReq<T> {
     pub fn validate(&self) -> Result<(), Error> {
         self.0.validate()
     }
 }
 
-impl<T> FromRequest<AppState> for Json<T>
+impl<T> FromRequest<AppState> for JsonReq<T>
 where
     T: serde::de::DeserializeOwned + 'static,
 {
@@ -118,12 +117,6 @@ where
             .await
             .map_err(|e| HttpError::BadRequest.with_message(format!("{e}")))?;
         crate::sanitize::auto_sanitize(&mut value);
-        Ok(Json(value))
-    }
-}
-
-impl<T: serde::Serialize> IntoResponse for Json<T> {
-    fn into_response(self) -> Response {
-        axum::Json(self.0).into_response()
+        Ok(JsonReq(value))
     }
 }
