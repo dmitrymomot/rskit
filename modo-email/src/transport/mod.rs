@@ -1,41 +1,9 @@
+mod factory;
 #[cfg(feature = "resend")]
 pub mod resend;
 #[cfg(feature = "smtp")]
 pub mod smtp;
+mod trait_def;
 
-use crate::config::EmailConfig;
-use crate::message::MailMessage;
-use std::sync::Arc;
-
-/// Async trait that every delivery backend must implement.
-///
-/// Implement this trait to add a custom transport (e.g. a test spy,
-/// an in-memory queue, or a third-party HTTP API).
-#[async_trait::async_trait]
-pub trait MailTransport: Send + Sync + 'static {
-    /// Deliver `message` to its recipients.
-    async fn send(&self, message: &MailMessage) -> Result<(), modo::Error>;
-}
-
-/// Create the appropriate transport backend based on config.
-pub fn transport(config: &EmailConfig) -> Result<Arc<dyn MailTransport>, modo::Error> {
-    match config.transport {
-        #[cfg(feature = "smtp")]
-        crate::config::TransportBackend::Smtp => {
-            Ok(Arc::new(smtp::SmtpTransport::new(&config.smtp)?))
-        }
-        #[cfg(not(feature = "smtp"))]
-        crate::config::TransportBackend::Smtp => Err(modo::Error::internal(
-            "SMTP transport requires the `smtp` feature",
-        )),
-
-        #[cfg(feature = "resend")]
-        crate::config::TransportBackend::Resend => {
-            Ok(Arc::new(resend::ResendTransport::new(&config.resend)?))
-        }
-        #[cfg(not(feature = "resend"))]
-        crate::config::TransportBackend::Resend => Err(modo::Error::internal(
-            "Resend transport requires the `resend` feature",
-        )),
-    }
-}
+pub use factory::transport;
+pub use trait_def::MailTransport;
