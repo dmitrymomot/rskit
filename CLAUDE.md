@@ -41,6 +41,10 @@ Rust web framework for small monolithic apps. Single binary, compile-time magic,
 
 ## Gotchas
 
+- modo-db transactions: supported via `db.begin().await?` — `DatabaseTransaction` implements `ConnectionTrait`, so `insert(&txn)`, `update(&txn)` etc. all work — documented in modo-db README
+- SessionManagerState is created per-request (not shared) — each request gets its own `Arc<SessionManagerState>` with its own mutexes; cross-request mutex contention is impossible
+- CSRF double-submit: cookie holds signed token (HttpOnly=true is correct), raw token injected server-side via template context `csrf_token` — JS never reads the cookie
+- Review docs in `docs/review-*.md` — re-reviewed 2026-03-15 with false positive annotations; check `[FALSE POSITIVE]` / `[PARTIALLY ACCURATE]` tags before acting on findings
 - Feature flags: optional deps use `dep:name` syntax; gate fields with `#[cfg(feature = "...")]` in struct, Default, and from_env()
 - Proc macros can't check `cfg` flags — emit both `#[cfg(feature = "x")]` / `#[cfg(not(feature = "x"))]` branches in generated code
 - Re-exports in `modo/src/lib.rs` must be alphabetically sorted (`cargo fmt` enforces this)
