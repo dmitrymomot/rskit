@@ -142,8 +142,8 @@ pub fn by_ip() -> KeyFn {
 }
 
 pub fn by_header(name: &str) -> KeyFn {
-    let name =
-        HeaderName::from_bytes(name.as_bytes()).expect("invalid header name for rate limit key");
+    let name = HeaderName::from_bytes(name.as_bytes())
+        .unwrap_or_else(|_| panic!("by_header: invalid HTTP header name {:?}", name));
     Arc::new(move |parts: &Parts| {
         parts
             .headers

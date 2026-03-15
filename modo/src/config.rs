@@ -33,7 +33,7 @@ impl Default for HttpConfig {
     fn default() -> Self {
         Self {
             timeout: None,
-            body_limit: None,
+            body_limit: Some("2mb".to_string()),
             compression: false,
             catch_panic: true,
             trailing_slash: TrailingSlash::default(),
@@ -561,7 +561,7 @@ mod tests {
         assert_eq!(cfg.readiness_path, "/_ready");
         // New middleware config defaults
         assert!(cfg.http.timeout.is_none());
-        assert!(cfg.http.body_limit.is_none());
+        assert_eq!(cfg.http.body_limit, Some("2mb".to_string()));
         assert!(!cfg.http.compression);
         assert!(cfg.http.catch_panic);
         assert_eq!(cfg.http.trailing_slash, TrailingSlash::None);

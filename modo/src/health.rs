@@ -24,12 +24,12 @@ pub async fn liveness_handler() -> impl IntoResponse {
 /// Handler for the readiness probe (`/_ready`).
 ///
 /// Runs all registered checks sequentially. Returns `200 OK` when all pass,
-/// or `500 Internal Server Error` on the first failure.
+/// or `503 Service Unavailable` on the first failure.
 pub async fn readiness_handler(checks: Vec<ReadinessCheck>) -> impl IntoResponse {
     for check in &checks {
         if let Err(e) = check().await {
             tracing::error!(error = %e, "Readiness check failed");
-            return (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response();
+            return (StatusCode::SERVICE_UNAVAILABLE, "service unavailable").into_response();
         }
     }
     (StatusCode::OK, "ok").into_response()

@@ -81,9 +81,9 @@ async fn test_readiness_500_on_failure() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
-    assert_eq!(&body[..], b"internal server error");
+    assert_eq!(&body[..], b"service unavailable");
 }

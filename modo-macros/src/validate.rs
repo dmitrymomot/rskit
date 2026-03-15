@@ -321,7 +321,7 @@ fn gen_rule_check(rule: &ValidationRule, ctx: &FieldContext) -> TokenStream {
                 field_message,
                 &default_msg,
             );
-            let check = quote! { __val.len() < #value };
+            let check = quote! { __val.chars().count() < #value };
             wrap_non_required_check(
                 field_name,
                 &push,
@@ -340,7 +340,7 @@ fn gen_rule_check(rule: &ValidationRule, ctx: &FieldContext) -> TokenStream {
                 field_message,
                 &default_msg,
             );
-            let check = quote! { __val.len() > #value };
+            let check = quote! { __val.chars().count() > #value };
             wrap_non_required_check(
                 field_name,
                 &push,

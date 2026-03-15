@@ -16,7 +16,7 @@ When `ensure_http_override` is called (via `.timeout()`, `.body_limit()`, etc.) 
 
 ---
 
-### BUG-02: Readiness probe returns 500 instead of 503
+### ~~BUG-02: Readiness probe returns 500 instead of 503~~ [FIXED]
 
 **Location:** `modo/src/health.rs:32`
 
@@ -36,7 +36,7 @@ A readiness probe that fails should conventionally return 503 (Service Unavailab
 
 ---
 
-### BUG-04: ViewResponse::redirect panics on invalid URLs
+### ~~BUG-04: ViewResponse::redirect panics on invalid URLs~~ [FIXED]
 
 **Location:** `modo/src/templates/view_response.rs:61,68`
 
@@ -46,7 +46,7 @@ A readiness probe that fails should conventionally return 503 (Service Unavailab
 
 ---
 
-### BUG-05: RwLock unwrap can cascade-panic after handler panic
+### ~~BUG-05: RwLock unwrap can cascade-panic after handler panic~~ [FIXED]
 
 **Location:** `modo/src/templates/engine.rs:37,39`
 
@@ -56,7 +56,7 @@ A readiness probe that fails should conventionally return 503 (Service Unavailab
 
 ---
 
-### BUG-06: Validate min_length/max_length uses byte count, not character count
+### ~~BUG-06: Validate min_length/max_length uses byte count, not character count~~ [FIXED]
 
 **Location:** `modo-macros/src/validate.rs:324,343`
 
@@ -124,7 +124,7 @@ If the resolver returns `Ok(None)` (no tenant found), nothing is inserted into t
 
 ---
 
-### BUG-12: #[handler] doesn't validate function is async
+### ~~BUG-12: #[handler] doesn't validate function is async~~ [FIXED]
 
 **Location:** `modo-macros/src/handler.rs`
 
@@ -154,7 +154,7 @@ The target entity name is inferred by trimming a trailing `'s'` from the Pascal-
 
 ---
 
-### BUG-15: Set-Cookie not redacted from response logs
+### ~~BUG-15: Set-Cookie not redacted from response logs~~ [FIXED]
 
 **Location:** `modo/src/app.rs:683-690`
 
@@ -174,7 +174,7 @@ The target entity name is inferred by trimming a trailing `'s'` from the Pascal-
 
 ---
 
-### BUG-17: rate_limit::by_header panics on invalid header name
+### ~~BUG-17: rate_limit::by_header panics on invalid header name~~ [FIXED]
 
 **Location:** `modo/src/middleware/rate_limit.rs:145-146`
 

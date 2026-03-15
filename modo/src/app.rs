@@ -26,7 +26,9 @@ use tower::{Layer, Service};
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::compression::CompressionLayer;
 use tower_http::limit::RequestBodyLimitLayer;
-use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
+use tower_http::sensitive_headers::{
+    SetSensitiveRequestHeadersLayer, SetSensitiveResponseHeadersLayer,
+};
 use tower_http::timeout::TimeoutLayer;
 use tracing::{info, warn};
 
@@ -686,7 +688,10 @@ impl AppBuilder {
                 header::SET_COOKIE,
                 header::PROXY_AUTHORIZATION,
             ]);
-            router = router.layer(SetSensitiveRequestHeadersLayer::from_shared(sensitive));
+            router = router.layer(SetSensitiveRequestHeadersLayer::from_shared(
+                sensitive.clone(),
+            ));
+            router = router.layer(SetSensitiveResponseHeadersLayer::from_shared(sensitive));
         }
 
         // --- Request ID (always on) ---

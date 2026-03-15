@@ -34,7 +34,7 @@ When the form body exceeds `max_body_bytes`, the error is swallowed and `Body::e
 
 ---
 
-### SEC-04: Session token hash leaked via Serde serialization
+### ~~SEC-04: Session token hash leaked via Serde serialization~~ [FIXED]
 
 **Location:** `modo-session/src/types.rs:147-172`
 
@@ -64,7 +64,7 @@ Template `{{key}}` substitution inserts values verbatim, and MiniJinja auto-esca
 
 ---
 
-### SEC-07: No default HTTP body size limit
+### ~~SEC-07: No default HTTP body size limit~~ [FIXED]
 
 **Location:** `modo/src/config.rs` (body_limit field), `modo/src/app.rs`
 
@@ -96,7 +96,7 @@ The `mime_matches` function compares only the `Content-Type` header from the mul
 
 ---
 
-### SEC-10: CSRF config validation uses debug_assert (no-op in release)
+### ~~SEC-10: CSRF config validation uses debug_assert (no-op in release)~~ [FIXED]
 
 **Location:** `modo/src/csrf/middleware.rs:40-44`
 

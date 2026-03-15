@@ -20,7 +20,7 @@ impl TemplateEngine {
     /// (before service registration). Uses `get_mut()` — no lock overhead
     /// since `&mut self` guarantees exclusivity.
     pub fn env_mut(&mut self) -> &mut Environment<'static> {
-        self.env.get_mut().unwrap()
+        self.env.get_mut().unwrap_or_else(|e| e.into_inner())
     }
 
     /// Render a template by name with the given context value.
@@ -34,9 +34,12 @@ impl TemplateEngine {
         ctx: minijinja::Value,
     ) -> Result<String, crate::templates::TemplateError> {
         #[cfg(debug_assertions)]
-        self.env.write().unwrap().clear_templates();
+        self.env
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear_templates();
 
-        let env = self.env.read().unwrap();
+        let env = self.env.read().unwrap_or_else(|e| e.into_inner());
         let tmpl = env.get_template(name)?;
         Ok(tmpl.render(ctx)?)
     }

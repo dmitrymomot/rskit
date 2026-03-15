@@ -6,13 +6,13 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 
 | ID     | Issue                                                      | Effort | Crate        |
 | ------ | ---------------------------------------------------------- | ------ | ------------ |
-| SEC-04 | Add `#[serde(skip)]` to `SessionData::token_hash`          | S      | modo-session |
-| SEC-07 | Set default `body_limit` (e.g., 2MB)                       | S      | modo         |
+| ~~SEC-04~~ | ~~Add `#[serde(skip)]` to `SessionData::token_hash`~~          | ~~S~~      | ~~modo-session~~ | FIXED |
+| ~~SEC-07~~ | ~~Set default `body_limit` (e.g., 2MB)~~                       | ~~S~~      | ~~modo~~         | FIXED |
 | SEC-01 | Fix CSRF cookie HttpOnly for header-based variant          | M      | modo         |
 | SEC-02 | Route CSRF failures through custom error handler           | M      | modo         |
 | SEC-03 | Return 413 on CSRF body overflow instead of empty body     | S      | modo         |
 | SEC-09 | Guard against CORS Mirror + credentials: true              | S      | modo         |
-| SEC-10 | Replace CSRF `debug_assert!` with startup validation       | S      | modo         |
+| ~~SEC-10~~ | ~~Replace CSRF `debug_assert!` with startup validation~~       | ~~S~~      | ~~modo~~         | FIXED |
 | SEC-05 | Add HTML escaping option for email template variables      | M      | modo-email   |
 | SEC-06 | Document HeaderResolver security preconditions prominently | S      | modo-tenant  |
 | SEC-14 | Validate or regenerate client-supplied Request IDs         | S      | modo         |
@@ -23,13 +23,13 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 
 | ID     | Issue                                                              | Effort | Crate          |
 | ------ | ------------------------------------------------------------------ | ------ | -------------- |
-| BUG-06 | Fix `min_length`/`max_length` to use `chars().count()`             | S      | modo-macros    |
-| BUG-02 | Change readiness probe from 500 to 503                             | S      | modo           |
-| BUG-04 | Fix `ViewResponse::redirect` to not panic                          | S      | modo           |
-| BUG-05 | Fix `RwLock::unwrap()` with poison recovery pattern                | S      | modo           |
-| BUG-12 | Add `async` check to `#[handler]` macro                            | S      | modo-macros    |
-| BUG-15 | Add `SetSensitiveResponseHeadersLayer` for Set-Cookie              | S      | modo           |
-| BUG-17 | Replace `by_header` `.expect()` with `Result`                      | S      | modo           |
+| ~~BUG-06~~ | ~~Fix `min_length`/`max_length` to use `chars().count()`~~             | ~~S~~      | ~~modo-macros~~    | FIXED |
+| ~~BUG-02~~ | ~~Change readiness probe from 500 to 503~~                             | ~~S~~      | ~~modo~~           | FIXED |
+| ~~BUG-04~~ | ~~Fix `ViewResponse::redirect` to not panic~~                          | ~~S~~      | ~~modo~~           | FIXED |
+| ~~BUG-05~~ | ~~Fix `RwLock::unwrap()` with poison recovery pattern~~                | ~~S~~      | ~~modo~~           | FIXED |
+| ~~BUG-12~~ | ~~Add `async` check to `#[handler]` macro~~                            | ~~S~~      | ~~modo-macros~~    | FIXED |
+| ~~BUG-15~~ | ~~Add `SetSensitiveResponseHeadersLayer` for Set-Cookie~~              | ~~S~~      | ~~modo~~           | FIXED |
+| ~~BUG-17~~ | ~~Replace `by_header` `.expect()` with `Result`~~                      | ~~S~~      | ~~modo~~           | FIXED |
 | BUG-18 | Fix `cancel()` to return 404/409 instead of 500                    | S      | modo-jobs      |
 | BUG-07 | Fix `Sanitize` derive for generic structs                          | M      | modo-macros    |
 | BUG-08 | Exclude `created_at` from UPDATE active models                     | M      | modo-db-macros |

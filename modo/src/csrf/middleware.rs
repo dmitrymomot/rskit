@@ -37,11 +37,10 @@ pub async fn csrf_protection(
         }
     };
 
-    debug_assert!(
-        config.validate().is_ok(),
-        "Invalid CsrfConfig: {:?}",
-        config.validate()
-    );
+    if let Err(e) = config.validate() {
+        tracing::error!(error = %e, "Invalid CsrfConfig — rejecting request");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
 
     let arc_cookie_config = state
         .services

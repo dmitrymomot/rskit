@@ -140,6 +140,13 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     let args: HandlerArgs = parse2(attr)?;
     let mut func: ItemFn = parse2(item)?;
 
+    if func.sig.asyncness.is_none() {
+        return Err(syn::Error::new_spanned(
+            func.sig.fn_token,
+            "#[handler] requires an async function",
+        ));
+    }
+
     let func_name = func.sig.ident.clone();
     let method_ident = &args.method;
     let path = &args.path;

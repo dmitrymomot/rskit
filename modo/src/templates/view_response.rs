@@ -54,22 +54,30 @@ impl IntoResponse for ViewResponse {
                 }
                 resp
             }
-            ViewResponseKind::Redirect { url } => {
-                let mut resp = Response::new(axum::body::Body::empty());
-                *resp.status_mut() = StatusCode::FOUND;
-                let val =
-                    HeaderValue::try_from(&url).expect("redirect URL must be a valid header value");
-                resp.headers_mut().insert("location", val);
-                resp
-            }
-            ViewResponseKind::HxRedirect { url } => {
-                let mut resp = Response::new(axum::body::Body::empty());
-                *resp.status_mut() = StatusCode::OK;
-                let val = HeaderValue::try_from(&url)
-                    .expect("HX-Redirect URL must be a valid header value");
-                resp.headers_mut().insert("hx-redirect", val);
-                resp
-            }
+            ViewResponseKind::Redirect { url } => match HeaderValue::try_from(&url) {
+                Ok(val) => {
+                    let mut resp = Response::new(axum::body::Body::empty());
+                    *resp.status_mut() = StatusCode::FOUND;
+                    resp.headers_mut().insert("location", val);
+                    resp
+                }
+                Err(_) => {
+                    tracing::error!("Invalid redirect URL");
+                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                }
+            },
+            ViewResponseKind::HxRedirect { url } => match HeaderValue::try_from(&url) {
+                Ok(val) => {
+                    let mut resp = Response::new(axum::body::Body::empty());
+                    *resp.status_mut() = StatusCode::OK;
+                    resp.headers_mut().insert("hx-redirect", val);
+                    resp
+                }
+                Err(_) => {
+                    tracing::error!("Invalid HX-Redirect URL");
+                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                }
+            },
         }
     }
 }

@@ -148,6 +148,7 @@ fn hex_digit(b: u8) -> Option<u8> {
 pub struct SessionData {
     /// Unique session identifier (ULID).
     pub id: SessionId,
+    #[serde(skip_serializing)]
     pub(crate) token_hash: String,
     /// ID of the authenticated user.
     pub user_id: String,
