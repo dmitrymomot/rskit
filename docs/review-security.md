@@ -14,23 +14,23 @@ Findings from comprehensive framework review (2026-03-15).
 
 ---
 
-### SEC-02: CSRF failure bypasses custom error handler
+### ~~SEC-02: CSRF failure bypasses custom error handler~~ [FIXED]
 
 **Location:** `modo/src/csrf/middleware.rs:134,163,169`
 
 CSRF validation returns a bare `StatusCode::FORBIDDEN` without inserting an `Error` extension into response extensions. This means `#[error_handler]` is never invoked for CSRF rejections. The response format is also inconsistent — bare status code body instead of the JSON error format used elsewhere.
 
-**Fix:** Convert CSRF failures to `Error::forbidden(...)` and insert into response extensions, consistent with other middleware error paths.
+**Fix:** All CSRF failure paths now use `HttpError::*.with_message(...)` which produces structured JSON error responses and inserts the `Error` extension for custom error handler interception.
 
 ---
 
-### SEC-03: CSRF form body overflow silently returns empty body
+### ~~SEC-03: CSRF form body overflow silently returns empty body~~ [FIXED]
 
 **Location:** `modo/src/csrf/middleware.rs:200-202`
 
 When the form body exceeds `max_body_bytes`, the error is swallowed and `Body::empty()` is passed downstream. The downstream handler receives an empty body and may produce confusing validation errors rather than a meaningful "payload too large" response.
 
-**Fix:** Return a 413 (Payload Too Large) response directly when the body exceeds the limit, instead of silently passing an empty body.
+**Fix:** `extract_from_form_body` now returns `Result<..., Response>` and oversized bodies produce `HttpError::PayloadTooLarge` (413).
 
 ---
 
@@ -54,13 +54,13 @@ Template `{{key}}` substitution inserts values verbatim, and MiniJinja auto-esca
 
 ---
 
-### SEC-06: Tenant HeaderResolver spoofable without proxy
+### ~~SEC-06: Tenant HeaderResolver spoofable without proxy~~ [FIXED]
 
 **Location:** `modo-tenant/src/resolvers/header.rs:42`
 
 `HeaderResolver` accepts arbitrary header values from clients. Without a reverse proxy that strips/overwrites the tenant header, any client can impersonate any tenant by setting `X-Tenant-Id: victim-tenant`.
 
-**Fix:** Add prominent security warning in docs and consider a `require_trusted_proxy: bool` config that fails if `TrustedProxies` is empty when `HeaderResolver` is used.
+**Fix:** Added prominent `# Security` section to `HeaderResolver` struct docstring and a security blockquote in `modo-tenant/README.md` warning that the header is client-controlled and must only be used behind a trusted reverse proxy or for internal/API-only services.
 
 ---
 
@@ -86,13 +86,13 @@ The `mime_matches` function compares only the `Content-Type` header from the mul
 
 ---
 
-### SEC-09: CORS Mirror + credentials: true allows any origin
+### ~~SEC-09: CORS Mirror + credentials: true allows any origin~~ [FIXED]
 
 **Location:** `modo/src/config.rs`
 
 `CorsOrigins::Mirror` (the default) reflects the request's `Origin` header back. If a user sets `credentials: true` on the default config, any origin can make credentialed cross-origin requests.
 
-**Fix:** Add a validation check that rejects the `Mirror` + `credentials: true` combination at startup, or at minimum emit a strong warning.
+**Fix:** Added `CorsConfig::validate()` method that rejects `Mirror` or `Any` origins with `credentials: true`. Called at the top of `into_layer()` — panics on invalid config at startup.
 
 ---
 
@@ -136,7 +136,7 @@ A user-supplied translation value containing `{admin}` could expand another vari
 
 ---
 
-### SEC-14: Request ID accepted from client without validation [PARTIALLY ACCURATE]
+### ~~SEC-14: Request ID accepted from client without validation~~ [FIXED]
 
 **Location:** `modo/src/request_id.rs:57-61`
 
@@ -144,7 +144,7 @@ The middleware accepts client-supplied `X-Request-ID` headers verbatim. A client
 
 **Re-review note:** `HeaderValue::to_str().ok()` already enforces ASCII-only content (visible ASCII characters only — no null bytes, newlines, or control characters are accepted). The remaining risk is log pollution with arbitrary printable ASCII strings and correlation identifier poisoning, not binary injection.
 
-**Fix:** Validate that client-supplied request IDs contain only alphanumeric characters and hyphens, or always generate server-side IDs.
+**Fix:** Added `is_valid_request_id()` validation: max 128 chars, alphanumeric + hyphens/underscores only. Invalid IDs are silently replaced with a server-generated ULID.
 
 ---
 

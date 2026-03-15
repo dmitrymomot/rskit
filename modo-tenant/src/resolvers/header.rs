@@ -8,6 +8,18 @@ use std::marker::PhantomData;
 /// The header value is trimmed of surrounding whitespace before being forwarded
 /// to the `lookup` closure. Returns `Ok(None)` when the header is absent or
 /// contains only whitespace.
+///
+/// # Security
+///
+/// The header value is fully controlled by the client. Without a reverse proxy
+/// that strips or overwrites the configured header, any client can impersonate
+/// any tenant.
+///
+/// Use this resolver only when:
+/// - A trusted reverse proxy (e.g. Nginx, Envoy, Cloudflare) sets the header
+///   and strips client-supplied values, **or**
+/// - The endpoint is internal / API-only with authenticated callers whose
+///   tenant is verified by other means.
 pub struct HeaderResolver<T, F> {
     header_name: String,
     lookup: F,

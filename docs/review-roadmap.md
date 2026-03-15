@@ -6,43 +6,43 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 
 ## Priority 1 — Security Fixes
 
-| ID     | Issue                                                      | Effort | Crate        |
-| ------ | ---------------------------------------------------------- | ------ | ------------ |
-| ~~SEC-04~~ | ~~Add `#[serde(skip)]` to `SessionData::token_hash`~~          | ~~S~~      | ~~modo-session~~ | FIXED |
-| ~~SEC-07~~ | ~~Set default `body_limit` (e.g., 2MB)~~                       | ~~S~~      | ~~modo~~         | FIXED |
-| ~~SEC-01~~ | ~~Fix CSRF cookie HttpOnly for header-based variant~~          | ~~M~~      | ~~modo~~         | FALSE POSITIVE |
-| SEC-02 | Route CSRF failures through custom error handler           | M      | modo         |
-| SEC-03 | Return 413 on CSRF body overflow instead of empty body     | S      | modo         |
-| SEC-09 | Guard against CORS Mirror + credentials: true              | S      | modo         |
-| ~~SEC-10~~ | ~~Replace CSRF `debug_assert!` with startup validation~~       | ~~S~~      | ~~modo~~         | FIXED |
-| SEC-05 | Add HTML escaping option for email template variables      | M      | modo-email   |
-| SEC-06 | Document HeaderResolver security preconditions prominently | S      | modo-tenant  |
-| SEC-14 | Validate or regenerate client-supplied Request IDs         | S      | modo         |
+| ID         | Issue                                                      | Effort | Crate            |
+| ---------- | ---------------------------------------------------------- | ------ | ---------------- | -------------- |
+| ~~SEC-04~~ | ~~Add `#[serde(skip)]` to `SessionData::token_hash`~~      | ~~S~~  | ~~modo-session~~ | FIXED          |
+| ~~SEC-07~~ | ~~Set default `body_limit` (e.g., 2MB)~~                   | ~~S~~  | ~~modo~~         | FIXED          |
+| ~~SEC-01~~ | ~~Fix CSRF cookie HttpOnly for header-based variant~~      | ~~M~~  | ~~modo~~         | FALSE POSITIVE |
+| ~~SEC-02~~ | ~~Route CSRF failures through custom error handler~~       | ~~M~~  | ~~modo~~         | FIXED          |
+| ~~SEC-03~~ | ~~Return 413 on CSRF body overflow instead of empty body~~ | ~~S~~  | ~~modo~~         | FIXED          |
+| ~~SEC-09~~ | ~~Guard against CORS Mirror + credentials: true~~          | ~~S~~  | ~~modo~~         | FIXED          |
+| ~~SEC-10~~ | ~~Replace CSRF `debug_assert!` with startup validation~~   | ~~S~~  | ~~modo~~         | FIXED          |
+| SEC-05     | Add HTML escaping option for email template variables      | M      | modo-email       |
+| ~~SEC-06~~ | ~~Document HeaderResolver security preconditions prominently~~ | ~~S~~ | ~~modo-tenant~~ | FIXED          |
+| ~~SEC-14~~ | ~~Validate or regenerate client-supplied Request IDs~~     | ~~S~~  | ~~modo~~         | FIXED          |
 
 ---
 
 ## Priority 2 — Bug Fixes
 
-| ID     | Issue                                                              | Effort | Crate          |
-| ------ | ------------------------------------------------------------------ | ------ | -------------- |
-| ~~BUG-06~~ | ~~Fix `min_length`/`max_length` to use `chars().count()`~~             | ~~S~~      | ~~modo-macros~~    | FIXED |
-| ~~BUG-02~~ | ~~Change readiness probe from 500 to 503~~                             | ~~S~~      | ~~modo~~           | FIXED |
-| ~~BUG-04~~ | ~~Fix `ViewResponse::redirect` to not panic~~                          | ~~S~~      | ~~modo~~           | FIXED |
-| ~~BUG-05~~ | ~~Fix `RwLock::unwrap()` with poison recovery pattern~~                | ~~S~~      | ~~modo~~           | FIXED |
-| ~~BUG-12~~ | ~~Add `async` check to `#[handler]` macro~~                            | ~~S~~      | ~~modo-macros~~    | FIXED |
-| ~~BUG-15~~ | ~~Add `SetSensitiveResponseHeadersLayer` for Set-Cookie~~              | ~~S~~      | ~~modo~~           | FIXED |
-| ~~BUG-17~~ | ~~Replace `by_header` `.expect()` with `Result`~~                      | ~~S~~      | ~~modo~~           | FIXED |
-| BUG-18 | Fix `cancel()` to return 404/409 instead of 500                    | S      | modo-jobs      |
-| BUG-07 | Fix `Sanitize` derive for generic structs                          | M      | modo-macros    |
-| BUG-08 | Exclude `created_at` from UPDATE active models                     | M      | modo-db-macros |
-| BUG-11 | Cache `Ok(None)` in tenant resolver                                | S      | modo-tenant    |
-| BUG-13 | Handle nested modules in `#[module]`                               | M      | modo-macros    |
-| BUG-14 | Fix `has_many` pluralization (use heck or require explicit target) | M      | modo-db-macros |
-| BUG-01 | Fix `AppBuilder` call order config override issue                  | M      | modo           |
-| BUG-03 | Fix `ContextLayer` to merge instead of overwrite                   | S      | modo           |
-| BUG-09 | Fix `before_save` mutation-before-write issue                      | M      | modo-db-macros |
-| ~~BUG-10~~ | ~~Fix stale reaper + timeout handler race condition~~                  | ~~M~~      | ~~modo-jobs~~      | FALSE POSITIVE |
-| BUG-16 | Add `OptionalRateLimitInfo` extractor                              | S      | modo           |
+| ID         | Issue                                                              | Effort | Crate           |
+| ---------- | ------------------------------------------------------------------ | ------ | --------------- | -------------- |
+| ~~BUG-06~~ | ~~Fix `min_length`/`max_length` to use `chars().count()`~~         | ~~S~~  | ~~modo-macros~~ | FIXED          |
+| ~~BUG-02~~ | ~~Change readiness probe from 500 to 503~~                         | ~~S~~  | ~~modo~~        | FIXED          |
+| ~~BUG-04~~ | ~~Fix `ViewResponse::redirect` to not panic~~                      | ~~S~~  | ~~modo~~        | FIXED          |
+| ~~BUG-05~~ | ~~Fix `RwLock::unwrap()` with poison recovery pattern~~            | ~~S~~  | ~~modo~~        | FIXED          |
+| ~~BUG-12~~ | ~~Add `async` check to `#[handler]` macro~~                        | ~~S~~  | ~~modo-macros~~ | FIXED          |
+| ~~BUG-15~~ | ~~Add `SetSensitiveResponseHeadersLayer` for Set-Cookie~~          | ~~S~~  | ~~modo~~        | FIXED          |
+| ~~BUG-17~~ | ~~Replace `by_header` `.expect()` with `Result`~~                  | ~~S~~  | ~~modo~~        | FIXED          |
+| BUG-18     | Fix `cancel()` to return 404/409 instead of 500                    | S      | modo-jobs       |
+| BUG-07     | Fix `Sanitize` derive for generic structs                          | M      | modo-macros     |
+| BUG-08     | Exclude `created_at` from UPDATE active models                     | M      | modo-db-macros  |
+| BUG-11     | Cache `Ok(None)` in tenant resolver                                | S      | modo-tenant     |
+| BUG-13     | Handle nested modules in `#[module]`                               | M      | modo-macros     |
+| BUG-14     | Fix `has_many` pluralization (use heck or require explicit target) | M      | modo-db-macros  |
+| BUG-01     | Fix `AppBuilder` call order config override issue                  | M      | modo            |
+| BUG-03     | Fix `ContextLayer` to merge instead of overwrite                   | S      | modo            |
+| BUG-09     | Fix `before_save` mutation-before-write issue                      | M      | modo-db-macros  |
+| ~~BUG-10~~ | ~~Fix stale reaper + timeout handler race condition~~              | ~~M~~  | ~~modo-jobs~~   | FALSE POSITIVE |
+| BUG-16     | Add `OptionalRateLimitInfo` extractor                              | S      | modo            |
 
 ---
 
@@ -82,9 +82,9 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 
 ### Service Registration
 
-| ID     | Task                                                                         | Effort |
-| ------ | ---------------------------------------------------------------------------- | ------ |
-| INC-09 | Make `MultipartForm` fail on missing `UploadConfig` (match other extractors) | S      |
+| ID     | Task                                                                           | Effort |
+| ------ | ------------------------------------------------------------------------------ | ------ |
+| INC-09 | Make `MultipartForm` fail on missing `UploadConfig` (match other extractors)   | S      |
 | DES-26 | Clarify `OptionalAuth` "never rejects" headline (caveats exist on lines 93-96) | S      |
 
 ---
@@ -93,14 +93,14 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 
 ### Database
 
-| ID     | Feature                                                                    | Effort | Value  |
-| ------ | -------------------------------------------------------------------------- | ------ | ------ |
-| ~~DES-01~~ | ~~Transaction support — `db.transaction(\|txn\| { ... })` wrapper~~            | ~~M~~      | ~~High~~   | FALSE POSITIVE — already supported via `db.begin()` |
-| DES-04 | Expose `acquire_timeout`, `idle_timeout`, `max_lifetime` in DatabaseConfig | S      | High   |
-| DES-31 | SQL-escape column names in composite index generation                      | S      | Medium |
-| DES-32 | Fix entity module visibility to match struct visibility                    | S      | Low    |
-| —      | Join support on `EntityQuery` (`.join()`, `.inner_join()`)                 | L      | High   |
-| —      | `paginate` and `paginate_cursor` as methods on `EntityQuery`               | S      | Medium |
+| ID         | Feature                                                                    | Effort | Value    |
+| ---------- | -------------------------------------------------------------------------- | ------ | -------- | --------------------------------------------------- |
+| ~~DES-01~~ | ~~Transaction support — `db.transaction(\|txn\| { ... })` wrapper~~        | ~~M~~  | ~~High~~ | FALSE POSITIVE — already supported via `db.begin()` |
+| DES-04     | Expose `acquire_timeout`, `idle_timeout`, `max_lifetime` in DatabaseConfig | S      | High     |
+| DES-31     | SQL-escape column names in composite index generation                      | S      | Medium   |
+| DES-32     | Fix entity module visibility to match struct visibility                    | S      | Low      |
+| —          | Join support on `EntityQuery` (`.join()`, `.inner_join()`)                 | L      | High     |
+| —          | `paginate` and `paginate_cursor` as methods on `EntityQuery`               | S      | Medium   |
 
 ### Jobs
 
@@ -144,11 +144,11 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 
 ### Session
 
-| ID     | Feature                                                      | Effort | Value  |
-| ------ | ------------------------------------------------------------ | ------ | ------ |
-| DES-24 | Validate `max_sessions_per_user > 0` at construction time    | S      | Medium |
-| ~~DES-06~~ | ~~Refactor to release mutex before DB operations~~               | ~~M~~      | ~~High~~   | FALSE POSITIVE — mutex is per-request, no cross-request issue |
-| DES-05 | Atomic session limit enforcement (single SQL or transaction) | M      | Medium |
+| ID         | Feature                                                      | Effort | Value    |
+| ---------- | ------------------------------------------------------------ | ------ | -------- | ------------------------------------------------------------- |
+| DES-24     | Validate `max_sessions_per_user > 0` at construction time    | S      | Medium   |
+| ~~DES-06~~ | ~~Refactor to release mutex before DB operations~~           | ~~M~~  | ~~High~~ | FALSE POSITIVE — mutex is per-request, no cross-request issue |
+| DES-05     | Atomic session limit enforcement (single SQL or transaction) | M      | Medium   |
 
 ### Multi-tenancy
 

@@ -116,6 +116,12 @@ let svc = TenantResolverService::new(resolver);
 
 The header value is trimmed of whitespace. Missing or whitespace-only headers return `None`.
 
+> **Security:** The header value is fully controlled by the client. Without a
+> reverse proxy that strips or overwrites the configured header, any client can
+> impersonate any tenant. Use `HeaderResolver` only behind a trusted reverse
+> proxy that sets the header, or for internal/API-only services with
+> authenticated callers.
+
 #### Path prefix
 
 ```rust
