@@ -37,7 +37,7 @@ The macro generates:
 ### Function Signature Rules
 
 - The function must be `async`.
-- Return type must be `Result<(), modo::Error>` or any alias thereof (e.g. `HandlerResult<()`).
+- Return type must be `Result<(), modo::Error>` or any alias thereof (e.g. `HandlerResult<()>`).
 - At most one plain parameter is treated as the **payload** (deserialized from JSON).
 - Use `Service<T>` to inject a registered service into the job handler.
 - Use `Db` to inject the database pool.
@@ -89,7 +89,7 @@ use modo_db::Db;
 
 #[job(queue = "default")]
 async fn sync_user(payload: SyncPayload, Db(db): Db) -> HandlerResult<()> {
-    // use db (Arc<DbPool>) directly
+    // use db (DbPool) directly
     Ok(())
 }
 ```
@@ -149,7 +149,7 @@ queue.cancel(&job_id).await?;
 ```
 
 Only jobs in the `Pending` state can be cancelled. Returns an error if the job is not found
-or is already `Running`, `Completed`, or `Dead`.
+or is not in the `Pending` state.
 
 ### JobId
 
@@ -337,7 +337,7 @@ async fn cleanup_expired_sessions() -> HandlerResult<()> {
 The cron expression uses six fields: `second minute hour day month weekday`.
 
 **Execution semantics:**
-- One goroutine-equivalent Tokio task is spawned per cron job at startup.
+- One Tokio task is spawned per cron job at startup.
 - At most one instance of each cron job runs at a time.
 - If the handler takes longer than the interval between ticks, the next tick is skipped rather
   than firing concurrently.
