@@ -124,8 +124,8 @@ parsing, for example when writing directly to storage without a full-copy alloca
 | `file_name()`   | `&str`                    | Original filename                      |
 | `content_type()`| `&str`                    | MIME content type                      |
 | `size()`        | `usize`                   | Total bytes across all chunks          |
-| `chunk()`       | `Option<Result<Bytes, _>>`| Read next chunk (consumes sequentially)|
-| `into_reader()` | `Pin<Box<dyn AsyncRead>>` | Convert to a tokio `AsyncRead`         |
+| `chunk()`       | `Option<Result<Bytes, _>>`| Async; read next chunk (consumes sequentially)|
+| `into_reader()` | `Pin<Box<dyn AsyncRead + Send>>` | Convert to a tokio `AsyncRead`  |
 | `to_bytes()`    | `bytes::Bytes`            | Collapse all chunks into one `Bytes`   |
 
 ---
@@ -139,8 +139,8 @@ failure returns a structured error with per-field messages.
 
 | Attribute              | Applies to                    | Description                                   |
 |------------------------|-------------------------------|-----------------------------------------------|
-| `max_size = "<size>"`  | `UploadedFile`, `Vec<UploadedFile>` | Maximum file size. Accepts `"5mb"`, `"100kb"`, `"2gb"`, or plain bytes. Case-insensitive. |
-| `accept = "<pattern>"` | `UploadedFile`, `Vec<UploadedFile>` | MIME type pattern. Supports exact types (`"application/pdf"`) and wildcards (`"image/*"`, `"*/*"`). |
+| `max_size = "<size>"`  | `UploadedFile`, `Option<UploadedFile>`, `Vec<UploadedFile>` | Maximum file size. Accepts `"5mb"`, `"100kb"`, `"2gb"`, or plain bytes. Case-insensitive. |
+| `accept = "<pattern>"` | `UploadedFile`, `Option<UploadedFile>`, `Vec<UploadedFile>` | MIME type pattern. Supports exact types (`"application/pdf"`) and wildcards (`"image/*"`, `"*/*"`). |
 | `min_count = <n>`      | `Vec<UploadedFile>`           | Minimum number of files.                      |
 | `max_count = <n>`      | `Vec<UploadedFile>`           | Maximum number of files.                      |
 
