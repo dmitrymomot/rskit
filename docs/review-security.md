@@ -4,13 +4,13 @@ Findings from comprehensive framework review (2026-03-15).
 
 ## Severity: High
 
-### SEC-01: CSRF cookie is HttpOnly but double-submit requires JS read
+### ~~SEC-01: CSRF cookie is HttpOnly but double-submit requires JS read~~ [FALSE POSITIVE]
 
 **Location:** `modo/src/csrf/middleware.rs:109`
 
-The double-submit cookie pattern where the client must read the cookie to submit it in a header requires the cookie to be readable by JavaScript (i.e., NOT HttpOnly). Setting `http_only(true)` means the header-based CSRF variant can only work in same-page form submissions, not by SPA/fetch-based clients.
+~~The double-submit cookie pattern where the client must read the cookie to submit it in a header requires the cookie to be readable by JavaScript (i.e., NOT HttpOnly). Setting `http_only(true)` means the header-based CSRF variant can only work in same-page form submissions, not by SPA/fetch-based clients.~~
 
-**Fix:** Either make `http_only` configurable per submission mode, or set it to `false` when header-based submission is expected. Consider splitting config into form-based (HttpOnly=true) and header-based (HttpOnly=false) variants.
+**Re-review finding:** The middleware supports two submission channels: (1) header-based (`x-csrf-token`) and (2) form body extraction. Neither requires JavaScript to read the cookie. The cookie holds the signed token; the submitted value is the raw token, provided to the page through server-side rendering via the `CsrfToken` extension / template context `csrf_token` variable / form `<input>`. The `HttpOnly` flag correctly prevents JS from stealing the signed cookie. The claim misunderstands the double-submit pattern used here.
 
 ---
 
@@ -116,13 +116,13 @@ When the tenant resolver returns an error (e.g., DB unavailable), the error is l
 
 ---
 
-### SEC-12: Session fingerprint compared with != (not constant-time)
+### ~~SEC-12: Session fingerprint compared with != (not constant-time)~~ [FALSE POSITIVE]
 
 **Location:** `modo-session/src/middleware.rs:149`
 
-The CSRF module uses `subtle::ConstantTimeEq` for token comparison, but session fingerprint comparison uses standard `!=`, which is variable-time. While fingerprint timing attacks are harder to exploit across the network, consistency with the framework's security posture is missing.
+~~The CSRF module uses `subtle::ConstantTimeEq` for token comparison, but session fingerprint comparison uses standard `!=`, which is variable-time. While fingerprint timing attacks are harder to exploit across the network, consistency with the framework's security posture is missing.~~
 
-**Fix:** Use `subtle::ConstantTimeEq` for fingerprint comparison, matching the CSRF module pattern.
+**Re-review finding:** Session fingerprints are SHA-256 hashes of User-Agent, Accept-Language, and Accept-Encoding headers — they are not secret values. An attacker who controls a request already knows these headers. Constant-time comparison is only meaningful for secret values (tokens, passwords) to prevent timing-based oracle attacks. The fingerprint check detects header-level session hijacking (different device using stolen token). Standard `!=` is appropriate here.
 
 ---
 
@@ -136,11 +136,13 @@ A user-supplied translation value containing `{admin}` could expand another vari
 
 ---
 
-### SEC-14: Request ID accepted from client without validation
+### SEC-14: Request ID accepted from client without validation [PARTIALLY ACCURATE]
 
 **Location:** `modo/src/request_id.rs:57-61`
 
 The middleware accepts client-supplied `X-Request-ID` headers verbatim. A client can inject arbitrary values, enabling log injection if request IDs are included in logs without sanitization.
+
+**Re-review note:** `HeaderValue::to_str().ok()` already enforces ASCII-only content (visible ASCII characters only — no null bytes, newlines, or control characters are accepted). The remaining risk is log pollution with arbitrary printable ASCII strings and correlation identifier poisoning, not binary injection.
 
 **Fix:** Validate that client-supplied request IDs contain only alphanumeric characters and hyphens, or always generate server-side IDs.
 

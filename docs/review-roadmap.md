@@ -2,13 +2,15 @@
 
 Prioritized recommendations from comprehensive framework review (2026-03-15).
 
+**Re-review (2026-03-15):** 5 false positives identified and struck through: DES-01, DES-06, SEC-01, SEC-12, BUG-10. 11 items downgraded to partially accurate (noted in source docs). ~64 items confirmed accurate. Overall original review accuracy: ~93%.
+
 ## Priority 1 — Security Fixes
 
 | ID     | Issue                                                      | Effort | Crate        |
 | ------ | ---------------------------------------------------------- | ------ | ------------ |
 | ~~SEC-04~~ | ~~Add `#[serde(skip)]` to `SessionData::token_hash`~~          | ~~S~~      | ~~modo-session~~ | FIXED |
 | ~~SEC-07~~ | ~~Set default `body_limit` (e.g., 2MB)~~                       | ~~S~~      | ~~modo~~         | FIXED |
-| SEC-01 | Fix CSRF cookie HttpOnly for header-based variant          | M      | modo         |
+| ~~SEC-01~~ | ~~Fix CSRF cookie HttpOnly for header-based variant~~          | ~~M~~      | ~~modo~~         | FALSE POSITIVE |
 | SEC-02 | Route CSRF failures through custom error handler           | M      | modo         |
 | SEC-03 | Return 413 on CSRF body overflow instead of empty body     | S      | modo         |
 | SEC-09 | Guard against CORS Mirror + credentials: true              | S      | modo         |
@@ -39,7 +41,7 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 | BUG-01 | Fix `AppBuilder` call order config override issue                  | M      | modo           |
 | BUG-03 | Fix `ContextLayer` to merge instead of overwrite                   | S      | modo           |
 | BUG-09 | Fix `before_save` mutation-before-write issue                      | M      | modo-db-macros |
-| BUG-10 | Fix stale reaper + timeout handler race condition                  | M      | modo-jobs      |
+| ~~BUG-10~~ | ~~Fix stale reaper + timeout handler race condition~~                  | ~~M~~      | ~~modo-jobs~~      | FALSE POSITIVE |
 | BUG-16 | Add `OptionalRateLimitInfo` extractor                              | S      | modo           |
 
 ---
@@ -83,7 +85,7 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 | ID     | Task                                                                         | Effort |
 | ------ | ---------------------------------------------------------------------------- | ------ |
 | INC-09 | Make `MultipartForm` fail on missing `UploadConfig` (match other extractors) | S      |
-| DES-26 | Fix `OptionalAuth` doc to not say "never rejects"                            | S      |
+| DES-26 | Clarify `OptionalAuth` "never rejects" headline (caveats exist on lines 93-96) | S      |
 
 ---
 
@@ -93,7 +95,7 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 
 | ID     | Feature                                                                    | Effort | Value  |
 | ------ | -------------------------------------------------------------------------- | ------ | ------ |
-| DES-01 | Transaction support — `db.transaction(\|txn\| { ... })` wrapper            | M      | High   |
+| ~~DES-01~~ | ~~Transaction support — `db.transaction(\|txn\| { ... })` wrapper~~            | ~~M~~      | ~~High~~   | FALSE POSITIVE — already supported via `db.begin()` |
 | DES-04 | Expose `acquire_timeout`, `idle_timeout`, `max_lifetime` in DatabaseConfig | S      | High   |
 | DES-31 | SQL-escape column names in composite index generation                      | S      | Medium |
 | DES-32 | Fix entity module visibility to match struct visibility                    | S      | Low    |
@@ -145,7 +147,7 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 | ID     | Feature                                                      | Effort | Value  |
 | ------ | ------------------------------------------------------------ | ------ | ------ |
 | DES-24 | Validate `max_sessions_per_user > 0` at construction time    | S      | Medium |
-| DES-06 | Refactor to release mutex before DB operations               | M      | High   |
+| ~~DES-06~~ | ~~Refactor to release mutex before DB operations~~               | ~~M~~      | ~~High~~   | FALSE POSITIVE — mutex is per-request, no cross-request issue |
 | DES-05 | Atomic session limit enforcement (single SQL or transaction) | M      | Medium |
 
 ### Multi-tenancy

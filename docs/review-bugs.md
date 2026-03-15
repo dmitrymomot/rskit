@@ -68,21 +68,25 @@ All other Unicode-aware code in the framework (e.g., `sanitize::truncate`) uses 
 
 ---
 
-### BUG-07: Sanitize derive broken for generic structs
+### BUG-07: Sanitize derive broken for generic structs [PARTIALLY ACCURATE]
 
 **Location:** `modo-macros/src/sanitize.rs:122-143`
 
 The trampoline function and `TypeId::of::<#struct_name>()` don't include generic type parameters. Deriving `Sanitize` on `struct Foo<T>` produces `TypeId::of::<Foo>()` and `downcast_mut::<Foo>()` which are incomplete types and won't compile.
 
+**Re-review note:** The `impl Sanitize` block itself correctly uses `ty_generics`. The trampoline/TypeId issue causes a **compile error**, not a silent runtime bug. Impact is lower than originally reported — users get a build failure, not incorrect behavior.
+
 **Fix:** Include `impl_generics`, `ty_generics`, and `where_clause` in the trampoline function and TypeId call site. Alternatively, emit a clear compile error if generics are detected.
 
 ---
 
-### BUG-08: Entity macro includes created_at in UPDATE statements
+### BUG-08: Entity macro includes created_at in UPDATE statements [PARTIALLY ACCURATE]
 
 **Location:** `modo-db-macros/src/entity.rs:811-815`
 
 `into_active_model_full` sets `created_at: ActiveValue::Set(self.created_at)` for all operations, including updates. A user who mutates `self.created_at` before calling `update()` will overwrite the auto-managed `created_at` in the database. This bypasses the "auto-managed" semantics where `created_at` should be immutable after insert.
+
+**Re-review note:** The value sent is `self.created_at` (the existing stored value), not a new timestamp. Under normal use this is a no-op (same value written back). `apply_auto_fields` correctly avoids overwriting `created_at` with `now` on updates. The issue is wasteful SQL and potential trigger side-effects, not data corruption.
 
 **Fix:** Emit `created_at: ActiveValue::NotSet` for the update path, or use a separate `into_active_model_for_update` that excludes `created_at`.
 
@@ -100,17 +104,13 @@ Same issue in `modo-tenant` restore: `self.deleted_at = None` is set before `bef
 
 ---
 
-### BUG-10: Jobs stale reaper + timeout handler race over-decrements attempts
+### ~~BUG-10: Jobs stale reaper + timeout handler race over-decrements attempts~~ [FALSE POSITIVE]
 
 **Location:** `modo-jobs/src/runner.rs:543-546`
 
-Both `execute_job` (timeout path) and the stale reaper can update the same job concurrently. The stale reaper unconditionally decrements `attempts - 1`. If both fire for the same job, `attempts` gets decremented twice — once by `schedule_retry` and once by the reaper — allowing more retries than `max_attempts` intended.
+~~Both `execute_job` (timeout path) and the stale reaper can update the same job concurrently. The stale reaper unconditionally decrements `attempts - 1`. If both fire for the same job, `attempts` gets decremented twice — once by `schedule_retry` and once by the reaper — allowing more retries than `max_attempts` intended.~~
 
-**Fix:** Either:
-
-- Add a `WHERE locked_by = worker_id` guard to the stale reaper so it doesn't touch jobs being actively handled.
-- Remove the stale reaper's `attempts - 1` decrement (let the timeout count as a real attempt).
-- Use a transaction or CAS-style update to prevent double-update.
+**Re-review finding:** Only the stale reaper decrements attempts. The `execute_job` timeout path calls `handle_failure` → `schedule_retry`, which updates `state`, `run_at`, `last_error`, `locked_by`, `locked_at`, and `updated_at` — but does NOT decrement `attempts`. The "double-decrement" claim is incorrect. A real but different race exists: the stale reaper can reset a job to `pending` while `execute_job` is still running, potentially causing duplicate execution — but that is a different issue than attempt count corruption.
 
 ---
 
@@ -196,13 +196,13 @@ When cancelling a job that doesn't exist or isn't pending, the returned error is
 
 ## Design / Correctness Issues
 
-### DES-01: No transaction support in Record trait
+### ~~DES-01: No transaction support in Record trait~~ [FALSE POSITIVE]
 
 **Location:** `modo-db/src/record.rs`
 
-There is no `begin_transaction()` or any API for users to wrap multi-record operations atomically. Users who need atomicity must drop down to raw SeaORM.
+~~There is no `begin_transaction()` or any API for users to wrap multi-record operations atomically. Users who need atomicity must drop down to raw SeaORM.~~
 
-**Impact:** Multi-step operations (e.g., transfer balance between accounts) cannot be made atomic through the framework's API.
+**Re-review finding:** Transactions are fully supported. All `Record` trait methods and generated `insert`/`update`/`delete` methods accept `&impl ConnectionTrait`. SeaORM's `DatabaseTransaction` (obtained via `db.begin().await`) implements `ConnectionTrait`. The README (lines 293-305) documents the transaction pattern: `let txn = db.begin().await?; todo.insert(&txn).await?; txn.commit().await?;`. No convenience wrapper exists, but the functionality is there.
 
 ---
 
@@ -222,11 +222,13 @@ Each migration runs individually without a transaction. If a migration partially
 
 ---
 
-### DES-04: No DB connection timeouts configured
+### DES-04: No DB connection timeouts configured [PARTIALLY ACCURATE]
 
 **Location:** `modo-db/src/connect.rs:11-13`
 
 `ConnectOptions` only sets `max_connections` and `min_connections`. Missing `acquire_timeout`, `idle_timeout`, `max_lifetime`, and `connect_timeout`. Requests wait indefinitely for a connection under pool exhaustion.
+
+**Re-review note:** For SQLite specifically, `apply_sqlite_pragmas` sets `PRAGMA busy_timeout=5000` (5-second busy timeout), providing timeout for lock contention. The claim is accurate for Postgres pool-level timeouts and for SQLite pool acquire/connect timeouts.
 
 ---
 
@@ -238,11 +240,13 @@ Three separate queries (COUNT, SELECT oldest, DELETE) with no transaction. Under
 
 ---
 
-### DES-06: SessionManager holds mutex across async DB ops
+### ~~DES-06: SessionManager holds mutex across async DB ops~~ [FALSE POSITIVE]
 
 **Location:** `modo-session/src/manager.rs:122-140`
 
-`set`, `remove_key`, and `revoke` hold the `current_session` mutex lock across `.await` calls. This causes `user_id_from_extensions` (which uses `try_lock`) to return `None` during those operations, making the user appear unauthenticated to concurrent middleware.
+~~`set`, `remove_key`, and `revoke` hold the `current_session` mutex lock across `.await` calls. This causes `user_id_from_extensions` (which uses `try_lock`) to return `None` during those operations, making the user appear unauthenticated to concurrent middleware.~~
+
+**Re-review finding:** `SessionManagerState` is created fresh per request in `SessionMiddleware::call` (middleware.rs:171-178). Each request gets its own `Arc<SessionManagerState>` with its own mutexes. The shared `SessionStore` (DB client) has no mutex contention. Lock contention on request A's mutex has zero effect on request B. The only caller of `try_lock` (`user_id_from_extensions`) runs in the pre-handler phase via `UserContextLayer`, before any handler code could call `set`/`remove_key`/`revoke`. Cross-request interference is impossible.
 
 ---
 
@@ -374,19 +378,23 @@ Two modules with the same Rust identifier name (in different scopes) would silen
 
 ---
 
-### DES-23: OpenDAL store_stream collapses to single allocation
+### DES-23: OpenDAL store_stream collapses to single allocation [PARTIALLY ACCURATE]
 
 **Location:** `modo-upload/src/storage/opendal.rs:48`
 
 `stream.to_bytes()` collects all chunks into a single allocation before writing to S3. For large files, this means a second full-size memory allocation. OpenDAL supports streaming writers but they are not used.
 
+**Re-review note:** When there is only one chunk, `Bytes::clone` is used (zero-copy, Arc-based). Multi-chunk case uses a single `BytesMut::with_capacity(total_size)` — efficient allocation, not repeated reallocations. The real issue is that the entire file must be in memory before OpenDAL can write it (no streaming), not allocation inefficiency per se.
+
 ---
 
-### DES-24: SessionConfig max_sessions_per_user = 0 breaks auth
+### DES-24: SessionConfig max_sessions_per_user = 0 breaks auth [PARTIALLY ACCURATE]
 
 **Location:** `modo-session/src/store.rs:247`
 
 If `max_sessions_per_user = 0`, every newly created session is immediately evicted. Authentication silently always fails with no error returned.
+
+**Re-review note:** The default is `10`, not `0`. This requires deliberate misconfiguration. The issue is a missing input validation guard (`max_sessions_per_user > 0` at construction time), not a default behavior problem.
 
 ---
 
@@ -398,11 +406,13 @@ Deserialization failure (e.g., stored type changed between deploys) returns `Ok(
 
 ---
 
-### DES-26: OptionalAuth doc says "never rejects" but returns 500
+### DES-26: OptionalAuth doc says "never rejects" but returns 500 [PARTIALLY ACCURATE]
 
 **Location:** `modo-auth/src/extractor.rs:111-120`
 
 The doc comment says "Never rejects", but it returns `Err` (500) when `UserProviderService<U>` is not registered or the provider returns an infrastructure error.
+
+**Re-review note:** Lines 93-96 of the doc comment already qualify the behavior: "Returns 500 Internal Server Error if session middleware or UserProviderService<U> is not registered, or if the provider returns an infrastructure error." The original report only quoted the headline sentence. The full documentation is not contradictory — but the "Never rejects" phrase is misleading without reading the subsequent lines.
 
 ---
 

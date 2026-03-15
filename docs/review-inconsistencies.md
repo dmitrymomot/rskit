@@ -23,9 +23,11 @@ Two different patterns exist for async pluggable traits:
 
 ## Error Handling
 
-### INC-02: No crate-level error types outside modo
+### INC-02: No crate-level error types outside modo [PARTIALLY ACCURATE]
 
 All sub-crates produce `modo::Error` directly. There is no domain-specific error type for sessions, jobs, email, etc. Callers cannot distinguish error sources at the type level.
+
+**Re-review note:** `modo` core defines `ConfigError` (config.rs:296-312), a distinct thiserror-derived enum for config loading. `modo-db` has `db_err_to_error()` as a conversion helper (orphan rule workaround). These are not full domain error types but represent nuance the original claim missed.
 
 ### INC-03: Error message casing varies
 
@@ -99,9 +101,11 @@ Email send failures, template rendering errors, and transport selection are neve
 
 ## ID Types
 
-### INC-13: SessionId and JobId are structurally identical
+### INC-13: SessionId and JobId are structurally identical [PARTIALLY ACCURATE]
 
-Both `modo-session/src/types.rs` (`SessionId(String)`) and `modo-jobs/src/types.rs` (`JobId(String)`) are identical newtypes over `String` backed by ULID, with the same trait impls (`from_raw`, `new`, `as_str`, `Display`, `FromStr`). `JobId` additionally has `From<String>`, `From<&str>`, `AsRef<str>` that `SessionId` does not.
+Both `modo-session/src/types.rs` (`SessionId(String)`) and `modo-jobs/src/types.rs` (`JobId(String)`) are newtypes over `String` backed by ULID with similar core APIs.
+
+**Re-review note:** The APIs differ more than stated. `SessionId::default()` generates a new ULID; `JobId` derives `Default` (yields empty string). `JobId` has `From<String>`, `From<&str>`, `AsRef<str>` that `SessionId` does not. `SessionId` has `from_raw()` that `JobId` does not. The structural type is similar but the trait surface and default behavior differ meaningfully.
 
 **Recommendation:** Create a shared `UlidId` macro or generic newtype to eliminate duplication and ensure consistent trait impls.
 
@@ -123,9 +127,11 @@ CLAUDE.md convention: "use 'ContextLayer' suffix for layers that inject template
 
 `modo-email/src/factory.rs:10`: `pub fn mailer(config: &EmailConfig) -> Result<Mailer>` and `pub fn mailer_with(...)`. Every other configurable service uses a builder or `new(config)` constructor pattern.
 
-### INC-17: Session layer function duplicates constructor
+### INC-17: Session layer function duplicates constructor [PARTIALLY ACCURATE]
 
 `modo-session/src/middleware.rs:79`: `pub fn layer(store: SessionStore) -> SessionContextLayer`. Also has `SessionContextLayer::new()`. Having two construction paths is confusing.
+
+**Re-review note:** `SessionContextLayer::new()` is private (no `pub` keyword), not a public duplicate. The public interface is only the `layer()` free function, which internally calls `new()`. There is no API ambiguity from the user's perspective.
 
 ---
 
@@ -156,9 +162,11 @@ Three different patterns exist:
 
 `AppConfig` integrates `ServerConfig`, `CookieConfig`, `TemplateConfig`, `I18nConfig`, `CsrfConfig`, and `SseConfig`. But `DatabaseConfig`, `SessionConfig`, `JobsConfig`, `EmailConfig`, and `UploadConfig` are NOT included. Each must be manually embedded in the application's settings struct.
 
-### INC-20: No env-var-only configuration path
+### INC-20: No env-var-only configuration path [PARTIALLY ACCURATE]
 
 All configuration is loaded via YAML with `${VAR}` substitution. Sub-crate configs have no direct environment variable reading. The only env var the framework reads directly is `MODO_ENV`. No 12-factor style env-var-only path exists.
+
+**Re-review note:** `load_or_default<T>()` returns `T::default()` if the config directory or YAML file is absent, allowing zero-YAML operation with all defaults. Additionally, `${VAR}` substitution allows YAML content to be 100% environment-variable-sourced. Not a true 12-factor env-var path, but partial escape hatches exist.
 
 ---
 
