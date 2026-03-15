@@ -157,8 +157,9 @@ pub struct TemplateContext {
 }
 ```
 
-Built-in values injected by `ContextLayer`:
-- `current_url` — the full request URI string.
+Built-in values injected by `ContextLayer` and framework middleware:
+- `current_url` — the full request URI string (injected by `ContextLayer`).
+- `request_id` — the per-request ULID string (injected by a framework middleware layer after `ContextLayer`).
 
 Additional values injected automatically by other middleware (when features are enabled):
 - `locale` — resolved language tag (i18n middleware).
@@ -829,6 +830,7 @@ use my_templates::functions as _;
 - `TemplateEngine` — `modo::TemplateEngine`
 - `TemplateConfig` — `modo::TemplateConfig`
 - `TemplateContext` — `modo::TemplateContext`
+- `TemplateError` — `modo::templates::TemplateError`
 - `View` — `modo::templates::View`
 - `ViewRender` — `modo::ViewRender`
 - `ViewRenderer` — `modo::ViewRenderer`
