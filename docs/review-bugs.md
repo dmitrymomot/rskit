@@ -26,7 +26,7 @@ A readiness probe that fails should conventionally return 503 (Service Unavailab
 
 ---
 
-### BUG-03: ContextLayer overwrites existing TemplateContext
+### ~~BUG-03: ContextLayer overwrites existing TemplateContext~~ [FIXED]
 
 **Location:** `modo/src/templates/middleware.rs:53-56`
 
@@ -114,7 +114,7 @@ Same issue in `modo-tenant` restore: `self.deleted_at = None` is set before `bef
 
 ---
 
-### BUG-11: Tenant resolver Ok(None) is never cached
+### ~~BUG-11: Tenant resolver Ok(None) is never cached~~ [FIXED]
 
 **Location:** `modo-tenant/src/extractor.rs:39`
 
@@ -164,7 +164,7 @@ The target entity name is inferred by trimming a trailing `'s'` from the Pascal-
 
 ---
 
-### BUG-16: RateLimitInfo extractor returns 500 when rate limiting disabled
+### ~~BUG-16: RateLimitInfo extractor returns 500 when rate limiting disabled~~ [FIXED]
 
 **Location:** `modo/src/middleware/rate_limit.rs:113-126`
 
@@ -184,7 +184,7 @@ The target entity name is inferred by trimming a trailing `'s'` from the Pascal-
 
 ---
 
-### BUG-18: Job cancel returns 500 for user-facing 404/conflict
+### ~~BUG-18: Job cancel returns 500 for user-facing 404/conflict~~ [FIXED]
 
 **Location:** `modo-jobs/src/queue.rs:105`
 

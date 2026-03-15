@@ -50,9 +50,11 @@ where
         Box::pin(async move {
             let (mut parts, body) = request.into_parts();
 
-            let mut ctx = TemplateContext::new();
+            let mut ctx = parts
+                .extensions
+                .remove::<TemplateContext>()
+                .unwrap_or_default();
             ctx.insert("current_url", parts.uri.to_string());
-
             parts.extensions.insert(ctx);
 
             let request = Request::from_parts(parts, body);

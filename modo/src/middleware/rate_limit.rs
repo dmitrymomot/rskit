@@ -125,6 +125,30 @@ impl FromRequestParts<AppState> for RateLimitInfo {
     }
 }
 
+/// Rate limit info extractor that never rejects.
+/// Returns `None` when rate limiting middleware is not configured.
+pub struct OptionalRateLimitInfo(pub Option<RateLimitInfo>);
+
+impl std::ops::Deref for OptionalRateLimitInfo {
+    type Target = Option<RateLimitInfo>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl FromRequestParts<AppState> for OptionalRateLimitInfo {
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(OptionalRateLimitInfo(
+            parts.extensions.get::<RateLimitInfo>().cloned(),
+        ))
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Key functions
 // ---------------------------------------------------------------------------
@@ -259,6 +283,42 @@ pub fn spawn_cleanup_task(limiter: Arc<RateLimiterState>) -> tokio::task::JoinHa
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn optional_rate_limit_info_returns_none_without_middleware() {
+        use crate::app::{AppState, ServiceRegistry};
+        use axum::Router;
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use axum::routing::get;
+        use tower::ServiceExt;
+
+        let state = AppState {
+            services: ServiceRegistry::new(),
+            server_config: Default::default(),
+            cookie_key: axum_extra::extract::cookie::Key::generate(),
+        };
+
+        let app = Router::new()
+            .route(
+                "/",
+                get(|info: OptionalRateLimitInfo| async move {
+                    if info.is_none() { "none" } else { "some" }
+                }),
+            )
+            .with_state(state);
+
+        let resp = app
+            .oneshot(Request::get("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&body[..], b"none");
+    }
 
     #[test]
     fn test_token_bucket_allows_within_limit() {

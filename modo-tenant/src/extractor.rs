@@ -31,18 +31,14 @@ where
     T: Clone + Send + Sync + HasTenantId + serde::Serialize + 'static,
 {
     if let Some(cached) = parts.extensions.get::<ResolvedTenant<T>>() {
-        return Ok(Some(Arc::clone(&cached.0)));
+        return Ok(cached.0.clone());
     }
 
     let tenant = resolver.resolve(parts).await?;
 
-    if let Some(t) = tenant {
-        let arc = Arc::new(t);
-        parts.extensions.insert(ResolvedTenant(Arc::clone(&arc)));
-        return Ok(Some(arc));
-    }
-
-    Ok(None)
+    let arc = tenant.map(Arc::new);
+    parts.extensions.insert(ResolvedTenant(arc.clone()));
+    Ok(arc)
 }
 
 /// Resolve tenant using the `TenantResolverService` from `AppState`.
@@ -383,6 +379,62 @@ mod tests {
             .unwrap();
 
         assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn resolver_called_once_when_none() {
+        let call_count = Arc::new(AtomicUsize::new(0));
+
+        struct NoneCountingResolver {
+            count: Arc<AtomicUsize>,
+        }
+
+        impl crate::TenantResolver for NoneCountingResolver {
+            type Tenant = TestTenant;
+
+            async fn resolve(
+                &self,
+                _parts: &modo::axum::http::request::Parts,
+            ) -> Result<Option<Self::Tenant>, modo::Error> {
+                self.count.fetch_add(1, Ordering::SeqCst);
+                Ok(None)
+            }
+        }
+
+        let resolver = NoneCountingResolver {
+            count: call_count.clone(),
+        };
+        let services = ServiceRegistry::new().with(TenantResolverService::new(resolver));
+        let state = AppState {
+            services,
+            server_config: Default::default(),
+            cookie_key: axum_extra::extract::cookie::Key::generate(),
+        };
+
+        let app = Router::new()
+            .route(
+                "/",
+                get(
+                    |opt1: OptionalTenant<TestTenant>,
+                     opt2: OptionalTenant<TestTenant>| async move {
+                        format!("{}-{}", opt1.is_none(), opt2.is_none())
+                    },
+                ),
+            )
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .header("host", "unknown.test.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(call_count.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]

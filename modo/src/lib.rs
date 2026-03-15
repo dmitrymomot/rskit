@@ -55,7 +55,7 @@ pub use error::{
 pub use extractor::Service;
 #[cfg(feature = "i18n")]
 pub use i18n::{I18n, I18nConfig};
-pub use middleware::{ClientIp, RateLimitInfo};
+pub use middleware::{ClientIp, OptionalRateLimitInfo, RateLimitInfo};
 pub use request_id::RequestId;
 pub use router::Method;
 pub use sanitize::Sanitize;

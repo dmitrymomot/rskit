@@ -102,10 +102,8 @@ impl JobQueue {
         .map_err(|e| modo::Error::internal(format!("Failed to cancel job: {e}")))?;
 
         if result.rows_affected == 0 {
-            return Err(modo::Error::internal(format!(
-                "Job {} not found or not in pending state",
-                id
-            )));
+            return Err(modo::HttpError::Conflict
+                .with_message(format!("Job {} not found or not in pending state", id)));
         }
 
         Ok(())
@@ -143,5 +141,43 @@ impl JobQueue {
             .map_err(|e| modo::Error::internal(format!("Failed to insert job: {e}")))?;
 
         Ok(id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use modo_db::sea_orm::{ConnectionTrait, Database, Schema};
+
+    async fn setup_db() -> modo_db::sea_orm::DatabaseConnection {
+        let db = Database::connect("sqlite::memory:")
+            .await
+            .expect("Failed to connect");
+
+        let schema = Schema::new(db.get_database_backend());
+        let mut builder = schema.builder();
+        let reg = inventory::iter::<modo_db::EntityRegistration>()
+            .find(|r| r.table_name == "modo_jobs")
+            .unwrap();
+        builder = (reg.register_fn)(builder);
+        builder.sync(&db).await.expect("Schema sync failed");
+        for sql in reg.extra_sql {
+            db.execute_unprepared(sql).await.expect("Extra SQL failed");
+        }
+        db
+    }
+
+    #[tokio::test]
+    async fn cancel_nonexistent_job_returns_409() {
+        let db = setup_db().await;
+        let queue = JobQueue {
+            db,
+            max_payload_bytes: None,
+        };
+
+        let fake_id = JobId::new();
+        let err = queue.cancel(&fake_id).await.unwrap_err();
+
+        assert_eq!(err.status_code(), modo::axum::http::StatusCode::CONFLICT);
     }
 }
