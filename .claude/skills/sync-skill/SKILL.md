@@ -110,6 +110,8 @@ For each claim in the reference doc, verify against source:
 - [ ] Gotchas are still accurate
 - [ ] Macro attribute syntax matches the parser, not just doc comments
 - [ ] `lib.rs` re-export lists in references are complete
+- [ ] Macro-generated code compiles for each parameter kind (payload, `Service<T>`, `Db`, no-args) — trace the types through the generated setup statements
+- [ ] Prose that enumerates enum variants or states is exhaustive — prefer "not in X state" over listing every other variant
 
 ### Step 6: Fix inconsistencies
 
@@ -126,6 +128,8 @@ Apply fixes. Common issues to watch for:
 - **Abstraction layer drift** — the crate may have added a higher-level API (like `Record`
   trait) on top of a lower-level one (raw SeaORM). Always document the idiomatic higher-level
   API as the primary pattern, with the lower-level as an escape hatch.
+- **Non-Rust terminology** — replace borrowed terms from other ecosystems (e.g. "goroutine",
+  "channel" when meaning tokio channel) with standard Rust/Tokio vocabulary.
 
 ### Step 7: Update SKILL.md if needed
 
@@ -162,3 +166,4 @@ After completing the sync, list:
 3. New sections or examples added
 4. `cargo doc` result (pass or issues found)
 5. Any items that need user clarification
+6. Code bugs discovered (not doc issues) — type mismatches, dead code paths, latent compile errors in macro codegen
