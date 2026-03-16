@@ -1,6 +1,7 @@
 use crate::config::DatabaseConfig;
 use crate::pool::DbPool;
 use sea_orm::{ConnectOptions, Database};
+use std::time::Duration;
 use tracing::info;
 
 /// Connect to the database using the provided configuration.
@@ -10,7 +11,10 @@ use tracing::info;
 pub async fn connect(config: &DatabaseConfig) -> Result<DbPool, modo::Error> {
     let mut opts = ConnectOptions::new(&config.url);
     opts.max_connections(config.max_connections)
-        .min_connections(config.min_connections);
+        .min_connections(config.min_connections)
+        .acquire_timeout(Duration::from_secs(config.acquire_timeout_secs))
+        .idle_timeout(Duration::from_secs(config.idle_timeout_secs))
+        .max_lifetime(Duration::from_secs(config.max_lifetime_secs));
 
     let conn = Database::connect(opts)
         .await
