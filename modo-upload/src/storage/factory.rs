@@ -20,7 +20,7 @@ pub fn storage(config: &crate::config::UploadConfig) -> Result<Arc<dyn FileStora
         }
         #[cfg(not(feature = "local"))]
         crate::config::StorageBackend::Local => Err(modo::Error::internal(
-            "Local storage backend requires the `local` feature",
+            "local storage backend requires the `local` feature",
         )),
 
         #[cfg(feature = "opendal")]
