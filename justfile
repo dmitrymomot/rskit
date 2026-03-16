@@ -18,6 +18,10 @@ lint:
 test:
     cargo test --workspace --all-targets
 
+# Run all tests with postgres feature (requires running Postgres)
+test-pg:
+    cargo test --workspace --all-targets --features postgres
+
 # Run all checks (fmt + lint + test) — use in CI or pre-push
 check: fmt-check lint test
 
