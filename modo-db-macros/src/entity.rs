@@ -659,13 +659,14 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     let mut extra_sql_stmts = Vec::new();
     for idx in &struct_attrs.indices {
-        let cols = idx.columns.join(", ");
+        let quoted_cols: Vec<String> = idx.columns.iter().map(|c| format!("\"{c}\"")).collect();
+        let cols = quoted_cols.join(", ");
         let col_names = idx.columns.join("_");
         let idx_name = format!("idx_{table_name}_{col_names}");
         let sql = if idx.unique {
-            format!("CREATE UNIQUE INDEX IF NOT EXISTS {idx_name} ON {table_name}({cols})")
+            format!("CREATE UNIQUE INDEX IF NOT EXISTS \"{idx_name}\" ON \"{table_name}\"({cols})")
         } else {
-            format!("CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name}({cols})")
+            format!("CREATE INDEX IF NOT EXISTS \"{idx_name}\" ON \"{table_name}\"({cols})")
         };
         extra_sql_stmts.push(sql);
     }
@@ -674,7 +675,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     if struct_attrs.soft_delete {
         let idx_name = format!("idx_{table_name}_deleted_at");
         extra_sql_stmts.push(format!(
-            "CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name}(deleted_at)"
+            "CREATE INDEX IF NOT EXISTS \"{idx_name}\" ON \"{table_name}\"(\"deleted_at\")"
         ));
     }
 
