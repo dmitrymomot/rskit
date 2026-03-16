@@ -1,11 +1,44 @@
 use std::collections::HashMap;
 
+/// Escape HTML special characters for safe embedding in HTML email output.
+fn html_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#x27;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Replace `{{key}}` placeholders, HTML-escaping all substituted values.
+///
+/// Use this for template bodies that will be rendered as HTML. For plain-text
+/// contexts (e.g., email subject lines), use [`substitute`] instead.
+pub fn substitute_html(input: &str, context: &HashMap<String, serde_json::Value>) -> String {
+    substitute_inner(input, context, true)
+}
+
 /// Replace `{{key}}` placeholders in `input` with values from `context`.
 ///
 /// - Whitespace inside braces is trimmed: `{{ name }}` matches key `"name"`.
 /// - String values are inserted directly; other JSON types use their `to_string()` representation.
 /// - Unresolved placeholders are left as-is.
+/// - Values are NOT HTML-escaped. For HTML contexts, use [`substitute_html`].
 pub fn substitute(input: &str, context: &HashMap<String, serde_json::Value>) -> String {
+    substitute_inner(input, context, false)
+}
+
+fn substitute_inner(
+    input: &str,
+    context: &HashMap<String, serde_json::Value>,
+    escape_html: bool,
+) -> String {
     let mut result = String::with_capacity(input.len());
     let mut chars = input.chars().peekable();
 
@@ -27,9 +60,14 @@ pub fn substitute(input: &str, context: &HashMap<String, serde_json::Value>) -> 
             let key = key.trim();
             if found_close {
                 if let Some(val) = context.get(key) {
-                    match val {
-                        serde_json::Value::String(s) => result.push_str(s),
-                        other => result.push_str(&other.to_string()),
+                    let raw = match val {
+                        serde_json::Value::String(s) => s.clone(),
+                        other => other.to_string(),
+                    };
+                    if escape_html {
+                        result.push_str(&html_escape(&raw));
+                    } else {
+                        result.push_str(&raw);
                     }
                 } else {
                     result.push_str("{{");
@@ -170,5 +208,32 @@ mod tests {
         ctx.insert("名前".to_string(), json!("太郎"));
         let result = substitute("Hello {{名前}}", &ctx);
         assert_eq!(result, "Hello 太郎");
+    }
+
+    #[test]
+    fn html_in_values_is_escaped_for_html() {
+        let mut ctx = HashMap::new();
+        ctx.insert("name".to_string(), json!("<script>alert('xss')</script>"));
+        let result = substitute_html("Hello {{name}}", &ctx);
+        assert_eq!(
+            result,
+            "Hello &lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;"
+        );
+    }
+
+    #[test]
+    fn ampersand_in_values_is_escaped_for_html() {
+        let mut ctx = HashMap::new();
+        ctx.insert("company".to_string(), json!("A&B \"Corp\""));
+        let result = substitute_html("From {{company}}", &ctx);
+        assert_eq!(result, "From A&amp;B &quot;Corp&quot;");
+    }
+
+    #[test]
+    fn plain_substitute_does_not_escape() {
+        let mut ctx = HashMap::new();
+        ctx.insert("name".to_string(), json!("O'Brien & Co"));
+        let result = substitute("Hello {{name}}", &ctx);
+        assert_eq!(result, "Hello O'Brien & Co");
     }
 }

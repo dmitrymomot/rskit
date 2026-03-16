@@ -42,8 +42,10 @@ impl Mailer {
         let template = self.templates.get(&email.template, locale)?;
 
         // Substitute variables in subject and body.
+        // Subject is a plain-text RFC 5322 header — must NOT be HTML-escaped.
+        // Body flows through Markdown → HTML layout, so values must be HTML-escaped.
         let subject = vars::substitute(&template.subject, &email.context);
-        let body = vars::substitute(&template.body, &email.context);
+        let body = vars::substitute_html(&template.body, &email.context);
 
         // Validate brand_color as a CSS hex color; fall back to default if invalid.
         let button_color = email
