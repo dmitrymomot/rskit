@@ -459,35 +459,36 @@ mod tests {
 
     #[test]
     fn test_substitute_simple_var() {
-        unsafe { std::env::set_var("MODO_TEST_VAR", "hello") };
-        assert_eq!(substitute_env_vars("${MODO_TEST_VAR}"), "hello");
-        unsafe { std::env::remove_var("MODO_TEST_VAR") };
+        temp_env::with_var("MODO_TEST_VAR", Some("hello"), || {
+            assert_eq!(substitute_env_vars("${MODO_TEST_VAR}"), "hello");
+        });
     }
 
     #[test]
     fn test_substitute_with_default() {
-        unsafe { std::env::remove_var("MODO_UNSET_VAR") };
-        assert_eq!(
-            substitute_env_vars("${MODO_UNSET_VAR:-fallback}"),
-            "fallback"
-        );
+        temp_env::with_var("MODO_UNSET_VAR", None::<&str>, || {
+            assert_eq!(
+                substitute_env_vars("${MODO_UNSET_VAR:-fallback}"),
+                "fallback"
+            );
+        });
     }
 
     #[test]
     fn test_substitute_empty_uses_default() {
-        unsafe { std::env::set_var("MODO_EMPTY_VAR", "") };
-        assert_eq!(
-            substitute_env_vars("${MODO_EMPTY_VAR:-default_val}"),
-            "default_val"
-        );
-        unsafe { std::env::remove_var("MODO_EMPTY_VAR") };
+        temp_env::with_var("MODO_EMPTY_VAR", Some(""), || {
+            assert_eq!(
+                substitute_env_vars("${MODO_EMPTY_VAR:-default_val}"),
+                "default_val"
+            );
+        });
     }
 
     #[test]
     fn test_substitute_set_var_ignores_default() {
-        unsafe { std::env::set_var("MODO_SET_VAR", "real") };
-        assert_eq!(substitute_env_vars("${MODO_SET_VAR:-ignored}"), "real");
-        unsafe { std::env::remove_var("MODO_SET_VAR") };
+        temp_env::with_var("MODO_SET_VAR", Some("real"), || {
+            assert_eq!(substitute_env_vars("${MODO_SET_VAR:-ignored}"), "real");
+        });
     }
 
     #[test]
@@ -497,8 +498,9 @@ mod tests {
 
     #[test]
     fn test_substitute_no_default_unset() {
-        unsafe { std::env::remove_var("MODO_GONE_VAR") };
-        assert_eq!(substitute_env_vars("port: ${MODO_GONE_VAR}"), "port: ");
+        temp_env::with_var("MODO_GONE_VAR", None::<&str>, || {
+            assert_eq!(substitute_env_vars("port: ${MODO_GONE_VAR}"), "port: ");
+        });
     }
 
     #[test]
@@ -508,13 +510,12 @@ mod tests {
 
     #[test]
     fn test_substitute_mixed() {
-        unsafe { std::env::set_var("MODO_MIX_A", "aaa") };
-        unsafe { std::env::remove_var("MODO_MIX_B") };
-        assert_eq!(
-            substitute_env_vars("start-${MODO_MIX_A}-${MODO_MIX_B:-bbb}-end"),
-            "start-aaa-bbb-end"
-        );
-        unsafe { std::env::remove_var("MODO_MIX_A") };
+        temp_env::with_vars([("MODO_MIX_A", Some("aaa")), ("MODO_MIX_B", None)], || {
+            assert_eq!(
+                substitute_env_vars("start-${MODO_MIX_A}-${MODO_MIX_B:-bbb}-end"),
+                "start-aaa-bbb-end"
+            );
+        });
     }
 
     #[test]

@@ -83,3 +83,4 @@ minijinja = "2"
 serde = { version = "1", features = ["derive"] }
 tempfile = "3"
 futures-util = "0.3"
+temp-env = "0.3"
