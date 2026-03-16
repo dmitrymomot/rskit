@@ -43,9 +43,6 @@ jobs:
 
           echo "Publishing all crates at version $ROOT_VERSION (was ${PUBLISHED:-<new>})..."
 
-          # Macro crates with circular dev-deps need --no-verify
-          NO_VERIFY_CRATES="modo-db-macros modo-jobs-macros modo-upload-macros"
-
           # Topological order based on normal (non-dev) dependencies
           CRATES=(
             modo-macros
@@ -67,11 +64,7 @@ jobs:
 
           for name in "${CRATES[@]}"; do
             echo "Publishing $name $ROOT_VERSION..."
-            flags=""
-            if echo "$NO_VERIFY_CRATES" | grep -qw "$name"; then
-              flags="--no-verify"
-            fi
-            if ! publish_output=$(cargo publish -p "$name" $flags 2>&1); then
+            if ! publish_output=$(cargo publish -p "$name" 2>&1); then
               if echo "$publish_output" | grep -q "already exists"; then
                 echo "$name $ROOT_VERSION already on crates.io — skipping"
                 continue

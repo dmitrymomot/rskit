@@ -17,5 +17,5 @@ syn = { version = "2", features = ["full", "extra-traits"] }
 
 [dev-dependencies]
 trybuild = "1"
-modo-jobs = { workspace = true }
-modo = { workspace = true }
+modo-jobs = { path = "../modo-jobs" }
+modo = { path = "../modo" }

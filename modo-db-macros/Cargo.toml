@@ -16,4 +16,4 @@ proc-macro2 = "1"
 
 [dev-dependencies]
 trybuild = "1"
-modo-db = { workspace = true }
+modo-db = { path = "../modo-db" }

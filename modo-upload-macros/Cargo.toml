@@ -16,4 +16,4 @@ proc-macro2 = "1"
 
 [dev-dependencies]
 trybuild = "1"
-modo-upload = { workspace = true }
+modo-upload = { path = "../modo-upload" }
