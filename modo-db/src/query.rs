@@ -144,10 +144,201 @@ where
             .map(|r| r.map(T::from))
     }
 
+    // ── Join methods ──────────────────────────────────────────────────────────
+
+    /// Perform a 1:1 join (LEFT JOIN) with a related entity.
+    ///
+    /// Requires that `E` implements `Related<F>`.
+    pub fn find_also_related<U, F>(self) -> JoinedQuery<T, U, E, F>
+    where
+        F: EntityTrait + Default,
+        U: From<F::Model> + Send + Sync,
+        F::Model: FromQueryResult + Send + Sync,
+        E: sea_orm::Related<F>,
+    {
+        JoinedQuery {
+            select: self.select.find_also_related(F::default()),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Perform a 1:N join with a related entity.
+    ///
+    /// Requires that `E` implements `Related<F>`.
+    pub fn find_with_related<U, F>(self) -> JoinedManyQuery<T, U, E, F>
+    where
+        F: EntityTrait + Default,
+        U: From<F::Model> + Send + Sync,
+        F::Model: FromQueryResult + Send + Sync,
+        E: sea_orm::Related<F>,
+    {
+        JoinedManyQuery {
+            select: self.select.find_with_related(F::default()),
+            _phantom: PhantomData,
+        }
+    }
+
     // ── Escape hatch ─────────────────────────────────────────────────────────
 
     /// Unwrap the inner `Select<E>` for advanced SeaORM usage.
     pub fn into_select(self) -> Select<E> {
+        self.select
+    }
+}
+
+// ── JoinedQuery (1:1 / find_also_related) ──────────────────────────────────
+
+/// A query builder wrapping SeaORM's `SelectTwo<E, F>` for 1:1 joins.
+///
+/// Results are auto-converted to `(T, Option<U>)` tuples via `From<Model>`.
+pub struct JoinedQuery<T, U, E: EntityTrait, F: EntityTrait> {
+    select: sea_orm::SelectTwo<E, F>,
+    _phantom: PhantomData<(T, U)>,
+}
+
+impl<T, U, E, F> JoinedQuery<T, U, E, F>
+where
+    E: EntityTrait,
+    F: EntityTrait,
+    T: From<E::Model> + Send + Sync,
+    U: From<F::Model> + Send + Sync,
+    E::Model: FromQueryResult + Send + Sync,
+    F::Model: FromQueryResult + Send + Sync,
+{
+    /// Apply a WHERE condition.
+    pub fn filter(self, f: impl IntoCondition) -> Self {
+        Self {
+            select: QueryFilter::filter(self.select, f),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// ORDER BY `col` ASC.
+    pub fn order_by_asc<C: ColumnTrait>(self, col: C) -> Self {
+        Self {
+            select: QueryOrder::order_by_asc(self.select, col),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// ORDER BY `col` DESC.
+    pub fn order_by_desc<C: ColumnTrait>(self, col: C) -> Self {
+        Self {
+            select: QueryOrder::order_by_desc(self.select, col),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// LIMIT `n` rows.
+    pub fn limit(self, n: u64) -> Self {
+        Self {
+            select: QuerySelect::limit(self.select, Some(n)),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// OFFSET `n` rows.
+    pub fn offset(self, n: u64) -> Self {
+        Self {
+            select: QuerySelect::offset(self.select, Some(n)),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Fetch all matching rows, converting both models to domain types.
+    pub async fn all(self, db: &impl ConnectionTrait) -> Result<Vec<(T, Option<U>)>, modo::Error> {
+        let rows = self.select.all(db).await.map_err(db_err_to_error)?;
+        Ok(rows
+            .into_iter()
+            .map(|(a, b)| (T::from(a), b.map(U::from)))
+            .collect())
+    }
+
+    /// Fetch at most one row, converting both models to domain types.
+    pub async fn one(
+        self,
+        db: &impl ConnectionTrait,
+    ) -> Result<Option<(T, Option<U>)>, modo::Error> {
+        let row = self.select.one(db).await.map_err(db_err_to_error)?;
+        Ok(row.map(|(a, b)| (T::from(a), b.map(U::from))))
+    }
+
+    /// Unwrap the inner `SelectTwo<E, F>` for advanced SeaORM usage.
+    pub fn into_select(self) -> sea_orm::SelectTwo<E, F> {
+        self.select
+    }
+}
+
+// ── JoinedManyQuery (1:N / find_with_related) ──────────────────────────────
+
+/// A query builder wrapping SeaORM's `SelectTwoMany<E, F>` for 1:N joins.
+///
+/// Results are auto-converted to `(T, Vec<U>)` tuples via `From<Model>`.
+pub struct JoinedManyQuery<T, U, E: EntityTrait, F: EntityTrait> {
+    select: sea_orm::SelectTwoMany<E, F>,
+    _phantom: PhantomData<(T, U)>,
+}
+
+impl<T, U, E, F> JoinedManyQuery<T, U, E, F>
+where
+    E: EntityTrait,
+    F: EntityTrait,
+    T: From<E::Model> + Send + Sync,
+    U: From<F::Model> + Send + Sync,
+    E::Model: FromQueryResult + Send + Sync,
+    F::Model: FromQueryResult + Send + Sync,
+{
+    /// Apply a WHERE condition.
+    pub fn filter(self, f: impl IntoCondition) -> Self {
+        Self {
+            select: QueryFilter::filter(self.select, f),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// ORDER BY `col` ASC.
+    pub fn order_by_asc<C: ColumnTrait>(self, col: C) -> Self {
+        Self {
+            select: QueryOrder::order_by_asc(self.select, col),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// ORDER BY `col` DESC.
+    pub fn order_by_desc<C: ColumnTrait>(self, col: C) -> Self {
+        Self {
+            select: QueryOrder::order_by_desc(self.select, col),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// LIMIT `n` rows.
+    pub fn limit(self, n: u64) -> Self {
+        Self {
+            select: QuerySelect::limit(self.select, Some(n)),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// OFFSET `n` rows.
+    pub fn offset(self, n: u64) -> Self {
+        Self {
+            select: QuerySelect::offset(self.select, Some(n)),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Fetch all matching rows, converting both models to domain types.
+    pub async fn all(self, db: &impl ConnectionTrait) -> Result<Vec<(T, Vec<U>)>, modo::Error> {
+        let rows = self.select.all(db).await.map_err(db_err_to_error)?;
+        Ok(rows
+            .into_iter()
+            .map(|(a, bs)| (T::from(a), bs.into_iter().map(U::from).collect()))
+            .collect())
+    }
+
+    /// Unwrap the inner `SelectTwoMany<E, F>` for advanced SeaORM usage.
+    pub fn into_select(self) -> sea_orm::SelectTwoMany<E, F> {
         self.select
     }
 }
