@@ -129,6 +129,7 @@ async fn offset_beyond_last_page() {
 async fn offset_per_page_clamped_to_100() {
     let db = setup_db().await;
 
+    // No rows needed — clamping is metadata-only (happens before the query).
     let params = PageParams {
         page: 1,
         per_page: 999,

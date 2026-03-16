@@ -1,3 +1,9 @@
+//! Dependency smoke tests for cron scheduling infrastructure.
+//!
+//! These tests validate the upstream `cron` and `tokio_util` crates that
+//! modo-jobs relies on for cron scheduling — they don't exercise modo-jobs
+//! APIs directly, but guard against regressions in key dependency behaviour.
+
 use chrono::Utc;
 use cron::Schedule;
 use std::str::FromStr;
