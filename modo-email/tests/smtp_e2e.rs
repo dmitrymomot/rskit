@@ -5,7 +5,8 @@ use modo_email::template::filesystem::FilesystemProvider;
 use modo_email::template::layout::LayoutEngine;
 use modo_email::transport::smtp::SmtpTransport;
 use modo_email::{
-    MailMessage, MailTransport, Mailer, SendEmail, SenderProfile, SmtpConfig, TemplateProvider,
+    MailMessage, MailTransport, Mailer, SendEmail, SenderProfile, SmtpConfig, SmtpSecurity,
+    TemplateProvider,
 };
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
@@ -121,7 +122,7 @@ async fn smtp_end_to_end() {
         port,
         username: String::new(),
         password: String::new(),
-        tls: false,
+        security: SmtpSecurity::None,
     })
     .unwrap();
 
@@ -188,7 +189,7 @@ async fn smtp_full_pipeline_end_to_end() {
             port,
             username: String::new(),
             password: String::new(),
-            tls: false,
+            security: SmtpSecurity::None,
         })
         .unwrap(),
     );

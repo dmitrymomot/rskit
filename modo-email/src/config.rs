@@ -76,6 +76,7 @@ pub enum SmtpSecurity {
     None,
     /// Upgrade a plaintext connection to TLS via the STARTTLS command (port 587).
     #[default]
+    #[serde(rename = "starttls")]
     StartTls,
     /// Connect with TLS from the start — SMTPS (port 465).
     ImplicitTls,

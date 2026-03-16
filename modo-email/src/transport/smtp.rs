@@ -15,15 +15,25 @@ pub struct SmtpTransport {
 impl SmtpTransport {
     /// Create an SMTP transport from `SmtpConfig`.
     ///
-    /// When `config.tls` is `true`, uses STARTTLS via `relay()`.
-    /// When `false`, connects without TLS (useful for local dev or trusted relays).
+    /// - `SmtpSecurity::None` — plaintext, no TLS (local dev / trusted relay).
+    /// - `SmtpSecurity::StartTls` — upgrades a plaintext connection via STARTTLS (port 587).
+    /// - `SmtpSecurity::ImplicitTls` — direct TLS connection, SMTPS (port 465).
     pub fn new(config: &SmtpConfig) -> Result<Self, modo::Error> {
-        let builder = if config.tls {
-            AsyncSmtpTransport::<Tokio1Executor>::relay(&config.host)
-                .map_err(|e| modo::Error::internal(format!("SMTP config error: {e}")))?
-                .port(config.port)
-        } else {
-            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&config.host).port(config.port)
+        let builder = match config.security {
+            crate::config::SmtpSecurity::None => {
+                AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&config.host)
+                    .port(config.port)
+            }
+            crate::config::SmtpSecurity::StartTls => {
+                AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&config.host)
+                    .map_err(|e| modo::Error::internal(format!("SMTP config error: {e}")))?
+                    .port(config.port)
+            }
+            crate::config::SmtpSecurity::ImplicitTls => {
+                AsyncSmtpTransport::<Tokio1Executor>::relay(&config.host)
+                    .map_err(|e| modo::Error::internal(format!("SMTP config error: {e}")))?
+                    .port(config.port)
+            }
         };
 
         let mailer = if !config.username.is_empty() {
