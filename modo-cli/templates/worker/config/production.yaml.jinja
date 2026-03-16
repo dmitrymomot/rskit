@@ -6,6 +6,12 @@ database:
   url: ${DATABASE_URL}
   max_connections: 20
   min_connections: 5
+{%- if db_driver == "sqlite" %}
+jobs_database:
+  url: ${JOBS_DATABASE_URL}
+  max_connections: 10
+  min_connections: 2
+{%- endif %}
 jobs:
   queues:
     - name: default

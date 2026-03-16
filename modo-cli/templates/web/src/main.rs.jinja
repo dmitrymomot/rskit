@@ -23,7 +23,7 @@ async fn main(
 
     let session_store = modo_session::SessionStore::new(
         &db,
-        modo_session::SessionConfig::default(),
+        config.session,
         config.core.cookies.clone(),
     );
 

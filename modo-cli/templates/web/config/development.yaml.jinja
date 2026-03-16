@@ -30,18 +30,23 @@ jobs:
       concurrency: 2
 cookie:
   secure: false
+session:
+  session_ttl_secs: 2592000
+  validate_fingerprint: true
+  max_sessions_per_user: 10
 # Mailpit Web UI: http://localhost:8025
 email:
   templates_path: templates/emails
   default_from_name: {{ project_name }}
   default_from_email: noreply@localhost
+  cache_templates: false
   smtp:
     host: localhost
     port: 1025
-    tls: false
+    security: none
 i18n:
   path: locales
-  default_locale: en
+  default_lang: en
 {%- if s3 %}
 upload:
   backend: s3

@@ -2,6 +2,7 @@ use modo::AppConfig;
 use modo_db::DatabaseConfig;
 use modo_email::EmailConfig;
 use modo_jobs::JobsConfig;
+use modo_session::SessionConfig;
 use modo_upload::UploadConfig;
 use serde::Deserialize;
 
@@ -15,6 +16,8 @@ pub(crate) struct Config {
 {%- endif %}
     #[serde(default)]
     pub(crate) jobs: JobsConfig,
+    #[serde(default)]
+    pub(crate) session: SessionConfig,
     #[serde(default)]
     pub(crate) email: EmailConfig,
     #[serde(default)]

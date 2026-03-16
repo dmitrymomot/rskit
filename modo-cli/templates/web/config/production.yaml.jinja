@@ -10,12 +10,24 @@ database:
   url: ${DATABASE_URL}
   max_connections: 20
   min_connections: 5
+{%- if db_driver == "sqlite" %}
+jobs_database:
+  url: ${JOBS_DATABASE_URL}
+  max_connections: 10
+  min_connections: 2
+{%- endif %}
 jobs:
   queues:
     - name: default
       concurrency: 4
     - name: email
       concurrency: 2
+cookie:
+  secure: true
+session:
+  session_ttl_secs: 2592000
+  validate_fingerprint: true
+  max_sessions_per_user: 10
 email:
   templates_path: templates/emails
   default_from_name: ${EMAIL_FROM_NAME}
@@ -24,7 +36,7 @@ email:
     api_key: ${RESEND_API_KEY}
 i18n:
   path: locales
-  default_locale: en
+  default_lang: en
 upload:
   backend: s3
   s3:

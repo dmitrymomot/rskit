@@ -4,18 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-modo = { version = "0.1", features = ["templates", "csrf", "i18n", "sse", "static-embed"] }
-modo-db = { version = "0.1", features = ["{{ db_driver }}"] }
-modo-auth = "0.1"
-modo-session = "0.1"
-modo-jobs = "0.1"
-modo-email = "0.1"
-modo-upload = { version = "0.1", features = ["opendal"] }
-modo-tenant = "0.1"
+modo = { version = "0.3", features = ["templates", "csrf", "i18n", "sse", "static-embed"] }
+modo-db = { version = "0.3", features = ["{{ db_driver }}"] }
+modo-session = "0.3"
+modo-jobs = "0.3"
+modo-email = "0.3"
+modo-upload = { version = "0.3", features = ["opendal"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-chrono = "0.4"
-tokio = { version = "1", features = ["full"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("templates", "sse", "csrf", "i18n", "static-embed"))'] }
