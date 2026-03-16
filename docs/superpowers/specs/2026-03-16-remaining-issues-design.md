@@ -11,7 +11,7 @@
 | 3 | Logging & Observability | 3 | Batch 1 (INC-06) |
 | 4 | Macro & API Surface | 2 | Batch 1 (INC-15) |
 | 5 | Framework Core Features | 7 | None |
-| 6 | Database Features | 7 | None |
+| 6 | Database Features | 6 | None |
 | 7 | Jobs Features | 5 | None |
 | 8 | Email + Upload + Multi-tenancy | 6 | None |
 | 9 | Testing Infrastructure | 13 | Batches 5-8 (tests validate new features) |
@@ -26,16 +26,15 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 
 ### SEC-08: Upload content type not verified against file bytes
 
-**Location:** `modo-upload/src/validate.rs:63`
+**Location:** `modo-upload/src/validate.rs` (`UploadValidator`)
 
 **Problem:** `mime_matches` compares only the `Content-Type` header. A client can send `Content-Type: image/png` with a PHP payload.
 
-**Approach:** Add optional magic-bytes validation using the `infer` crate. Add `validate_content_bytes: bool` option to `UploadConfig` (default: `true`). When enabled, after MIME check passes, read the first few bytes and verify they match the claimed content type. If mismatch, reject with 422. Document the limitation that not all MIME types have detectable magic bytes — for unrecognized types, validation is skipped.
+**Approach:** Add magic-bytes validation transparently within the existing `UploadValidator::accept()` method — no signature change. When `accept("image/png")` is called, after the existing MIME header check passes, automatically use the `infer` crate to verify the file's actual bytes match the claimed type. If `infer` can detect the type and it mismatches, reject with 422. If `infer` cannot detect the type (no magic bytes for that MIME type), skip byte validation and rely on the header check only. This is transparent to callers — existing `accept()` calls get automatic byte validation for free. Document the limitation that not all MIME types have detectable magic bytes.
 
 **Files:**
 - `modo-upload/Cargo.toml` (add `infer` dependency)
-- `modo-upload/src/config.rs` (add `validate_content_bytes` field)
-- `modo-upload/src/validate.rs` (add `validate_magic_bytes` function, integrate into validation pipeline)
+- `modo-upload/src/validate.rs` (add `validate_magic_bytes` function, integrate into `UploadValidator::accept()` pipeline)
 
 ### INC-03: Standardize error message casing
 
@@ -62,7 +61,7 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 **Approach:** In `MultipartForm::from_request`, if `UploadConfig` is not found in extensions, return 500 with message "UploadConfig not configured — register it via .service()". Match the pattern used by other extractors.
 
 **Files:**
-- `modo-upload/src/multipart.rs` (or wherever `MultipartForm` extraction lives)
+- `modo-upload/src/extractor.rs` (where `MultipartForm::from_request` is implemented)
 
 ### INC-12: Move deps to workspace level
 
@@ -76,13 +75,15 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 
 ### INC-15: Rename ContextLayer → TemplateContextLayer
 
-**Problem:** `ContextLayer` name is too generic — it specifically injects template context, not general request context.
+**Problem:** `ContextLayer` name is too generic — it specifically injects template context, not general request context. Other layers follow the `XxxContextLayer` convention (`SessionContextLayer`, `UserContextLayer`, `TenantContextLayer`), but `ContextLayer` lacks a qualifying prefix.
 
-**Approach:** Rename the struct and all references. No backward compat shim needed.
+**Approach:** Rename the struct to `TemplateContextLayer` and all references. No backward compat shim needed. Also update CLAUDE.md convention line to reflect the new name (the convention documents `ContextLayer` suffix for template context injection — update the example to show `TemplateContextLayer` as the base layer alongside the existing examples).
 
 **Files:**
 - `modo/src/context_layer.rs` (or wherever `ContextLayer` is defined)
+- `modo/src/templates/view_renderer.rs` (warn! log message references `ContextLayer` by name)
 - All files importing or referencing `ContextLayer`
+- `CLAUDE.md` (update Middleware layer naming convention entry)
 
 ### DES-26: Clarify OptionalAuth "never rejects" headline
 
@@ -97,11 +98,11 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 
 **Problem:** Tests use `unsafe { std::env::set_var() }` which mutates global process state and is UB in Rust 2024 edition with threads.
 
-**Approach:** Use `temp_env` crate for scoped env var setting in tests. Or better: refactor config loading to accept an env-reader function/trait, inject test values without touching process env.
+**Approach:** Use the `temp_env` crate for scoped env var setting in tests. This is simpler than refactoring config loading to accept an env-reader trait (which would require threading a new trait through `DeserializeOwned + Default` config types — too invasive for a test-only concern).
 
 **Files:**
-- `modo/src/config.rs` (test module)
-- Possibly `Cargo.toml` (add `temp_env` dev-dependency)
+- `modo/Cargo.toml` (add `temp_env` as dev-dependency)
+- `modo/src/config.rs` (test module — replace `unsafe` blocks with `temp_env::with_var`)
 
 ---
 
@@ -113,21 +114,21 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 
 **Problem:** `MailTransport` uses `#[async_trait]` macro instead of native async fn in traits (stabilized in Rust 1.75).
 
-**Approach:** Remove `#[async_trait]` attribute from `MailTransport` trait and all implementations. Use native `async fn` syntax. Since the trait is used as `Arc<dyn MailTransport>`, and native async traits with dynamic dispatch require `trait_variant` or manual boxing, evaluate whether to use `-> Pin<Box<dyn Future>>` return type for the dyn-dispatched methods, or restructure to use `impl MailTransport` generics. Given the `Arc<dyn Trait>` pattern used throughout modo, the cleanest approach is `#[trait_variant::make(MailTransportDyn: Send)]` or manually boxing the future in the trait definition.
+**Approach:** Remove `#[async_trait]` attribute from `MailTransport` trait and all implementations. Use native `async fn` syntax. Since the trait is used as `Arc<dyn MailTransport>` (modo convention), native async traits need explicit dyn-dispatch support. **Use `trait_variant::make`** — this is the canonical upstream solution for this exact pattern. Apply `#[trait_variant::make(MailTransportDyn: Send)]` to generate an object-safe companion trait automatically. Use `MailTransportDyn` as the dyn-dispatch type in `Arc<dyn MailTransportDyn>`. Both traits in this batch (MailTransport and FileStorage) must use the same approach for consistency.
 
 **Files:**
+- `modo-email/Cargo.toml` (add `trait-variant` dependency)
 - `modo-email/src/transport.rs` (trait definition)
 - All `MailTransport` implementations (SMTP, InMemory)
-- `modo-email/Cargo.toml` (possibly add `trait-variant`)
 
 ### INC-01b: Migrate FileStorage to native async trait
 
-**Approach:** Same pattern as MailTransport. Remove `#[async_trait]`, use native async fn with appropriate dyn-dispatch strategy.
+**Approach:** Same `trait_variant::make` pattern as MailTransport. Remove `#[async_trait]`, use native `async fn`. Apply `#[trait_variant::make(FileStorageDyn: Send)]` for dyn dispatch. Use `FileStorageDyn` in `Arc<dyn FileStorageDyn>`.
 
 **Files:**
+- `modo-upload/Cargo.toml` (add `trait-variant` dependency)
 - `modo-upload/src/storage.rs` (trait definition)
 - All `FileStorage` implementations (LocalFs, OpenDAL)
-- `modo-upload/Cargo.toml`
 
 ### INC-01c: Drop async-trait dependency
 
@@ -166,7 +167,7 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 
 **Problem:** Existing tracing calls across the workspace use inconsistent field naming.
 
-**Approach:** Define field naming convention: snake_case, domain-prefixed where ambiguous (e.g., `session.id`, `job.id`, `tenant.id`). Audit all `tracing::*` calls. Update inconsistent ones. Document convention in CLAUDE.md or a contributing guide.
+**Approach:** Define field naming convention: **snake_case with underscore separators** (e.g., `session_id`, `job_id`, `tenant_id`). This follows the tracing-native convention — dotted names (e.g., `session.id`) require string literal syntax in `tracing` macros and can break downstream subscribers that interpret dots as nesting. Audit all `tracing::*` calls across the workspace. Update inconsistent ones. Document convention in CLAUDE.md.
 
 **Files:** All source files with `tracing::` calls across the workspace.
 
@@ -215,9 +216,9 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 
 ### DES-12: ViewResponse::redirect_with_status
 
-**Problem:** `redirect()` hardcodes 303.
+**Problem:** `redirect()` hardcodes 302 (FOUND).
 
-**Approach:** Add `redirect_with_status(url: &str, status: StatusCode) -> Self`. Keep existing `redirect()` as convenience (delegates with 303).
+**Approach:** Add `redirect_with_status(url: &str, status: StatusCode) -> Self`. Keep existing `redirect()` as convenience (delegates with 302 FOUND, preserving current behavior).
 
 **Files:**
 - `modo/src/view.rs` (or wherever `ViewResponse` is defined)
@@ -272,7 +273,7 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 
 ## Batch 6: Database Features
 
-7 items. DES-05 and DES-24 are in modo-session but grouped here as DB-pattern tasks.
+6 items. DES-05 and DES-24 are in modo-session but grouped here as DB-pattern tasks. Note: pagination (`paginate`/`paginate_cursor`) already exists in `modo-db/src/query.rs` and `modo-db/src/pagination.rs` — no work needed. TEST-01 in Batch 9 will validate the existing implementation.
 
 ### DES-04: Expose pool timeouts in DatabaseConfig
 
@@ -297,7 +298,7 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 
 **Problem:** Read-then-write pattern for session limit is racy under concurrent logins.
 
-**Approach:** Replace with single transaction: `BEGIN; SELECT COUNT(*) ... FOR UPDATE; DELETE oldest if count >= max; INSERT new session; COMMIT`. Prevents race condition.
+**Approach:** Replace with a single transaction. **SQLite:** Use `BEGIN IMMEDIATE` (database-level write lock provides atomicity — no row-level locking needed). **Postgres:** Use `SELECT COUNT(*) ... FOR UPDATE` within the transaction for row-level locking. The implementation must handle both backends: use `db.begin().await?` and write the count+delete+insert sequence within the transaction. SeaORM's `ConnectionTrait` on `DatabaseTransaction` handles the backend differences transparently for DML, but the `FOR UPDATE` clause must be conditionally applied only for Postgres (use `sea_query` conditional expression or raw SQL with backend detection).
 
 **Files:**
 - `modo-session/src/store.rs` (or session creation logic)
@@ -330,15 +331,6 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 - `modo-db/src/query.rs` (EntityQuery methods)
 - Possibly `modo-db/src/record.rs` (tuple conversion)
 
-### Paginate / paginate_cursor on EntityQuery
-
-**Problem:** No pagination helper on EntityQuery.
-
-**Approach:** Add `.paginate(page_size)` returning `(Vec<T>, u64)` (items + total count) and `.paginate_cursor(cursor, page_size)` for cursor-based pagination. Build on SeaORM's `PaginatorTrait`.
-
-**Files:**
-- `modo-db/src/query.rs` (pagination methods)
-
 ---
 
 ## Batch 7: Jobs Features
@@ -349,20 +341,21 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 
 **Problem:** Stale reaper and cleanup intervals are hardcoded.
 
-**Approach:** Add `stale_reaper_interval` and `cleanup_interval` fields to `JobsConfig` with defaults matching current behavior. Both are `Duration` values.
+**Approach:** Add `stale_reaper_interval` field to `JobsConfig` with default matching current hardcoded 60s. Note: `cleanup_interval` already exists as `cleanup.interval_secs` in `CleanupConfig` — only the stale reaper interval is missing. Do not add a duplicate `cleanup_interval` at the top level.
 
 **Files:**
 - `modo-jobs/src/config.rs`
-- `modo-jobs/src/worker.rs` or wherever intervals are used
+- `modo-jobs/src/runner.rs` or wherever intervals are used
 
 ### DES-37: catch_unwind around job handlers
 
 **Problem:** A panicking job handler crashes the worker loop.
 
-**Approach:** Wrap job handler execution in `std::panic::AssertUnwindSafe` + `catch_unwind`. On panic, mark job as failed with the panic message. Worker loop continues processing.
+**Approach:** Wrap the job handler future in `std::panic::AssertUnwindSafe` and use `futures::FutureExt::catch_unwind()` to catch panics during `.await`. On panic, extract the panic payload message (via `downcast_ref::<String>` or `&str`), mark the job as failed with that message, and continue the worker loop. Note: `catch_unwind` does not catch panics configured to abort (`panic = "abort"` in Cargo.toml) or panics in spawned threads — it only catches unwinding panics in the current task.
 
 **Files:**
-- `modo-jobs/src/worker.rs` (job execution path)
+- `modo-jobs/Cargo.toml` (add `futures-util = "0.3"` dependency — provides `FutureExt::catch_unwind`)
+- `modo-jobs/src/runner.rs` (job execution path)
 
 ### DES-09: Compile-time cron expression validation
 
@@ -441,13 +434,14 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 
 ### Reserved subdomain exclusion
 
-**Problem:** Subdomain resolver doesn't exclude common reserved subdomains.
+**Problem:** `SubdomainResolver` hardcodes only `"www"` as an excluded subdomain (line 51). No way to configure additional reserved subdomains.
 
-**Approach:** Add `reserved_subdomains: Vec<String>` to tenant config with default `["www", "api", "admin", "mail"]`. Subdomain resolver checks this list first — if matched, returns `Ok(None)` without hitting the DB.
+**Approach:** Add a `reserved: Vec<String>` field to `SubdomainResolver` (there is no `modo-tenant/src/config.rs` — the resolver is a standalone struct parameterized by a lookup closure). Accept it in the constructor: `SubdomainResolver::new(base_domain, resolver_fn, reserved)`. Default: `vec!["www", "api", "admin", "mail"]`. The resolver checks this list before calling the lookup closure — if matched, returns `Ok(None)` without hitting the DB. Remove the hardcoded `sub != "www"` check and use the list instead.
+
+**Test updates:** Existing tests pass the new default reserved list (`vec!["www".into(), "api".into(), "admin".into(), "mail".into()]`) unless testing custom reserved behavior. The existing `returns_none_for_www` test should use the default list so it validates the real production behavior. Add a new test `custom_reserved_subdomains` that passes a custom list and verifies only those subdomains are excluded.
 
 **Files:**
-- `modo-tenant/src/config.rs` (add field)
-- `modo-tenant/src/resolvers/subdomain.rs` (check before resolution)
+- `modo-tenant/src/resolvers/subdomain.rs` (add `reserved` field to struct, update `new()` signature, update resolution logic, update all 7 inline tests to pass `reserved` arg)
 
 ---
 
@@ -479,7 +473,7 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 
 | ID | Test | Target | Approach |
 |---|---|---|---|
-| TEST-06 | Postgres backend CI | modo-db | Add Postgres to CI matrix via GitHub Actions service container. Run full test suite against both SQLite and Postgres. |
+| TEST-06 | Postgres backend CI | modo-db | Add Postgres to CI matrix via GitHub Actions service container. Run `cargo test --workspace --features postgres` (note: `just test` does NOT use `--all-features` per CLAUDE.md). CI matrix: one job with SQLite (default), one with Postgres service + `--features postgres`. |
 | TEST-11 | trybuild compile-fail | all macros | Add `trybuild` dev-dependency. Create `tests/ui/` directories with invalid macro inputs. Verify helpful compile errors. |
 | TEST-12 | Concurrent access stress | modo-db, modo-session, modo-jobs | Stress tests: concurrent writes, session ops, job claims. Verify no corruption or deadlocks. |
 
