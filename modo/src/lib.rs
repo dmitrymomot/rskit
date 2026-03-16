@@ -35,6 +35,7 @@ pub mod sse;
 pub(crate) mod static_files;
 #[cfg(feature = "templates")]
 pub mod templates;
+mod ulid_id;
 pub mod validate;
 
 pub use app::{AppBuilder, AppState, ServiceRegistry};

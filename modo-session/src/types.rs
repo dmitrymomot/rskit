@@ -3,53 +3,8 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt::{self, Write};
-use std::str::FromStr;
 
-/// Opaque session identifier (ULID string).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct SessionId(String);
-
-impl SessionId {
-    /// Generate a new, globally unique session ID.
-    pub fn new() -> Self {
-        Self(ulid::Ulid::new().to_string())
-    }
-
-    /// Wrap an existing string as a `SessionId` without validation.
-    pub fn from_raw(s: impl Into<String>) -> Self {
-        Self(s.into())
-    }
-
-    /// Borrow the underlying ULID string.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    /// Consume the ID, returning the inner `String`.
-    pub fn into_string(self) -> String {
-        self.0
-    }
-}
-
-impl Default for SessionId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl fmt::Display for SessionId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl FromStr for SessionId {
-    type Err = std::convert::Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(s.to_string()))
-    }
-}
+modo::ulid_id!(SessionId);
 
 /// Opaque session token (32 random bytes).
 ///

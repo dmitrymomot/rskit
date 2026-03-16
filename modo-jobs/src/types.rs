@@ -2,58 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
-/// Unique identifier for a job, backed by a ULID string.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
-pub struct JobId(String);
-
-impl JobId {
-    /// Generate a new unique job ID.
-    pub fn new() -> Self {
-        Self(ulid::Ulid::new().to_string())
-    }
-
-    /// View the ID as a string slice.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    /// Consume the ID, returning the inner `String`.
-    pub fn into_string(self) -> String {
-        self.0
-    }
-}
-
-impl From<String> for JobId {
-    fn from(s: String) -> Self {
-        Self(s)
-    }
-}
-
-impl From<&str> for JobId {
-    fn from(s: &str) -> Self {
-        Self(s.to_string())
-    }
-}
-
-impl AsRef<str> for JobId {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for JobId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl FromStr for JobId {
-    type Err = std::convert::Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(s.to_string()))
-    }
-}
+modo::ulid_id!(JobId);
 
 /// State of a job in the queue.
 ///
