@@ -88,12 +88,16 @@ impl<U: Clone + Send + Sync + 'static> FromRequestParts<AppState> for Auth<U> {
 
 /// Extractor that optionally loads the authenticated user.
 ///
-/// Never rejects — returns `OptionalAuth(None)` if there is no active session
-/// or the session's user ID is not found by the provider.
+/// Passes the request through regardless of authentication outcome:
+/// returns `OptionalAuth(Some(user))` when an authenticated user is found,
+/// or `OptionalAuth(None)` if there is no active session or the session's
+/// user ID is not found by the provider.
 ///
-/// Returns `500 Internal Server Error` if session middleware or
-/// [`UserProviderService<U>`] is not registered, or if the provider returns an
-/// infrastructure error.
+/// **Caveat:** this extractor still returns `500 Internal Server Error` when
+/// infrastructure is misconfigured (session middleware or
+/// [`UserProviderService<U>`] not registered) or when the provider returns a
+/// hard error (e.g. database connection failure). Only *authentication
+/// absence* is treated as `None`; infrastructure failures are propagated.
 #[derive(Clone)]
 pub struct OptionalAuth<U: Clone + Send + Sync + 'static>(
     /// `Some(user)` when authenticated, `None` otherwise.
