@@ -27,10 +27,11 @@ impl FileStorageSend for OpendalStorage {
         let path = format!("{prefix}/{filename}");
         let size = file.size() as u64;
 
-        self.operator
-            .write(&path, file.data().clone())
-            .await
-            .map_err(|e| modo::Error::internal(format!("failed to store file: {e}")))?;
+        if let Err(e) = self.operator.write(&path, file.data().clone()).await {
+            // Best-effort cleanup of any partial remote object.
+            let _ = self.operator.delete(&path).await;
+            return Err(modo::Error::internal(format!("Failed to store file: {e}")));
+        }
 
         Ok(StoredFile { path, size })
     }
@@ -47,10 +48,10 @@ impl FileStorageSend for OpendalStorage {
         let data = stream.to_bytes();
         let size = data.len() as u64;
 
-        self.operator
-            .write(&path, data)
-            .await
-            .map_err(|e| modo::Error::internal(format!("failed to store file: {e}")))?;
+        if let Err(e) = self.operator.write(&path, data).await {
+            let _ = self.operator.delete(&path).await;
+            return Err(modo::Error::internal(format!("Failed to store file: {e}")));
+        }
 
         Ok(StoredFile { path, size })
     }

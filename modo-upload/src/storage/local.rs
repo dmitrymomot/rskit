@@ -1,3 +1,4 @@
+use super::guard::CommitGuard;
 use super::{FileStorageSend, StoredFile, ensure_within, generate_filename};
 use crate::file::UploadedFile;
 use crate::stream::BufferedUpload;
@@ -39,9 +40,11 @@ impl FileStorageSend for LocalStorage {
                 .map_err(|e| modo::Error::internal(format!("failed to create directory: {e}")))?;
         }
 
+        let guard = CommitGuard::new(&full_path);
         tokio::fs::write(&full_path, file.data())
             .await
             .map_err(|e| modo::Error::internal(format!("failed to write file: {e}")))?;
+        guard.commit();
 
         Ok(StoredFile {
             path: rel_path,
@@ -64,6 +67,7 @@ impl FileStorageSend for LocalStorage {
                 .map_err(|e| modo::Error::internal(format!("failed to create directory: {e}")))?;
         }
 
+        let guard = CommitGuard::new(&full_path);
         let mut file = tokio::fs::File::create(&full_path)
             .await
             .map_err(|e| modo::Error::internal(format!("failed to create file: {e}")))?;
@@ -80,6 +84,7 @@ impl FileStorageSend for LocalStorage {
         file.flush()
             .await
             .map_err(|e| modo::Error::internal(format!("failed to flush file: {e}")))?;
+        guard.commit();
 
         Ok(StoredFile {
             path: rel_path,

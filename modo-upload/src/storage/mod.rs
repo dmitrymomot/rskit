@@ -10,6 +10,7 @@
 //!   including S3-compatible services.  Requires the `opendal` feature.
 
 mod factory;
+mod guard;
 #[cfg(feature = "local")]
 pub mod local;
 #[cfg(feature = "opendal")]
