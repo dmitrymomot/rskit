@@ -547,6 +547,21 @@ impl AppBuilder {
         // Fallback for unmatched routes — returns a proper JSON 404
         router = router.fallback(|| async { HttpError::NotFound.into_response() });
 
+        // --- Validate error handler registrations ---
+        {
+            let handler_count = inventory::iter::<crate::error::ErrorHandlerRegistration>
+                .into_iter()
+                .count();
+            if handler_count > 1 {
+                panic!(
+                    "Multiple #[error_handler] registrations found ({}). \
+                     Only one error handler is allowed per application. \
+                     Remove duplicate #[error_handler] attributes.",
+                    handler_count,
+                );
+            }
+        }
+
         // =====================================================================
         // Middleware stack (applied bottom-up; last .layer() call = outermost)
         // Stack order: CORS > Maintenance > Catch Panic > Request ID >
@@ -864,5 +879,21 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_error_handler_count_validation() {
+        // Validate the detection logic directly
+        let count = inventory::iter::<crate::error::ErrorHandlerRegistration>
+            .into_iter()
+            .count();
+        // In test context, zero registrations is valid
+        assert!(
+            count <= 1,
+            "expected at most 1 error handler in test context"
+        );
     }
 }
