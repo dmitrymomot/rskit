@@ -18,22 +18,22 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 license = "Apache-2.0"
 repository = "https://github.com/dmitrymomot/modo"
 
 [workspace.dependencies]
-modo = { path = "modo", version = "0.2" }
-modo-macros = { path = "modo-macros", version = "0.2" }
-modo-db = { path = "modo-db", version = "0.2" }
-modo-db-macros = { path = "modo-db-macros", version = "0.2" }
-modo-email = { path = "modo-email", version = "0.2" }
-modo-jobs = { path = "modo-jobs", version = "0.2" }
-modo-jobs-macros = { path = "modo-jobs-macros", version = "0.2" }
-modo-session = { path = "modo-session", version = "0.2" }
-modo-auth = { path = "modo-auth", version = "0.2" }
-modo-tenant = { path = "modo-tenant", version = "0.2" }
-modo-upload = { path = "modo-upload", version = "0.2" }
-modo-upload-macros = { path = "modo-upload-macros", version = "0.2" }
+modo = { path = "modo", version = "0.3" }
+modo-macros = { path = "modo-macros", version = "0.3" }
+modo-db = { path = "modo-db", version = "0.3" }
+modo-db-macros = { path = "modo-db-macros", version = "0.3" }
+modo-email = { path = "modo-email", version = "0.3" }
+modo-jobs = { path = "modo-jobs", version = "0.3" }
+modo-jobs-macros = { path = "modo-jobs-macros", version = "0.3" }
+modo-session = { path = "modo-session", version = "0.3" }
+modo-auth = { path = "modo-auth", version = "0.3" }
+modo-tenant = { path = "modo-tenant", version = "0.3" }
+modo-upload = { path = "modo-upload", version = "0.3" }
+modo-upload-macros = { path = "modo-upload-macros", version = "0.3" }
 inventory = "0.3"
 serde_yaml_ng = "0.10"
