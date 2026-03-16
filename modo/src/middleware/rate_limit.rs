@@ -265,13 +265,21 @@ fn set_rate_headers(headers: &mut axum::http::HeaderMap, limit: u32, remaining: 
     }
 }
 
-/// Spawns a background task that prunes expired buckets every 5 minutes.
+/// Calculate cleanup interval proportional to the rate limit window.
+/// Returns `clamp(window_secs / 2, 1, 60)`.
+fn cleanup_interval_secs(window_secs: u64) -> u64 {
+    (window_secs / 2).clamp(1, 60)
+}
+
+/// Spawns a background task that prunes expired buckets at an interval
+/// proportional to the rate-limit window (`clamp(window / 2, 1s, 60s)`).
 ///
 /// Returns the `JoinHandle` so callers can abort it during shutdown.
 pub fn spawn_cleanup_task(limiter: Arc<RateLimiterState>) -> tokio::task::JoinHandle<()> {
     let window = limiter.window_secs;
+    let interval_secs = cleanup_interval_secs(window);
     tokio::spawn(async move {
-        let interval = std::time::Duration::from_secs(300); // 5 min
+        let interval = std::time::Duration::from_secs(interval_secs);
         let max_age = std::time::Duration::from_secs(window * 2);
         loop {
             tokio::time::sleep(interval).await;
@@ -368,5 +376,26 @@ mod tests {
         // Zero max_age means everything is "expired"
         limiter.cleanup(std::time::Duration::ZERO);
         assert_eq!(limiter.buckets.len(), 0);
+    }
+
+    #[test]
+    fn test_cleanup_interval_calculation() {
+        // Small window: 2s -> max(1, 1) capped at 60 = 1s
+        assert_eq!(cleanup_interval_secs(2), 1);
+
+        // Medium window: 60s -> max(30, 1) capped at 60 = 30s
+        assert_eq!(cleanup_interval_secs(60), 30);
+
+        // Large window: 300s -> max(150, 1) capped at 60 = 60s
+        assert_eq!(cleanup_interval_secs(300), 60);
+
+        // Very large window: 3600s -> max(1800, 1) capped at 60 = 60s
+        assert_eq!(cleanup_interval_secs(3600), 60);
+
+        // Tiny window: 1s -> max(0, 1) = 1s  (0/2 = 0, clamped to 1)
+        assert_eq!(cleanup_interval_secs(1), 1);
+
+        // Zero window (edge case): 0s -> max(0, 1) capped at 60 = 1s
+        assert_eq!(cleanup_interval_secs(0), 1);
     }
 }
