@@ -1,7 +1,7 @@
 use crate::message::{MailMessage, SendEmail, SenderProfile};
 use crate::template::layout::LayoutEngine;
 use crate::template::{TemplateProvider, markdown, vars};
-use crate::transport::MailTransport;
+use crate::transport::MailTransportDyn;
 use std::sync::Arc;
 
 /// High-level email service that ties together template loading, variable
@@ -11,7 +11,7 @@ use std::sync::Arc;
 /// across async tasks and register as a modo service.
 #[derive(Clone)]
 pub struct Mailer {
-    transport: Arc<dyn MailTransport>,
+    transport: Arc<dyn MailTransportDyn>,
     templates: Arc<dyn TemplateProvider>,
     default_sender: SenderProfile,
     layout_engine: Arc<LayoutEngine>,
@@ -23,7 +23,7 @@ impl Mailer {
     /// Prefer the [`mailer`](crate::mailer) or [`mailer_with`](crate::mailer_with)
     /// factory functions for typical usage.
     pub fn new(
-        transport: Arc<dyn MailTransport>,
+        transport: Arc<dyn MailTransportDyn>,
         templates: Arc<dyn TemplateProvider>,
         default_sender: SenderProfile,
         layout_engine: Arc<LayoutEngine>,
@@ -103,13 +103,13 @@ fn is_valid_hex_color(s: &str) -> bool {
 mod tests {
     use super::*;
     use crate::template::EmailTemplate;
+    use crate::transport::MailTransportSend;
 
     struct MockTransport {
         sent: std::sync::Mutex<Vec<MailMessage>>,
     }
 
-    #[async_trait::async_trait]
-    impl MailTransport for MockTransport {
+    impl MailTransportSend for MockTransport {
         async fn send(&self, message: &MailMessage) -> Result<(), modo::Error> {
             self.sent.lock().unwrap().push(message.clone());
             Ok(())
@@ -128,7 +128,7 @@ mod tests {
         }
     }
 
-    fn test_mailer(transport: Arc<dyn MailTransport>) -> Mailer {
+    fn test_mailer(transport: Arc<dyn MailTransportDyn>) -> Mailer {
         Mailer::new(
             transport,
             Arc::new(MockTemplateProvider),

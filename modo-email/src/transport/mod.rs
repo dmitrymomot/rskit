@@ -6,4 +6,4 @@ pub mod smtp;
 mod trait_def;
 
 pub use factory::transport;
-pub use trait_def::MailTransport;
+pub use trait_def::{MailTransport, MailTransportDyn, MailTransportSend};

@@ -1,4 +1,4 @@
-use super::MailTransport;
+use super::MailTransportSend;
 use crate::config::SmtpConfig;
 use crate::message::MailMessage;
 use lettre::message::{MultiPart, SinglePart, header::ContentType};
@@ -37,8 +37,7 @@ impl SmtpTransport {
     }
 }
 
-#[async_trait::async_trait]
-impl MailTransport for SmtpTransport {
+impl MailTransportSend for SmtpTransport {
     async fn send(&self, message: &MailMessage) -> Result<(), modo::Error> {
         let mut builder = Message::builder()
             .from(

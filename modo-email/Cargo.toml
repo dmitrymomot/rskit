@@ -17,6 +17,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml_ng.workspace = true
 async-trait.workspace = true
+trait-variant = "0.1"
 pulldown-cmark = "0.12"
 minijinja = { version = "2", features = ["loader"] }
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder", "smtp-transport"], optional = true }

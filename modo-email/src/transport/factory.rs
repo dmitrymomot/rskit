@@ -1,9 +1,9 @@
 use crate::config::EmailConfig;
-use crate::transport::MailTransport;
+use crate::transport::MailTransportDyn;
 use std::sync::Arc;
 
 /// Create the appropriate transport backend based on config.
-pub fn transport(config: &EmailConfig) -> Result<Arc<dyn MailTransport>, modo::Error> {
+pub fn transport(config: &EmailConfig) -> Result<Arc<dyn MailTransportDyn>, modo::Error> {
     match config.transport {
         #[cfg(feature = "smtp")]
         crate::config::TransportBackend::Smtp => {

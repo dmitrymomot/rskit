@@ -1,4 +1,4 @@
-use super::MailTransport;
+use super::MailTransportSend;
 use crate::config::ResendConfig;
 use crate::message::MailMessage;
 
@@ -21,8 +21,7 @@ impl ResendTransport {
     }
 }
 
-#[async_trait::async_trait]
-impl MailTransport for ResendTransport {
+impl MailTransportSend for ResendTransport {
     async fn send(&self, message: &MailMessage) -> Result<(), modo::Error> {
         let mut body = serde_json::json!({
             "from": message.from,

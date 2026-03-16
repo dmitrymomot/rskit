@@ -31,7 +31,7 @@ pub use config::{EmailConfig, TransportBackend};
 pub use mailer::Mailer;
 pub use message::{MailMessage, SendEmail, SendEmailPayload, SenderProfile};
 pub use template::{EmailTemplate, TemplateProvider};
-pub use transport::MailTransport;
+pub use transport::{MailTransport, MailTransportDyn, MailTransportSend};
 
 #[cfg(feature = "resend")]
 pub use config::ResendConfig;
