@@ -19,6 +19,7 @@ axum = { version = "0.8", features = ["multipart"] }
 async-trait = "0.1"
 bytes = "1"
 futures-util = "0.3"
+infer = "0.16"
 tokio = { version = "1", features = ["fs", "io-util"] }
 tokio-util = { version = "0.7", features = ["io"] }
 ulid = "1"
