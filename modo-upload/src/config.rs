@@ -42,6 +42,25 @@ impl Default for UploadConfig {
     }
 }
 
+impl UploadConfig {
+    /// Validate configuration at startup. Panics if `max_file_size` is set but
+    /// parses to zero or is not a valid size string.
+    ///
+    /// Call this during application startup (e.g., in the storage factory) to
+    /// fail fast rather than discovering bad config at request time.
+    pub fn validate(&self) {
+        if let Some(ref size_str) = self.max_file_size {
+            let bytes = modo::config::parse_size(size_str).unwrap_or_else(|e| {
+                panic!("invalid max_file_size \"{size_str}\": {e}");
+            });
+            assert!(
+                bytes > 0,
+                "max_file_size must be greater than 0, got \"{size_str}\""
+            );
+        }
+    }
+}
+
 /// S3-compatible storage configuration.
 #[cfg(feature = "opendal")]
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -57,4 +76,55 @@ pub struct S3Config {
     pub access_key_id: String,
     /// AWS secret access key.
     pub secret_access_key: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_config_is_valid() {
+        // Should not panic
+        let config = UploadConfig::default();
+        config.validate();
+    }
+
+    #[test]
+    #[should_panic(expected = "max_file_size")]
+    fn rejects_zero_max_file_size() {
+        let config = UploadConfig {
+            max_file_size: Some("0".to_string()),
+            ..Default::default()
+        };
+        config.validate();
+    }
+
+    #[test]
+    #[should_panic(expected = "max_file_size")]
+    fn rejects_zero_bytes_max_file_size() {
+        let config = UploadConfig {
+            max_file_size: Some("0mb".to_string()),
+            ..Default::default()
+        };
+        config.validate();
+    }
+
+    #[test]
+    #[should_panic(expected = "max_file_size")]
+    fn rejects_unparseable_max_file_size() {
+        let config = UploadConfig {
+            max_file_size: Some("not-a-size".to_string()),
+            ..Default::default()
+        };
+        config.validate();
+    }
+
+    #[test]
+    fn none_max_file_size_is_valid() {
+        let config = UploadConfig {
+            max_file_size: None,
+            ..Default::default()
+        };
+        config.validate();
+    }
 }

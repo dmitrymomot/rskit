@@ -1,14 +1,23 @@
 use std::sync::Arc;
 
 use crate::{
-    EmailConfig, FilesystemProvider, LayoutEngine, Mailer, SenderProfile, TemplateProvider,
+    CachedTemplateProvider, EmailConfig, FilesystemProvider, LayoutEngine, Mailer, SenderProfile,
+    TemplateProvider,
 };
 
 /// Create a [`Mailer`] using [`FilesystemProvider`] and the transport configured in `config`.
 ///
 /// This is the standard entry point. Templates are loaded from `config.templates_path`.
 pub fn mailer(config: &EmailConfig) -> Result<Mailer, modo::Error> {
-    let provider = Arc::new(FilesystemProvider::new(&config.templates_path));
+    let fs_provider = FilesystemProvider::new(&config.templates_path);
+    let provider: Arc<dyn TemplateProvider> = if config.cache_templates {
+        Arc::new(CachedTemplateProvider::new(
+            fs_provider,
+            config.template_cache_size,
+        ))
+    } else {
+        Arc::new(fs_provider)
+    };
     mailer_with(config, provider)
 }
 

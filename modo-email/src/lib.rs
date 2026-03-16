@@ -36,8 +36,9 @@ pub use transport::{MailTransport, MailTransportDyn, MailTransportSend};
 #[cfg(feature = "resend")]
 pub use config::ResendConfig;
 #[cfg(feature = "smtp")]
-pub use config::SmtpConfig;
+pub use config::{SmtpConfig, SmtpSecurity};
 
 pub use factory::{mailer, mailer_with};
+pub use template::CachedTemplateProvider;
 pub use template::filesystem::FilesystemProvider;
 pub use template::layout::LayoutEngine;

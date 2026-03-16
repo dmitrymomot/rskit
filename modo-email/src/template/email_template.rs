@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 /// A parsed email template with subject, body, and optional layout.
+#[derive(Clone)]
 pub struct EmailTemplate {
     /// Subject line with `{{var}}` placeholders (not yet substituted).
     pub subject: String,
