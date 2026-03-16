@@ -33,11 +33,12 @@ Rust web framework for small monolithic apps. Single binary, compile-time magic,
 - Extractors: NEVER use `modo::axum::extract::Query`/`Path`/`Form` directly — always use `QueryReq`, `PathReq`, `FormReq` from `modo::extractor`
 - Versioning: all crates use `version.workspace = true` — bump version only in root `Cargo.toml`
 - Pluggable backends: wrap with `Arc<dyn Trait>` (not `Box`) for consistency across storage, transport, etc.
-- Middleware layer naming: use "ContextLayer" suffix for layers that inject template context (e.g. `SessionContextLayer`, `UserContextLayer`, `TenantContextLayer`)
+- Middleware layer naming: use "ContextLayer" suffix for layers that inject template context (e.g. `TemplateContextLayer`, `SessionContextLayer`, `UserContextLayer`, `TenantContextLayer`)
 - modo-db CRUD: use Record trait methods on domain structs — `Todo::find_by_id(&id, &*db)`, `todo.insert(&*db)`, `todo.update(&*db)`, `todo.delete(&*db)` — NOT raw SeaORM `ActiveModel`/`Entity::find()`
 - modo-db queries: use `Todo::query().filter(...).all(&*db)` (returns domain types) — fall back to raw SeaORM via `.into_select()` only when needed
 - modo-db `find_by_id` returns `Result<T, Error>` with auto-404 — no `.ok_or(NotFound)?` needed
 - modo-db `update(&mut self)` refreshes all fields from DB after write — no re-fetch needed
+- Tracing fields: always snake_case (`user_id`, `session_id`, `job_id`) — never dotted names (`panic.message`) which require string literal syntax and can break subscribers
 
 ## Gotchas
 

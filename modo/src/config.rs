@@ -211,6 +211,8 @@ pub struct ServerConfig {
     pub trusted_proxies: Vec<String>,
     /// Graceful shutdown timeout in seconds. Default: `30`.
     pub shutdown_timeout_secs: u64,
+    /// Per-hook timeout in seconds during graceful shutdown. Default: `5`.
+    pub hook_timeout_secs: u64,
     /// Optional CORS policy loaded from YAML (`server.cors`).
     pub cors: Option<CorsYamlConfig>,
     /// Path for the liveness health check endpoint. Default: `"/_live"`.
@@ -243,6 +245,7 @@ impl Default for ServerConfig {
             log_level: "info".to_string(),
             trusted_proxies: Vec::new(),
             shutdown_timeout_secs: 30,
+            hook_timeout_secs: 5,
             cors: None,
             liveness_path: "/_live".to_string(),
             readiness_path: "/_ready".to_string(),
@@ -419,12 +422,10 @@ pub fn load<T: DeserializeOwned>() -> Result<T, ConfigError> {
 
 /// Load config for an explicit environment name.
 pub fn load_for_env<T: DeserializeOwned>(env: &str) -> Result<T, ConfigError> {
-    let config_dir = "config";
+    let config_dir = std::env::var("MODO_CONFIG_DIR").unwrap_or_else(|_| "config".to_string());
 
-    if !std::path::Path::new(config_dir).is_dir() {
-        return Err(ConfigError::DirectoryNotFound {
-            path: config_dir.to_string(),
-        });
+    if !std::path::Path::new(&config_dir).is_dir() {
+        return Err(ConfigError::DirectoryNotFound { path: config_dir });
     }
 
     let path = format!("{config_dir}/{env}.yaml");
@@ -459,35 +460,36 @@ mod tests {
 
     #[test]
     fn test_substitute_simple_var() {
-        unsafe { std::env::set_var("MODO_TEST_VAR", "hello") };
-        assert_eq!(substitute_env_vars("${MODO_TEST_VAR}"), "hello");
-        unsafe { std::env::remove_var("MODO_TEST_VAR") };
+        temp_env::with_var("MODO_TEST_VAR", Some("hello"), || {
+            assert_eq!(substitute_env_vars("${MODO_TEST_VAR}"), "hello");
+        });
     }
 
     #[test]
     fn test_substitute_with_default() {
-        unsafe { std::env::remove_var("MODO_UNSET_VAR") };
-        assert_eq!(
-            substitute_env_vars("${MODO_UNSET_VAR:-fallback}"),
-            "fallback"
-        );
+        temp_env::with_var("MODO_UNSET_VAR", None::<&str>, || {
+            assert_eq!(
+                substitute_env_vars("${MODO_UNSET_VAR:-fallback}"),
+                "fallback"
+            );
+        });
     }
 
     #[test]
     fn test_substitute_empty_uses_default() {
-        unsafe { std::env::set_var("MODO_EMPTY_VAR", "") };
-        assert_eq!(
-            substitute_env_vars("${MODO_EMPTY_VAR:-default_val}"),
-            "default_val"
-        );
-        unsafe { std::env::remove_var("MODO_EMPTY_VAR") };
+        temp_env::with_var("MODO_EMPTY_VAR", Some(""), || {
+            assert_eq!(
+                substitute_env_vars("${MODO_EMPTY_VAR:-default_val}"),
+                "default_val"
+            );
+        });
     }
 
     #[test]
     fn test_substitute_set_var_ignores_default() {
-        unsafe { std::env::set_var("MODO_SET_VAR", "real") };
-        assert_eq!(substitute_env_vars("${MODO_SET_VAR:-ignored}"), "real");
-        unsafe { std::env::remove_var("MODO_SET_VAR") };
+        temp_env::with_var("MODO_SET_VAR", Some("real"), || {
+            assert_eq!(substitute_env_vars("${MODO_SET_VAR:-ignored}"), "real");
+        });
     }
 
     #[test]
@@ -497,8 +499,9 @@ mod tests {
 
     #[test]
     fn test_substitute_no_default_unset() {
-        unsafe { std::env::remove_var("MODO_GONE_VAR") };
-        assert_eq!(substitute_env_vars("port: ${MODO_GONE_VAR}"), "port: ");
+        temp_env::with_var("MODO_GONE_VAR", None::<&str>, || {
+            assert_eq!(substitute_env_vars("port: ${MODO_GONE_VAR}"), "port: ");
+        });
     }
 
     #[test]
@@ -508,13 +511,12 @@ mod tests {
 
     #[test]
     fn test_substitute_mixed() {
-        unsafe { std::env::set_var("MODO_MIX_A", "aaa") };
-        unsafe { std::env::remove_var("MODO_MIX_B") };
-        assert_eq!(
-            substitute_env_vars("start-${MODO_MIX_A}-${MODO_MIX_B:-bbb}-end"),
-            "start-aaa-bbb-end"
-        );
-        unsafe { std::env::remove_var("MODO_MIX_A") };
+        temp_env::with_vars([("MODO_MIX_A", Some("aaa")), ("MODO_MIX_B", None)], || {
+            assert_eq!(
+                substitute_env_vars("start-${MODO_MIX_A}-${MODO_MIX_B:-bbb}-end"),
+                "start-aaa-bbb-end"
+            );
+        });
     }
 
     #[test]
@@ -572,6 +574,19 @@ mod tests {
     }
 
     #[test]
+    fn test_server_config_hook_timeout_default() {
+        let cfg = ServerConfig::default();
+        assert_eq!(cfg.hook_timeout_secs, 5);
+    }
+
+    #[test]
+    fn test_server_config_hook_timeout_yaml() {
+        let yaml = "server:\n  hook_timeout_secs: 15\n";
+        let cfg: AppConfig = serde_yaml_ng::from_str(yaml).unwrap();
+        assert_eq!(cfg.server.hook_timeout_secs, 15);
+    }
+
+    #[test]
     fn test_parse_size() {
         assert_eq!(parse_size("100"), Ok(100));
         assert_eq!(parse_size("2kb"), Ok(2048));
@@ -606,5 +621,40 @@ mod tests {
         assert_eq!(cfg.server.port, 8080);
         // cookies get defaults
         assert_eq!(cfg.cookies.path, "/");
+    }
+
+    #[test]
+    fn test_config_dir_from_env_var() {
+        let dir = std::env::temp_dir().join("modo_config_dir_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("test.yaml"), "server:\n  port: 9999\n").unwrap();
+
+        let cfg: AppConfig =
+            temp_env::with_var("MODO_CONFIG_DIR", Some(dir.to_str().unwrap()), || {
+                load_for_env("test").unwrap()
+            });
+
+        assert_eq!(cfg.server.port, 9999);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_config_dir_defaults_to_config() {
+        temp_env::with_var("MODO_CONFIG_DIR", None::<&str>, || {
+            let result: Result<AppConfig, _> = load_for_env("nonexistent_env_12345");
+            match result {
+                Err(ConfigError::DirectoryNotFound { path })
+                | Err(ConfigError::FileRead { path, .. }) => {
+                    assert!(
+                        path.starts_with("config"),
+                        "expected config dir path, got: {path}"
+                    );
+                }
+                _ => {
+                    // If ./config dir exists with the file, that's also fine
+                }
+            }
+        });
     }
 }

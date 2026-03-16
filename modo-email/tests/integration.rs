@@ -1,6 +1,8 @@
 use modo_email::template::filesystem::FilesystemProvider;
 use modo_email::template::layout::LayoutEngine;
-use modo_email::{MailMessage, MailTransport, Mailer, SendEmail, SenderProfile};
+use modo_email::{
+    MailMessage, MailTransportDyn, MailTransportSend, Mailer, SendEmail, SenderProfile,
+};
 use std::sync::{Arc, Mutex};
 
 /// A transport that captures sent messages for assertions.
@@ -11,16 +13,14 @@ struct CapturingTransport {
 /// A transport that always returns an error.
 struct FailingTransport;
 
-#[async_trait::async_trait]
-impl MailTransport for CapturingTransport {
+impl MailTransportSend for CapturingTransport {
     async fn send(&self, message: &MailMessage) -> Result<(), modo::Error> {
         self.messages.lock().unwrap().push(message.clone());
         Ok(())
     }
 }
 
-#[async_trait::async_trait]
-impl MailTransport for FailingTransport {
+impl MailTransportSend for FailingTransport {
     async fn send(&self, _message: &MailMessage) -> Result<(), modo::Error> {
         Err(modo::Error::internal("connection refused"))
     }
@@ -259,7 +259,7 @@ async fn transport_error_propagates() {
 
     std::fs::write(path.join("err.md"), "---\nsubject: \"Test\"\n---\nBody.").unwrap();
 
-    let transport: Arc<dyn MailTransport> = Arc::new(FailingTransport);
+    let transport: Arc<dyn MailTransportDyn> = Arc::new(FailingTransport);
     let mailer = Mailer::new(
         transport,
         Arc::new(FilesystemProvider::new(path.to_str().unwrap())),

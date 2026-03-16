@@ -1,4 +1,4 @@
-use super::MailTransport;
+use super::MailTransportSend;
 use crate::config::ResendConfig;
 use crate::message::MailMessage;
 
@@ -21,8 +21,7 @@ impl ResendTransport {
     }
 }
 
-#[async_trait::async_trait]
-impl MailTransport for ResendTransport {
+impl MailTransportSend for ResendTransport {
     async fn send(&self, message: &MailMessage) -> Result<(), modo::Error> {
         let mut body = serde_json::json!({
             "from": message.from,
@@ -36,6 +35,8 @@ impl MailTransport for ResendTransport {
             body["reply_to"] = serde_json::json!(reply_to);
         }
 
+        tracing::debug!(to = ?message.to, subject = %message.subject, "sending email via Resend API");
+
         let resp = self
             .client
             .post("https://api.resend.com/emails")
@@ -43,11 +44,15 @@ impl MailTransport for ResendTransport {
             .json(&body)
             .send()
             .await
-            .map_err(|e| modo::Error::internal(format!("Resend request failed: {e}")))?;
+            .map_err(|e| {
+                tracing::error!(error = %e, "Resend request failed");
+                modo::Error::internal(format!("Resend request failed: {e}"))
+            })?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
+            tracing::error!(status = %status, body = %text, "Resend API error");
             return Err(modo::Error::internal(format!(
                 "Resend API error ({status}): {text}"
             )));

@@ -1,4 +1,4 @@
-use super::{FileStorage, StoredFile, generate_filename, validate_logical_path};
+use super::{FileStorageSend, StoredFile, generate_filename, validate_logical_path};
 use crate::file::UploadedFile;
 use crate::stream::BufferedUpload;
 
@@ -20,8 +20,7 @@ impl OpendalStorage {
     }
 }
 
-#[async_trait::async_trait]
-impl FileStorage for OpendalStorage {
+impl FileStorageSend for OpendalStorage {
     async fn store(&self, prefix: &str, file: &UploadedFile) -> Result<StoredFile, modo::Error> {
         validate_logical_path(prefix)?;
         let filename = generate_filename(file.file_name());
@@ -31,7 +30,7 @@ impl FileStorage for OpendalStorage {
         self.operator
             .write(&path, file.data().clone())
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to store file: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to store file: {e}")))?;
 
         Ok(StoredFile { path, size })
     }
@@ -51,7 +50,7 @@ impl FileStorage for OpendalStorage {
         self.operator
             .write(&path, data)
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to store file: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to store file: {e}")))?;
 
         Ok(StoredFile { path, size })
     }
@@ -61,7 +60,7 @@ impl FileStorage for OpendalStorage {
         self.operator
             .delete(path)
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to delete file: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to delete file: {e}")))?;
         Ok(())
     }
 
@@ -70,6 +69,6 @@ impl FileStorage for OpendalStorage {
         self.operator
             .exists(path)
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to check file: {e}")))
+            .map_err(|e| modo::Error::internal(format!("failed to check file: {e}")))
     }
 }

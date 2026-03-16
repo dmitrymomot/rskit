@@ -29,7 +29,7 @@ impl<S: Send + Sync> FromRequestParts<S> for SessionManager {
             .extensions
             .get::<Arc<SessionManagerState>>()
             .cloned()
-            .ok_or_else(|| Error::internal("SessionManager requires session middleware"))?;
+            .ok_or_else(|| Error::internal("session manager requires session middleware"))?;
 
         Ok(Self { state })
     }

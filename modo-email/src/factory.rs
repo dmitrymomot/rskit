@@ -21,7 +21,7 @@ pub fn mailer_with(
     provider: Arc<dyn TemplateProvider>,
 ) -> Result<Mailer, modo::Error> {
     let transport = crate::transport::transport(config)?;
-    let layout = Arc::new(LayoutEngine::new(&config.templates_path));
+    let layout = Arc::new(LayoutEngine::try_new(&config.templates_path)?);
     let sender = SenderProfile {
         from_name: config.default_from_name.clone(),
         from_email: config.default_from_email.clone(),

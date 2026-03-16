@@ -55,7 +55,9 @@ pub struct LayoutEngine {
 impl LayoutEngine {
     /// Create a `LayoutEngine` that loads custom `.html` layouts from
     /// `{templates_path}/layouts/` in addition to the built-in `"default"` layout.
-    pub fn new(templates_path: &str) -> Self {
+    ///
+    /// Returns an error if any layout file contains invalid template syntax.
+    pub fn try_new(templates_path: &str) -> Result<Self, modo::Error> {
         let mut env = Self::base_env();
 
         let layouts_dir = Path::new(templates_path).join("layouts");
@@ -71,12 +73,26 @@ impl LayoutEngine {
                     )
                 {
                     env.add_template_owned(format!("layouts/{stem}.html"), content)
-                        .ok();
+                        .map_err(|e| {
+                            modo::Error::internal(format!(
+                                "invalid layout template '{stem}.html': {e}"
+                            ))
+                        })?;
                 }
             }
         }
 
-        Self { env }
+        Ok(Self { env })
+    }
+
+    /// Create a `LayoutEngine` that loads custom `.html` layouts from
+    /// `{templates_path}/layouts/` in addition to the built-in `"default"` layout.
+    ///
+    /// # Panics
+    /// Panics if any layout file contains invalid template syntax.
+    /// Use [`try_new`](Self::try_new) for a fallible alternative.
+    pub fn new(templates_path: &str) -> Self {
+        Self::try_new(templates_path).expect("all layout templates must be valid")
     }
 
     /// Create a `LayoutEngine` with only the built-in `"default"` layout.
@@ -99,13 +115,15 @@ impl LayoutEngine {
     ) -> Result<String, modo::Error> {
         let template_name = format!("layouts/{layout_name}.html");
 
-        let tmpl = self
-            .env
-            .get_template(&template_name)
-            .map_err(|_| modo::Error::internal(format!("Layout not found: {layout_name}")))?;
+        let tmpl = self.env.get_template(&template_name).map_err(|_| {
+            tracing::debug!(layout_name = %layout_name, "email layout not found");
+            modo::Error::internal(format!("Layout not found: {layout_name}"))
+        })?;
 
-        tmpl.render(context)
-            .map_err(|e| modo::Error::internal(format!("Layout render error: {e}")))
+        tmpl.render(context).map_err(|e| {
+            tracing::error!(layout_name = %layout_name, error = %e, "email layout render failed");
+            modo::Error::internal(format!("Layout render error: {e}"))
+        })
     }
 
     /// Creates a base environment with the built-in default layout and
@@ -203,5 +221,16 @@ mod tests {
         // Auto-escape is disabled, so HTML should be rendered verbatim
         assert!(html.contains("<h1>Title</h1>"));
         assert!(html.contains("<p>Body &amp; more</p>"));
+    }
+
+    #[test]
+    fn invalid_layout_syntax_returns_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let layouts_dir = dir.path().join("layouts");
+        fs::create_dir_all(&layouts_dir).unwrap();
+        fs::write(layouts_dir.join("broken.html"), "{% if unclosed %}").unwrap();
+
+        let result = LayoutEngine::try_new(dir.path().to_str().unwrap());
+        assert!(result.is_err());
     }
 }

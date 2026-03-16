@@ -27,7 +27,7 @@ impl FromRequestParts<AppState> for ClientIp {
             .extensions
             .get::<ClientIp>()
             .copied()
-            .ok_or_else(|| Error::internal("ClientIp not found in request extensions"))
+            .ok_or_else(|| Error::internal("client IP not found in request extensions"))
     }
 }
 

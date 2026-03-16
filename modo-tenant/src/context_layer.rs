@@ -17,6 +17,18 @@ use tower::{Layer, Service};
 /// If no [`TemplateContext`] extension is present the layer is a no-op for
 /// context injection but still passes the request through.
 ///
+/// # Security: Fail-Open Behavior
+///
+/// This layer **fails open** on resolver errors: if the tenant resolver returns
+/// an error (e.g., database unavailable), the request continues without tenant
+/// context rather than being rejected.
+///
+/// This means templates that gate content on `{% if tenant %}` will render the
+/// public / unauthenticated view during infrastructure failures. If your
+/// application requires tenant context for security-sensitive rendering, use the
+/// [`Tenant<T>`](crate::Tenant) extractor in handlers instead — it returns 500
+/// on resolver errors and never silently drops the tenant.
+///
 /// Requires feature `"templates"`.
 pub struct TenantContextLayer<T>
 where
@@ -105,7 +117,7 @@ where
             let tenant = match crate::extractor::resolve_and_cache(&mut parts, &tenant_svc).await {
                 Ok(t) => t,
                 Err(e) => {
-                    tracing::warn!("TenantContextLayer: tenant resolution failed: {e}");
+                    tracing::warn!(error = %e, "TenantContextLayer: tenant resolution failed");
                     None
                 }
             };

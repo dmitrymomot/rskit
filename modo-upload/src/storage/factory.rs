@@ -1,7 +1,7 @@
-use crate::storage::FileStorage;
+use crate::storage::FileStorageDyn;
 use std::sync::Arc;
 
-/// Construct a [`FileStorage`] backend from [`UploadConfig`](crate::UploadConfig).
+/// Construct a [`FileStorageDyn`] backend from [`UploadConfig`](crate::UploadConfig).
 ///
 /// The backend is chosen based on `config.backend`:
 ///
@@ -12,7 +12,9 @@ use std::sync::Arc;
 ///
 /// Returns an error if the required feature is not enabled for the selected
 /// backend, or if the S3 operator cannot be configured.
-pub fn storage(config: &crate::config::UploadConfig) -> Result<Arc<dyn FileStorage>, modo::Error> {
+pub fn storage(
+    config: &crate::config::UploadConfig,
+) -> Result<Arc<dyn FileStorageDyn>, modo::Error> {
     match config.backend {
         #[cfg(feature = "local")]
         crate::config::StorageBackend::Local => {
@@ -20,7 +22,7 @@ pub fn storage(config: &crate::config::UploadConfig) -> Result<Arc<dyn FileStora
         }
         #[cfg(not(feature = "local"))]
         crate::config::StorageBackend::Local => Err(modo::Error::internal(
-            "Local storage backend requires the `local` feature",
+            "local storage backend requires the `local` feature",
         )),
 
         #[cfg(feature = "opendal")]
@@ -39,7 +41,7 @@ pub fn storage(config: &crate::config::UploadConfig) -> Result<Arc<dyn FileStora
                 builder = builder.secret_access_key(&s3.secret_access_key);
             }
             let op = ::opendal::Operator::new(builder)
-                .map_err(|e| modo::Error::internal(format!("Failed to configure S3 storage: {e}")))?
+                .map_err(|e| modo::Error::internal(format!("failed to configure S3 storage: {e}")))?
                 .finish();
             Ok(Arc::new(super::opendal::OpendalStorage::new(op)))
         }

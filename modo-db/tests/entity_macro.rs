@@ -346,29 +346,30 @@ fn test_auto_ulid_default_generates_id() {
     assert_eq!(record.name, "");
 }
 
-// --- Entity with auto NanoID ---
+// --- Entity with auto short_id ---
 
-#[modo_db::entity(table = "test_auto_nanoid")]
-pub struct TestAutoNanoid {
-    #[entity(primary_key, auto = "nanoid")]
+#[modo_db::entity(table = "test_auto_short_id")]
+pub struct TestAutoShortId {
+    #[entity(primary_key, auto = "short_id")]
     pub id: String,
     pub name: String,
 }
 
 #[test]
-fn test_auto_nanoid_entity_registers() {
+fn test_auto_short_id_entity_registers() {
     let registrations: Vec<&EntityRegistration> = inventory::iter::<EntityRegistration>().collect();
     let tables: Vec<&str> = registrations.iter().map(|r| r.table_name).collect();
-    assert!(tables.contains(&"test_auto_nanoid"));
+    assert!(tables.contains(&"test_auto_short_id"));
 }
 
 #[test]
-fn test_auto_nanoid_default_generates_id() {
-    let record = TestAutoNanoid::default();
+fn test_auto_short_id_default_generates_id() {
+    let record = TestAutoShortId::default();
     assert!(
         !record.id.is_empty(),
-        "auto NanoID field should not be empty on default"
+        "auto short_id field should not be empty on default"
     );
+    assert_eq!(record.id.len(), 13, "auto short_id should be 13 chars");
 }
 
 // --- Entity with auto ULID + timestamps ---

@@ -10,7 +10,7 @@ use axum::{
 };
 use http::{Request, StatusCode};
 use modo::ViewResult;
-use modo::templates::{ContextLayer, TemplateEngine, ViewRenderer};
+use modo::templates::{TemplateContextLayer, TemplateEngine, ViewRenderer};
 use std::sync::Arc;
 use tower::ServiceExt;
 
@@ -86,7 +86,7 @@ fn app(engine: Arc<TemplateEngine>) -> Router {
         .route("/check-htmx", get(check_htmx))
         .route("/dual", get(dual_template))
         .route("/render-string", get(render_string))
-        .layer(ContextLayer::new())
+        .layer(TemplateContextLayer::new())
         .layer(Extension(engine))
 }
 
@@ -235,7 +235,7 @@ async fn extraction_fails_without_template_engine() {
     // Router without Extension(engine) — ViewRenderer extraction should fail
     let app = Router::new()
         .route("/hello", get(single_view))
-        .layer(ContextLayer::new());
+        .layer(TemplateContextLayer::new());
 
     let resp = app
         .oneshot(Request::get("/hello").body(Body::empty()).unwrap())

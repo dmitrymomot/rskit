@@ -65,7 +65,7 @@ pub use extractor::Db;
 #[doc(hidden)]
 pub use helpers::{do_delete, do_insert, do_update};
 pub use hooks::DefaultHooks;
-pub use id::{generate_nanoid, generate_ulid};
+pub use id::{generate_short_id, generate_ulid};
 pub use migration::MigrationRegistration;
 pub use pagination::{
     CursorParams, CursorResult, PageParams, PageResult, paginate, paginate_cursor,
@@ -82,3 +82,27 @@ pub use modo_db_macros::{entity, migration};
 pub use chrono;
 pub use inventory;
 pub use sea_orm;
+
+/// Internal re-exports for generated code. Not public API.
+#[doc(hidden)]
+pub mod __internal {
+    // -- entity macro --
+    pub use crate::entity::EntityRegistration;
+    pub use crate::error::db_err_to_error;
+    pub use crate::helpers::{do_delete, do_insert, do_update};
+    pub use crate::hooks::DefaultHooks;
+    pub use crate::id::{generate_short_id, generate_ulid};
+    pub use crate::query::{EntityDeleteMany, EntityQuery, EntityUpdateMany};
+    pub use crate::record::Record;
+
+    // -- migration macro --
+    pub use crate::migration::MigrationRegistration;
+
+    // -- third-party re-exports --
+    pub use ::chrono;
+    pub use ::inventory;
+    pub use ::sea_orm;
+
+    // -- modo error types (used by entity macro for Result<_, modo::Error>) --
+    pub use ::modo;
+}

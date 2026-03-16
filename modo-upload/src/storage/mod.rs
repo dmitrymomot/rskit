@@ -18,7 +18,7 @@ mod types;
 pub(crate) mod utils;
 
 pub use factory::storage;
-pub use types::{FileStorage, StoredFile};
+pub use types::{FileStorage, FileStorageDyn, FileStorageSend, StoredFile};
 #[cfg(feature = "opendal")]
 pub(crate) use utils::validate_logical_path;
 pub(crate) use utils::{ensure_within, generate_filename};

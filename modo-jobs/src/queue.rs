@@ -62,16 +62,16 @@ impl JobQueue {
         let reg = inventory::iter::<JobRegistration>
             .into_iter()
             .find(|r| r.name == name)
-            .ok_or_else(|| modo::Error::internal(format!("No job registered with name: {name}")))?;
+            .ok_or_else(|| modo::Error::internal(format!("no job registered with name: {name}")))?;
 
         let payload_json = serde_json::to_string(payload)
-            .map_err(|e| modo::Error::internal(format!("Failed to serialize job payload: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to serialize job payload: {e}")))?;
 
         if let Some(max) = self.max_payload_bytes
             && payload_json.len() > max
         {
             return Err(modo::Error::internal(format!(
-                "Job payload size ({} bytes) exceeds limit ({max} bytes)",
+                "job payload size ({} bytes) exceeds limit ({max} bytes)",
                 payload_json.len()
             )));
         }
@@ -99,13 +99,14 @@ impl JobQueue {
             &self.db,
         )
         .await
-        .map_err(|e| modo::Error::internal(format!("Failed to cancel job: {e}")))?;
+        .map_err(|e| modo::Error::internal(format!("failed to cancel job: {e}")))?;
 
+        // 409 for both "not found" and "not pending" — a single UPDATE with
+        // two filters can't distinguish the cases without an extra SELECT, and
+        // returning 409 uniformly avoids disclosing whether a job ID exists.
         if result.rows_affected == 0 {
-            return Err(modo::Error::internal(format!(
-                "Job {} not found or not in pending state",
-                id
-            )));
+            return Err(modo::HttpError::Conflict
+                .with_message(format!("job {} not found or not in pending state", id)));
         }
 
         Ok(())
@@ -140,8 +141,46 @@ impl JobQueue {
         model
             .insert(&self.db)
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to insert job: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to insert job: {e}")))?;
 
         Ok(id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use modo_db::sea_orm::{ConnectionTrait, Database, Schema};
+
+    async fn setup_db() -> modo_db::sea_orm::DatabaseConnection {
+        let db = Database::connect("sqlite::memory:")
+            .await
+            .expect("Failed to connect");
+
+        let schema = Schema::new(db.get_database_backend());
+        let mut builder = schema.builder();
+        let reg = inventory::iter::<modo_db::EntityRegistration>()
+            .find(|r| r.table_name == "modo_jobs")
+            .unwrap();
+        builder = (reg.register_fn)(builder);
+        builder.sync(&db).await.expect("Schema sync failed");
+        for sql in reg.extra_sql {
+            db.execute_unprepared(sql).await.expect("Extra SQL failed");
+        }
+        db
+    }
+
+    #[tokio::test]
+    async fn cancel_nonexistent_job_returns_409() {
+        let db = setup_db().await;
+        let queue = JobQueue {
+            db,
+            max_payload_bytes: None,
+        };
+
+        let fake_id = JobId::new();
+        let err = queue.cancel(&fake_id).await.unwrap_err();
+
+        assert_eq!(err.status_code(), modo::axum::http::StatusCode::CONFLICT);
     }
 }

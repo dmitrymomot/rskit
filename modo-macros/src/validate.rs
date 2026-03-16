@@ -217,14 +217,14 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
             if #(#empty_checks)&&* {
                 Ok(())
             } else {
-                Err(modo::validate::validation_error(vec![#(#field_collect),*]))
+                Err(modo::__internal::validation_error(vec![#(#field_collect),*]))
             }
         }
     };
 
     Ok(quote! {
-        impl #impl_generics modo::validate::Validate for #struct_name #ty_generics #where_clause {
-            fn validate(&self) -> Result<(), modo::Error> {
+        impl #impl_generics modo::__internal::Validate for #struct_name #ty_generics #where_clause {
+            fn validate(&self) -> Result<(), modo::__internal::Error> {
                 #(#field_checks)*
                 #body
             }
@@ -358,7 +358,7 @@ fn gen_rule_check(rule: &ValidationRule, ctx: &FieldContext) -> TokenStream {
                 field_message,
                 "must be a valid email address",
             );
-            let check = quote! { !modo::validate::is_valid_email(__val) };
+            let check = quote! { !modo::__internal::is_valid_email(__val) };
             wrap_non_required_check(
                 field_name,
                 &push,

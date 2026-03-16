@@ -54,14 +54,14 @@ impl UploadedFile {
         let mut field = field;
         let mut buf = bytes::BytesMut::new();
         while let Some(chunk) = field.chunk().await.map_err(|e| {
-            modo::HttpError::BadRequest.with_message(format!("Failed to read multipart chunk: {e}"))
+            modo::HttpError::BadRequest.with_message(format!("failed to read multipart chunk: {e}"))
         })? {
             buf.extend_from_slice(&chunk);
             if let Some(max) = max_size
                 && buf.len() > max
             {
                 return Err(modo::HttpError::PayloadTooLarge
-                    .with_message("Upload exceeds maximum allowed size"));
+                    .with_message("upload exceeds maximum allowed size"));
             }
         }
         Ok(Self {

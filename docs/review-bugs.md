@@ -4,7 +4,7 @@ Findings from comprehensive framework review (2026-03-15).
 
 ## Confirmed Bugs
 
-### BUG-01: AppBuilder call order silently discards config
+### ~~BUG-01: AppBuilder call order silently discards config~~ [FIXED]
 
 **Location:** `modo/src/app.rs:303-311`
 
@@ -26,7 +26,7 @@ A readiness probe that fails should conventionally return 503 (Service Unavailab
 
 ---
 
-### BUG-03: ContextLayer overwrites existing TemplateContext
+### ~~BUG-03: ContextLayer overwrites existing TemplateContext~~ [FIXED]
 
 **Location:** `modo/src/templates/middleware.rs:53-56`
 
@@ -68,7 +68,7 @@ All other Unicode-aware code in the framework (e.g., `sanitize::truncate`) uses 
 
 ---
 
-### BUG-07: Sanitize derive broken for generic structs [PARTIALLY ACCURATE]
+### ~~BUG-07: Sanitize derive broken for generic structs~~ [FIXED]
 
 **Location:** `modo-macros/src/sanitize.rs:122-143`
 
@@ -80,7 +80,7 @@ The trampoline function and `TypeId::of::<#struct_name>()` don't include generic
 
 ---
 
-### BUG-08: Entity macro includes created_at in UPDATE statements [PARTIALLY ACCURATE]
+### ~~BUG-08: Entity macro includes created_at in UPDATE statements~~ [FIXED]
 
 **Location:** `modo-db-macros/src/entity.rs:811-815`
 
@@ -92,7 +92,7 @@ The trampoline function and `TypeId::of::<#struct_name>()` don't include generic
 
 ---
 
-### BUG-09: before_save hook mutates self before DB write succeeds
+### ~~BUG-09: before_save hook mutates self before DB write succeeds~~ [FIXED]
 
 **Location:** `modo-db-macros/src/entity.rs:1013-1020`, `modo-tenant/src/extractor.rs` (restore path)
 
@@ -114,7 +114,7 @@ Same issue in `modo-tenant` restore: `self.deleted_at = None` is set before `bef
 
 ---
 
-### BUG-11: Tenant resolver Ok(None) is never cached
+### ~~BUG-11: Tenant resolver Ok(None) is never cached~~ [FIXED]
 
 **Location:** `modo-tenant/src/extractor.rs:39`
 
@@ -134,7 +134,7 @@ A sync function annotated with `#[handler]` compiles the registration code but p
 
 ---
 
-### BUG-13: Nested modules in #[module] are not walked
+### ~~BUG-13: Nested modules in #[module] are not walked~~ [FIXED]
 
 **Location:** `modo-macros/src/module.rs:61-66`
 
@@ -144,7 +144,7 @@ A sync function annotated with `#[handler]` compiles the registration code but p
 
 ---
 
-### BUG-14: has_many pluralization is naive
+### ~~BUG-14: has_many pluralization is naive~~ [FIXED]
 
 **Location:** `modo-db-macros/src/entity.rs:600-605`
 
@@ -164,7 +164,7 @@ The target entity name is inferred by trimming a trailing `'s'` from the Pascal-
 
 ---
 
-### BUG-16: RateLimitInfo extractor returns 500 when rate limiting disabled
+### ~~BUG-16: RateLimitInfo extractor returns 500 when rate limiting disabled~~ [FIXED]
 
 **Location:** `modo/src/middleware/rate_limit.rs:113-126`
 
@@ -184,7 +184,7 @@ The target entity name is inferred by trimming a trailing `'s'` from the Pascal-
 
 ---
 
-### BUG-18: Job cancel returns 500 for user-facing 404/conflict
+### ~~BUG-18: Job cancel returns 500 for user-facing 404/conflict~~ [FIXED]
 
 **Location:** `modo-jobs/src/queue.rs:105`
 

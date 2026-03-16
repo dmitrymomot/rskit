@@ -51,8 +51,18 @@ pub fn header_str<'a>(headers: &'a HeaderMap, name: &str) -> &'a str {
 
 /// Extract client IP with trusted proxy validation.
 ///
-/// If `connect_ip` is from a trusted proxy (or no trusted proxies configured),
-/// trust X-Forwarded-For / X-Real-IP headers. Otherwise use the socket IP.
+/// # Security
+///
+/// When `trusted_proxies` is empty (the default), proxy headers
+/// (`X-Forwarded-For`, `X-Real-IP`) are trusted unconditionally. Any client
+/// can spoof their IP address by setting these headers. In production behind a
+/// reverse proxy, **always** configure `trusted_proxies` to your proxy's CIDR
+/// range (e.g., `["10.0.0.0/8"]`). Without a reverse proxy, set a dummy value
+/// like `["127.0.0.1/32"]` to ignore proxy headers entirely.
+///
+/// When `trusted_proxies` is non-empty, proxy headers are only trusted when
+/// `connect_ip` originates from a listed CIDR range. Otherwise the raw
+/// `connect_ip` is returned.
 pub fn extract_client_ip(
     headers: &HeaderMap,
     trusted_proxies: &[String],

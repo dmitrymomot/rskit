@@ -8,15 +8,15 @@ use tower::{Layer, Service};
 /// with built-in values (current_url).
 /// Must be applied outermost of all context-writing middleware.
 #[derive(Clone, Default)]
-pub struct ContextLayer;
+pub struct TemplateContextLayer;
 
-impl ContextLayer {
+impl TemplateContextLayer {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl<S> Layer<S> for ContextLayer {
+impl<S> Layer<S> for TemplateContextLayer {
     type Service = ContextMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
@@ -50,9 +50,11 @@ where
         Box::pin(async move {
             let (mut parts, body) = request.into_parts();
 
-            let mut ctx = TemplateContext::new();
+            let mut ctx = parts
+                .extensions
+                .remove::<TemplateContext>()
+                .unwrap_or_default();
             ctx.insert("current_url", parts.uri.to_string());
-
             parts.extensions.insert(ctx);
 
             let request = Request::from_parts(parts, body);

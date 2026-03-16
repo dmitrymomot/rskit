@@ -18,6 +18,7 @@ async fn resolve_user<U: Clone + Send + Sync + 'static>(
 ) -> Result<Option<U>, Error> {
     // Fast path: user already resolved by UserContextLayer or a prior extractor
     if let Some(cached) = parts.extensions.get::<ResolvedUser<U>>() {
+        tracing::debug!(cache_hit = true, "auth user resolved from extension cache");
         return Ok(Some((*cached.0).clone()));
     }
 
@@ -27,7 +28,10 @@ async fn resolve_user<U: Clone + Send + Sync + 'static>(
 
     let user_id = match session.user_id().await {
         Some(id) => id,
-        None => return Ok(None),
+        None => {
+            tracing::debug!("no session user_id, skipping auth resolution");
+            return Ok(None);
+        }
     };
 
     let provider = state
@@ -43,7 +47,10 @@ async fn resolve_user<U: Clone + Send + Sync + 'static>(
     let user = provider.find_by_id(&user_id).await?;
 
     if let Some(ref u) = user {
+        tracing::debug!(user_id = %user_id, cache_hit = false, "auth user resolved from provider");
         parts.extensions.insert(ResolvedUser(Arc::new(u.clone())));
+    } else {
+        tracing::warn!(user_id = %user_id, "session references non-existent user");
     }
 
     Ok(user)
@@ -88,12 +95,16 @@ impl<U: Clone + Send + Sync + 'static> FromRequestParts<AppState> for Auth<U> {
 
 /// Extractor that optionally loads the authenticated user.
 ///
-/// Never rejects — returns `OptionalAuth(None)` if there is no active session
-/// or the session's user ID is not found by the provider.
+/// Passes the request through regardless of authentication outcome:
+/// returns `OptionalAuth(Some(user))` when an authenticated user is found,
+/// or `OptionalAuth(None)` if there is no active session or the session's
+/// user ID is not found by the provider.
 ///
-/// Returns `500 Internal Server Error` if session middleware or
-/// [`UserProviderService<U>`] is not registered, or if the provider returns an
-/// infrastructure error.
+/// **Caveat:** this extractor still returns `500 Internal Server Error` when
+/// infrastructure is misconfigured (session middleware or
+/// [`UserProviderService<U>`] not registered) or when the provider returns a
+/// hard error (e.g. database connection failure). Only *authentication
+/// absence* is treated as `None`; infrastructure failures are propagated.
 #[derive(Clone)]
 pub struct OptionalAuth<U: Clone + Send + Sync + 'static>(
     /// `Some(user)` when authenticated, `None` otherwise.

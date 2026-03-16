@@ -32,9 +32,9 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     Ok(quote! {
         #func
 
-        modo::inventory::submit! {
-            modo::error::ErrorHandlerRegistration {
-                handler: #func_name as modo::error::ErrorHandlerFn,
+        modo::__internal::inventory::submit! {
+            modo::__internal::ErrorHandlerRegistration {
+                handler: #func_name as modo::__internal::ErrorHandlerFn,
             }
         }
     })

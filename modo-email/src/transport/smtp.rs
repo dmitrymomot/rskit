@@ -1,4 +1,4 @@
-use super::MailTransport;
+use super::MailTransportSend;
 use crate::config::SmtpConfig;
 use crate::message::MailMessage;
 use lettre::message::{MultiPart, SinglePart, header::ContentType};
@@ -37,28 +37,27 @@ impl SmtpTransport {
     }
 }
 
-#[async_trait::async_trait]
-impl MailTransport for SmtpTransport {
+impl MailTransportSend for SmtpTransport {
     async fn send(&self, message: &MailMessage) -> Result<(), modo::Error> {
         let mut builder = Message::builder()
             .from(
                 message
                     .from
                     .parse()
-                    .map_err(|e| modo::Error::internal(format!("Invalid from address: {e}")))?,
+                    .map_err(|e| modo::Error::internal(format!("invalid from address: {e}")))?,
             )
             .subject(&message.subject);
 
         for recipient in &message.to {
             builder = builder.to(recipient
                 .parse()
-                .map_err(|e| modo::Error::internal(format!("Invalid to address: {e}")))?);
+                .map_err(|e| modo::Error::internal(format!("invalid to address: {e}")))?);
         }
 
         if let Some(ref reply_to) = message.reply_to {
             builder =
                 builder.reply_to(reply_to.parse().map_err(|e| {
-                    modo::Error::internal(format!("Invalid reply-to address: {e}"))
+                    modo::Error::internal(format!("invalid reply-to address: {e}"))
                 })?);
         }
 
@@ -76,12 +75,14 @@ impl MailTransport for SmtpTransport {
                             .body(message.html.clone()),
                     ),
             )
-            .map_err(|e| modo::Error::internal(format!("Failed to build email: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to build email: {e}")))?;
 
-        self.mailer
-            .send(email)
-            .await
-            .map_err(|e| modo::Error::internal(format!("SMTP send failed: {e}")))?;
+        tracing::debug!(to = ?message.to, subject = %message.subject, "sending email via SMTP");
+
+        self.mailer.send(email).await.map_err(|e| {
+            tracing::error!(error = %e, "SMTP send failed");
+            modo::Error::internal(format!("SMTP send failed: {e}"))
+        })?;
 
         Ok(())
     }

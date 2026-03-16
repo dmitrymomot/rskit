@@ -78,7 +78,7 @@ impl FromRequestParts<AppState> for I18n {
         let store = state
             .services
             .get::<TranslationStore>()
-            .ok_or_else(|| Error::internal("TranslationStore not registered in services"))?;
+            .ok_or_else(|| Error::internal("translation store not registered in services"))?;
 
         let default_lang = store.config().default_lang.clone();
 

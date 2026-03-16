@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use axum::extract::FromRequestParts;
+use http::StatusCode;
 use http::request::Parts;
 
 use crate::error::Error;
@@ -47,6 +48,20 @@ impl ViewRenderer {
         }
     }
 
+    /// Smart redirect with custom status — returns redirect with given status
+    /// for normal requests, `HX-Redirect` header + 200 for HTMX requests.
+    pub fn redirect_with_status(
+        &self,
+        url: &str,
+        status: StatusCode,
+    ) -> Result<ViewResponse, Error> {
+        if self.is_htmx {
+            Ok(ViewResponse::hx_redirect(url))
+        } else {
+            Ok(ViewResponse::redirect_with_status(url, status))
+        }
+    }
+
     /// Render a view to a plain `String`.
     ///
     /// Useful for non-HTTP contexts: SSE events, WebSocket messages, emails.
@@ -72,8 +87,8 @@ impl<S: Send + Sync> FromRequestParts<S> for ViewRenderer {
             .cloned()
             .ok_or_else(|| {
                 Error::internal(
-                    "ViewRenderer requires TemplateEngine. \
-                     Register it as a service or add Extension(Arc::new(engine)).",
+                    "view renderer requires TemplateEngine \
+                     — register it as a service or add Extension(Arc::new(engine))",
                 )
             })?;
 
@@ -84,7 +99,7 @@ impl<S: Send + Sync> FromRequestParts<S> for ViewRenderer {
             .unwrap_or_else(|| {
                 tracing::warn!(
                     "TemplateContext not found in request extensions. \
-                     Ensure ContextLayer is applied."
+                     Ensure TemplateContextLayer is applied."
                 );
                 TemplateContext::default()
             });

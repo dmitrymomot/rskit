@@ -59,8 +59,23 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     // Rewrite inner #[handler(METHOD, "/path")] attrs to include module = "mod_name"
     if let Some((_brace, ref mut items)) = module.content {
         for item in items.iter_mut() {
-            if let Item::Fn(func) = item {
-                rewrite_handler_attrs(func, &mod_name_str)?;
+            match item {
+                Item::Fn(func) => {
+                    rewrite_handler_attrs(func, &mod_name_str)?;
+                }
+                // Bare `mod foo;` (no body) is allowed — it can't contain
+                // inline handlers, so there's nothing to rewrite.  Only
+                // inline `mod foo { ... }` is rejected.
+                Item::Mod(inner_mod) => {
+                    if inner_mod.content.is_some() {
+                        return Err(syn::Error::new_spanned(
+                            &inner_mod.ident,
+                            "nested modules inside #[module] are not supported; \
+                             handlers in nested modules would not receive the module prefix",
+                        ));
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -74,16 +89,18 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         wrapper_defs.push(def);
     }
 
-    let middleware_vec =
-        build_middleware_vec(&wrapper_names, quote! { modo::router::RouterMiddlewareFn });
+    let middleware_vec = build_middleware_vec(
+        &wrapper_names,
+        quote! { modo::__internal::RouterMiddlewareFn },
+    );
 
     Ok(quote! {
         #module
 
         #(#wrapper_defs)*
 
-        modo::inventory::submit! {
-            modo::router::ModuleRegistration {
+        modo::__internal::inventory::submit! {
+            modo::__internal::ModuleRegistration {
                 name: #mod_name_str,
                 prefix: #prefix,
                 middleware: #middleware_vec,

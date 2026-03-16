@@ -14,10 +14,10 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
         #[allow(unexpected_cfgs)]
         #[cfg(feature = "templates")]
-        ::modo::inventory::submit! {
-            ::modo::templates::TemplateFunctionEntry {
+        ::modo::__internal::inventory::submit! {
+            ::modo::__internal::TemplateFunctionEntry {
                 name: #template_name,
-                register_fn: |env: &mut ::modo::minijinja::Environment<'static>| {
+                register_fn: |env: &mut ::modo::__internal::minijinja::Environment<'static>| {
                     env.add_function(#template_name, #func_name);
                 },
             }

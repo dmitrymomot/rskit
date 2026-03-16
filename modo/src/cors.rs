@@ -69,8 +69,31 @@ impl CorsConfig {
         }
     }
 
+    /// Validates the CORS configuration.
+    ///
+    /// Returns an error if `credentials` is `true` with `Any` or `Mirror`
+    /// origins, which would allow any origin to send credentialed requests.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.credentials {
+            match &self.origins {
+                CorsOrigins::Any => {
+                    Err("CORS misconfiguration: `credentials` must not be used with `Any` origins — any origin could send credentialed requests".into())
+                }
+                CorsOrigins::Mirror => {
+                    Err("CORS misconfiguration: `credentials` must not be used with `Mirror` origins — any origin could send credentialed requests".into())
+                }
+                _ => Ok(()),
+            }
+        } else {
+            Ok(())
+        }
+    }
+
     /// Convert into a `tower-http` `CorsLayer` for use in the middleware stack.
     pub fn into_layer(self) -> CorsLayer {
+        if let Err(msg) = self.validate() {
+            panic!("{msg}");
+        }
         let methods = vec![
             Method::GET,
             Method::POST,
@@ -152,5 +175,57 @@ impl From<CorsYamlConfig> for CorsConfig {
             credentials: yaml.credentials,
             max_age_secs: yaml.max_age_secs,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mirror_without_credentials_is_valid() {
+        let config = CorsConfig::default();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn list_with_credentials_is_valid() {
+        let config = CorsConfig {
+            origins: CorsOrigins::List(vec!["https://example.com".into()]),
+            credentials: true,
+            max_age_secs: Some(3600),
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn mirror_with_credentials_is_rejected() {
+        let config = CorsConfig {
+            origins: CorsOrigins::Mirror,
+            credentials: true,
+            max_age_secs: Some(3600),
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn any_with_credentials_is_rejected() {
+        let config = CorsConfig {
+            origins: CorsOrigins::Any,
+            credentials: true,
+            max_age_secs: Some(3600),
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "CORS misconfiguration")]
+    fn into_layer_panics_on_mirror_with_credentials() {
+        let config = CorsConfig {
+            origins: CorsOrigins::Mirror,
+            credentials: true,
+            max_age_secs: Some(3600),
+        };
+        let _ = config.into_layer();
     }
 }

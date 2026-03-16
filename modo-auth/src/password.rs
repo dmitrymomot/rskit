@@ -74,7 +74,8 @@ impl PasswordHasher {
         let params = self.params.clone();
         let password = password.to_owned();
 
-        tokio::task::spawn_blocking(move || {
+        let start = std::time::Instant::now();
+        let result = tokio::task::spawn_blocking(move || {
             let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
             let salt = SaltString::generate(&mut OsRng);
 
@@ -84,7 +85,10 @@ impl PasswordHasher {
                 .map_err(|e| modo::Error::internal(format!("password hashing failed: {e}")))
         })
         .await
-        .map_err(|e| modo::Error::internal(format!("password hashing task failed: {e}")))?
+        .map_err(|e| modo::Error::internal(format!("password hashing task failed: {e}")))?;
+
+        tracing::debug!(duration_ms = %start.elapsed().as_millis(), "password hash completed");
+        result
     }
 
     /// Verify a password against a PHC-formatted hash string.
@@ -101,7 +105,8 @@ impl PasswordHasher {
         let password = password.to_owned();
         let hash = hash.to_owned();
 
-        tokio::task::spawn_blocking(move || {
+        let start = std::time::Instant::now();
+        let result = tokio::task::spawn_blocking(move || {
             let parsed = PasswordHash::new(&hash)
                 .map_err(|e| modo::Error::internal(format!("invalid password hash: {e}")))?;
 
@@ -118,7 +123,20 @@ impl PasswordHasher {
             }
         })
         .await
-        .map_err(|e| modo::Error::internal(format!("password verification task failed: {e}")))?
+        .map_err(|e| modo::Error::internal(format!("password verification task failed: {e}")))?;
+
+        let elapsed_ms = start.elapsed().as_millis();
+        match &result {
+            Ok(true) => {
+                tracing::debug!(duration_ms = %elapsed_ms, "password verification succeeded")
+            }
+            Ok(false) => {
+                tracing::debug!(duration_ms = %elapsed_ms, "password verification failed (mismatch)")
+            }
+            Err(_) => {} // error already in the Result
+        }
+
+        result
     }
 }
 

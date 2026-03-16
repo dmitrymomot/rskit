@@ -34,10 +34,16 @@ pub struct SessionConfig {
     /// Maximum number of concurrent active sessions per user before the
     /// least-recently-used session is evicted (default: 10).
     pub max_sessions_per_user: usize,
-    /// CIDR ranges of trusted reverse-proxy addresses.  When non-empty, the
-    /// `X-Forwarded-For` / `X-Real-IP` headers are only trusted when the TCP
-    /// connection originates from one of these ranges (default: empty = trust
-    /// proxy headers unconditionally).
+    /// CIDR ranges of trusted reverse-proxy addresses.
+    ///
+    /// When non-empty, the `X-Forwarded-For` / `X-Real-IP` headers are only
+    /// trusted when the TCP connection originates from one of these ranges.
+    ///
+    /// **Security:** When empty (the default), proxy headers are trusted
+    /// unconditionally — any client can spoof their IP. In production behind a
+    /// reverse proxy, always set this to your proxy's CIDR range. Without a
+    /// reverse proxy, set a dummy value like `["127.0.0.1/32"]` to disable
+    /// proxy header trust entirely.
     pub trusted_proxies: Vec<String>,
 }
 

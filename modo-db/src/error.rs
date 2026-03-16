@@ -24,7 +24,52 @@ pub fn db_err_to_error(e: sea_orm::DbErr) -> modo::Error {
         }
         _ => match e {
             sea_orm::DbErr::RecordNotFound(_) => modo::Error::from(modo::HttpError::NotFound),
-            _ => modo::Error::internal(e.to_string()),
+            _ => {
+                tracing::error!(error = %e, "database error");
+                modo::Error::internal("database error")
+            }
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generic_db_error_does_not_leak_details() {
+        let db_err = sea_orm::DbErr::Conn(sea_orm::RuntimeErr::Internal(
+            "connection to server at \"10.0.0.1\" failed: FATAL password auth failed for user \"app\"".to_string(),
+        ));
+        let err = db_err_to_error(db_err);
+        let msg = err.to_string();
+        assert!(!msg.contains("10.0.0.1"), "error should not leak server IP");
+        assert!(
+            !msg.contains("password"),
+            "error should not leak connection details"
+        );
+    }
+
+    #[test]
+    fn not_found_still_returns_404() {
+        let db_err = sea_orm::DbErr::RecordNotFound("user".to_string());
+        let err = db_err_to_error(db_err);
+        assert_eq!(err.status_code(), 404);
+    }
+
+    #[test]
+    fn query_error_falls_to_generic_500() {
+        // RuntimeErr::Internal is not detected by sql_err() as a constraint
+        // violation — this tests the catch-all path only. Actual constraint
+        // detection requires a real SQLx error, which is integration-test territory.
+        let db_err = sea_orm::DbErr::Query(sea_orm::RuntimeErr::Internal(
+            "UNIQUE constraint failed: users.email".to_string(),
+        ));
+        let err = db_err_to_error(db_err);
+        assert_eq!(err.status_code(), 500);
+        assert!(
+            !err.to_string().contains("users.email"),
+            "error should not leak table/column names"
+        );
     }
 }

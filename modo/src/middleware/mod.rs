@@ -12,8 +12,8 @@ pub use client_ip::{ClientIp, client_ip_middleware};
 pub(crate) use client_ip::{TrustedProxies, parse_trusted_proxies};
 pub use maintenance::maintenance_middleware;
 pub use rate_limit::{
-    RateLimitInfo, RateLimiterState, by_header, by_ip, by_path, rate_limit_middleware,
-    spawn_cleanup_task,
+    OptionalRateLimitInfo, RateLimitInfo, RateLimiterState, by_header, by_ip, by_path,
+    rate_limit_middleware, spawn_cleanup_task,
 };
 pub use security_headers::security_headers_middleware;
 pub use trailing_slash::trailing_slash_middleware;

@@ -101,7 +101,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             .unwrap_or_else(|| syn::LitStr::new("static/", proc_macro2::Span::call_site()));
         static_embed_tokens = quote! {
             let #app_ident = {
-                use ::modo::rust_embed;
+                use ::modo::__internal::rust_embed;
                 #[derive(rust_embed::Embed)]
                 #[folder = #folder]
                 struct __ModoStaticAssets;
@@ -118,31 +118,31 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     Ok(quote! {
         fn main() {
-            modo::tokio::runtime::Builder::new_multi_thread()
+            modo::__internal::tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .expect("failed to build tokio runtime")
                 .block_on(async {
-                    let stdout_filter = modo::tracing_subscriber::EnvFilter::try_from_default_env()
-                        .unwrap_or_else(|_| modo::tracing_subscriber::EnvFilter::new("info,sqlx::query=warn"));
+                    let stdout_filter = modo::__internal::tracing_subscriber::EnvFilter::try_from_default_env()
+                        .unwrap_or_else(|_| modo::__internal::tracing_subscriber::EnvFilter::new("info,sqlx::query=warn"));
 
-                    modo::tracing_subscriber::fmt()
+                    modo::__internal::tracing_subscriber::fmt()
                         .with_env_filter(stdout_filter)
                         .init();
 
-                    let #app_ident = modo::app::AppBuilder::new();
+                    let #app_ident = modo::__internal::AppBuilder::new();
 
                     #static_embed_tokens
 
                     let __modo_result: std::result::Result<(), Box<dyn std::error::Error>> = {
                         async move {
-                            let #config_ident: #config_ty = modo::config::load_or_default()?;
+                            let #config_ident: #config_ty = modo::__internal::load_or_default()?;
                             #(#stmts)*
                         }
                     }.await;
 
                     if let Err(e) = __modo_result {
-                        modo::tracing::error!("Application error: {e}");
+                        modo::__internal::tracing::error!("Application error: {e}");
                         std::process::exit(1);
                     }
                 });

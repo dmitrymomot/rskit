@@ -68,8 +68,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     Ok(quote! {
         #func
 
-        modo_db::inventory::submit! {
-            modo_db::MigrationRegistration {
+        modo_db::__internal::inventory::submit! {
+            modo_db::__internal::MigrationRegistration {
                 version: #version,
                 description: #description,
                 group: #group_str,

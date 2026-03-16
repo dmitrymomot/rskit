@@ -23,7 +23,7 @@ impl<'a> UploadValidator<'a> {
     pub fn max_size(mut self, max: usize) -> Self {
         if self.file.size() > max {
             self.errors
-                .push(format!("File exceeds maximum size of {}", format_size(max)));
+                .push(format!("file exceeds maximum size of {}", format_size(max)));
         }
         self
     }
@@ -33,9 +33,24 @@ impl<'a> UploadValidator<'a> {
     /// Supports exact types (`"image/png"`), wildcard subtypes (`"image/*"`),
     /// and the catch-all `"*/*"`.  Parameters after `;` in the content type
     /// are stripped before matching.
+    ///
+    /// When the MIME header check passes, the file's actual bytes are
+    /// inspected via magic-number detection.  If the detected type does not
+    /// match the claimed content type, the file is rejected (422).  Files
+    /// whose type cannot be detected from bytes (e.g. plain text, JSON)
+    /// are allowed through — magic-bytes validation only applies when
+    /// detection succeeds.
     pub fn accept(mut self, pattern: &str) -> Self {
         if !mime_matches(self.file.content_type(), pattern) {
-            self.errors.push(format!("File type must match {pattern}"));
+            self.errors.push(format!("file type must match {pattern}"));
+            return self;
+        }
+        // Skip magic-bytes validation for catch-all or empty files
+        if pattern == "*/*" || self.file.is_empty() {
+            return self;
+        }
+        if let Some(err) = validate_magic_bytes(self.file.content_type(), self.file.data()) {
+            self.errors.push(err);
         }
         self
     }
@@ -53,6 +68,28 @@ impl<'a> UploadValidator<'a> {
                 self.errors,
             )]))
         }
+    }
+}
+
+/// Validate that the file's actual bytes match its claimed content type.
+///
+/// Returns `Some(error_message)` when the detected type does not match,
+/// or `None` when validation passes (including when the type cannot be
+/// detected from bytes).
+fn validate_magic_bytes(claimed_content_type: &str, data: &[u8]) -> Option<String> {
+    let detected = infer::get(data)?; // can't detect — allow through
+    let claimed = claimed_content_type
+        .split(';')
+        .next()
+        .unwrap_or(claimed_content_type)
+        .trim();
+    if detected.mime_type() != claimed {
+        Some(format!(
+            "file content does not match claimed type {claimed} (detected {})",
+            detected.mime_type()
+        ))
+    } else {
+        None
     }
 }
 
@@ -192,7 +229,9 @@ mod tests {
     }
 
     #[test]
-    fn validator_accept_pass() {
+    fn accept_passes_when_bytes_undetectable() {
+        // b"img" can't be identified by `infer`, so magic-bytes validation
+        // is skipped and only the MIME header check applies.
         let f = UploadedFile::__test_new("f", "img.png", "image/png", b"img");
         f.validate().accept("image/*").check().unwrap();
     }
@@ -270,5 +309,65 @@ mod tests {
     #[test]
     fn format_size_boundary_below_mb() {
         assert_eq!(format_size(1024 * 1024 - 1), "1048575B");
+    }
+
+    #[test]
+    fn accept_rejects_mismatched_magic_bytes() {
+        // PNG magic bytes: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+        let png_bytes: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00];
+        // Claim it's JPEG but bytes are PNG
+        let f = UploadedFile::__test_new("f", "photo.jpg", "image/jpeg", png_bytes);
+        let err = f.validate().accept("image/jpeg").check();
+        assert!(
+            err.is_err(),
+            "should reject: claimed JPEG but bytes are PNG"
+        );
+    }
+
+    #[test]
+    fn accept_passes_matching_magic_bytes() {
+        let png_bytes: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00];
+        let f = UploadedFile::__test_new("f", "photo.png", "image/png", png_bytes);
+        f.validate().accept("image/png").check().unwrap();
+    }
+
+    #[test]
+    fn accept_passes_matching_wildcard_with_valid_bytes() {
+        let png_bytes: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00];
+        let f = UploadedFile::__test_new("f", "photo.png", "image/png", png_bytes);
+        f.validate().accept("image/*").check().unwrap();
+    }
+
+    #[test]
+    fn accept_rejects_wildcard_when_bytes_mismatch_category() {
+        // PNG bytes but claiming text/plain
+        let png_bytes: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00];
+        let f = UploadedFile::__test_new("f", "data.txt", "text/plain", png_bytes);
+        // text/plain doesn't match image/* pattern
+        let err = f.validate().accept("text/*").check();
+        assert!(err.is_err(), "should reject: bytes are PNG, not text");
+    }
+
+    #[test]
+    fn accept_skips_magic_bytes_for_unknown_types() {
+        // For types infer can't detect (e.g. application/json), skip byte validation
+        let json_bytes = b"{\"key\": \"value\"}";
+        let f = UploadedFile::__test_new("f", "data.json", "application/json", json_bytes);
+        f.validate().accept("application/json").check().unwrap();
+    }
+
+    #[test]
+    fn accept_skips_magic_bytes_for_empty_files() {
+        let f = UploadedFile::__test_new("f", "empty.png", "image/png", &[]);
+        // Empty file — no bytes to sniff, MIME header matches, should pass
+        f.validate().accept("image/png").check().unwrap();
+    }
+
+    #[test]
+    fn accept_star_star_skips_magic_bytes() {
+        // Wildcard */* should accept anything regardless of bytes
+        let png_bytes: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00];
+        let f = UploadedFile::__test_new("f", "photo.jpg", "image/jpeg", png_bytes);
+        f.validate().accept("*/*").check().unwrap();
     }
 }

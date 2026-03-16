@@ -2,9 +2,10 @@ use super::config::CsrfConfig;
 use super::token;
 use crate::cookie_util::read_cookie;
 use crate::cookies::{CookieConfig, CookieOptions, build_cookie};
+use crate::error::HttpError;
 use axum::body::Body;
 use axum::extract::State;
-use axum::http::{Method, Request, StatusCode};
+use axum::http::{Method, Request};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use http::header;
@@ -39,7 +40,9 @@ pub async fn csrf_protection(
 
     if let Err(e) = config.validate() {
         tracing::error!(error = %e, "Invalid CsrfConfig — rejecting request");
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        return HttpError::InternalServerError
+            .with_message("invalid CSRF configuration")
+            .into_response();
     }
 
     let arc_cookie_config = state
@@ -130,7 +133,9 @@ async fn handle_mutating_request(
         Some(t) => t,
         None => {
             tracing::warn!("CSRF validation failed: missing or invalid cookie");
-            return StatusCode::FORBIDDEN.into_response();
+            return HttpError::Forbidden
+                .with_message("CSRF validation failed: missing or invalid cookie")
+                .into_response();
         }
     };
 
@@ -145,27 +150,35 @@ async fn handle_mutating_request(
     let (submitted, body) = if submitted.is_some() {
         (submitted, body)
     } else {
-        extract_from_form_body(
+        match extract_from_form_body(
             &parts.headers,
             body,
             &config.field_name,
             config.max_body_bytes,
         )
         .await
+        {
+            Ok(result) => result,
+            Err(response) => return response,
+        }
     };
 
     let submitted = match submitted {
         Some(t) => t,
         None => {
             tracing::warn!("CSRF validation failed: no token in header or form body");
-            return StatusCode::FORBIDDEN.into_response();
+            return HttpError::Forbidden
+                .with_message("CSRF validation failed: no token in header or form body")
+                .into_response();
         }
     };
 
     // 4. Constant-time compare
     if !constant_time_eq(cookie_token.as_bytes(), submitted.as_bytes()) {
         tracing::warn!("CSRF validation failed: token mismatch");
-        return StatusCode::FORBIDDEN.into_response();
+        return HttpError::Forbidden
+            .with_message("CSRF validation failed: token mismatch")
+            .into_response();
     }
 
     // 5. Inject token so handlers re-rendering forms (e.g. validation errors) can access it
@@ -185,20 +198,24 @@ async fn extract_from_form_body(
     body: Body,
     field_name: &str,
     max_body_bytes: usize,
-) -> (Option<String>, Body) {
+) -> Result<(Option<String>, Body), Response> {
     let is_form = headers
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .is_some_and(|ct| ct.starts_with("application/x-www-form-urlencoded"));
 
     if !is_form {
-        return (None, body);
+        return Ok((None, body));
     }
 
     // Buffer the body
     let bytes = match axum::body::to_bytes(body, max_body_bytes).await {
         Ok(b) => b,
-        Err(_) => return (None, Body::empty()),
+        Err(_) => {
+            return Err(HttpError::PayloadTooLarge
+                .with_message("request body too large")
+                .into_response());
+        }
     };
 
     // Parse url-encoded form
@@ -207,7 +224,7 @@ async fn extract_from_form_body(
         .map(|(_, val)| val.into_owned());
 
     // Reconstruct body for downstream
-    (token, Body::from(bytes))
+    Ok((token, Body::from(bytes)))
 }
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
@@ -225,6 +242,7 @@ mod tests {
     use crate::config::ServerConfig;
     use crate::cookies::CookieConfig;
     use axum::Router;
+    use axum::http::StatusCode;
     use axum::routing::{get, post};
     use axum_extra::extract::cookie::Key;
     use http::Request;
@@ -468,6 +486,73 @@ mod tests {
             set_cookie.contains("Domain=example.com"),
             "expected Domain=example.com in Set-Cookie: {set_cookie}"
         );
+    }
+
+    #[tokio::test]
+    async fn csrf_error_has_json_body() {
+        let state = test_state();
+        let key = state.server_config.secret_key.as_bytes();
+        let raw_token = token::generate(32);
+        let signed = token::sign(&raw_token, key);
+
+        let app = test_app(state);
+        let wrong_token = token::generate(32);
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/submit")
+            .header(header::COOKIE, format!("_csrf={signed}"))
+            .header("x-csrf-token", &wrong_token)
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+        let body_bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
+        let body_lower = body_str.to_lowercase();
+        assert!(
+            body_lower.contains("forbidden"),
+            "expected 'forbidden' in response body, got: {body_str}"
+        );
+    }
+
+    #[tokio::test]
+    async fn oversized_form_body_returns_413() {
+        let csrf_config = CsrfConfig {
+            max_body_bytes: 10,
+            ..Default::default()
+        };
+        let services = ServiceRegistry::new()
+            .with(csrf_config)
+            .with(CookieConfig::default());
+        let server_config = ServerConfig {
+            secret_key: "test-secret-key-for-csrf".to_string(),
+            ..Default::default()
+        };
+        let state = AppState {
+            services,
+            server_config,
+            cookie_key: Key::generate(),
+        };
+        let key = state.server_config.secret_key.as_bytes();
+        let raw_token = token::generate(32);
+        let signed = token::sign(&raw_token, key);
+
+        let app = test_app(state);
+        let big_body = format!("_csrf_token={}&data={}", raw_token, "x".repeat(100));
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/submit")
+            .header(header::COOKIE, format!("_csrf={signed}"))
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(Body::from(big_body))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
 
     #[test]

@@ -102,13 +102,16 @@ where
             // Try to get user_id from session extensions
             let user_id = modo_session::user_id_from_extensions(&parts.extensions);
 
-            if let Some(user_id) = user_id
-                && let Ok(Some(user)) = user_svc.find_by_id(&user_id).await
+            if let Some(ref user_id) = user_id
+                && let Ok(Some(user)) = user_svc.find_by_id(user_id).await
             {
+                tracing::debug!(user_id = %user_id, "injected user into template context");
                 if let Some(ctx) = parts.extensions.get_mut::<TemplateContext>() {
                     ctx.insert("user", modo::minijinja::Value::from_serialize(&user));
                 }
                 parts.extensions.insert(ResolvedUser(Arc::new(user)));
+            } else if let Some(ref user_id) = user_id {
+                tracing::debug!(user_id = %user_id, "user context layer: user not found for session user_id");
             }
 
             let request = Request::from_parts(parts, body);

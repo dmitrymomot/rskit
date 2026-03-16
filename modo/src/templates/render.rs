@@ -1,6 +1,5 @@
 use super::context::TemplateContext;
 use super::engine::TemplateEngine;
-use super::html_escape;
 use super::view::View;
 use axum::body::Body;
 use axum::http::Request;
@@ -64,7 +63,9 @@ where
         let template_ctx = match request.extensions().get::<TemplateContext>().cloned() {
             Some(ctx) => ctx,
             None => {
-                warn!("TemplateContext not found in request extensions; was ContextLayer applied?");
+                warn!(
+                    "TemplateContext not found in request extensions; was TemplateContextLayer applied?"
+                );
                 TemplateContext::default()
             }
         };
@@ -108,17 +109,65 @@ where
                 }
                 Err(err) => {
                     error!(template = template_name, error = %err, "template render failed");
-                    let body = if cfg!(debug_assertions) {
-                        format!(
-                            "<h1>Template Render Error</h1><pre>{}</pre>",
-                            html_escape(&err.to_string())
-                        )
-                    } else {
-                        "<h1>Internal Server Error</h1>".to_string()
-                    };
-                    Ok((StatusCode::INTERNAL_SERVER_ERROR, Html(body)).into_response())
+                    let error =
+                        crate::error::Error::internal(format!("template render failed: {err}"));
+                    Ok(error.into_response())
                 }
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::Error;
+    use axum::Router;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use axum::response::IntoResponse;
+    use axum::routing::get;
+    use std::sync::Arc;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn render_error_inserts_error_into_extensions() {
+        // Create engine with no templates
+        let engine = Arc::new(
+            crate::templates::engine(&crate::templates::TemplateConfig {
+                path: "/nonexistent_path_for_test".to_string(),
+                ..Default::default()
+            })
+            .unwrap(),
+        );
+
+        // Handler that returns a View pointing to a nonexistent template
+        let app = Router::new()
+            .route(
+                "/",
+                get(|| async {
+                    let view = crate::templates::View::new(
+                        "nonexistent.html",
+                        minijinja::Value::UNDEFINED,
+                    );
+                    let mut resp = StatusCode::OK.into_response();
+                    resp.extensions_mut().insert(view);
+                    resp
+                }),
+            )
+            .layer(RenderLayer::new(engine))
+            .layer(crate::templates::TemplateContextLayer::new());
+
+        let resp = app
+            .oneshot(Request::get("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        // The Error should be in extensions for error_handler_middleware to pick up
+        assert!(
+            resp.extensions().get::<Error>().is_some(),
+            "Expected Error in response extensions for error handler interception"
+        );
     }
 }

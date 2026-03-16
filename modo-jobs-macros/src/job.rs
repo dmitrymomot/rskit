@@ -225,13 +225,13 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
                 // Extract the pattern ident for the call arg
                 let ident = extract_pat_ident(param_pat);
                 setup_stmts.push(quote! {
-                    let #ident = modo_jobs::modo::extractor::service::Service(ctx.service::<#inner_ty>()?);
+                    let #ident = modo_jobs::__internal::modo::extractor::service::Service(ctx.service::<#inner_ty>()?);
                 });
                 call_args.push(quote! { #ident });
             }
             Some(ParamKind::Db) => {
                 setup_stmts.push(quote! {
-                    let __db = modo_jobs::modo_db::extractor::Db(ctx.db()?.clone());
+                    let __db = modo_jobs::__internal::modo_db::extractor::Db(ctx.db()?.clone());
                 });
                 // Use the original pattern for the call
                 call_args.push(quote! { __db });
@@ -253,8 +253,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             pub const JOB_NAME: &str = #func_name_str;
         }
 
-        impl modo_jobs::JobHandler for #struct_name {
-            async fn run(&self, ctx: modo_jobs::JobContext) -> Result<(), modo_jobs::modo::error::Error> {
+        impl modo_jobs::__internal::JobHandler for #struct_name {
+            async fn run(&self, ctx: modo_jobs::__internal::JobContext) -> Result<(), modo_jobs::__internal::modo::Error> {
                 #(#setup_stmts)*
                 #impl_name(#(#call_args),*).await
             }
@@ -270,17 +270,17 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         quote! {
             impl #struct_name {
                 pub async fn enqueue(
-                    queue: &modo_jobs::JobQueue,
+                    queue: &modo_jobs::__internal::JobQueue,
                     #payload_param
-                ) -> Result<modo_jobs::JobId, modo_jobs::modo::error::Error> {
+                ) -> Result<modo_jobs::__internal::JobId, modo_jobs::__internal::modo::Error> {
                     queue.enqueue(Self::JOB_NAME, #payload_arg).await
                 }
 
                 pub async fn enqueue_at(
-                    queue: &modo_jobs::JobQueue,
+                    queue: &modo_jobs::__internal::JobQueue,
                     #payload_param
-                    run_at: modo_jobs::chrono::DateTime<modo_jobs::chrono::Utc>,
-                ) -> Result<modo_jobs::JobId, modo_jobs::modo::error::Error> {
+                    run_at: modo_jobs::__internal::chrono::DateTime<modo_jobs::__internal::chrono::Utc>,
+                ) -> Result<modo_jobs::__internal::JobId, modo_jobs::__internal::modo::Error> {
                     queue.enqueue_at(Self::JOB_NAME, #payload_arg, run_at).await
                 }
             }
@@ -291,8 +291,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     // Registration
     let registration = quote! {
-        modo_jobs::inventory::submit! {
-            modo_jobs::JobRegistration {
+        modo_jobs::__internal::inventory::submit! {
+            modo_jobs::__internal::JobRegistration {
                 name: #struct_name::JOB_NAME,
                 queue: #queue,
                 priority: #priority,

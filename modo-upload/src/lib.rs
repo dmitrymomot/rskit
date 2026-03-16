@@ -18,7 +18,7 @@
 //! ```rust,ignore
 //! use std::sync::Arc;
 //! use modo::{AppConfig, Json, JsonResult, Service};
-//! use modo_upload::{FileStorage, FromMultipart, MultipartForm, UploadConfig, UploadedFile, storage};
+//! use modo_upload::{FileStorageDyn, FromMultipart, MultipartForm, UploadConfig, UploadedFile, storage};
 //! use serde::Deserialize;
 //!
 //! #[derive(Default, Deserialize)]
@@ -38,7 +38,7 @@
 //!
 //! #[modo::handler(POST, "/upload")]
 //! async fn upload(
-//!     file_storage: Service<Arc<dyn FileStorage>>,
+//!     file_storage: Service<Arc<dyn FileStorageDyn>>,
 //!     form: MultipartForm<UploadForm>,
 //! ) -> JsonResult<()> {
 //!     let stored = file_storage.store("avatars", &form.avatar).await?;
@@ -72,7 +72,7 @@ pub use config::{StorageBackend, UploadConfig};
 pub use extractor::MultipartForm;
 pub use file::UploadedFile;
 pub use from_multipart::FromMultipart;
-pub use storage::{FileStorage, StoredFile, storage};
+pub use storage::{FileStorage, FileStorageDyn, FileStorageSend, StoredFile, storage};
 pub use stream::BufferedUpload;
 pub use validate::{gb, kb, mb};
 
@@ -80,6 +80,5 @@ pub use validate::{gb, kb, mb};
 #[doc(hidden)]
 pub mod __internal {
     pub use crate::validate::mime_matches;
-    pub use async_trait::async_trait;
     pub use axum;
 }
