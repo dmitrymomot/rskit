@@ -15,6 +15,7 @@ use std::sync::Arc;
 pub fn storage(
     config: &crate::config::UploadConfig,
 ) -> Result<Arc<dyn FileStorageDyn>, modo::Error> {
+    config.validate();
     match config.backend {
         #[cfg(feature = "local")]
         crate::config::StorageBackend::Local => {
