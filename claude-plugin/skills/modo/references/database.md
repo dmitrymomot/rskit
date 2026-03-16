@@ -144,7 +144,7 @@ Applied as `#[entity(...)]` on individual struct fields:
 |--------|-------------|
 | `primary_key` | Marks the field as the primary key |
 | `auto_increment = true\|false` | Overrides SeaORM's default auto-increment behavior |
-| `auto = "ulid"\|"nanoid"` | Generates a ULID or NanoID before insert. Only valid on `primary_key` fields. |
+| `auto = "ulid"\|"short_id"` | Generates a ULID or short ID before insert. Only valid on `primary_key` fields. |
 | `unique` | Adds a unique constraint |
 | `indexed` | Creates a single-column index |
 | `nullable` | Accepted but has no effect -- SeaORM infers nullability from `Option<T>` |
@@ -163,14 +163,14 @@ Applied as `#[entity(...)]` on individual struct fields:
 
 ### ID generation
 
-The `auto = "ulid"` and `auto = "nanoid"` options on a primary key field cause
+The `auto = "ulid"` and `auto = "short_id"` options on a primary key field cause
 `Record::apply_auto_fields` to call `modo_db::generate_ulid()` or
-`modo_db::generate_nanoid()` before insert if the field is empty or not set. The `Default`
+`modo_db::generate_short_id()` before insert if the field is empty or not set. The `Default`
 impl for the struct also calls the generator, so `Todo::default()` produces a struct with a
-fresh ULID/NanoID.
+fresh ULID/short ID.
 
 - `generate_ulid()` -- 26-character Crockford Base32 ULID
-- `generate_nanoid()` -- 21-character NanoID (default alphabet)
+- `generate_short_id()` -- 13-character Base36 `[0-9a-z]`, time-sortable
 
 Session IDs and most entity IDs in modo use ULID. Do not use UUID.
 
@@ -1161,7 +1161,7 @@ am.update(&*db).await.map_err(modo_db::db_err_to_error)?;
 - **Schema sync is addition-only**: `sync_and_migrate` never drops or renames columns. Use a
   versioned `#[modo_db::migration]` to rename or drop columns.
 
-- **`auto = "ulid"` only on primary key fields**: Using `auto = "ulid"` or `auto = "nanoid"` on
+- **`auto = "ulid"` only on primary key fields**: Using `auto = "ulid"` or `auto = "short_id"` on
   a non-primary-key field is a compile error.
 
 - **Do not declare `created_at`/`updated_at`/`deleted_at` manually**: When `timestamps` or
@@ -1219,5 +1219,5 @@ am.update(&*db).await.map_err(modo_db::db_err_to_error)?;
 | `sync_and_migrate_group` | `modo_db::sync_and_migrate_group` |
 | `connect` | `modo_db::connect` |
 | `generate_ulid` | `modo_db::generate_ulid` |
-| `generate_nanoid` | `modo_db::generate_nanoid` |
+| `generate_short_id` | `modo_db::generate_short_id` |
 | `db_err_to_error` | `modo_db::db_err_to_error` |

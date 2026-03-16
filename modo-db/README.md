@@ -109,7 +109,7 @@ let todo = Todo {
 | ----------------------------------- | ----------------------------------------------------------- |
 | `primary_key`                       | Marks the primary key column                                |
 | `auto_increment = false`            | Disables auto-increment (required for composite PKs)        |
-| `auto = "ulid"` / `auto = "nanoid"` | Auto-generates the PK before insert (primary key only)      |
+| `auto = "ulid"` / `auto = "short_id"` | Auto-generates the PK before insert (primary key only)    |
 | `unique`                            | Adds a unique constraint                                    |
 | `indexed`                           | Adds a single-column index                                  |
 | `column_type = "Text"`              | Overrides the SeaORM column type                            |
@@ -521,8 +521,8 @@ Migrations can also be assigned to a group with `group = "<name>"` so they only 
 ### ID generation
 
 ```rust,ignore
-let ulid_id = modo_db::generate_ulid();   // 26-char Crockford Base32
-let nano_id = modo_db::generate_nanoid(); // 21-char NanoID
+let ulid_id  = modo_db::generate_ulid();     // 26-char Crockford Base32
+let short_id = modo_db::generate_short_id(); // 13-char Base36, time-sortable
 ```
 
 ## Key Types

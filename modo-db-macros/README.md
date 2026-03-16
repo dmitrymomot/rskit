@@ -41,7 +41,7 @@ Place these as `#[entity(...)]` on individual struct fields.
 | ------------------------------ | -------------------------------------------------------------------------------- |
 | `primary_key`                  | Marks the field as the primary key.                                              |
 | `auto_increment = true\|false` | Overrides SeaORM's default auto-increment behaviour.                             |
-| `auto = "ulid"\|"nanoid"`      | Generates a ULID or NanoID before insert. Only valid on `primary_key` fields.    |
+| `auto = "ulid"\|"short_id"`    | Generates a ULID or short ID before insert. Only valid on `primary_key` fields.  |
 | `unique`                       | Adds a unique constraint.                                                        |
 | `indexed`                      | Creates a single-column index.                                                   |
 | `column_type = "<type>"`       | Overrides the inferred SeaORM column type string.                                |
