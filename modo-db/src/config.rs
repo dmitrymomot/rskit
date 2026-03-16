@@ -17,7 +17,7 @@ pub struct DatabaseConfig {
     pub acquire_timeout_secs: u64,
     /// Seconds a connection may sit idle in the pool before being closed (default: 600).
     pub idle_timeout_secs: u64,
-    /// Maximum lifetime of a connection in seconds before it is recycled (default: 1800).
+    /// Maximum lifetime of a connection in seconds before it is closed and replaced (default: 1800).
     pub max_lifetime_secs: u64,
 }
 
