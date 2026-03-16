@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use axum::extract::FromRequestParts;
+use http::StatusCode;
 use http::request::Parts;
 
 use crate::error::Error;
@@ -44,6 +45,20 @@ impl ViewRenderer {
             Ok(ViewResponse::hx_redirect(url))
         } else {
             Ok(ViewResponse::redirect(url))
+        }
+    }
+
+    /// Smart redirect with custom status — returns redirect with given status
+    /// for normal requests, `HX-Redirect` header + 200 for HTMX requests.
+    pub fn redirect_with_status(
+        &self,
+        url: &str,
+        status: StatusCode,
+    ) -> Result<ViewResponse, Error> {
+        if self.is_htmx {
+            Ok(ViewResponse::hx_redirect(url))
+        } else {
+            Ok(ViewResponse::redirect_with_status(url, status))
         }
     }
 
