@@ -117,16 +117,20 @@ mod tests {
 
     #[test]
     fn validate_rejects_zero_stale_reaper_interval() {
-        let mut config = JobsConfig::default();
-        config.stale_reaper_interval_secs = 0;
+        let config = JobsConfig {
+            stale_reaper_interval_secs: 0,
+            ..Default::default()
+        };
         let err = config.validate().unwrap_err();
         assert!(err.to_string().contains("stale_reaper_interval_secs"));
     }
 
     #[test]
     fn validate_accepts_nonzero_stale_reaper_interval() {
-        let mut config = JobsConfig::default();
-        config.stale_reaper_interval_secs = 30;
+        let config = JobsConfig {
+            stale_reaper_interval_secs: 30,
+            ..Default::default()
+        };
         assert!(config.validate().is_ok());
     }
 
