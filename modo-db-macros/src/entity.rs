@@ -1243,7 +1243,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         #preserved_struct
 
         // 2. SeaORM module
-        pub mod #mod_name {
+        #vis mod #mod_name {
             use modo_db::__internal::sea_orm;
             use modo_db::__internal::sea_orm::entity::prelude::*;
 
