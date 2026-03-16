@@ -118,6 +118,7 @@ Controls the HTTP server, middleware stack, and health check endpoints.
 | `log_level` | `String` | `"info"` | Log level filter: `trace`, `debug`, `info`, `warn`, `error` |
 | `trusted_proxies` | `Vec<String>` | `[]` | CIDR ranges for trusted proxy IP extraction (e.g. `["10.0.0.0/8"]`) |
 | `shutdown_timeout_secs` | `u64` | `30` | Graceful shutdown timeout in seconds |
+| `hook_timeout_secs` | `u64` | `5` | Per-hook timeout in seconds during graceful shutdown. Each `on_shutdown` callback is capped to this duration. |
 | `cors` | `Option<CorsYamlConfig>` | `None` | CORS policy. Absent = no CORS middleware applied |
 | `liveness_path` | `String` | `"/_live"` | Path for the liveness health check endpoint |
 | `readiness_path` | `String` | `"/_ready"` | Path for the readiness health check endpoint |

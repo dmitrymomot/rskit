@@ -187,10 +187,12 @@ pub struct Config {
 |-------|------|---------|-------------|
 | `poll_interval_secs` | `u64` | `1` | How often each queue polls for new jobs. |
 | `stale_threshold_secs` | `u64` | `600` | Jobs locked longer than this are re-queued. |
+| `stale_reaper_interval_secs` | `u64` | `60` | How often the stale reaper checks for stale jobs. |
 | `drain_timeout_secs` | `u64` | `30` | Max time to wait for in-flight jobs at shutdown. |
 | `queues` | `Vec<QueueConfig>` | `[{name: "default", concurrency: 4}]` | Per-queue configuration. |
 | `cleanup` | `CleanupConfig` | see below | Automatic cleanup of finished jobs. |
 | `max_payload_bytes` | `Option<usize>` | `None` (unlimited) | Optional cap on serialized payload size. |
+| `max_queue_depth` | `Option<usize>` | `None` (unlimited) | Optional cap on pending jobs per queue. When set, `enqueue()` returns 503 if the queue is full. |
 
 ### QueueConfig fields
 
@@ -213,6 +215,7 @@ Example YAML:
 jobs:
   poll_interval_secs: 1
   stale_threshold_secs: 600
+  stale_reaper_interval_secs: 60
   drain_timeout_secs: 30
   queues:
     - name: default
@@ -482,7 +485,7 @@ error when the serialized payload exceeds that limit. The default is `None` (unl
 
 **Stale job reaping.** Jobs locked longer than `stale_threshold_secs` (default 600 s) are
 reset to `Pending` and their attempt counter is decremented. This handles crashed workers.
-The reaper runs every 60 seconds.
+The reaper runs every `stale_reaper_interval_secs` seconds (default 60).
 
 **Cron timeout panics on invalid expressions.** A malformed cron expression causes a `panic!`
 at startup rather than returning an error. Verify expressions before deploying.

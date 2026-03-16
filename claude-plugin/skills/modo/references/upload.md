@@ -76,13 +76,13 @@ call `.validate()` on the wrapper to run additional field-level rules.
 ```rust
 use modo::JsonResult;
 use modo::Service;
-use modo_upload::{FileStorage, MultipartForm};
+use modo_upload::{FileStorageDyn, MultipartForm};
 
 use crate::types::ProfileForm;
 
 #[modo::handler(POST, "/profile")]
 async fn update_profile(
-    storage: Service<Arc<dyn FileStorage>>,
+    storage: Service<Arc<dyn FileStorageDyn>>,
     form: MultipartForm<ProfileForm>,
 ) -> JsonResult<serde_json::Value> {
     form.validate()?;
@@ -263,7 +263,7 @@ Serializes/deserializes as lowercase strings (`"local"`, `"s3"`).
 
 ### `storage()` factory function
 
-Construct a `Arc<dyn FileStorage>` from config, then register it as a service:
+Construct an `Arc<dyn FileStorageDyn>` from config, then register it as a service:
 
 ```rust
 #[modo::main]
@@ -276,13 +276,19 @@ async fn main(
 }
 ```
 
-After registration, inject it into handlers via `Service<Arc<dyn FileStorage>>`.
+After registration, inject it into handlers via `Service<Arc<dyn FileStorageDyn>>`.
 
 ### `FileStorage` trait
 
+`FileStorage` defines the storage interface. The crate uses `trait_variant` to generate three
+related traits:
+
+- `FileStorage` — the base async trait (not object-safe due to async methods).
+- `FileStorageSend` — variant with `Send` bound on futures.
+- `FileStorageDyn` — object-safe companion for use as `Arc<dyn FileStorageDyn>`.
+
 ```rust
-#[async_trait]
-pub trait FileStorage: Send + Sync + 'static {
+pub trait FileStorage: Sync + 'static {
     async fn store(&self, prefix: &str, file: &UploadedFile)
         -> Result<StoredFile, modo::Error>;
 
@@ -294,6 +300,10 @@ pub trait FileStorage: Send + Sync + 'static {
     async fn exists(&self, path: &str) -> Result<bool, modo::Error>;
 }
 ```
+
+A blanket impl provides `FileStorageDyn` for all `T: FileStorageSend`. The `storage()` factory
+returns `Arc<dyn FileStorageDyn>`, which is the type to register as a service and inject in
+handlers.
 
 All methods take a `prefix` (e.g. `"avatars"`) and return a `StoredFile` with `path` and `size`
 fields. The path is relative within the storage root — store it in the database, not the full
@@ -360,12 +370,12 @@ Logical path safety: object-store keys are validated before every operation — 
 ### Full upload handler with validation
 
 The upload example shows the complete pattern combining `#[derive(FromMultipart)]`, `MultipartForm`,
-`Service<Arc<dyn FileStorage>>`, and runtime validation:
+`Service<Arc<dyn FileStorageDyn>>`, and runtime validation:
 
 ```rust
 use modo::JsonResult;
 use modo::Service;
-use modo_upload::{FileStorage, MultipartForm, UploadedFile, FromMultipart};
+use modo_upload::{FileStorageDyn, MultipartForm, UploadedFile, FromMultipart};
 
 #[derive(FromMultipart, modo::Sanitize, modo::Validate)]
 pub struct ProfileForm {
@@ -383,7 +393,7 @@ pub struct ProfileForm {
 
 #[modo::handler(POST, "/profile")]
 async fn update_profile(
-    storage: Service<Arc<dyn FileStorage>>,
+    storage: Service<Arc<dyn FileStorageDyn>>,
     form: MultipartForm<ProfileForm>,
 ) -> JsonResult<serde_json::Value> {
     form.validate()?;
@@ -455,7 +465,7 @@ struct VideoForm {
 
 #[modo::handler(POST, "/video")]
 async fn upload_video(
-    storage: Service<Arc<dyn FileStorage>>,
+    storage: Service<Arc<dyn FileStorageDyn>>,
     form: MultipartForm<VideoForm>,
 ) -> JsonResult<serde_json::Value> {
     let mut form = form.into_inner();
@@ -508,8 +518,8 @@ if storage.exists(&old_path).await? {
   If the process does not have write permission to the parent, the first upload will fail at
   runtime, not at startup.
 
-- **`service(storage)` registers `Arc<dyn FileStorage>`.** Inject it exactly as
-  `Service<Arc<dyn FileStorage>>` in handlers. Using `Service<LocalStorage>` or
+- **`service(storage)` registers `Arc<dyn FileStorageDyn>`.** Inject it exactly as
+  `Service<Arc<dyn FileStorageDyn>>` in handlers. Using `Service<LocalStorage>` or
   `Service<OpendalStorage>` directly will fail to resolve.
 
 - **Auto-sanitization.** `MultipartForm` calls `modo::sanitize::auto_sanitize` on the parsed
@@ -527,8 +537,9 @@ if storage.exists(&old_path).await? {
 | `MultipartForm<T>`       | https://docs.rs/modo-upload/latest/modo_upload/struct.MultipartForm.html |
 | `UploadedFile`           | https://docs.rs/modo-upload/latest/modo_upload/struct.UploadedFile.html |
 | `BufferedUpload`         | https://docs.rs/modo-upload/latest/modo_upload/struct.BufferedUpload.html |
-| `FileStorage` trait      | https://docs.rs/modo-upload/latest/modo_upload/storage/trait.FileStorage.html |
-| `StoredFile`             | https://docs.rs/modo-upload/latest/modo_upload/storage/struct.StoredFile.html |
+| `FileStorage` trait      | https://docs.rs/modo-upload/latest/modo_upload/trait.FileStorage.html |
+| `FileStorageDyn` trait   | https://docs.rs/modo-upload/latest/modo_upload/trait.FileStorageDyn.html |
+| `StoredFile`             | https://docs.rs/modo-upload/latest/modo_upload/struct.StoredFile.html |
 | `StorageBackend`         | https://docs.rs/modo-upload/latest/modo_upload/enum.StorageBackend.html |
 | `UploadConfig`           | https://docs.rs/modo-upload/latest/modo_upload/struct.UploadConfig.html |
 | `S3Config`               | https://docs.rs/modo-upload/latest/modo_upload/struct.S3Config.html |

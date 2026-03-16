@@ -40,6 +40,8 @@ pub struct Config {
 | `default_from_name` | `String` | `""` | Display name for the `From` header. |
 | `default_from_email` | `String` | `""` | Email address for the `From` header. |
 | `default_reply_to` | `Option<String>` | `None` | Optional default `Reply-To` address. |
+| `cache_templates` | `bool` | `true` | Cache compiled templates. Set `false` in dev for live reloading. |
+| `template_cache_size` | `usize` | `100` | Max cached templates (LRU eviction). Only used when `cache_templates` is `true`. |
 | `smtp` | `SmtpConfig` | see below | SMTP settings (requires `smtp` feature). |
 | `resend` | `ResendConfig` | see below | Resend API settings (requires `resend` feature). |
 
@@ -61,12 +63,14 @@ email:
   default_from_name: "My App"
   default_from_email: "noreply@myapp.com"
   default_reply_to: "support@myapp.com"
+  cache_templates: true
+  template_cache_size: 100
   smtp:
     host: smtp.mailgun.org
     port: 587
     username: postmaster@myapp.com
     password: secret
-    tls: true
+    security: starttls
 ```
 
 ### SmtpConfig (requires `smtp` feature)
@@ -77,10 +81,15 @@ email:
 | `port` | `u16` | `587` | SMTP server port. |
 | `username` | `String` | `""` | SMTP authentication username. |
 | `password` | `String` | `""` | SMTP authentication password. |
-| `tls` | `bool` | `true` | When `true`, uses STARTTLS. When `false`, no TLS. |
+| `security` | `SmtpSecurity` | `starttls` | TLS security mode. |
 
-STARTTLS (port 587) is the only supported TLS mode. Implicit TLS / SMTPS (port 465)
-is not currently supported. For local development without TLS, set `tls: false`.
+`SmtpSecurity` is an enum serialized as snake_case strings:
+
+| Variant | YAML value | Description |
+|---------|------------|-------------|
+| `None` | `none` | Plaintext — no TLS (local dev or trusted networks only). |
+| `StartTls` | `starttls` | Upgrade to TLS via STARTTLS command (port 587, default). |
+| `ImplicitTls` | `implicit_tls` | Connect with TLS from the start — SMTPS (port 465). |
 
 ### ResendConfig (requires `resend` feature)
 
@@ -548,8 +557,9 @@ tool are unaffected.
 The mailer must be on the jobs builder for job handlers to resolve it via
 `Service<Mailer>`.
 
-**SMTPS (port 465) not supported.** Only STARTTLS (port 587) is available when
-`tls: true`. Connecting to port 465 with `tls: true` will fail at connection time.
+**SMTPS (port 465) requires `implicit_tls`.** Set `security: implicit_tls` and
+`port: 465` for SMTPS connections. Using `security: starttls` with port 465
+will fail at connection time.
 
 **`brand_color` is validated.** Only `#RGB` and `#RRGGBB` hex strings are accepted.
 Any other value (e.g. `"red"`, `"#zzzzzz"`, or a CSS injection attempt) silently
@@ -588,6 +598,7 @@ at startup.
 |------|---------|-------------|
 | `EmailConfig` | https://docs.rs/modo-email/latest/modo_email/struct.EmailConfig.html | Top-level email configuration. |
 | `SmtpConfig` | https://docs.rs/modo-email/latest/modo_email/struct.SmtpConfig.html | SMTP connection settings (`smtp` feature). |
+| `SmtpSecurity` | https://docs.rs/modo-email/latest/modo_email/enum.SmtpSecurity.html | TLS mode: `None`, `StartTls`, `ImplicitTls` (`smtp` feature). |
 | `ResendConfig` | https://docs.rs/modo-email/latest/modo_email/struct.ResendConfig.html | Resend API key config (`resend` feature). |
 | `TransportBackend` | https://docs.rs/modo-email/latest/modo_email/enum.TransportBackend.html | `Smtp` or `Resend` transport selector. |
 | `Mailer` | https://docs.rs/modo-email/latest/modo_email/struct.Mailer.html | High-level email service (clone-safe). |
