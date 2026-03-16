@@ -21,7 +21,7 @@ templates = ["modo/templates"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
-serde_yaml_ng = "0.10"
+serde_yaml_ng.workspace = true
 modo-db.workspace = true
 axum = "0.8"
 axum-extra = { version = "0.10", features = ["cookie-signed"] }

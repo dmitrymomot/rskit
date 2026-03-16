@@ -26,7 +26,7 @@ tower-http = { version = "0.6", features = [
 dashmap = "6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-inventory = "0.3"
+inventory.workspace = true
 
 # Error handling
 thiserror = "2"
@@ -38,7 +38,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
 
 # Config
 dotenvy = "0.15"
-serde_yaml_ng = "0.10"
+serde_yaml_ng.workspace = true
 
 # Cookies (key derivation)
 cookie = { version = "0.18", features = ["key-expansion"] }

@@ -35,3 +35,6 @@ modo-auth = { path = "modo-auth", version = "0.2" }
 modo-tenant = { path = "modo-tenant", version = "0.2" }
 modo-upload = { path = "modo-upload", version = "0.2" }
 modo-upload-macros = { path = "modo-upload-macros", version = "0.2" }
+async-trait = "0.1"
+inventory = "0.3"
+serde_yaml_ng = "0.10"
