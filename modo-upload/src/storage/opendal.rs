@@ -1,4 +1,4 @@
-use super::{FileStorage, StoredFile, generate_filename, validate_logical_path};
+use super::{FileStorageSend, StoredFile, generate_filename, validate_logical_path};
 use crate::file::UploadedFile;
 use crate::stream::BufferedUpload;
 
@@ -20,8 +20,7 @@ impl OpendalStorage {
     }
 }
 
-#[async_trait::async_trait]
-impl FileStorage for OpendalStorage {
+impl FileStorageSend for OpendalStorage {
     async fn store(&self, prefix: &str, file: &UploadedFile) -> Result<StoredFile, modo::Error> {
         validate_logical_path(prefix)?;
         let filename = generate_filename(file.file_name());

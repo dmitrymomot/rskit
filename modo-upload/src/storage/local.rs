@@ -1,4 +1,4 @@
-use super::{FileStorage, StoredFile, ensure_within, generate_filename};
+use super::{FileStorageSend, StoredFile, ensure_within, generate_filename};
 use crate::file::UploadedFile;
 use crate::stream::BufferedUpload;
 use std::path::{Path, PathBuf};
@@ -19,7 +19,7 @@ impl LocalStorage {
     /// Create a new `LocalStorage` rooted at `base_dir`.
     ///
     /// The directory does not need to exist at construction time; it is
-    /// created on the first [`store`](FileStorage::store) call.
+    /// created on the first [`store`](FileStorageDyn::store) call.
     pub fn new(base_dir: impl Into<PathBuf>) -> Self {
         Self {
             base_dir: base_dir.into(),
@@ -27,8 +27,7 @@ impl LocalStorage {
     }
 }
 
-#[async_trait::async_trait]
-impl FileStorage for LocalStorage {
+impl FileStorageSend for LocalStorage {
     async fn store(&self, prefix: &str, file: &UploadedFile) -> Result<StoredFile, modo::Error> {
         let filename = generate_filename(file.file_name());
         let rel_path = format!("{prefix}/{filename}");
@@ -98,8 +97,8 @@ impl FileStorage for LocalStorage {
 
     async fn exists(&self, path: &str) -> Result<bool, modo::Error> {
         let full_path = ensure_within(&self.base_dir, Path::new(path))?;
-        Ok(tokio::fs::try_exists(&full_path)
+        tokio::fs::try_exists(&full_path)
             .await
-            .map_err(|e| modo::Error::internal(format!("failed to check file: {e}")))?)
+            .map_err(|e| modo::Error::internal(format!("failed to check file: {e}")))
     }
 }

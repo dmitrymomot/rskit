@@ -1,7 +1,7 @@
-use crate::storage::FileStorage;
+use crate::storage::FileStorageDyn;
 use std::sync::Arc;
 
-/// Construct a [`FileStorage`] backend from [`UploadConfig`](crate::UploadConfig).
+/// Construct a [`FileStorageDyn`] backend from [`UploadConfig`](crate::UploadConfig).
 ///
 /// The backend is chosen based on `config.backend`:
 ///
@@ -12,7 +12,9 @@ use std::sync::Arc;
 ///
 /// Returns an error if the required feature is not enabled for the selected
 /// backend, or if the S3 operator cannot be configured.
-pub fn storage(config: &crate::config::UploadConfig) -> Result<Arc<dyn FileStorage>, modo::Error> {
+pub fn storage(
+    config: &crate::config::UploadConfig,
+) -> Result<Arc<dyn FileStorageDyn>, modo::Error> {
     match config.backend {
         #[cfg(feature = "local")]
         crate::config::StorageBackend::Local => {
