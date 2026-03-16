@@ -10,6 +10,8 @@ pub struct JobsConfig {
     pub poll_interval_secs: u64,
     /// Jobs running longer than this are considered stale and re-queued (seconds).
     pub stale_threshold_secs: u64,
+    /// How often the stale reaper checks for stale jobs (seconds).
+    pub stale_reaper_interval_secs: u64,
     /// Maximum time to wait for in-flight jobs during shutdown (seconds).
     pub drain_timeout_secs: u64,
     /// Per-queue concurrency configuration.
@@ -18,20 +20,27 @@ pub struct JobsConfig {
     pub cleanup: CleanupConfig,
     /// Optional maximum payload size in bytes. `None` means unlimited.
     pub max_payload_bytes: Option<usize>,
+    /// Optional maximum number of pending jobs per queue. `None` means unlimited.
+    /// When set and the queue is full, `enqueue()` returns a 503 error.
+    pub max_queue_depth: Option<usize>,
 }
 
 impl JobsConfig {
     /// Validate the configuration, returning an error if any invariant is violated.
     ///
-    /// Checks that `poll_interval_secs`, `stale_threshold_secs`, and
-    /// `cleanup.interval_secs` are all greater than zero, that at least one queue
-    /// is configured, and that every queue has `concurrency > 0`.
+    /// Checks that `poll_interval_secs`, `stale_threshold_secs`,
+    /// `stale_reaper_interval_secs`, and `cleanup.interval_secs` are all greater
+    /// than zero, that at least one queue is configured, and that every queue has
+    /// `concurrency > 0`.
     pub fn validate(&self) -> Result<(), Error> {
         if self.poll_interval_secs == 0 {
             return Err(Error::internal("poll_interval_secs must be > 0"));
         }
         if self.stale_threshold_secs == 0 {
             return Err(Error::internal("stale_threshold_secs must be > 0"));
+        }
+        if self.stale_reaper_interval_secs == 0 {
+            return Err(Error::internal("stale_reaper_interval_secs must be > 0"));
         }
         if self.queues.is_empty() {
             return Err(Error::internal("at least one queue must be configured"));
@@ -47,6 +56,9 @@ impl JobsConfig {
         if self.cleanup.interval_secs == 0 {
             return Err(Error::internal("cleanup.interval_secs must be > 0"));
         }
+        if self.max_queue_depth == Some(0) {
+            return Err(Error::internal("max_queue_depth must be > 0 if set"));
+        }
         Ok(())
     }
 }
@@ -56,6 +68,7 @@ impl Default for JobsConfig {
         Self {
             poll_interval_secs: 1,
             stale_threshold_secs: 600,
+            stale_reaper_interval_secs: 60,
             drain_timeout_secs: 30,
             queues: vec![QueueConfig {
                 name: "default".to_string(),
@@ -63,6 +76,7 @@ impl Default for JobsConfig {
             }],
             cleanup: CleanupConfig::default(),
             max_payload_bytes: None,
+            max_queue_depth: None,
         }
     }
 }
@@ -95,5 +109,69 @@ impl Default for CleanupConfig {
             retention_secs: 86400,
             statuses: vec![JobState::Completed, JobState::Dead, JobState::Cancelled],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_config_has_60s_stale_reaper_interval() {
+        let config = JobsConfig::default();
+        assert_eq!(config.stale_reaper_interval_secs, 60);
+    }
+
+    #[test]
+    fn validate_rejects_zero_stale_reaper_interval() {
+        let config = JobsConfig {
+            stale_reaper_interval_secs: 0,
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("stale_reaper_interval_secs"));
+    }
+
+    #[test]
+    fn validate_accepts_nonzero_stale_reaper_interval() {
+        let config = JobsConfig {
+            stale_reaper_interval_secs: 30,
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn config_deserializes_stale_reaper_interval() {
+        let yaml = r#"
+            stale_reaper_interval_secs: 120
+        "#;
+        let config: JobsConfig = serde_yaml_ng::from_str(yaml).unwrap();
+        assert_eq!(config.stale_reaper_interval_secs, 120);
+    }
+
+    #[test]
+    fn default_config_has_no_queue_depth_limit() {
+        let config = JobsConfig::default();
+        assert!(config.max_queue_depth.is_none());
+    }
+
+    #[test]
+    fn config_deserializes_max_queue_depth() {
+        let yaml = r#"
+            max_queue_depth: 1000
+        "#;
+        let config: JobsConfig = serde_yaml_ng::from_str(yaml).unwrap();
+        assert_eq!(config.max_queue_depth, Some(1000));
+    }
+
+    #[test]
+    fn validate_rejects_zero_max_queue_depth() {
+        let config = JobsConfig {
+            max_queue_depth: Some(0),
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("max_queue_depth"));
     }
 }

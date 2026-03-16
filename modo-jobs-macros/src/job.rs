@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{FnArg, Ident, ItemFn, Lit, LitStr, Pat, Result, Token, Type, parse2};
@@ -54,6 +56,12 @@ impl syn::parse::Parse for JobArgs {
                 args.timeout = val.value();
             } else if ident == "cron" {
                 let val: LitStr = input.parse()?;
+                if let Err(e) = cron::Schedule::from_str(&val.value()) {
+                    return Err(syn::Error::new_spanned(
+                        &val,
+                        format!("invalid cron expression: {e}"),
+                    ));
+                }
                 args.cron = Some(val.value());
             } else {
                 return Err(syn::Error::new_spanned(
@@ -334,5 +342,24 @@ fn extract_pat_ident(pat: &Pat) -> TokenStream {
             let fallback = format_ident!("__param");
             quote! { #fallback }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    #[test]
+    fn valid_cron_expression_parses() {
+        assert!(cron::Schedule::from_str("0 */5 * * * *").is_ok());
+        assert!(cron::Schedule::from_str("0 0 * * * *").is_ok());
+        assert!(cron::Schedule::from_str("0 0 0 * * *").is_ok());
+    }
+
+    #[test]
+    fn invalid_cron_expression_fails() {
+        assert!(cron::Schedule::from_str("not a cron").is_err());
+        assert!(cron::Schedule::from_str("").is_err());
+        assert!(cron::Schedule::from_str("* * *").is_err());
     }
 }
