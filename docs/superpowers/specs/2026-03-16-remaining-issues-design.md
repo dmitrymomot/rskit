@@ -260,7 +260,7 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 **Files:**
 - `modo/src/view.rs` or template rendering path
 
-### Maintenance mode trailing slash
+### DES-22: Maintenance mode trailing slash
 
 **Problem:** `/health` doesn't match if request is `/health/`.
 
@@ -321,7 +321,7 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 **Files:**
 - `modo-db-macros/src/` (entity code generation)
 
-### Join support on EntityQuery
+### DES-33: Join support on EntityQuery
 
 **Problem:** No join API on the ergonomic `EntityQuery` wrapper.
 
@@ -432,7 +432,7 @@ Batches 1-4 are cleanup/consistency work. Batches 5-8 are feature work. Batch 9 
 - `modo-email/src/template/provider.rs` (caching layer)
 - `modo-email/src/config.rs` (cache config fields)
 
-### Reserved subdomain exclusion
+### DES-38: Reserved subdomain exclusion
 
 **Problem:** `SubdomainResolver` hardcodes only `"www"` as an excluded subdomain (line 51). No way to configure additional reserved subdomains.
 
