@@ -211,6 +211,8 @@ pub struct ServerConfig {
     pub trusted_proxies: Vec<String>,
     /// Graceful shutdown timeout in seconds. Default: `30`.
     pub shutdown_timeout_secs: u64,
+    /// Per-hook timeout in seconds during graceful shutdown. Default: `5`.
+    pub hook_timeout_secs: u64,
     /// Optional CORS policy loaded from YAML (`server.cors`).
     pub cors: Option<CorsYamlConfig>,
     /// Path for the liveness health check endpoint. Default: `"/_live"`.
@@ -243,6 +245,7 @@ impl Default for ServerConfig {
             log_level: "info".to_string(),
             trusted_proxies: Vec::new(),
             shutdown_timeout_secs: 30,
+            hook_timeout_secs: 5,
             cors: None,
             liveness_path: "/_live".to_string(),
             readiness_path: "/_ready".to_string(),
@@ -568,6 +571,19 @@ mod tests {
         assert!(cfg.http.sensitive_headers);
         assert!(cfg.security_headers.enabled);
         assert!(cfg.rate_limit.is_none());
+    }
+
+    #[test]
+    fn test_server_config_hook_timeout_default() {
+        let cfg = ServerConfig::default();
+        assert_eq!(cfg.hook_timeout_secs, 5);
+    }
+
+    #[test]
+    fn test_server_config_hook_timeout_yaml() {
+        let yaml = "server:\n  hook_timeout_secs: 15\n";
+        let cfg: AppConfig = serde_yaml_ng::from_str(yaml).unwrap();
+        assert_eq!(cfg.server.hook_timeout_secs, 15);
     }
 
     #[test]

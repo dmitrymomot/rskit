@@ -196,7 +196,7 @@ impl AppBuilder {
 
     /// Register an async callback to run during graceful shutdown (after HTTP draining).
     ///
-    /// Each hook runs sequentially with a 5-second budget.
+    /// Each hook runs sequentially with a configurable timeout (default 5s, set via `hook_timeout_secs` in ServerConfig).
     pub fn on_shutdown<F, Fut>(mut self, f: F) -> Self
     where
         F: FnOnce() -> Fut + Send + 'static,
@@ -815,13 +815,16 @@ impl AppBuilder {
             }
         }
 
-        // 3. Run user shutdown hooks sequentially (5s budget per hook)
+        // 3. Run user shutdown hooks sequentially (configurable budget per hook)
         if !shutdown_hooks.is_empty() {
             info!("Running {} shutdown hook(s)", shutdown_hooks.len());
             for hook in shutdown_hooks {
-                if tokio::time::timeout(Duration::from_secs(5), hook())
-                    .await
-                    .is_err()
+                if tokio::time::timeout(
+                    Duration::from_secs(server_config.hook_timeout_secs),
+                    hook(),
+                )
+                .await
+                .is_err()
                 {
                     warn!("Shutdown hook timed out");
                 }
