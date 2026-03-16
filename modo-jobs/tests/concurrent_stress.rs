@@ -46,7 +46,7 @@ async fn concurrent_inserts_and_claims() {
         expected_ids.insert(id.as_str().to_string());
         let db = db.clone();
         insert_set.spawn(async move {
-            insert_job(&*db, &id).await;
+            insert_job(&db, &id).await;
         });
     }
 
@@ -66,7 +66,7 @@ async fn concurrent_inserts_and_claims() {
 
         claim_set.spawn(async move {
             loop {
-                let result = runner::claim_next(&*db, "default", &worker_id)
+                let result = runner::claim_next(&db, "default", &worker_id)
                     .await
                     .expect("Claim failed");
 

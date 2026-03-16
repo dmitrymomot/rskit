@@ -50,7 +50,7 @@ async fn no_double_claims_under_concurrency() {
         let db = db.clone();
         let worker_id = format!("worker-{worker_num}");
         handles.push(tokio::spawn(async move {
-            runner::claim_next(&*db, "default", &worker_id)
+            runner::claim_next(&db, "default", &worker_id)
                 .await
                 .expect("Claim failed")
                 .map(|job| job.id)

@@ -13,7 +13,7 @@ fn cron_expression_parses_and_schedules() {
     let now = Utc::now();
     let diff = (next_time - now).num_seconds();
     assert!(
-        diff >= 0 && diff <= 60,
+        (0..=60).contains(&diff),
         "Next fire time should be within 60s, got {diff}s"
     );
 }
@@ -30,7 +30,7 @@ fn cron_every_second_expression() {
     for (i, time) in upcoming.iter().enumerate() {
         let diff = (*time - now).num_seconds();
         assert!(
-            diff >= 0 && diff <= 5,
+            (0..=5).contains(&diff),
             "Fire time {i} should be within 5s of now, got {diff}s"
         );
     }

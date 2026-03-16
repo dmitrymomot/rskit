@@ -49,8 +49,10 @@ fn test_meta(user_num: usize) -> SessionMeta {
 #[tokio::test]
 async fn concurrent_session_creation() {
     let db = setup_db().await;
-    let mut config = SessionConfig::default();
-    config.max_sessions_per_user = 100; // High limit for stress test
+    let config = SessionConfig {
+        max_sessions_per_user: 100, // High limit for stress test
+        ..Default::default()
+    };
     let store = Arc::new(SessionStore::new(&db, config, Default::default()));
 
     let mut set = JoinSet::new();
