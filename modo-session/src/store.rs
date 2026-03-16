@@ -7,8 +7,8 @@ use modo::Error;
 use modo::cookies::CookieConfig;
 use modo_db::DbPool;
 use modo_db::sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseBackend, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set, TransactionTrait,
 };
 
 /// Low-level database-backed session store.
@@ -49,8 +49,8 @@ impl SessionStore {
     /// Insert a new session for `user_id` and return the persisted [`SessionData`]
     /// together with the plaintext [`SessionToken`] (to be set in the cookie).
     ///
-    /// After inserting, LRU eviction is applied if the user has exceeded
-    /// [`SessionConfig::max_sessions_per_user`].
+    /// The insert and LRU eviction run inside a single transaction to prevent
+    /// race conditions under concurrent logins.
     pub async fn create(
         &self,
         meta: &SessionMeta,
@@ -79,12 +79,33 @@ impl SessionStore {
             expires_at: Set(expires_at),
         };
 
+        // Wrap insert + enforce in a transaction.
+        // SQLite: default BEGIN acquires a write lock on first write (WAL mode),
+        //         providing database-level write serialization.
+        // Postgres: use SERIALIZABLE isolation to prevent phantom reads
+        //           between count and insert under concurrent logins.
+        let conn = self.db.connection();
+        let txn = if conn.get_database_backend() == DatabaseBackend::Postgres {
+            use modo_db::sea_orm::IsolationLevel;
+            conn.begin_with_config(Some(IsolationLevel::Serializable), None)
+                .await
+                .map_err(|e| Error::internal(format!("begin transaction: {e}")))?
+        } else {
+            conn.begin()
+                .await
+                .map_err(|e| Error::internal(format!("begin transaction: {e}")))?
+        };
+
         let result = model
-            .insert(self.db.connection())
+            .insert(&txn)
             .await
             .map_err(|e| Error::internal(format!("insert session: {e}")))?;
 
-        self.enforce_session_limit(user_id).await?;
+        self.enforce_session_limit_txn(user_id, &txn).await?;
+
+        txn.commit()
+            .await
+            .map_err(|e| Error::internal(format!("commit transaction: {e}")))?;
 
         Ok((model_to_session_data(&result)?, token))
     }
@@ -234,6 +255,50 @@ impl SessionStore {
         Ok(result.rows_affected)
     }
 
+    /// Enforce session limit within an existing transaction.
+    async fn enforce_session_limit_txn(
+        &self,
+        user_id: &str,
+        txn: &modo_db::sea_orm::DatabaseTransaction,
+    ) -> Result<(), Error> {
+        let now = Utc::now();
+
+        let count = Entity::find()
+            .filter(Column::UserId.eq(user_id))
+            .filter(Column::ExpiresAt.gt(now))
+            .count(txn)
+            .await
+            .map_err(|e| Error::internal(format!("count sessions: {e}")))?;
+
+        if count as usize <= self.config.max_sessions_per_user {
+            return Ok(());
+        }
+
+        let excess = count as usize - self.config.max_sessions_per_user;
+
+        // Find least-recently-used sessions (LRU eviction)
+        let oldest = Entity::find()
+            .filter(Column::UserId.eq(user_id))
+            .filter(Column::ExpiresAt.gt(now))
+            .order_by_asc(Column::LastActiveAt)
+            .limit(excess as u64)
+            .all(txn)
+            .await
+            .map_err(|e| Error::internal(format!("find oldest sessions: {e}")))?;
+
+        let ids: Vec<String> = oldest.into_iter().map(|m| m.id).collect();
+        if !ids.is_empty() {
+            Entity::delete_many()
+                .filter(Column::Id.is_in(ids))
+                .exec(txn)
+                .await
+                .map_err(|e| Error::internal(format!("evict sessions: {e}")))?;
+        }
+
+        Ok(())
+    }
+
+    #[allow(dead_code)]
     async fn enforce_session_limit(&self, user_id: &str) -> Result<(), Error> {
         let now = Utc::now();
 
