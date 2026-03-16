@@ -10,6 +10,8 @@ pub struct JobsConfig {
     pub poll_interval_secs: u64,
     /// Jobs running longer than this are considered stale and re-queued (seconds).
     pub stale_threshold_secs: u64,
+    /// How often the stale reaper checks for stale jobs (seconds).
+    pub stale_reaper_interval_secs: u64,
     /// Maximum time to wait for in-flight jobs during shutdown (seconds).
     pub drain_timeout_secs: u64,
     /// Per-queue concurrency configuration.
@@ -23,15 +25,19 @@ pub struct JobsConfig {
 impl JobsConfig {
     /// Validate the configuration, returning an error if any invariant is violated.
     ///
-    /// Checks that `poll_interval_secs`, `stale_threshold_secs`, and
-    /// `cleanup.interval_secs` are all greater than zero, that at least one queue
-    /// is configured, and that every queue has `concurrency > 0`.
+    /// Checks that `poll_interval_secs`, `stale_threshold_secs`,
+    /// `stale_reaper_interval_secs`, and `cleanup.interval_secs` are all greater
+    /// than zero, that at least one queue is configured, and that every queue has
+    /// `concurrency > 0`.
     pub fn validate(&self) -> Result<(), Error> {
         if self.poll_interval_secs == 0 {
             return Err(Error::internal("poll_interval_secs must be > 0"));
         }
         if self.stale_threshold_secs == 0 {
             return Err(Error::internal("stale_threshold_secs must be > 0"));
+        }
+        if self.stale_reaper_interval_secs == 0 {
+            return Err(Error::internal("stale_reaper_interval_secs must be > 0"));
         }
         if self.queues.is_empty() {
             return Err(Error::internal("at least one queue must be configured"));
@@ -56,6 +62,7 @@ impl Default for JobsConfig {
         Self {
             poll_interval_secs: 1,
             stale_threshold_secs: 600,
+            stale_reaper_interval_secs: 60,
             drain_timeout_secs: 30,
             queues: vec![QueueConfig {
                 name: "default".to_string(),
@@ -95,5 +102,40 @@ impl Default for CleanupConfig {
             retention_secs: 86400,
             statuses: vec![JobState::Completed, JobState::Dead, JobState::Cancelled],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_config_has_60s_stale_reaper_interval() {
+        let config = JobsConfig::default();
+        assert_eq!(config.stale_reaper_interval_secs, 60);
+    }
+
+    #[test]
+    fn validate_rejects_zero_stale_reaper_interval() {
+        let mut config = JobsConfig::default();
+        config.stale_reaper_interval_secs = 0;
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("stale_reaper_interval_secs"));
+    }
+
+    #[test]
+    fn validate_accepts_nonzero_stale_reaper_interval() {
+        let mut config = JobsConfig::default();
+        config.stale_reaper_interval_secs = 30;
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn config_deserializes_stale_reaper_interval() {
+        let yaml = r#"
+            stale_reaper_interval_secs: 120
+        "#;
+        let config: JobsConfig = serde_yaml_ng::from_str(yaml).unwrap();
+        assert_eq!(config.stale_reaper_interval_secs, 120);
     }
 }

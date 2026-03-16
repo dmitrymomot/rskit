@@ -206,9 +206,10 @@ async fn start_inner(
         let db = db.connection().clone();
         let cancel = cancel.clone();
         let threshold_secs = config.stale_threshold_secs;
+        let reaper_interval_secs = config.stale_reaper_interval_secs;
 
         tokio::spawn(async move {
-            reap_stale_loop(&db, cancel, threshold_secs).await;
+            reap_stale_loop(&db, cancel, threshold_secs, reaper_interval_secs).await;
         });
     }
 
@@ -520,8 +521,9 @@ async fn reap_stale_loop(
     db: &modo_db::sea_orm::DatabaseConnection,
     cancel: CancellationToken,
     threshold_secs: u64,
+    reaper_interval_secs: u64,
 ) {
-    let mut interval = tokio::time::interval(Duration::from_secs(60));
+    let mut interval = tokio::time::interval(Duration::from_secs(reaper_interval_secs));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     loop {
