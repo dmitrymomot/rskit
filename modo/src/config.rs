@@ -609,40 +609,36 @@ mod tests {
 
     #[test]
     fn test_config_dir_from_env_var() {
-        // Create a temp directory with a valid YAML config
         let dir = std::env::temp_dir().join("modo_config_dir_test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("test.yaml"), "server:\n  port: 9999\n").unwrap();
 
-        unsafe { std::env::set_var("MODO_CONFIG_DIR", dir.to_str().unwrap()) };
-        let result: Result<AppConfig, _> = load_for_env("test");
-        unsafe { std::env::remove_var("MODO_CONFIG_DIR") };
+        let cfg: AppConfig =
+            temp_env::with_var("MODO_CONFIG_DIR", Some(dir.to_str().unwrap()), || {
+                load_for_env("test").unwrap()
+            });
 
-        let cfg = result.unwrap();
         assert_eq!(cfg.server.port, 9999);
-
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
     fn test_config_dir_defaults_to_config() {
-        unsafe { std::env::remove_var("MODO_CONFIG_DIR") };
-        // When no env var and no ./config dir, should return DirectoryNotFound for "config"
-        let result: Result<AppConfig, _> = load_for_env("nonexistent_env_12345");
-        match result {
-            Err(ConfigError::DirectoryNotFound { path })
-            | Err(ConfigError::FileRead { path, .. }) => {
-                assert!(
-                    path.starts_with("config"),
-                    "expected config dir path, got: {path}"
-                );
+        temp_env::with_var("MODO_CONFIG_DIR", None::<&str>, || {
+            let result: Result<AppConfig, _> = load_for_env("nonexistent_env_12345");
+            match result {
+                Err(ConfigError::DirectoryNotFound { path })
+                | Err(ConfigError::FileRead { path, .. }) => {
+                    assert!(
+                        path.starts_with("config"),
+                        "expected config dir path, got: {path}"
+                    );
+                }
+                _ => {
+                    // If ./config dir exists with the file, that's also fine
+                }
             }
-            other => {
-                // If ./config dir exists with the file, that's also fine
-                // The key assertion is that it uses "config" as the directory
-                let _ = other;
-            }
-        }
+        });
     }
 }
