@@ -86,6 +86,10 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// All `#[handler]` attributes inside the module are automatically rewritten to
 /// include the module association so they are grouped correctly at startup.
 /// The module is registered via `inventory` and collected by `AppBuilder`.
+///
+/// Bare `mod foo;` declarations inside the module body are allowed. Inline
+/// nested `mod foo { ... }` blocks are not supported and will produce a compile
+/// error, because their handlers would not receive the outer module's prefix.
 #[proc_macro_attribute]
 pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     module::expand(attr.into(), item.into())
@@ -103,6 +107,8 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// every `modo::Error` that propagates out of a route and can inspect the
 /// request context (method, URI, headers) to produce a suitable response.
 /// Call `err.default_response()` to delegate back to the built-in JSON rendering.
+///
+/// This attribute takes no arguments.
 #[proc_macro_attribute]
 pub fn error_handler(attr: TokenStream, item: TokenStream) -> TokenStream {
     error_handler::expand(attr.into(), item.into())
@@ -128,6 +134,8 @@ pub fn error_handler(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The macro also registers a `SanitizerRegistration` entry via `inventory`
 /// so extractors (`JsonReq`, `FormReq`) can invoke `Sanitize::sanitize` automatically.
+///
+/// Generic structs are not supported; the derive will produce a compile error.
 #[proc_macro_derive(Sanitize, attributes(clean))]
 pub fn derive_sanitize(input: TokenStream) -> TokenStream {
     sanitize::expand(input.into())
@@ -198,6 +206,8 @@ pub fn t(input: TokenStream) -> TokenStream {
 /// context and rendering the named template. When the optional `htmx` path is
 /// provided, HTMX requests (`HX-Request` header present) render the partial
 /// instead of the full-page template.
+///
+/// Can only be applied to structs.
 ///
 /// Requires the `templates` feature on `modo`.
 #[proc_macro_attribute]

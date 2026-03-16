@@ -20,7 +20,7 @@ impl LocalStorage {
     /// Create a new `LocalStorage` rooted at `base_dir`.
     ///
     /// The directory does not need to exist at construction time; it is
-    /// created on the first [`store`](FileStorageDyn::store) call.
+    /// created on the first [`store`](crate::FileStorageDyn::store) call.
     pub fn new(base_dir: impl Into<PathBuf>) -> Self {
         Self {
             base_dir: base_dir.into(),

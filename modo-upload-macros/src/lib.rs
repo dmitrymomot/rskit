@@ -13,8 +13,8 @@ mod from_multipart;
 /// |-------------------------|------------------------------------------------|
 /// | `UploadedFile`          | Required file field; errors if absent          |
 /// | `Option<UploadedFile>`  | Optional file field                            |
-/// | `Vec<UploadedFile>`     | Multiple files under the same field name       |
-/// | `BufferedUpload`        | Required buffered upload; at most one per struct |
+/// | `Vec<UploadedFile>`     | Zero or more files under the same field name   |
+/// | `BufferedUpload`        | Required buffered upload (only one per struct) |
 /// | `String`                | Required text field                            |
 /// | `Option<String>`        | Optional text field                            |
 /// | any `T: FromStr`        | Required text field, parsed via `FromStr`      |

@@ -8,7 +8,14 @@ use modo::{Error, HttpError};
 use std::ops::Deref;
 use std::sync::Arc;
 
-/// Extractor that requires a resolved tenant. Returns 404 if not found.
+/// Extractor that requires a resolved tenant.
+///
+/// Returns HTTP 404 when the resolver finds no matching tenant, and HTTP 500
+/// when the resolver returns an error or when [`TenantResolverService<T>`] is
+/// not registered.
+///
+/// Implements `Deref<Target = T>`, so fields of the inner tenant type are
+/// accessible directly. The raw value is also available via `.0`.
 #[derive(Clone)]
 pub struct Tenant<T: Clone + Send + Sync + 'static>(pub T);
 
@@ -79,12 +86,15 @@ where
     }
 }
 
-/// Extractor that optionally resolves a tenant. Never rejects due to missing tenant.
+/// Extractor that optionally resolves a tenant. Returns `None` when no tenant matches.
 ///
-/// Note: unlike `TenantContextLayer` (which silently swallows resolver errors),
-/// this extractor will reject with an error if the resolver itself fails (e.g.
-/// misconfigured service). It only returns `None` when the resolver succeeds
-/// but finds no matching tenant.
+/// Unlike [`Tenant<T>`], this extractor never rejects due to a missing tenant.
+/// It does reject with HTTP 500 when the resolver itself returns an error or
+/// when [`TenantResolverService<T>`] is not registered. Use this when tenant
+/// context is optional (e.g. public landing pages that also serve tenants).
+///
+/// Implements `Deref<Target = Option<T>>`, so `.is_some()`, `.as_ref()`, etc.
+/// are available directly. The raw value is also accessible via `.0`.
 #[derive(Clone)]
 pub struct OptionalTenant<T: Clone + Send + Sync + 'static>(pub Option<T>);
 

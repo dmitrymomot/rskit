@@ -36,6 +36,11 @@ pub fn scaffold(
     Ok(())
 }
 
+/// Recursively writes all files in `dir` into `target_dir`, rooted at `prefix`.
+///
+/// Renders `.jinja` files through MiniJinja and strips the `.jinja` extension.
+/// Skips a `.jinja` file when it renders to empty output AND its source contains
+/// a `{% if %}` block (so unconditionally empty stubs are still written).
 fn write_dir(
     env: &Environment,
     dir: &Dir<'static>,

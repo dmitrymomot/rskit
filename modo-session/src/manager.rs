@@ -14,6 +14,10 @@ use std::sync::Arc;
 /// [`crate::layer`] for the extractor to work; if the middleware is missing the
 /// extractor returns an internal error.
 ///
+/// Each request receives its own `SessionManager` instance backed by its own
+/// per-request state.  There is no cross-request sharing; operations on one
+/// request's `SessionManager` cannot affect another request's session state.
+///
 /// Changes made through `SessionManager` (authentication, logout, token
 /// rotation, data writes) are applied to the HTTP response cookie automatically
 /// by the middleware after the handler returns.
@@ -36,16 +40,20 @@ impl<S: Send + Sync> FromRequestParts<S> for SessionManager {
 }
 
 impl SessionManager {
-    /// Create a session for the given user.
-    /// Destroys any existing session first (fixation prevention).
+    /// Create a new session for `user_id`.
+    ///
+    /// Any existing session is destroyed before the new one is created to
+    /// prevent session-fixation attacks.  The session cookie is set on the
+    /// response automatically.
     pub async fn authenticate(&self, user_id: &str) -> Result<(), Error> {
         self.authenticate_with(user_id, serde_json::json!({})).await
     }
 
-    /// Create a session with custom data attached.
+    /// Create a new session for `user_id` with custom JSON data attached.
     ///
     /// Any existing session is destroyed before the new one is created to
-    /// prevent session-fixation attacks.
+    /// prevent session-fixation attacks.  The session cookie is set on the
+    /// response automatically.
     pub async fn authenticate_with(
         &self,
         user_id: &str,
@@ -76,7 +84,10 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Destroy the current session. Cookie is removed automatically.
+    /// Destroy the current session.
+    ///
+    /// The session cookie is cleared on the response automatically.
+    /// If there is no active session this is a no-op.
     pub async fn logout(&self) -> Result<(), Error> {
         {
             let current = self.state.current_session.lock().await;
@@ -89,7 +100,10 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Destroy ALL sessions for the current user.
+    /// Destroy ALL sessions for the currently authenticated user.
+    ///
+    /// The session cookie is cleared on the response automatically.
+    /// If there is no active session this is a no-op.
     pub async fn logout_all(&self) -> Result<(), Error> {
         {
             let current = self.state.current_session.lock().await;
@@ -106,6 +120,8 @@ impl SessionManager {
     }
 
     /// Destroy all sessions for the current user except the current one.
+    ///
+    /// Returns `Unauthorized` if the request is not authenticated.
     pub async fn logout_other(&self) -> Result<(), Error> {
         let current = self.state.current_session.lock().await;
         let session = current
@@ -117,8 +133,12 @@ impl SessionManager {
             .await
     }
 
-    /// Destroy a specific session by ID (for "manage my devices" UI).
-    /// Only works on sessions owned by the current user.
+    /// Destroy a specific session by ID.
+    ///
+    /// Only sessions owned by the currently authenticated user can be revoked.
+    /// Returns `Unauthorized` if the request is not authenticated, or
+    /// `NotFound` if the target session does not exist or belongs to a
+    /// different user.
     pub async fn revoke(&self, id: &SessionId) -> Result<(), Error> {
         let current = self.state.current_session.lock().await;
         let session = current
@@ -139,7 +159,10 @@ impl SessionManager {
         self.state.store.destroy(id).await
     }
 
-    /// Regenerate the session token without changing the session ID.
+    /// Regenerate the session token without changing the session ID or data.
+    ///
+    /// The new token is set on the response cookie automatically.
+    /// Returns `Unauthorized` if the request is not authenticated.
     pub async fn rotate(&self) -> Result<(), Error> {
         let session_id = {
             let current = self.state.current_session.lock().await;
@@ -162,12 +185,14 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Access the current session data (if authenticated).
+    /// Return the full session record for the current request, or `None` if
+    /// the request is not authenticated.
     pub async fn current(&self) -> Option<SessionData> {
         self.state.current_session.lock().await.clone()
     }
 
-    /// Get the current user ID.
+    /// Return the authenticated user ID, or `None` if the request is not
+    /// authenticated.
     pub async fn user_id(&self) -> Option<String> {
         self.state
             .current_session
@@ -177,12 +202,16 @@ impl SessionManager {
             .map(|s| s.user_id.clone())
     }
 
-    /// Check if a session is active.
+    /// Return `true` if the current request has an active, authenticated
+    /// session.
     pub async fn is_authenticated(&self) -> bool {
         self.state.current_session.lock().await.is_some()
     }
 
-    /// List all active sessions for the authenticated user.
+    /// Return all active (non-expired) sessions for the authenticated user,
+    /// ordered by most-recently-active first.
+    ///
+    /// Returns `Unauthorized` if the request is not authenticated.
     pub async fn list_my_sessions(&self) -> Result<Vec<SessionData>, Error> {
         let user_id = {
             let current = self.state.current_session.lock().await;
@@ -194,7 +223,11 @@ impl SessionManager {
         self.state.store.list_for_user(&user_id).await
     }
 
-    /// Get a typed value from the session data by key.
+    /// Read a typed value from the session's JSON data by key.
+    ///
+    /// Returns `Ok(None)` if the key is absent or if the request is not
+    /// authenticated.  Returns `Ok(None)` (with a tracing warning) if the
+    /// stored value cannot be deserialised into `T`.
     pub async fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, Error> {
         let current = self.state.current_session.lock().await;
         let session = match current.as_ref() {
@@ -213,7 +246,9 @@ impl SessionManager {
         }
     }
 
-    /// Set a single key in the session data (immediate DB write).
+    /// Set a key in the session's JSON data and persist the change immediately.
+    ///
+    /// Returns `Unauthorized` if the request is not authenticated.
     pub async fn set<T: Serialize>(&self, key: &str, value: &T) -> Result<(), Error> {
         let mut current = self.state.current_session.lock().await;
         let session = current
@@ -236,7 +271,10 @@ impl SessionManager {
             .await
     }
 
-    /// Remove a key from the session data (immediate DB write).
+    /// Remove a key from the session's JSON data and persist the change
+    /// immediately.
+    ///
+    /// Returns `Unauthorized` if the request is not authenticated.
     pub async fn remove_key(&self, key: &str) -> Result<(), Error> {
         let mut current = self.state.current_session.lock().await;
         let session = current
