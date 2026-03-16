@@ -6,14 +6,19 @@ use std::marker::PhantomData;
 /// Resolves a tenant from the subdomain of the `Host` header.
 ///
 /// Given `base_domain = "myapp.com"`, a request for `acme.myapp.com` extracts
-/// `"acme"` and forwards it to the `lookup` closure. The bare domain and the
-/// `www` subdomain are never forwarded — both return `Ok(None)`. Port suffixes
-/// in the `Host` header are stripped before matching.
+/// `"acme"` and forwards it to the `lookup` closure. The bare domain and
+/// reserved subdomains (default: `["www", "api", "admin", "mail"]`) are never
+/// forwarded — all return `Ok(None)`. Port suffixes in the `Host` header are
+/// stripped before matching.
 pub struct SubdomainResolver<T, F> {
     dot_base_domain: String,
+    reserved: Vec<String>,
     lookup: F,
     _phantom: PhantomData<T>,
 }
+
+/// Default list of reserved subdomains that are never resolved to tenants.
+const DEFAULT_RESERVED: &[&str] = &["www", "api", "admin", "mail"];
 
 impl<T, F, Fut> SubdomainResolver<T, F>
 where
@@ -23,9 +28,25 @@ where
 {
     /// Creates a new `SubdomainResolver` that strips `base_domain` and calls
     /// `lookup` with the remaining subdomain label(s).
+    ///
+    /// Uses the default reserved list: `["www", "api", "admin", "mail"]`.
     pub fn new(base_domain: impl Into<String>, lookup: F) -> Self {
         Self {
             dot_base_domain: format!(".{}", base_domain.into()),
+            reserved: DEFAULT_RESERVED.iter().map(|s| (*s).to_string()).collect(),
+            lookup,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Creates a new `SubdomainResolver` with a custom reserved subdomain list.
+    ///
+    /// Any subdomain in `reserved` will be treated the same as the bare domain
+    /// and return `Ok(None)` without calling `lookup`.
+    pub fn with_reserved(base_domain: impl Into<String>, reserved: Vec<String>, lookup: F) -> Self {
+        Self {
+            dot_base_domain: format!(".{}", base_domain.into()),
+            reserved,
             lookup,
             _phantom: PhantomData,
         }
@@ -48,7 +69,9 @@ where
 
         let subdomain = host.strip_suffix(&self.dot_base_domain);
         match subdomain {
-            Some(sub) if !sub.is_empty() && sub != "www" => (self.lookup)(sub.to_string()).await,
+            Some(sub) if !sub.is_empty() && !self.reserved.iter().any(|r| r == sub) => {
+                (self.lookup)(sub.to_string()).await
+            }
             _ => Ok(None),
         }
     }
@@ -171,5 +194,44 @@ mod tests {
         let p = parts("acme.myapp.com");
         let result = crate::TenantResolver::resolve(&resolver, &p).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn custom_reserved_subdomains() {
+        let resolver = SubdomainResolver::with_reserved(
+            "myapp.com",
+            vec![
+                "www".to_string(),
+                "api".to_string(),
+                "admin".to_string(),
+                "mail".to_string(),
+            ],
+            |slug| async move { Ok(Some(TestTenant { id: slug })) },
+        );
+
+        // "api" is reserved
+        let p = parts("api.myapp.com");
+        let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
+        assert_eq!(result, None);
+
+        // "admin" is reserved
+        let p = parts("admin.myapp.com");
+        let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
+        assert_eq!(result, None);
+
+        // "mail" is reserved
+        let p = parts("mail.myapp.com");
+        let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
+        assert_eq!(result, None);
+
+        // "acme" is NOT reserved
+        let p = parts("acme.myapp.com");
+        let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
+        assert_eq!(
+            result,
+            Some(TestTenant {
+                id: "acme".to_string()
+            })
+        );
     }
 }
