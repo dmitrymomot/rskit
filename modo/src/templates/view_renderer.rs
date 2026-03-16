@@ -84,7 +84,7 @@ impl<S: Send + Sync> FromRequestParts<S> for ViewRenderer {
             .unwrap_or_else(|| {
                 tracing::warn!(
                     "TemplateContext not found in request extensions. \
-                     Ensure ContextLayer is applied."
+                     Ensure TemplateContextLayer is applied."
                 );
                 TemplateContext::default()
             });

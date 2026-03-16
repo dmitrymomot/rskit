@@ -4,7 +4,7 @@ use axum::Router;
 use axum::body::Body;
 use axum::routing::get;
 use http::Request;
-use modo::templates::middleware::ContextLayer;
+use modo::templates::middleware::TemplateContextLayer;
 use modo::templates::render::RenderLayer;
 use std::fs;
 use std::path::PathBuf;
@@ -63,7 +63,7 @@ async fn full_page_renders_with_layout() {
             }),
         )
         .layer(RenderLayer::new(engine))
-        .layer(ContextLayer::new());
+        .layer(TemplateContextLayer::new());
 
     let resp = app
         .oneshot(Request::get("/").body(Body::empty()).unwrap())
@@ -96,7 +96,7 @@ async fn htmx_request_renders_partial() {
             }),
         )
         .layer(RenderLayer::new(engine))
-        .layer(ContextLayer::new());
+        .layer(TemplateContextLayer::new());
 
     let resp = app
         .oneshot(

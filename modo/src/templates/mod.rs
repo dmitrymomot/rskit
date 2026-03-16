@@ -16,7 +16,7 @@ pub use context::TemplateContext;
 pub use engine::{TemplateEngine, engine};
 pub use error::TemplateError;
 pub(crate) use escape::html_escape;
-pub use middleware::ContextLayer;
+pub use middleware::TemplateContextLayer;
 pub use registry::{TemplateFilterEntry, TemplateFunctionEntry};
 pub use render::RenderLayer;
 pub use view::View;

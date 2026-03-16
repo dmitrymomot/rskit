@@ -7,7 +7,7 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
 use modo::templates::TemplateContext;
-use modo::templates::middleware::ContextLayer;
+use modo::templates::middleware::TemplateContextLayer;
 use tower::ServiceExt;
 
 async fn handler(Extension(ctx): Extension<TemplateContext>) -> String {
@@ -23,7 +23,7 @@ async fn handler(Extension(ctx): Extension<TemplateContext>) -> String {
 async fn context_layer_sets_current_url() {
     let app = Router::new()
         .route("/hello", get(handler))
-        .layer(ContextLayer::new());
+        .layer(TemplateContextLayer::new());
 
     let resp = app
         .oneshot(Request::get("/hello").body(Body::empty()).unwrap())
@@ -60,7 +60,7 @@ async fn merge_handler(Extension(ctx): Extension<TemplateContext>) -> String {
 async fn context_layer_merges_with_existing_context() {
     let app = Router::new()
         .route("/test", get(merge_handler))
-        .layer(ContextLayer::new())
+        .layer(TemplateContextLayer::new())
         .layer(middleware::from_fn(pre_ctx_middleware));
 
     let resp = app

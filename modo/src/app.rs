@@ -575,7 +575,7 @@ impl AppBuilder {
         // --- Template context layer (wraps user layers, creates TemplateContext) ---
         #[cfg(feature = "templates")]
         if template_engine.is_some() {
-            // Inject request_id into TemplateContext (runs after ContextLayer creates it)
+            // Inject request_id into TemplateContext (runs after TemplateContextLayer creates it)
             router =
                 router.layer(axum::middleware::from_fn(
                     |request: axum::http::Request<axum::body::Body>,
@@ -596,7 +596,7 @@ impl AppBuilder {
                         next.run(request).await
                     },
                 ));
-            router = router.layer(crate::templates::ContextLayer::new());
+            router = router.layer(crate::templates::TemplateContextLayer::new());
         }
 
         // --- i18n layer (auto-wired) ---

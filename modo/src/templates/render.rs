@@ -64,7 +64,9 @@ where
         let template_ctx = match request.extensions().get::<TemplateContext>().cloned() {
             Some(ctx) => ctx,
             None => {
-                warn!("TemplateContext not found in request extensions; was ContextLayer applied?");
+                warn!(
+                    "TemplateContext not found in request extensions; was TemplateContextLayer applied?"
+                );
                 TemplateContext::default()
             }
         };

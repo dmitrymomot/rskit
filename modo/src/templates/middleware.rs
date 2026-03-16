@@ -8,15 +8,15 @@ use tower::{Layer, Service};
 /// with built-in values (current_url).
 /// Must be applied outermost of all context-writing middleware.
 #[derive(Clone, Default)]
-pub struct ContextLayer;
+pub struct TemplateContextLayer;
 
-impl ContextLayer {
+impl TemplateContextLayer {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl<S> Layer<S> for ContextLayer {
+impl<S> Layer<S> for TemplateContextLayer {
     type Service = ContextMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {

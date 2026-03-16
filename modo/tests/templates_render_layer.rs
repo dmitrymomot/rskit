@@ -6,7 +6,7 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use http::Request;
 use modo::templates::View;
-use modo::templates::middleware::ContextLayer;
+use modo::templates::middleware::TemplateContextLayer;
 use modo::templates::render::RenderLayer;
 use std::fs;
 use std::path::PathBuf;
@@ -43,7 +43,7 @@ async fn renders_view_with_merged_context() {
     let app = Router::new()
         .route("/test", get(handler))
         .layer(RenderLayer::new(engine))
-        .layer(ContextLayer::new());
+        .layer(TemplateContextLayer::new());
 
     let resp = app
         .oneshot(Request::get("/test").body(Body::empty()).unwrap())
@@ -72,7 +72,7 @@ async fn htmx_request_uses_htmx_template() {
     let app = Router::new()
         .route("/test", get(handler))
         .layer(RenderLayer::new(engine))
-        .layer(ContextLayer::new());
+        .layer(TemplateContextLayer::new());
 
     let resp = app
         .oneshot(
@@ -105,7 +105,7 @@ async fn non_view_response_passes_through() {
     let app = Router::new()
         .route("/test", get(handler))
         .layer(RenderLayer::new(engine))
-        .layer(ContextLayer::new());
+        .layer(TemplateContextLayer::new());
 
     let resp = app
         .oneshot(Request::get("/test").body(Body::empty()).unwrap())
