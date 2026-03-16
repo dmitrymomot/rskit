@@ -78,26 +78,15 @@ just assets-download     # download HTMX, Alpine.js, Tailwind Elements (first ti
 just dev                 # start Docker services, build CSS, run dev server
 ```
 
-For `api` or `worker` projects with SQLite:
+For other templates (`api`, `worker`, `minimal`):
 
 ```
 cd my-service
 just dev
 ```
 
-For `api` or `worker` projects with PostgreSQL, `just dev` also starts the Docker Compose services (Postgres):
-
-```
-cd my-api
-just dev
-```
-
-For `minimal` projects:
-
-```
-cd my-service
-just dev
-```
+When Docker Compose services are configured (Postgres via `--postgres`, RustFS via `--s3`,
+or Mailpit in `web` templates), `just dev` starts them automatically.
 
 ## Project name rules
 

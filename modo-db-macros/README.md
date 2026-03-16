@@ -1,5 +1,7 @@
 # modo-db-macros
 
+[![docs.rs](https://img.shields.io/docsrs/modo-db-macros)](https://docs.rs/modo-db-macros)
+
 Procedural macros powering the `modo-db` entity and migration system.
 
 This crate is an implementation detail of `modo-db`. Consume these macros through the
@@ -158,7 +160,8 @@ The optional `group` parameter (defaults to `"default"`) assigns the migration t
 Migrations in a group run only when `modo_db::sync_and_migrate_group` is called with the
 matching group name.
 
-The annotated function must be `async fn(db: &sea_orm::DatabaseConnection) -> Result<(), modo::Error>`:
+The annotated function must be `async fn(db: &sea_orm::DatabaseConnection) -> Result<(), modo::Error>`.
+The `db` parameter implements `ConnectionTrait`, so the full SeaORM typed API is available:
 
 ```rust,ignore
 #[modo_db::migration(version = 1, description = "seed default roles")]
