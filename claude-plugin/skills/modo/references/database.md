@@ -49,6 +49,9 @@ pub struct Config {
 | `url` | `String` | `"sqlite://data/main.db?mode=rwc"` |
 | `max_connections` | `u32` | `5` |
 | `min_connections` | `u32` | `1` |
+| `acquire_timeout_secs` | `u64` | `30` |
+| `idle_timeout_secs` | `u64` | `600` |
+| `max_lifetime_secs` | `u64` | `1800` |
 
 Example YAML:
 
@@ -57,6 +60,9 @@ database:
   url: "sqlite://data/main.db?mode=rwc"
   max_connections: 5
   min_connections: 1
+  acquire_timeout_secs: 30
+  idle_timeout_secs: 600
+  max_lifetime_secs: 1800
 ```
 
 For PostgreSQL:
@@ -66,6 +72,7 @@ database:
   url: "postgres://user:pass@localhost/myapp"
   max_connections: 10
   min_connections: 2
+  acquire_timeout_secs: 30
 ```
 
 ### Connecting and registering
@@ -402,6 +409,43 @@ let page: CursorResult<Todo> = Todo::query()
     )
     .await?;
 ```
+
+### Joined Queries
+
+`EntityQuery` supports loading related records in a single query via `find_also_related` and
+`find_with_related`, which return `JoinedQuery` and `JoinedManyQuery` respectively.
+
+**One-to-one / belongs-to join (`find_also_related`):**
+
+```rust
+// Load each todo with its optional author
+let results: Vec<(Todo, Option<User>)> = Todo::query()
+    .filter(todo::Column::Completed.eq(false))
+    .find_also_related::<User, user::Entity>()
+    .all(&*db)
+    .await?;
+```
+
+`JoinedQuery` supports the same chainable methods: `.filter()`, `.order_by_asc()`,
+`.order_by_desc()`, `.limit()`, `.offset()`, `.all()`, `.one()`, and `.into_select()`
+(which returns a `SelectTwo<E, F>` for raw SeaORM usage).
+
+**One-to-many join (`find_with_related`):**
+
+```rust
+// Load each user with all their posts
+let results: Vec<(User, Vec<Post>)> = User::query()
+    .find_with_related::<Post, post::Entity>()
+    .all(&*db)
+    .await?;
+```
+
+`JoinedManyQuery` supports `.filter()`, `.order_by_asc()`, `.order_by_desc()`, `.limit()`,
+`.offset()`, `.all()`, and `.into_select()` (which returns a `SelectTwoMany<E, F>`).
+
+Both require the source entity to implement `sea_orm::Related<F>` for the target entity,
+which is generated automatically by `#[entity(belongs_to)]`, `#[entity(has_many)]`, and
+`#[entity(has_one)]` field annotations.
 
 ### Escape hatch to raw SeaORM
 
@@ -1207,6 +1251,8 @@ am.update(&*db).await.map_err(modo_db::db_err_to_error)?;
 | `EntityQuery<T, E>` | `modo_db::EntityQuery` |
 | `EntityUpdateMany<E>` | `modo_db::EntityUpdateMany` |
 | `EntityDeleteMany<E>` | `modo_db::EntityDeleteMany` |
+| `JoinedQuery<T, U, E, F>` | `modo_db::JoinedQuery` |
+| `JoinedManyQuery<T, U, E, F>` | `modo_db::JoinedManyQuery` |
 | `EntityRegistration` | `modo_db::EntityRegistration` |
 | `MigrationRegistration` | `modo_db::MigrationRegistration` |
 | `PageParams` | `modo_db::PageParams` |
