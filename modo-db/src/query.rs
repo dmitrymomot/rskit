@@ -151,7 +151,7 @@ where
     /// Requires that `E` implements `Related<F>`.
     pub fn find_also_related<U, F>(self) -> JoinedQuery<T, U, E, F>
     where
-        F: EntityTrait + Default,
+        F: EntityTrait,
         U: From<F::Model> + Send + Sync,
         F::Model: FromQueryResult + Send + Sync,
         E: sea_orm::Related<F>,
@@ -167,7 +167,7 @@ where
     /// Requires that `E` implements `Related<F>`.
     pub fn find_with_related<U, F>(self) -> JoinedManyQuery<T, U, E, F>
     where
-        F: EntityTrait + Default,
+        F: EntityTrait,
         U: From<F::Model> + Send + Sync,
         F::Model: FromQueryResult + Send + Sync,
         E: sea_orm::Related<F>,
