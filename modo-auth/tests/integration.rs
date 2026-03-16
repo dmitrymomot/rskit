@@ -42,6 +42,7 @@ async fn setup_db() -> DbPool {
         url: "sqlite::memory:".to_string(),
         max_connections: 1,
         min_connections: 1,
+        ..Default::default()
     };
     let db = modo_db::connect(&config).await.expect("Failed to connect");
 

@@ -71,7 +71,7 @@ pub use pagination::{
     CursorParams, CursorResult, PageParams, PageResult, paginate, paginate_cursor,
 };
 pub use pool::DbPool;
-pub use query::{EntityDeleteMany, EntityQuery, EntityUpdateMany};
+pub use query::{EntityDeleteMany, EntityQuery, EntityUpdateMany, JoinedManyQuery, JoinedQuery};
 pub use record::Record;
 pub use sync::{sync_and_migrate, sync_and_migrate_group};
 
