@@ -229,7 +229,9 @@ mod tests {
     }
 
     #[test]
-    fn validator_accept_pass() {
+    fn accept_passes_when_bytes_undetectable() {
+        // b"img" can't be identified by `infer`, so magic-bytes validation
+        // is skipped and only the MIME header check applies.
         let f = UploadedFile::__test_new("f", "img.png", "image/png", b"img");
         f.validate().accept("image/*").check().unwrap();
     }

@@ -63,6 +63,9 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
                 Item::Fn(func) => {
                     rewrite_handler_attrs(func, &mod_name_str)?;
                 }
+                // Bare `mod foo;` (no body) is allowed — it can't contain
+                // inline handlers, so there's nothing to rewrite.  Only
+                // inline `mod foo { ... }` is rejected.
                 Item::Mod(inner_mod) => {
                     if inner_mod.content.is_some() {
                         return Err(syn::Error::new_spanned(

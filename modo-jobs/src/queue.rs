@@ -101,6 +101,9 @@ impl JobQueue {
         .await
         .map_err(|e| modo::Error::internal(format!("failed to cancel job: {e}")))?;
 
+        // 409 for both "not found" and "not pending" — a single UPDATE with
+        // two filters can't distinguish the cases without an extra SELECT, and
+        // returning 409 uniformly avoids disclosing whether a job ID exists.
         if result.rows_affected == 0 {
             return Err(modo::HttpError::Conflict
                 .with_message(format!("job {} not found or not in pending state", id)));
