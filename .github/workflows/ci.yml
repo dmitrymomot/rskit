@@ -3,9 +3,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   changes:
@@ -61,3 +63,31 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: extractions/setup-just@v2
       - run: just test
+
+  test-postgres:
+    name: Test (Postgres)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: modo
+          POSTGRES_PASSWORD: modo_test
+          POSTGRES_DB: modo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U modo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://modo:modo_test@localhost:5432/modo_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: extractions/setup-just@v2
+      - name: Run tests with postgres feature
+        run: just test-pg
