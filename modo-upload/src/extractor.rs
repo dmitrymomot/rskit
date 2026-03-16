@@ -62,7 +62,7 @@ where
         let max_file_size = config.max_file_size.as_ref().and_then(|s| {
             modo::config::parse_size(s)
                 .inspect_err(|e| {
-                    modo::tracing::warn!(
+                    tracing::warn!(
                         size = %s,
                         error = %e,
                         "failed to parse max_file_size from UploadConfig, ignoring limit"
