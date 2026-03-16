@@ -35,6 +35,8 @@ impl MailTransportSend for ResendTransport {
             body["reply_to"] = serde_json::json!(reply_to);
         }
 
+        tracing::debug!(to = ?message.to, subject = %message.subject, "sending email via Resend API");
+
         let resp = self
             .client
             .post("https://api.resend.com/emails")
@@ -42,13 +44,17 @@ impl MailTransportSend for ResendTransport {
             .json(&body)
             .send()
             .await
-            .map_err(|e| modo::Error::internal(format!("resend request failed: {e}")))?;
+            .map_err(|e| {
+                tracing::error!(error = %e, "Resend request failed");
+                modo::Error::internal(format!("Resend request failed: {e}"))
+            })?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
+            tracing::error!(status = %status, body = %text, "Resend API error");
             return Err(modo::Error::internal(format!(
-                "resend API error ({status}): {text}"
+                "Resend API error ({status}): {text}"
             )));
         }
 

@@ -39,7 +39,15 @@ impl Mailer {
     /// Render a `SendEmail` into a fully-formed `MailMessage` without sending.
     pub fn render(&self, email: &SendEmail) -> Result<MailMessage, modo::Error> {
         let locale = email.locale.as_deref().unwrap_or("");
-        let template = self.templates.get(&email.template, locale)?;
+        let template_name = &email.template;
+
+        tracing::debug!(
+            template_name = %template_name,
+            locale = %locale,
+            "resolving email template"
+        );
+
+        let template = self.templates.get(template_name, locale)?;
 
         // Substitute variables in subject and body.
         // Subject is a plain-text RFC 5322 header — must NOT be HTML-escaped.
@@ -60,6 +68,13 @@ impl Mailer {
 
         // Wrap HTML body in a layout.
         let layout_name = template.layout.as_deref().unwrap_or("default");
+
+        tracing::debug!(
+            layout_name = %layout_name,
+            template_name = %template_name,
+            "rendering email layout"
+        );
+
         let mut layout_map: std::collections::BTreeMap<String, minijinja::Value> = email
             .context
             .iter()
@@ -88,8 +103,34 @@ impl Mailer {
 
     /// Render and deliver an email via the configured transport.
     pub async fn send(&self, email: &SendEmail) -> Result<(), modo::Error> {
+        let to = email.to.join(", ");
+        let template_name = &email.template;
+
+        tracing::info!(
+            to = %to,
+            template_name = %template_name,
+            "sending email"
+        );
+
         let message = self.render(email)?;
-        self.transport.send(&message).await
+
+        if let Err(e) = self.transport.send(&message).await {
+            tracing::error!(
+                to = %to,
+                template_name = %template_name,
+                error = %e,
+                "email send failed"
+            );
+            return Err(e);
+        }
+
+        tracing::info!(
+            to = %to,
+            template_name = %template_name,
+            "email sent successfully"
+        );
+
+        Ok(())
     }
 }
 

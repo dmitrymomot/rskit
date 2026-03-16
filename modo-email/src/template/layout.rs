@@ -115,13 +115,15 @@ impl LayoutEngine {
     ) -> Result<String, modo::Error> {
         let template_name = format!("layouts/{layout_name}.html");
 
-        let tmpl = self
-            .env
-            .get_template(&template_name)
-            .map_err(|_| modo::Error::internal(format!("layout not found: {layout_name}")))?;
+        let tmpl = self.env.get_template(&template_name).map_err(|_| {
+            tracing::debug!(layout_name = %layout_name, "email layout not found");
+            modo::Error::internal(format!("Layout not found: {layout_name}"))
+        })?;
 
-        tmpl.render(context)
-            .map_err(|e| modo::Error::internal(format!("layout render error: {e}")))
+        tmpl.render(context).map_err(|e| {
+            tracing::error!(layout_name = %layout_name, error = %e, "email layout render failed");
+            modo::Error::internal(format!("Layout render error: {e}"))
+        })
     }
 
     /// Creates a base environment with the built-in default layout and

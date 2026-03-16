@@ -55,12 +55,24 @@ impl FilesystemProvider {
 
 impl TemplateProvider for FilesystemProvider {
     fn get(&self, name: &str, locale: &str) -> Result<EmailTemplate, modo::Error> {
-        let path = self
-            .resolve_path(name, locale)
-            .ok_or_else(|| modo::Error::internal(format!("email template not found: {name}")))?;
+        let path = self.resolve_path(name, locale).ok_or_else(|| {
+            tracing::debug!(
+                template_name = %name,
+                locale = %locale,
+                "email template not found on filesystem"
+            );
+            modo::Error::internal(format!("Email template not found: {name}"))
+        })?;
+
+        tracing::debug!(
+            template_name = %name,
+            locale = %locale,
+            path = %path.display(),
+            "loading email template from filesystem"
+        );
 
         let raw = std::fs::read_to_string(&path).map_err(|e| {
-            modo::Error::internal(format!("failed to read template {}: {e}", path.display()))
+            modo::Error::internal(format!("Failed to read template {}: {e}", path.display()))
         })?;
 
         EmailTemplate::parse(&raw)

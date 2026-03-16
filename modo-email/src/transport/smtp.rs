@@ -77,10 +77,12 @@ impl MailTransportSend for SmtpTransport {
             )
             .map_err(|e| modo::Error::internal(format!("failed to build email: {e}")))?;
 
-        self.mailer
-            .send(email)
-            .await
-            .map_err(|e| modo::Error::internal(format!("SMTP send failed: {e}")))?;
+        tracing::debug!(to = ?message.to, subject = %message.subject, "sending email via SMTP");
+
+        self.mailer.send(email).await.map_err(|e| {
+            tracing::error!(error = %e, "SMTP send failed");
+            modo::Error::internal(format!("SMTP send failed: {e}"))
+        })?;
 
         Ok(())
     }
