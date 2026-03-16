@@ -14,10 +14,10 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
         #[allow(unexpected_cfgs)]
         #[cfg(feature = "templates")]
-        ::modo::inventory::submit! {
-            ::modo::templates::TemplateFilterEntry {
+        ::modo::__internal::inventory::submit! {
+            ::modo::__internal::TemplateFilterEntry {
                 name: #filter_name,
-                register_fn: |env: &mut ::modo::minijinja::Environment<'static>| {
+                register_fn: |env: &mut ::modo::__internal::minijinja::Environment<'static>| {
                     env.add_filter(#filter_name, #func_name);
                 },
             }

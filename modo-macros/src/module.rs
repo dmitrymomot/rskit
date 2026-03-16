@@ -86,16 +86,18 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         wrapper_defs.push(def);
     }
 
-    let middleware_vec =
-        build_middleware_vec(&wrapper_names, quote! { modo::router::RouterMiddlewareFn });
+    let middleware_vec = build_middleware_vec(
+        &wrapper_names,
+        quote! { modo::__internal::RouterMiddlewareFn },
+    );
 
     Ok(quote! {
         #module
 
         #(#wrapper_defs)*
 
-        modo::inventory::submit! {
-            modo::router::ModuleRegistration {
+        modo::__internal::inventory::submit! {
+            modo::__internal::ModuleRegistration {
                 name: #mod_name_str,
                 prefix: #prefix,
                 middleware: #middleware_vec,

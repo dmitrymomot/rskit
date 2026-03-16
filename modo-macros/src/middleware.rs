@@ -42,7 +42,7 @@ impl Parse for MiddlewareList {
 fn build_layer_expr(attr: &MiddlewareAttr) -> TokenStream {
     let path = &attr.path;
     match &attr.args {
-        None => quote! { modo::axum::middleware::from_fn(#path) },
+        None => quote! { modo::__internal::axum::from_fn(#path) },
         Some(args) => quote! { #path(#(#args),*) },
     }
 }
@@ -60,8 +60,8 @@ pub fn gen_handler_middleware_wrapper(
 
     let def = quote! {
         fn #wrapper_name(
-            mr: modo::axum::routing::MethodRouter<modo::app::AppState>,
-        ) -> modo::axum::routing::MethodRouter<modo::app::AppState> {
+            mr: modo::__internal::axum::MethodRouter<modo::__internal::AppState>,
+        ) -> modo::__internal::axum::MethodRouter<modo::__internal::AppState> {
             mr.route_layer(#layer_expr)
         }
     };
@@ -84,8 +84,8 @@ pub fn gen_router_middleware_wrapper(
 
     let def = quote! {
         fn #wrapper_name(
-            router: modo::axum::Router<modo::app::AppState>,
-        ) -> modo::axum::Router<modo::app::AppState> {
+            router: modo::__internal::axum::Router<modo::__internal::AppState>,
+        ) -> modo::__internal::axum::Router<modo::__internal::AppState> {
             router.layer(#layer_expr)
         }
     };

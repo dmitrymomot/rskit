@@ -73,3 +73,19 @@ pub use inventory;
 pub use modo;
 pub use modo_db;
 pub use serde_json;
+
+/// Internal re-exports for generated code. Not public API.
+#[doc(hidden)]
+pub mod __internal {
+    pub use crate::handler::{JobContext, JobHandler, JobRegistration};
+    pub use crate::queue::JobQueue;
+    pub use crate::types::JobId;
+
+    // -- third-party re-exports --
+    pub use ::chrono;
+    pub use ::inventory;
+
+    // -- cross-crate re-exports --
+    pub use ::modo;
+    pub use ::modo_db;
+}

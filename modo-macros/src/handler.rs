@@ -104,8 +104,8 @@ fn transform_path_params(
 
     let struct_def = quote! {
         #[allow(non_camel_case_types, dead_code)]
-        #[derive(modo::serde::Deserialize)]
-        #[serde(crate = "modo::serde")]
+        #[derive(modo::__internal::serde::Deserialize)]
+        #[serde(crate = "modo::__internal::serde")]
         struct #struct_name {
             #(#struct_fields),*
         }
@@ -126,8 +126,8 @@ fn transform_path_params(
     // Build destructuring pattern with only declared fields + `..`
     let field_idents: Vec<&Ident> = matched.iter().map(|m| &m.ident).collect();
     let path_extractor: syn::FnArg = syn::parse_quote! {
-        modo::axum::extract::Path(#struct_name { #(#field_idents),*, .. }):
-            modo::axum::extract::Path<#struct_name>
+        modo::__internal::axum::Path(#struct_name { #(#field_idents),*, .. }):
+            modo::__internal::axum::Path<#struct_name>
     };
 
     // Insert the Path extractor at position 0
@@ -164,32 +164,32 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     let method_str = method_ident.to_string().to_uppercase();
     let (modo_method, axum_method) = match method_str.as_str() {
         "GET" => (
-            quote! { modo::router::Method::GET },
-            quote! { modo::axum::routing::get },
+            quote! { modo::__internal::Method::GET },
+            quote! { modo::__internal::axum::routing::get },
         ),
         "POST" => (
-            quote! { modo::router::Method::POST },
-            quote! { modo::axum::routing::post },
+            quote! { modo::__internal::Method::POST },
+            quote! { modo::__internal::axum::routing::post },
         ),
         "PUT" => (
-            quote! { modo::router::Method::PUT },
-            quote! { modo::axum::routing::put },
+            quote! { modo::__internal::Method::PUT },
+            quote! { modo::__internal::axum::routing::put },
         ),
         "PATCH" => (
-            quote! { modo::router::Method::PATCH },
-            quote! { modo::axum::routing::patch },
+            quote! { modo::__internal::Method::PATCH },
+            quote! { modo::__internal::axum::routing::patch },
         ),
         "DELETE" => (
-            quote! { modo::router::Method::DELETE },
-            quote! { modo::axum::routing::delete },
+            quote! { modo::__internal::Method::DELETE },
+            quote! { modo::__internal::axum::routing::delete },
         ),
         "HEAD" => (
-            quote! { modo::router::Method::HEAD },
-            quote! { modo::axum::routing::head },
+            quote! { modo::__internal::Method::HEAD },
+            quote! { modo::__internal::axum::routing::head },
         ),
         "OPTIONS" => (
-            quote! { modo::router::Method::OPTIONS },
-            quote! { modo::axum::routing::options },
+            quote! { modo::__internal::Method::OPTIONS },
+            quote! { modo::__internal::axum::routing::options },
         ),
         _ => {
             return Err(syn::Error::new_spanned(
@@ -225,7 +225,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     }
 
     let middleware_vec =
-        build_middleware_vec(&wrapper_names, quote! { modo::router::MiddlewareFn });
+        build_middleware_vec(&wrapper_names, quote! { modo::__internal::MiddlewareFn });
 
     let module_expr = match &args.module {
         Some(m) => quote! { Some(#m) },
@@ -239,8 +239,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
         #(#wrapper_defs)*
 
-        modo::inventory::submit! {
-            modo::router::RouteRegistration {
+        modo::__internal::inventory::submit! {
+            modo::__internal::RouteRegistration {
                 method: #modo_method,
                 path: #path,
                 handler: || #axum_method(#func_name),

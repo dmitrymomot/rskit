@@ -129,7 +129,7 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
     let sanitize_fn_name = quote::format_ident!("__sanitize_{}", struct_name);
 
     Ok(quote! {
-        impl #impl_generics modo::sanitize::Sanitize for #struct_name #ty_generics #where_clause {
+        impl #impl_generics modo::__internal::Sanitize for #struct_name #ty_generics #where_clause {
             fn sanitize(&mut self) {
                 #(#field_sanitizations)*
             }
@@ -139,11 +139,11 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
         #[allow(non_snake_case)]
         fn #sanitize_fn_name(any: &mut dyn std::any::Any) {
             if let Some(v) = any.downcast_mut::<#struct_name>() {
-                <#struct_name as modo::sanitize::Sanitize>::sanitize(v);
+                <#struct_name as modo::__internal::Sanitize>::sanitize(v);
             }
         }
 
-        modo::inventory::submit!(modo::sanitize::SanitizerRegistration {
+        modo::__internal::inventory::submit!(modo::__internal::SanitizerRegistration {
             type_id: std::any::TypeId::of::<#struct_name>(),
             sanitize: #sanitize_fn_name,
         });
@@ -158,20 +158,20 @@ fn gen_field_sanitization(sf: &SanitizeField) -> TokenStream {
         .rules
         .iter()
         .map(|rule| match rule {
-            SanitizationRule::Trim => quote! { __val = modo::sanitize::trim(__val); },
-            SanitizationRule::Lowercase => quote! { __val = modo::sanitize::lowercase(__val); },
-            SanitizationRule::Uppercase => quote! { __val = modo::sanitize::uppercase(__val); },
+            SanitizationRule::Trim => quote! { __val = modo::__internal::trim(__val); },
+            SanitizationRule::Lowercase => quote! { __val = modo::__internal::lowercase(__val); },
+            SanitizationRule::Uppercase => quote! { __val = modo::__internal::uppercase(__val); },
             SanitizationRule::StripHtml => {
-                quote! { __val = modo::sanitize::strip_html_tags(__val); }
+                quote! { __val = modo::__internal::strip_html_tags(__val); }
             }
             SanitizationRule::CollapseWhitespace => {
-                quote! { __val = modo::sanitize::collapse_whitespace(__val); }
+                quote! { __val = modo::__internal::collapse_whitespace(__val); }
             }
             SanitizationRule::Truncate { max_chars } => {
-                quote! { __val = modo::sanitize::truncate(__val, #max_chars); }
+                quote! { __val = modo::__internal::truncate(__val, #max_chars); }
             }
             SanitizationRule::NormalizeEmail => {
-                quote! { __val = modo::sanitize::normalize_email(__val); }
+                quote! { __val = modo::__internal::normalize_email(__val); }
             }
             SanitizationRule::Custom { func_path } => {
                 quote! { __val = #func_path(__val); }

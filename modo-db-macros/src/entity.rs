@@ -341,8 +341,8 @@ fn default_expr_for_field(f: &ParsedField) -> TokenStream {
     // Auto-ID fields
     if let Some(ref strategy) = f.attrs.auto {
         return match strategy.as_str() {
-            "ulid" => quote! { modo_db::generate_ulid() },
-            "nanoid" => quote! { modo_db::generate_nanoid() },
+            "ulid" => quote! { modo_db::__internal::generate_ulid() },
+            "nanoid" => quote! { modo_db::__internal::generate_nanoid() },
             _ => unreachable!(),
         };
     }
@@ -530,16 +530,16 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     // Timestamp and soft-delete model fields
     if struct_attrs.timestamps {
         model_fields.push(quote! {
-            pub created_at: modo_db::chrono::DateTime<modo_db::chrono::Utc>,
+            pub created_at: modo_db::__internal::chrono::DateTime<modo_db::__internal::chrono::Utc>,
         });
         model_fields.push(quote! {
-            pub updated_at: modo_db::chrono::DateTime<modo_db::chrono::Utc>,
+            pub updated_at: modo_db::__internal::chrono::DateTime<modo_db::__internal::chrono::Utc>,
         });
     }
 
     if struct_attrs.soft_delete {
         model_fields.push(quote! {
-            pub deleted_at: Option<modo_db::chrono::DateTime<modo_db::chrono::Utc>>,
+            pub deleted_at: Option<modo_db::__internal::chrono::DateTime<modo_db::__internal::chrono::Utc>>,
         });
     }
 
@@ -580,8 +580,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             });
 
             related_impls.push(quote! {
-                impl modo_db::sea_orm::entity::prelude::Related<super::#target_mod::Entity> for Entity {
-                    fn to() -> modo_db::sea_orm::entity::prelude::RelationDef {
+                impl modo_db::__internal::sea_orm::entity::prelude::Related<super::#target_mod::Entity> for Entity {
+                    fn to() -> modo_db::__internal::sea_orm::entity::prelude::RelationDef {
                         Relation::#variant_name.def()
                     }
                 }
@@ -613,11 +613,11 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             let target_variant = format_ident!("{target}");
 
             related_impls.push(quote! {
-                impl modo_db::sea_orm::entity::prelude::Related<super::#target_mod::Entity> for Entity {
-                    fn to() -> modo_db::sea_orm::entity::prelude::RelationDef {
+                impl modo_db::__internal::sea_orm::entity::prelude::Related<super::#target_mod::Entity> for Entity {
+                    fn to() -> modo_db::__internal::sea_orm::entity::prelude::RelationDef {
                         super::#via_mod::Relation::#target_variant.def()
                     }
-                    fn via() -> Option<modo_db::sea_orm::entity::prelude::RelationDef> {
+                    fn via() -> Option<modo_db::__internal::sea_orm::entity::prelude::RelationDef> {
                         Some(super::#via_mod::Relation::#self_variant.def().rev())
                     }
                 }
@@ -626,8 +626,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             let self_variant = format_ident!("{struct_name}");
 
             related_impls.push(quote! {
-                impl modo_db::sea_orm::entity::prelude::Related<super::#target_mod::Entity> for Entity {
-                    fn to() -> modo_db::sea_orm::entity::prelude::RelationDef {
+                impl modo_db::__internal::sea_orm::entity::prelude::Related<super::#target_mod::Entity> for Entity {
+                    fn to() -> modo_db::__internal::sea_orm::entity::prelude::RelationDef {
                         super::#target_mod::Relation::#self_variant.def().rev()
                     }
                 }
@@ -641,12 +641,12 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     let relation_enum = if relation_variants.is_empty() {
         quote! {
-            #[derive(Copy, Clone, Debug, modo_db::sea_orm::EnumIter, modo_db::sea_orm::DeriveRelation)]
+            #[derive(Copy, Clone, Debug, modo_db::__internal::sea_orm::EnumIter, modo_db::__internal::sea_orm::DeriveRelation)]
             pub enum Relation {}
         }
     } else {
         quote! {
-            #[derive(Copy, Clone, Debug, modo_db::sea_orm::EnumIter, modo_db::sea_orm::DeriveRelation)]
+            #[derive(Copy, Clone, Debug, modo_db::__internal::sea_orm::EnumIter, modo_db::__internal::sea_orm::DeriveRelation)]
             pub enum Relation {
                 #(#relation_variants)*
             }
@@ -707,8 +707,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     let timestamp_struct_fields = if struct_attrs.timestamps {
         quote! {
-            pub created_at: modo_db::chrono::DateTime<modo_db::chrono::Utc>,
-            pub updated_at: modo_db::chrono::DateTime<modo_db::chrono::Utc>,
+            pub created_at: modo_db::__internal::chrono::DateTime<modo_db::__internal::chrono::Utc>,
+            pub updated_at: modo_db::__internal::chrono::DateTime<modo_db::__internal::chrono::Utc>,
         }
     } else {
         quote! {}
@@ -716,7 +716,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     let soft_delete_struct_field = if struct_attrs.soft_delete {
         quote! {
-            pub deleted_at: Option<modo_db::chrono::DateTime<modo_db::chrono::Utc>>,
+            pub deleted_at: Option<modo_db::__internal::chrono::DateTime<modo_db::__internal::chrono::Utc>>,
         }
     } else {
         quote! {}
@@ -746,8 +746,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         .collect();
 
     if struct_attrs.timestamps {
-        default_field_stmts.push(quote! { created_at: modo_db::chrono::Utc::now(), });
-        default_field_stmts.push(quote! { updated_at: modo_db::chrono::Utc::now(), });
+        default_field_stmts.push(quote! { created_at: modo_db::__internal::chrono::Utc::now(), });
+        default_field_stmts.push(quote! { updated_at: modo_db::__internal::chrono::Utc::now(), });
     }
 
     if struct_attrs.soft_delete {
@@ -804,18 +804,21 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         .iter()
         .map(|f| {
             let name = &f.name;
-            quote! { #name: modo_db::sea_orm::ActiveValue::Set(self.#name.clone()), }
+            quote! { #name: modo_db::__internal::sea_orm::ActiveValue::Set(self.#name.clone()), }
         })
         .collect();
 
     if struct_attrs.timestamps {
-        am_full_stmts.push(quote! { created_at: modo_db::sea_orm::ActiveValue::NotSet, });
-        am_full_stmts.push(quote! { updated_at: modo_db::sea_orm::ActiveValue::NotSet, });
+        am_full_stmts
+            .push(quote! { created_at: modo_db::__internal::sea_orm::ActiveValue::NotSet, });
+        am_full_stmts
+            .push(quote! { updated_at: modo_db::__internal::sea_orm::ActiveValue::NotSet, });
     }
 
     if struct_attrs.soft_delete {
-        am_full_stmts
-            .push(quote! { deleted_at: modo_db::sea_orm::ActiveValue::Set(self.deleted_at), });
+        am_full_stmts.push(
+            quote! { deleted_at: modo_db::__internal::sea_orm::ActiveValue::Set(self.deleted_at), },
+        );
     }
 
     // into_active_model: set only PK fields, rest use Default (NotSet)
@@ -824,7 +827,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         .filter(|f| f.attrs.primary_key)
         .map(|f| {
             let name = &f.name;
-            quote! { #name: modo_db::sea_orm::ActiveValue::Set(self.#name.clone()), }
+            quote! { #name: modo_db::__internal::sea_orm::ActiveValue::Set(self.#name.clone()), }
         })
         .collect();
 
@@ -835,18 +838,18 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             f.attrs.auto.as_ref().map(|strategy| {
                 let name = &f.name;
                 let gen_call = match strategy.as_str() {
-                    "ulid" => quote! { modo_db::generate_ulid() },
-                    "nanoid" => quote! { modo_db::generate_nanoid() },
+                    "ulid" => quote! { modo_db::__internal::generate_ulid() },
+                    "nanoid" => quote! { modo_db::__internal::generate_nanoid() },
                     _ => unreachable!(),
                 };
                 quote! {
                     if is_insert {
-                        if let modo_db::sea_orm::ActiveValue::Set(ref id) = am.#name {
+                        if let modo_db::__internal::sea_orm::ActiveValue::Set(ref id) = am.#name {
                             if id.is_empty() {
-                                am.#name = modo_db::sea_orm::ActiveValue::Set(#gen_call);
+                                am.#name = modo_db::__internal::sea_orm::ActiveValue::Set(#gen_call);
                             }
                         } else {
-                            am.#name = modo_db::sea_orm::ActiveValue::Set(#gen_call);
+                            am.#name = modo_db::__internal::sea_orm::ActiveValue::Set(#gen_call);
                         }
                     }
                 }
@@ -856,11 +859,11 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     let timestamp_auto_stmts = if struct_attrs.timestamps {
         quote! {
-            let now = modo_db::chrono::Utc::now();
+            let now = modo_db::__internal::chrono::Utc::now();
             if is_insert {
-                am.created_at = modo_db::sea_orm::ActiveValue::Set(now);
+                am.created_at = modo_db::__internal::sea_orm::ActiveValue::Set(now);
             }
-            am.updated_at = modo_db::sea_orm::ActiveValue::Set(now);
+            am.updated_at = modo_db::__internal::sea_orm::ActiveValue::Set(now);
         }
     } else {
         quote! {}
@@ -881,34 +884,34 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         // Soft-delete: set deleted_at = now instead of real delete
         let update_stmts = if struct_attrs.timestamps {
             quote! {
-                let now = modo_db::chrono::Utc::now();
+                let now = modo_db::__internal::chrono::Utc::now();
                 self.deleted_at = Some(now);
                 self.updated_at = now;
             }
         } else {
             quote! {
-                self.deleted_at = Some(modo_db::chrono::Utc::now());
+                self.deleted_at = Some(modo_db::__internal::chrono::Utc::now());
             }
         };
 
         quote! {
-            pub async fn delete(mut self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
-                use modo_db::DefaultHooks;
+            pub async fn delete(mut self, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
+                use modo_db::__internal::DefaultHooks;
                 self.before_delete()?;
                 #update_stmts
-                let mut am = <Self as modo_db::Record>::into_active_model_full(&self);
-                <Self as modo_db::Record>::apply_auto_fields(&mut am, false);
-                use modo_db::sea_orm::ActiveModelTrait;
-                am.update(db).await.map_err(modo_db::db_err_to_error)?;
+                let mut am = <Self as modo_db::__internal::Record>::into_active_model_full(&self);
+                <Self as modo_db::__internal::Record>::apply_auto_fields(&mut am, false);
+                use modo_db::__internal::sea_orm::ActiveModelTrait;
+                am.update(db).await.map_err(modo_db::__internal::db_err_to_error)?;
                 Ok(())
             }
         }
     } else {
         quote! {
-            pub async fn delete(self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
-                use modo_db::DefaultHooks;
+            pub async fn delete(self, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
+                use modo_db::__internal::DefaultHooks;
                 self.before_delete()?;
-                modo_db::do_delete(self, db).await
+                modo_db::__internal::do_delete(self, db).await
             }
         }
     };
@@ -917,17 +920,17 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     let find_all_override = if struct_attrs.soft_delete {
         quote! {
             fn find_all(
-                db: &impl modo_db::sea_orm::ConnectionTrait,
-            ) -> impl std::future::Future<Output = Result<Vec<Self>, modo::Error>> + Send {
+                db: &impl modo_db::__internal::sea_orm::ConnectionTrait,
+            ) -> impl std::future::Future<Output = Result<Vec<Self>, modo_db::__internal::modo::Error>> + Send {
                 async {
-                    use modo_db::sea_orm::EntityTrait as _;
-                    use modo_db::sea_orm::QueryFilter;
-                    use modo_db::sea_orm::ColumnTrait;
+                    use modo_db::__internal::sea_orm::EntityTrait as _;
+                    use modo_db::__internal::sea_orm::QueryFilter;
+                    use modo_db::__internal::sea_orm::ColumnTrait;
                     let models = #mod_name::Entity::find()
                         .filter(#mod_name::Column::DeletedAt.is_null())
                         .all(db)
                         .await
-                        .map_err(modo_db::db_err_to_error)?;
+                        .map_err(modo_db::__internal::db_err_to_error)?;
                     Ok(models.into_iter().map(Self::from_model).collect())
                 }
             }
@@ -938,11 +941,11 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     let query_override = if struct_attrs.soft_delete {
         quote! {
-            fn query() -> modo_db::EntityQuery<Self, #mod_name::Entity> {
-                use modo_db::sea_orm::EntityTrait as _;
-                use modo_db::sea_orm::QueryFilter;
-                use modo_db::sea_orm::ColumnTrait;
-                modo_db::EntityQuery::new(
+            fn query() -> modo_db::__internal::EntityQuery<Self, #mod_name::Entity> {
+                use modo_db::__internal::sea_orm::EntityTrait as _;
+                use modo_db::__internal::sea_orm::QueryFilter;
+                use modo_db::__internal::sea_orm::ColumnTrait;
+                modo_db::__internal::EntityQuery::new(
                     #mod_name::Entity::find().filter(#mod_name::Column::DeletedAt.is_null())
                 )
             }
@@ -960,11 +963,11 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     let record_impl = quote! {
         #[allow(clippy::needless_update)]
-        impl modo_db::Record for #struct_name {
+        impl modo_db::__internal::Record for #struct_name {
             type Entity = #mod_name::Entity;
             type ActiveModel = #mod_name::ActiveModel;
 
-            fn from_model(model: <#mod_name::Entity as modo_db::sea_orm::EntityTrait>::Model) -> Self {
+            fn from_model(model: <#mod_name::Entity as modo_db::__internal::sea_orm::EntityTrait>::Model) -> Self {
                 Self::from(model)
             }
 
@@ -1000,19 +1003,19 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
             #delete_by_id_method
 
-            pub async fn insert(mut self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Self, modo::Error> {
-                use modo_db::DefaultHooks;
+            pub async fn insert(mut self, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<Self, modo_db::__internal::modo::Error> {
+                use modo_db::__internal::DefaultHooks;
                 self.before_save()?;
-                let result = modo_db::do_insert(self, db).await?;
+                let result = modo_db::__internal::do_insert(self, db).await?;
                 result.after_save()?;
                 Ok(result)
             }
 
-            pub async fn update(&mut self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
-                use modo_db::DefaultHooks;
+            pub async fn update(&mut self, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
+                use modo_db::__internal::DefaultHooks;
                 let mut candidate = self.clone();
                 candidate.before_save()?;
-                let refreshed = modo_db::do_update(&candidate, db).await?;
+                let refreshed = modo_db::__internal::do_update(&candidate, db).await?;
                 *self = refreshed;
                 self.after_save()?;
                 Ok(())
@@ -1041,23 +1044,23 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             let is_string_fk = type_name_str(&f.ty).as_deref() == Some("String");
             let accessor = if is_string_fk {
                 quote! {
-                    pub async fn #method_name(&self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Option<#target_ident>, modo::Error> {
-                        use modo_db::sea_orm::EntityTrait;
+                    pub async fn #method_name(&self, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<Option<#target_ident>, modo_db::__internal::modo::Error> {
+                        use modo_db::__internal::sea_orm::EntityTrait;
                         #target_mod::Entity::find_by_id(&self.#fk_field)
                             .one(db)
                             .await
-                            .map_err(modo_db::db_err_to_error)
+                            .map_err(modo_db::__internal::db_err_to_error)
                             .map(|opt| opt.map(#target_ident::from))
                     }
                 }
             } else {
                 quote! {
-                    pub async fn #method_name(&self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Option<#target_ident>, modo::Error> {
-                        use modo_db::sea_orm::EntityTrait;
+                    pub async fn #method_name(&self, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<Option<#target_ident>, modo_db::__internal::modo::Error> {
+                        use modo_db::__internal::sea_orm::EntityTrait;
                         #target_mod::Entity::find_by_id(self.#fk_field.clone())
                             .one(db)
                             .await
-                            .map_err(modo_db::db_err_to_error)
+                            .map_err(modo_db::__internal::db_err_to_error)
                             .map(|opt| opt.map(#target_ident::from))
                     }
                 }
@@ -1094,30 +1097,30 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
         if f.attrs.has_many {
             let accessor = quote! {
-                pub async fn #field_name(&self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Vec<#target_ident>, modo::Error> {
-                    use modo_db::sea_orm::EntityTrait;
-                    use modo_db::sea_orm::QueryFilter;
-                    use modo_db::sea_orm::ColumnTrait;
+                pub async fn #field_name(&self, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<Vec<#target_ident>, modo_db::__internal::modo::Error> {
+                    use modo_db::__internal::sea_orm::EntityTrait;
+                    use modo_db::__internal::sea_orm::QueryFilter;
+                    use modo_db::__internal::sea_orm::ColumnTrait;
                     #target_mod::Entity::find()
                         .filter(#target_mod::Column::#fk_col_pascal.eq(&self.#pk_field_name))
                         .all(db)
                         .await
-                        .map_err(modo_db::db_err_to_error)
+                        .map_err(modo_db::__internal::db_err_to_error)
                         .map(|models| models.into_iter().map(#target_ident::from).collect())
                 }
             };
             relation_accessors.push(accessor);
         } else if f.attrs.has_one {
             let accessor = quote! {
-                pub async fn #field_name(&self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Option<#target_ident>, modo::Error> {
-                    use modo_db::sea_orm::EntityTrait;
-                    use modo_db::sea_orm::QueryFilter;
-                    use modo_db::sea_orm::ColumnTrait;
+                pub async fn #field_name(&self, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<Option<#target_ident>, modo_db::__internal::modo::Error> {
+                    use modo_db::__internal::sea_orm::EntityTrait;
+                    use modo_db::__internal::sea_orm::QueryFilter;
+                    use modo_db::__internal::sea_orm::ColumnTrait;
                     #target_mod::Entity::find()
                         .filter(#target_mod::Column::#fk_col_pascal.eq(&self.#pk_field_name))
                         .one(db)
                         .await
-                        .map_err(modo_db::db_err_to_error)
+                        .map_err(modo_db::__internal::db_err_to_error)
                         .map(|opt| opt.map(#target_ident::from))
                 }
             };
@@ -1147,7 +1150,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             quote! {
                 update = update.col_expr(
                     #mod_name::Column::UpdatedAt,
-                    modo_db::sea_orm::sea_query::Expr::value(now),
+                    modo_db::__internal::sea_orm::sea_query::Expr::value(now),
                 );
             }
         } else {
@@ -1157,66 +1160,66 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         quote! {
             impl #struct_name {
                 /// Query that includes soft-deleted records.
-                pub fn with_deleted() -> modo_db::EntityQuery<Self, #mod_name::Entity> {
-                    use modo_db::sea_orm::EntityTrait as _;
-                    modo_db::EntityQuery::new(#mod_name::Entity::find())
+                pub fn with_deleted() -> modo_db::__internal::EntityQuery<Self, #mod_name::Entity> {
+                    use modo_db::__internal::sea_orm::EntityTrait as _;
+                    modo_db::__internal::EntityQuery::new(#mod_name::Entity::find())
                 }
 
                 /// Query that returns only soft-deleted records.
-                pub fn only_deleted() -> modo_db::EntityQuery<Self, #mod_name::Entity> {
-                    use modo_db::sea_orm::EntityTrait as _;
-                    use modo_db::sea_orm::QueryFilter;
-                    use modo_db::sea_orm::ColumnTrait;
-                    modo_db::EntityQuery::new(
+                pub fn only_deleted() -> modo_db::__internal::EntityQuery<Self, #mod_name::Entity> {
+                    use modo_db::__internal::sea_orm::EntityTrait as _;
+                    use modo_db::__internal::sea_orm::QueryFilter;
+                    use modo_db::__internal::sea_orm::ColumnTrait;
+                    modo_db::__internal::EntityQuery::new(
                         #mod_name::Entity::find().filter(#mod_name::Column::DeletedAt.is_not_null())
                     )
                 }
 
                 /// Restore a soft-deleted record by clearing `deleted_at`.
-                pub async fn restore(&mut self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
-                    use modo_db::DefaultHooks;
+                pub async fn restore(&mut self, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
+                    use modo_db::__internal::DefaultHooks;
                     let mut candidate = self.clone();
                     candidate.deleted_at = None;
                     candidate.before_save()?;
-                    let mut am = <Self as modo_db::Record>::into_active_model_full(&candidate);
-                    <Self as modo_db::Record>::apply_auto_fields(&mut am, false);
-                    use modo_db::sea_orm::ActiveModelTrait;
-                    let model = am.update(db).await.map_err(modo_db::db_err_to_error)?;
+                    let mut am = <Self as modo_db::__internal::Record>::into_active_model_full(&candidate);
+                    <Self as modo_db::__internal::Record>::apply_auto_fields(&mut am, false);
+                    use modo_db::__internal::sea_orm::ActiveModelTrait;
+                    let model = am.update(db).await.map_err(modo_db::__internal::db_err_to_error)?;
                     *self = Self::from(model);
                     self.after_save()?;
                     Ok(())
                 }
 
                 /// Permanently delete this record from the database (hard delete).
-                pub async fn force_delete(self, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
-                    use modo_db::DefaultHooks;
+                pub async fn force_delete(self, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
+                    use modo_db::__internal::DefaultHooks;
                     self.before_delete()?;
-                    modo_db::do_delete(self, db).await
+                    modo_db::__internal::do_delete(self, db).await
                 }
 
                 #force_delete_by_id_method
 
                 /// Bulk soft-delete builder — UPDATE SET deleted_at = now() (and updated_at if timestamps enabled).
                 /// Shadows the trait's `delete_many` which would perform a hard DELETE.
-                pub fn delete_many() -> modo_db::EntityUpdateMany<#mod_name::Entity> {
-                    use modo_db::sea_orm::EntityTrait as _;
-                    use modo_db::sea_orm::QueryFilter;
-                    use modo_db::sea_orm::ColumnTrait;
-                    let now = modo_db::chrono::Utc::now();
-                    let mut update = modo_db::EntityUpdateMany::new(#mod_name::Entity::update_many());
+                pub fn delete_many() -> modo_db::__internal::EntityUpdateMany<#mod_name::Entity> {
+                    use modo_db::__internal::sea_orm::EntityTrait as _;
+                    use modo_db::__internal::sea_orm::QueryFilter;
+                    use modo_db::__internal::sea_orm::ColumnTrait;
+                    let now = modo_db::__internal::chrono::Utc::now();
+                    let mut update = modo_db::__internal::EntityUpdateMany::new(#mod_name::Entity::update_many());
                     update = update.filter(#mod_name::Column::DeletedAt.is_null());
                     update = update.col_expr(
                         #mod_name::Column::DeletedAt,
-                        modo_db::sea_orm::sea_query::Expr::value(Some(now)),
+                        modo_db::__internal::sea_orm::sea_query::Expr::value(Some(now)),
                     );
                     #delete_many_updated_at
                     update
                 }
 
                 /// Bulk hard-delete builder (bypasses soft-delete).
-                pub fn force_delete_many() -> modo_db::EntityDeleteMany<#mod_name::Entity> {
-                    use modo_db::sea_orm::EntityTrait as _;
-                    modo_db::EntityDeleteMany::new(#mod_name::Entity::delete_many())
+                pub fn force_delete_many() -> modo_db::__internal::EntityDeleteMany<#mod_name::Entity> {
+                    use modo_db::__internal::sea_orm::EntityTrait as _;
+                    modo_db::__internal::EntityDeleteMany::new(#mod_name::Entity::delete_many())
                 }
             }
         }
@@ -1240,10 +1243,10 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
         // 2. SeaORM module
         pub mod #mod_name {
-            use modo_db::sea_orm;
-            use modo_db::sea_orm::entity::prelude::*;
+            use modo_db::__internal::sea_orm;
+            use modo_db::__internal::sea_orm::entity::prelude::*;
 
-            #[derive(Clone, Debug, PartialEq, Eq, modo_db::sea_orm::DeriveEntityModel)]
+            #[derive(Clone, Debug, PartialEq, Eq, modo_db::__internal::sea_orm::DeriveEntityModel)]
             #[sea_orm(table_name = #table_name)]
             pub struct Model {
                 #(#model_fields)*
@@ -1275,8 +1278,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         #soft_delete_methods
 
         // 9. Entity registration
-        modo_db::inventory::submit! {
-            modo_db::EntityRegistration {
+        modo_db::__internal::inventory::submit! {
+            modo_db::__internal::EntityRegistration {
                 table_name: #table_name,
                 group: #group_str,
                 register_fn: |sb| sb.register(#mod_name::Entity),
@@ -1322,26 +1325,26 @@ fn gen_string_pk_methods(
 ) -> (TokenStream, TokenStream) {
     let find_body = if struct_attrs.soft_delete {
         quote! {
-            use modo_db::sea_orm::EntityTrait;
-            use modo_db::sea_orm::QueryFilter;
-            use modo_db::sea_orm::ColumnTrait;
+            use modo_db::__internal::sea_orm::EntityTrait;
+            use modo_db::__internal::sea_orm::QueryFilter;
+            use modo_db::__internal::sea_orm::ColumnTrait;
             #mod_name::Entity::find_by_id(id)
                 .filter(#mod_name::Column::DeletedAt.is_null())
                 .one(db)
                 .await
-                .map_err(modo_db::db_err_to_error)?
+                .map_err(modo_db::__internal::db_err_to_error)?
                 .map(Self::from)
-                .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))
+                .ok_or_else(|| modo_db::__internal::modo::Error::from(modo_db::__internal::modo::HttpError::NotFound))
         }
     } else {
         quote! {
-            use modo_db::sea_orm::EntityTrait;
+            use modo_db::__internal::sea_orm::EntityTrait;
             #mod_name::Entity::find_by_id(id)
                 .one(db)
                 .await
-                .map_err(modo_db::db_err_to_error)?
+                .map_err(modo_db::__internal::db_err_to_error)?
                 .map(Self::from)
-                .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))
+                .ok_or_else(|| modo_db::__internal::modo::Error::from(modo_db::__internal::modo::HttpError::NotFound))
         }
     };
 
@@ -1354,13 +1357,13 @@ fn gen_string_pk_methods(
 
     (
         quote! {
-            pub async fn find_by_id(id: &str, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Self, modo::Error> {
+            pub async fn find_by_id(id: &str, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<Self, modo_db::__internal::modo::Error> {
                 #find_body
             }
         },
         quote! {
             /// Delete a record by ID. Loads the record first to invoke `before_delete`.
-            pub async fn delete_by_id(id: &str, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+            pub async fn delete_by_id(id: &str, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
                 #delete_body
             }
         },
@@ -1376,26 +1379,26 @@ fn gen_typed_pk_methods(
 ) -> (TokenStream, TokenStream) {
     let find_body = if struct_attrs.soft_delete {
         quote! {
-            use modo_db::sea_orm::EntityTrait;
-            use modo_db::sea_orm::QueryFilter;
-            use modo_db::sea_orm::ColumnTrait;
+            use modo_db::__internal::sea_orm::EntityTrait;
+            use modo_db::__internal::sea_orm::QueryFilter;
+            use modo_db::__internal::sea_orm::ColumnTrait;
             #mod_name::Entity::find_by_id(id)
                 .filter(#mod_name::Column::DeletedAt.is_null())
                 .one(db)
                 .await
-                .map_err(modo_db::db_err_to_error)?
+                .map_err(modo_db::__internal::db_err_to_error)?
                 .map(Self::from)
-                .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))
+                .ok_or_else(|| modo_db::__internal::modo::Error::from(modo_db::__internal::modo::HttpError::NotFound))
         }
     } else {
         quote! {
-            use modo_db::sea_orm::EntityTrait;
+            use modo_db::__internal::sea_orm::EntityTrait;
             #mod_name::Entity::find_by_id(id)
                 .one(db)
                 .await
-                .map_err(modo_db::db_err_to_error)?
+                .map_err(modo_db::__internal::db_err_to_error)?
                 .map(Self::from)
-                .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))
+                .ok_or_else(|| modo_db::__internal::modo::Error::from(modo_db::__internal::modo::HttpError::NotFound))
         }
     };
 
@@ -1407,12 +1410,12 @@ fn gen_typed_pk_methods(
 
     (
         quote! {
-            pub async fn find_by_id(id: #pk_ty, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Self, modo::Error> {
+            pub async fn find_by_id(id: #pk_ty, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<Self, modo_db::__internal::modo::Error> {
                 #find_body
             }
         },
         quote! {
-            pub async fn delete_by_id(id: #pk_ty, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+            pub async fn delete_by_id(id: #pk_ty, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
                 #delete_body
             }
         },
@@ -1429,26 +1432,26 @@ fn gen_composite_pk_methods(
 
     let find_body = if struct_attrs.soft_delete {
         quote! {
-            use modo_db::sea_orm::EntityTrait;
-            use modo_db::sea_orm::QueryFilter;
-            use modo_db::sea_orm::ColumnTrait;
+            use modo_db::__internal::sea_orm::EntityTrait;
+            use modo_db::__internal::sea_orm::QueryFilter;
+            use modo_db::__internal::sea_orm::ColumnTrait;
             #mod_name::Entity::find_by_id(id.clone())
                 .filter(#mod_name::Column::DeletedAt.is_null())
                 .one(db)
                 .await
-                .map_err(modo_db::db_err_to_error)?
+                .map_err(modo_db::__internal::db_err_to_error)?
                 .map(Self::from)
-                .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))
+                .ok_or_else(|| modo_db::__internal::modo::Error::from(modo_db::__internal::modo::HttpError::NotFound))
         }
     } else {
         quote! {
-            use modo_db::sea_orm::EntityTrait;
+            use modo_db::__internal::sea_orm::EntityTrait;
             #mod_name::Entity::find_by_id(id.clone())
                 .one(db)
                 .await
-                .map_err(modo_db::db_err_to_error)?
+                .map_err(modo_db::__internal::db_err_to_error)?
                 .map(Self::from)
-                .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))
+                .ok_or_else(|| modo_db::__internal::modo::Error::from(modo_db::__internal::modo::HttpError::NotFound))
         }
     };
 
@@ -1460,12 +1463,12 @@ fn gen_composite_pk_methods(
 
     (
         quote! {
-            pub async fn find_by_id(id: (#(#pk_types),*), db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<Self, modo::Error> {
+            pub async fn find_by_id(id: (#(#pk_types),*), db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<Self, modo_db::__internal::modo::Error> {
                 #find_body
             }
         },
         quote! {
-            pub async fn delete_by_id(id: (#(#pk_types),*), db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
+            pub async fn delete_by_id(id: (#(#pk_types),*), db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
                 #delete_body
             }
         },
@@ -1484,14 +1487,14 @@ fn gen_force_delete_by_id(pk_fields: &[&ParsedField], mod_name: &Ident) -> Token
                 ///
                 /// Loads the record first to invoke the `before_delete` hook.
                 /// Finds any record regardless of soft-delete status.
-                pub async fn force_delete_by_id(id: &str, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
-                    use modo_db::sea_orm::EntityTrait;
+                pub async fn force_delete_by_id(id: &str, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
+                    use modo_db::__internal::sea_orm::EntityTrait;
                     let record = #mod_name::Entity::find_by_id(id)
                         .one(db)
                         .await
-                        .map_err(modo_db::db_err_to_error)?
+                        .map_err(modo_db::__internal::db_err_to_error)?
                         .map(Self::from)
-                        .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))?;
+                        .ok_or_else(|| modo_db::__internal::modo::Error::from(modo_db::__internal::modo::HttpError::NotFound))?;
                     record.force_delete(db).await
                 }
             }
@@ -1501,14 +1504,14 @@ fn gen_force_delete_by_id(pk_fields: &[&ParsedField], mod_name: &Ident) -> Token
                 ///
                 /// Loads the record first to invoke the `before_delete` hook.
                 /// Finds any record regardless of soft-delete status.
-                pub async fn force_delete_by_id(id: #pk_ty, db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
-                    use modo_db::sea_orm::EntityTrait;
+                pub async fn force_delete_by_id(id: #pk_ty, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
+                    use modo_db::__internal::sea_orm::EntityTrait;
                     let record = #mod_name::Entity::find_by_id(id)
                         .one(db)
                         .await
-                        .map_err(modo_db::db_err_to_error)?
+                        .map_err(modo_db::__internal::db_err_to_error)?
                         .map(Self::from)
-                        .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))?;
+                        .ok_or_else(|| modo_db::__internal::modo::Error::from(modo_db::__internal::modo::HttpError::NotFound))?;
                     record.force_delete(db).await
                 }
             }
@@ -1520,14 +1523,14 @@ fn gen_force_delete_by_id(pk_fields: &[&ParsedField], mod_name: &Ident) -> Token
             ///
             /// Loads the record first to invoke the `before_delete` hook.
             /// Finds any record regardless of soft-delete status.
-            pub async fn force_delete_by_id(id: (#(#pk_types),*), db: &impl modo_db::sea_orm::ConnectionTrait) -> Result<(), modo::Error> {
-                use modo_db::sea_orm::EntityTrait;
+            pub async fn force_delete_by_id(id: (#(#pk_types),*), db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
+                use modo_db::__internal::sea_orm::EntityTrait;
                 let record = #mod_name::Entity::find_by_id(id)
                     .one(db)
                     .await
-                    .map_err(modo_db::db_err_to_error)?
+                    .map_err(modo_db::__internal::db_err_to_error)?
                     .map(Self::from)
-                    .ok_or_else(|| modo::Error::from(modo::HttpError::NotFound))?;
+                    .ok_or_else(|| modo_db::__internal::modo::Error::from(modo_db::__internal::modo::HttpError::NotFound))?;
                 record.force_delete(db).await
             }
         }
