@@ -10,6 +10,7 @@ description = "Procedural macros for modo-jobs"
 proc-macro = true
 
 [dependencies]
-syn = { version = "2", features = ["full", "extra-traits"] }
-quote = "1"
+cron = "0.15"
 proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "extra-traits"] }
