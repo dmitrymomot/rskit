@@ -2,6 +2,7 @@ pub mod config;
 pub mod context;
 pub mod engine;
 pub mod error;
+#[cfg(feature = "csrf")]
 pub(crate) mod escape;
 pub mod middleware;
 pub mod registry;
@@ -15,6 +16,7 @@ pub use config::TemplateConfig;
 pub use context::TemplateContext;
 pub use engine::{TemplateEngine, engine};
 pub use error::TemplateError;
+#[cfg(feature = "csrf")]
 pub(crate) use escape::html_escape;
 pub use middleware::TemplateContextLayer;
 pub use registry::{TemplateFilterEntry, TemplateFunctionEntry};
