@@ -178,7 +178,7 @@ async fn start_inner(
     }
 
     let cancel = CancellationToken::new();
-    let queue = JobQueue::new(db, config.max_payload_bytes);
+    let queue = JobQueue::new(db, config.max_payload_bytes, config.max_queue_depth);
     let worker_id = ulid::Ulid::new().to_string();
     let mut semaphores = Vec::new();
 

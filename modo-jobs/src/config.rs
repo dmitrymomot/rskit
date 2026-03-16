@@ -20,6 +20,9 @@ pub struct JobsConfig {
     pub cleanup: CleanupConfig,
     /// Optional maximum payload size in bytes. `None` means unlimited.
     pub max_payload_bytes: Option<usize>,
+    /// Optional maximum number of pending jobs per queue. `None` means unlimited.
+    /// When set and the queue is full, `enqueue()` returns a 503 error.
+    pub max_queue_depth: Option<usize>,
 }
 
 impl JobsConfig {
@@ -53,6 +56,9 @@ impl JobsConfig {
         if self.cleanup.interval_secs == 0 {
             return Err(Error::internal("cleanup.interval_secs must be > 0"));
         }
+        if self.max_queue_depth == Some(0) {
+            return Err(Error::internal("max_queue_depth must be > 0 if set"));
+        }
         Ok(())
     }
 }
@@ -70,6 +76,7 @@ impl Default for JobsConfig {
             }],
             cleanup: CleanupConfig::default(),
             max_payload_bytes: None,
+            max_queue_depth: None,
         }
     }
 }
@@ -141,5 +148,30 @@ mod tests {
         "#;
         let config: JobsConfig = serde_yaml_ng::from_str(yaml).unwrap();
         assert_eq!(config.stale_reaper_interval_secs, 120);
+    }
+
+    #[test]
+    fn default_config_has_no_queue_depth_limit() {
+        let config = JobsConfig::default();
+        assert!(config.max_queue_depth.is_none());
+    }
+
+    #[test]
+    fn config_deserializes_max_queue_depth() {
+        let yaml = r#"
+            max_queue_depth: 1000
+        "#;
+        let config: JobsConfig = serde_yaml_ng::from_str(yaml).unwrap();
+        assert_eq!(config.max_queue_depth, Some(1000));
+    }
+
+    #[test]
+    fn validate_rejects_zero_max_queue_depth() {
+        let config = JobsConfig {
+            max_queue_depth: Some(0),
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("max_queue_depth"));
     }
 }
