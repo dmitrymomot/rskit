@@ -37,7 +37,7 @@ mod migration;
 ///
 /// - `primary_key` — marks the field as the primary key.
 /// - `auto_increment = true|false` — overrides SeaORM's default auto-increment behaviour.
-/// - `auto = "ulid"|"nanoid"` — generates a ULID or NanoID before insert; only valid
+/// - `auto = "ulid"|"short_id"` — generates a ULID or short ID before insert; only valid
 ///   on `primary_key` fields.
 /// - `unique` — adds a unique constraint.
 /// - `indexed` — creates a single-column index.

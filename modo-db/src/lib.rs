@@ -65,7 +65,7 @@ pub use extractor::Db;
 #[doc(hidden)]
 pub use helpers::{do_delete, do_insert, do_update};
 pub use hooks::DefaultHooks;
-pub use id::{generate_nanoid, generate_ulid};
+pub use id::{generate_short_id, generate_ulid};
 pub use migration::MigrationRegistration;
 pub use pagination::{
     CursorParams, CursorResult, PageParams, PageResult, paginate, paginate_cursor,
@@ -91,7 +91,7 @@ pub mod __internal {
     pub use crate::error::db_err_to_error;
     pub use crate::helpers::{do_delete, do_insert, do_update};
     pub use crate::hooks::DefaultHooks;
-    pub use crate::id::{generate_nanoid, generate_ulid};
+    pub use crate::id::{generate_short_id, generate_ulid};
     pub use crate::query::{EntityDeleteMany, EntityQuery, EntityUpdateMany};
     pub use crate::record::Record;
 

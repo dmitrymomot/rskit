@@ -24,7 +24,7 @@ sea-orm = { version = "2.0.0-rc", features = [
 inventory.workspace = true
 serde = { version = "1", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
-nanoid = "0.4"
+rand = "0.9"
 tracing = "0.1"
 thiserror = "2"
 

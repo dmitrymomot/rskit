@@ -297,8 +297,8 @@ fn parse_field_attrs(field: &mut syn::Field) -> Result<FieldAttrs> {
                 "auto" => {
                     let lit: LitStr = meta.value()?.parse()?;
                     let val = lit.value();
-                    if val != "ulid" && val != "nanoid" {
-                        return Err(meta.error("auto must be \"ulid\" or \"nanoid\""));
+                    if val != "ulid" && val != "short_id" {
+                        return Err(meta.error("auto must be \"ulid\" or \"short_id\""));
                     }
                     attrs.auto = Some(val);
                 }
@@ -342,7 +342,7 @@ fn default_expr_for_field(f: &ParsedField) -> TokenStream {
     if let Some(ref strategy) = f.attrs.auto {
         return match strategy.as_str() {
             "ulid" => quote! { modo_db::__internal::generate_ulid() },
-            "nanoid" => quote! { modo_db::__internal::generate_nanoid() },
+            "short_id" => quote! { modo_db::__internal::generate_short_id() },
             _ => unreachable!(),
         };
     }
@@ -839,7 +839,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
                 let name = &f.name;
                 let gen_call = match strategy.as_str() {
                     "ulid" => quote! { modo_db::__internal::generate_ulid() },
-                    "nanoid" => quote! { modo_db::__internal::generate_nanoid() },
+                    "short_id" => quote! { modo_db::__internal::generate_short_id() },
                     _ => unreachable!(),
                 };
                 quote! {
