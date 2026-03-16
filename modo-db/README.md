@@ -92,7 +92,8 @@ The macro creates:
 
 - Your struct `Todo` with `Clone, Debug, Serialize, Default, From<todo::Model>`
 - A submodule `todo` containing `Model`, `ActiveModel`, `Entity`, `Column`, and `Relation`
-- An `impl Record for Todo` with CRUD operations and query builders
+- Inherent CRUD methods (`insert`, `update`, `delete`, `find_by_id`, `delete_by_id`) on the struct
+- An `impl Record for Todo` with query builder methods (`find_all`, `query`, `update_many`, `delete_many`)
 
 Because `Default` is generated, you can use struct-update syntax to set only the fields you care about:
 
@@ -132,7 +133,7 @@ let todo = Todo {
 
 ### CRUD operations
 
-The `Record` trait is implemented for every entity struct. All CRUD methods are inherent methods on your struct, so you call them directly without importing extra traits.
+All CRUD methods are inherent methods generated on your struct. The `Record` trait methods (`find_all`, `query`, `update_many`, `delete_many`) require `use modo_db::Record` in scope.
 
 #### Insert
 
@@ -331,7 +332,7 @@ impl User {
 
     pub fn before_delete(&self) -> Result<(), modo::Error> {
         if self.email.ends_with("@example.com") {
-            return Err(modo::Error::bad_request("cannot delete example accounts"));
+            return Err(modo::HttpError::BadRequest.with_message("cannot delete example accounts"));
         }
         Ok(())
     }
@@ -439,7 +440,7 @@ let n = Item::force_delete_many()
 
 ### Partial updates
 
-When you need to update only specific fields without fetching the full record first, use `into_active_model` and the raw SeaORM API:
+To update only specific fields using the raw SeaORM active model API, use `into_active_model` to obtain a PK-only active model and set only the fields you need:
 
 ```rust,ignore
 use sea_orm::{ActiveModelTrait, Set};
@@ -532,7 +533,7 @@ let short_id = modo_db::generate_short_id(); // 13-char Base36, time-sortable
 | `DatabaseConfig`                      | Connection URL + pool size, deserialised from YAML                                |
 | `DbPool`                              | Newtype over `sea_orm::DatabaseConnection`; implements `GracefulShutdown`         |
 | `Db`                                  | Axum extractor that pulls `DbPool` from app state                                 |
-| `Record`                              | Trait implemented by every entity struct; provides CRUD and query builder methods |
+| `Record`                              | Trait providing `find_all`, `query`, `update_many`, `delete_many`; implemented for every entity struct |
 | `DefaultHooks`                        | Blanket trait providing no-op `before_save`, `after_save`, `before_delete`        |
 | `EntityQuery<T, E>`                   | Chainable query builder with automatic domain-type conversion                     |
 | `EntityUpdateMany<E>`                 | Chainable bulk UPDATE builder                                                     |

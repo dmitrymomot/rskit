@@ -21,8 +21,7 @@ mod migration;
 /// # Struct-level options (applied as a second `#[entity(...)]` attribute)
 ///
 /// - `timestamps` — injects `created_at` and `updated_at` columns of type
-///   `DateTime<Utc>`; both are set automatically via `Record::apply_auto_fields`
-///   on every insert and update.
+///   `DateTime<Utc>`; both are set automatically on every insert and update.
 /// - `soft_delete` — injects a `deleted_at: Option<DateTime<Utc>>` column. The
 ///   `delete` method becomes a soft-delete (sets `deleted_at`). Extra methods
 ///   generated on the struct: `with_deleted`, `only_deleted`, `restore`,
@@ -53,11 +52,12 @@ mod migration;
 ///   `Restrict`, `NoAction`, `SetDefault`.
 /// - `on_update = "<action>"` — FK action on update. Same values as `on_delete`.
 /// - `has_many` — declares a `HasMany` relation (field is excluded from the model).
+///   **Requires** `target = "<Entity>"`.
 /// - `has_one` — declares a `HasOne` relation (field is excluded from the model).
 /// - `via = "<JoinEntity>"` — used with `has_many` / `has_one` for many-to-many
 ///   relations through a join entity.
-/// - `target = "<Entity>"` — overrides the inferred target entity name for `has_many`
-///   / `has_one` relations when the field name does not match the entity name.
+/// - `target = "<Entity>"` — required for `has_many`; overrides the inferred target
+///   entity name for `has_one` when the field name does not match the entity name.
 /// - `renamed_from = "<old_name>"` — records a rename hint as a column comment.
 ///
 /// # Example

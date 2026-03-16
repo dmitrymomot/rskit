@@ -41,9 +41,9 @@ async fn send_email(payload: EmailPayload) -> HandlerResult<()> {
 For a function `send_email`, the macro emits:
 
 - `SendEmailJob` — a unit struct implementing `modo_jobs::JobHandler`
-- `SendEmailJob::JOB_NAME: &'static str` — the snake_case function name (`"send_email"`)
-- `SendEmailJob::enqueue(&queue, &payload) -> Result<JobId, Error>` — enqueue for immediate execution
-- `SendEmailJob::enqueue_at(&queue, &payload, run_at) -> Result<JobId, Error>` — schedule for a future time
+- `SendEmailJob::JOB_NAME: &str` — the snake_case function name (`"send_email"`)
+- `SendEmailJob::enqueue(&queue, &payload) -> Result<JobId, modo::Error>` — enqueue for immediate execution
+- `SendEmailJob::enqueue_at(&queue, &payload, run_at) -> Result<JobId, modo::Error>` — schedule for a future time
 - An `inventory` registration for automatic discovery at startup
 
 Cron jobs omit `enqueue` and `enqueue_at`.
@@ -62,7 +62,8 @@ Cron jobs omit `enqueue` and `enqueue_at`.
 
 - Must be `async`.
 - At most one plain parameter is the **payload** (deserialized from JSON via `serde`).
-- Use `Service<T>` to inject a registered service and `Db` to inject the database pool.
+- Use `Service<T>` to inject a registered service.
+- Use `Db(db): Db` to inject the database pool.
 - Return type must be `Result<(), modo::Error>` or a compatible alias such as `HandlerResult<()>`.
 
 ### Enqueueing from an HTTP Handler
@@ -141,6 +142,29 @@ async fn main(
 `JobsHandle` implements `modo::GracefulShutdown` and drains in-flight jobs on
 shutdown. `JobQueue` is available as an axum extractor once `JobsHandle` is
 registered as a managed service.
+
+## Configuration
+
+`modo_jobs::JobsConfig` (used in `config.jobs`) controls queue behaviour:
+
+```yaml
+jobs:
+  poll_interval_secs: 1         # how often each queue polls for new jobs
+  stale_threshold_secs: 600     # jobs locked longer than this are re-queued
+  stale_reaper_interval_secs: 60
+  drain_timeout_secs: 30        # graceful-shutdown drain window
+  max_payload_bytes: ~          # null = unlimited
+  max_queue_depth: ~            # null = unlimited; 503 when exceeded
+  queues:
+    - name: default
+      concurrency: 4
+    - name: emails
+      concurrency: 2
+  cleanup:
+    interval_secs: 3600
+    retention_secs: 86400
+    statuses: [completed, dead, cancelled]
+```
 
 ## Key Types (from `modo-jobs`)
 

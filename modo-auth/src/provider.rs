@@ -7,6 +7,7 @@ use std::sync::Arc;
 /// Implement this on your own type (e.g., a repository struct that holds a DB pool)
 /// and register it via `app.service(UserProviderService::new(your_impl))`.
 pub trait UserProvider: Send + Sync + 'static {
+    /// The user type returned by this provider.
     type User: Clone + Send + Sync + 'static;
 
     /// Look up a user by their ID (as stored in the session).

@@ -17,17 +17,18 @@ use crate::pagination::{
 /// A chainable query builder that wraps SeaORM's `Select<E>` and
 /// auto-converts results to the domain type `T` via `From<E::Model>`.
 ///
-/// Construct one from `E::find()` or `E::find_by_id(pk)` and then chain
-/// filter/order/limit/offset calls before executing with a terminal method.
+/// The primary entry point is the `Record::query()` method generated on every
+/// entity struct. `EntityQuery::new` is available for advanced cases where you
+/// need to wrap a raw `Select<E>`.
 ///
 /// # Example
 ///
 /// ```rust,ignore
-/// let todos: Vec<Todo> = EntityQuery::new(TodoEntity::find())
-///     .filter(todo::Column::Done.eq(false))
+/// let todos: Vec<Todo> = Todo::query()
+///     .filter(todo::Column::Completed.eq(false))
 ///     .order_by_asc(todo::Column::CreatedAt)
 ///     .limit(10)
-///     .all(&db)
+///     .all(&*db)
 ///     .await?;
 /// ```
 pub struct EntityQuery<T, E: EntityTrait> {
@@ -348,13 +349,17 @@ where
 /// A chainable wrapper around SeaORM's `UpdateMany<E>` that returns
 /// `rows_affected` on execution.
 ///
+/// Typically obtained via `Record::update_many()` on an entity struct.
+///
 /// # Example
 ///
 /// ```rust,ignore
-/// let affected = EntityUpdateMany::new(TodoEntity::update_many())
-///     .filter(todo::Column::Done.eq(false))
-///     .col_expr(todo::Column::Done, Expr::value(true))
-///     .exec(&db)
+/// use sea_orm::sea_query::Expr;
+///
+/// let affected = Todo::update_many()
+///     .filter(todo::Column::Completed.eq(false))
+///     .col_expr(todo::Column::Completed, Expr::value(true))
+///     .exec(&*db)
 ///     .await?;
 /// ```
 pub struct EntityUpdateMany<E: EntityTrait> {
@@ -402,12 +407,16 @@ impl<E: EntityTrait> EntityUpdateMany<E> {
 /// A chainable wrapper around SeaORM's `DeleteMany<E>` that returns
 /// `rows_affected` on execution.
 ///
+/// Typically obtained via `Record::delete_many()` on an entity struct.
+/// For soft-delete entities, `delete_many()` performs a soft delete (UPDATE SET
+/// `deleted_at`). Use `force_delete_many()` to permanently remove rows.
+///
 /// # Example
 ///
 /// ```rust,ignore
-/// let deleted = EntityDeleteMany::new(TodoEntity::delete_many())
-///     .filter(todo::Column::Done.eq(true))
-///     .exec(&db)
+/// let deleted = Todo::delete_many()
+///     .filter(todo::Column::Completed.eq(true))
+///     .exec(&*db)
 ///     .await?;
 /// ```
 pub struct EntityDeleteMany<E: EntityTrait> {

@@ -6,12 +6,11 @@ use tracing::info;
 
 /// Synchronize database schema from all registered entities, then run all pending migrations.
 ///
-/// 1. Bootstrap `_modo_migrations` table (must exist before schema sync)
-/// 2. Collect all `EntityRegistration` entries from `inventory`
-/// 3. Register framework entities first, then user entities
-/// 4. Run `SchemaBuilder::sync()` (addition-only, topo-sorted by SeaORM)
-/// 5. Execute extra SQL (composite indices, partial unique indices)
-/// 6. Run pending migrations (version-ordered, tracked in `_modo_migrations`)
+/// 1. Bootstrap `_modo_migrations` table (must exist before schema sync).
+/// 2. Collect all `EntityRegistration` entries from `inventory` (framework entities first,
+///    then user entities), and run `SchemaBuilder::sync()` (addition-only).
+/// 3. Execute extra SQL registered with each entity (composite indices, partial unique indices).
+/// 4. Run pending migrations in ascending `version` order, tracked in `_modo_migrations`.
 pub async fn sync_and_migrate(db: &DbPool) -> Result<(), modo::Error> {
     do_sync(db, None).await
 }

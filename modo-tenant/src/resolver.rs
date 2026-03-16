@@ -83,7 +83,10 @@ impl<T: Clone + Send + Sync + 'static> TenantResolverService<T> {
         }
     }
 
-    /// Delegates to the underlying resolver and returns the resolved tenant.
+    /// Delegates to the underlying resolver.
+    ///
+    /// Returns `Ok(Some(T))` when a tenant is found, `Ok(None)` when no tenant
+    /// matches, and `Err` on resolution failure.
     pub async fn resolve(&self, parts: &Parts) -> Result<Option<T>, modo::Error> {
         self.inner.resolve(parts).await
     }

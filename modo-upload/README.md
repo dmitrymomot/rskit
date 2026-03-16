@@ -63,11 +63,11 @@ Call `.validate()` when `T` also derives `modo::Validate`.
 ```rust
 use std::sync::Arc;
 use modo::{Json, JsonResult, Service};
-use modo_upload::{FileStorage, MultipartForm};
+use modo_upload::{FileStorageDyn, MultipartForm};
 
 #[modo::handler(POST, "/profile")]
 async fn update_profile(
-    storage: Service<Arc<dyn FileStorage>>,
+    storage: Service<Arc<dyn FileStorageDyn>>,
     form: MultipartForm<ProfileForm>,
 ) -> JsonResult<serde_json::Value> {
     form.validate()?;
@@ -82,7 +82,7 @@ async fn update_profile(
 ### Register the storage backend
 
 Build the storage backend from `UploadConfig` and register it as a service so
-extractors can resolve it via `Service<Arc<dyn FileStorage>>`.
+extractors can resolve it via `Service<Arc<dyn FileStorageDyn>>`.
 
 ```rust
 use modo_upload::{UploadConfig, storage};
@@ -154,15 +154,16 @@ upload:
 
 ## Key Types
 
-| Type                             | Description                                                      |
-| -------------------------------- | ---------------------------------------------------------------- |
-| `FromMultipart` (trait + derive) | Parse `multipart/form-data` into a struct                        |
-| `MultipartForm<T>`               | Axum extractor; wraps a `FromMultipart` type                     |
-| `UploadedFile`                   | In-memory file with name, content-type, and bytes                |
-| `BufferedUpload`                 | Chunked in-memory file; provides `AsyncRead` via `into_reader()` |
-| `FileStorage`                    | Trait for storing, deleting, and querying files                  |
-| `StoredFile`                     | Result of a store operation: `path` and `size`                   |
-| `UploadConfig`                   | Deserialized upload configuration                                |
-| `StorageBackend`                 | Enum: `Local` or `S3`                                            |
-| `storage()`                      | Factory function: `&UploadConfig` → `Arc<dyn FileStorage>`       |
-| `kb` / `mb` / `gb`               | Size helper functions (return `usize` bytes)                     |
+| Type                             | Description                                                              |
+| -------------------------------- | ------------------------------------------------------------------------ |
+| `FromMultipart` (trait + derive) | Parse `multipart/form-data` into a struct                                |
+| `MultipartForm<T>`               | Axum extractor; wraps a `FromMultipart` type                             |
+| `UploadedFile`                   | In-memory file with name, content-type, and bytes                        |
+| `BufferedUpload`                 | In-memory file; provides a chunked reader via `into_reader()`            |
+| `FileStorage`                    | Async trait for storing, deleting, and querying files                    |
+| `FileStorageDyn`                 | Object-safe companion; use `Arc<dyn FileStorageDyn>` in handlers         |
+| `StoredFile`                     | Result of a store operation: `path` and `size`                           |
+| `UploadConfig`                   | Deserialized upload configuration                                        |
+| `StorageBackend`                 | Enum: `Local` or `S3`                                                    |
+| `storage()`                      | Factory function: `&UploadConfig` → `Arc<dyn FileStorageDyn>`            |
+| `kb` / `mb` / `gb`               | Size helper functions (return `usize` bytes)                             |

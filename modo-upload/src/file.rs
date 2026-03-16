@@ -31,11 +31,12 @@ impl FieldMeta {
     }
 }
 
-/// An uploaded file fully buffered in memory.
+/// An uploaded file fully buffered in memory as a single contiguous buffer.
 ///
 /// `UploadedFile` holds all bytes in a single [`bytes::Bytes`] buffer after the
-/// multipart field has been drained.  For large files that should be streamed
-/// rather than fully buffered, use [`BufferedUpload`](crate::BufferedUpload) instead.
+/// multipart field has been drained.  Use [`BufferedUpload`](crate::BufferedUpload)
+/// instead when you need to write to storage via a chunked reader API
+/// (e.g. [`BufferedUpload::into_reader`](crate::BufferedUpload::into_reader)).
 pub struct UploadedFile {
     name: String,
     file_name: String,

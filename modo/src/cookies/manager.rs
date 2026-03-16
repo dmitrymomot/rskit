@@ -8,8 +8,11 @@ use cookie::time::Duration;
 
 /// High-level cookie extractor with plain, signed, and encrypted cookie support.
 ///
-/// Uses global `CookieConfig` for defaults. Each setter accepts optional
-/// `CookieOptions` overrides.
+/// Uses the global [`CookieConfig`] for attribute defaults. Override per-cookie
+/// attributes with [`CookieOptions`] via the `_with` variants.
+///
+/// Return a `CookieManager` from a handler (or include it in a response tuple)
+/// to flush all pending `Set-Cookie` headers to the client.
 pub struct CookieManager {
     config: CookieConfig,
     jar: axum_extra::extract::CookieJar,
@@ -56,40 +59,48 @@ where
 impl CookieManager {
     // --- Plain cookies ---
 
+    /// Read a plain (unsigned, unencrypted) cookie by name.
     pub fn get(&self, name: &str) -> Option<String> {
         self.jar.get(name).map(|c| c.value().to_string())
     }
 
+    /// Set a plain cookie using global config defaults.
     pub fn set(&mut self, name: &str, value: &str) {
         let opts = CookieOptions::from_config(&self.config);
         self.set_with(name, value, opts);
     }
 
+    /// Set a plain cookie with explicit [`CookieOptions`].
     pub fn set_with(&mut self, name: &str, value: &str, opts: CookieOptions) {
         let cookie = build_cookie(name, value, &opts);
         self.jar = self.jar.clone().add(cookie);
     }
 
+    /// Remove a plain cookie by name.
     pub fn remove(&mut self, name: &str) {
         self.jar = self.jar.clone().remove(Cookie::from(name.to_string()));
     }
 
     // --- Signed cookies (HMAC, tamper-proof but readable) ---
 
+    /// Read and verify an HMAC-signed cookie. Returns `None` if missing or tampered.
     pub fn get_signed(&self, name: &str) -> Option<String> {
         self.signed_jar.get(name).map(|c| c.value().to_string())
     }
 
+    /// Set a signed cookie using global config defaults.
     pub fn set_signed(&mut self, name: &str, value: &str) {
         let opts = CookieOptions::from_config(&self.config);
         self.set_signed_with(name, value, opts);
     }
 
+    /// Set a signed cookie with explicit [`CookieOptions`].
     pub fn set_signed_with(&mut self, name: &str, value: &str, opts: CookieOptions) {
         let cookie = build_cookie(name, value, &opts);
         self.signed_jar = self.signed_jar.clone().add(cookie);
     }
 
+    /// Remove a signed cookie by name.
     pub fn remove_signed(&mut self, name: &str) {
         self.signed_jar = self
             .signed_jar
@@ -99,20 +110,24 @@ impl CookieManager {
 
     // --- Encrypted cookies (requires secret) ---
 
+    /// Read and decrypt an encrypted cookie. Returns `None` if missing or decryption fails.
     pub fn get_encrypted(&self, name: &str) -> Option<String> {
         self.private_jar.get(name).map(|c| c.value().to_string())
     }
 
+    /// Set an encrypted cookie using global config defaults.
     pub fn set_encrypted(&mut self, name: &str, value: &str) {
         let opts = CookieOptions::from_config(&self.config);
         self.set_encrypted_with(name, value, opts);
     }
 
+    /// Set an encrypted cookie with explicit [`CookieOptions`].
     pub fn set_encrypted_with(&mut self, name: &str, value: &str, opts: CookieOptions) {
         let cookie = build_cookie(name, value, &opts);
         self.private_jar = self.private_jar.clone().add(cookie);
     }
 
+    /// Remove an encrypted cookie by name.
     pub fn remove_encrypted(&mut self, name: &str) {
         self.private_jar = self
             .private_jar
@@ -122,10 +137,13 @@ impl CookieManager {
 
     // --- JSON convenience ---
 
+    /// Read a plain cookie and deserialize its value as JSON.
+    /// Returns `None` if the cookie is missing or deserialization fails.
     pub fn get_json<T: serde::de::DeserializeOwned>(&self, name: &str) -> Option<T> {
         deserialize_cookie_json(self.get(name), name)
     }
 
+    /// Serialize `value` as JSON and set it as a plain cookie.
     pub fn set_json<T: serde::Serialize>(
         &mut self,
         name: &str,
@@ -136,10 +154,13 @@ impl CookieManager {
         Ok(())
     }
 
+    /// Read a signed cookie and deserialize its value as JSON.
+    /// Returns `None` if the cookie is missing, tampered, or deserialization fails.
     pub fn get_signed_json<T: serde::de::DeserializeOwned>(&self, name: &str) -> Option<T> {
         deserialize_cookie_json(self.get_signed(name), name)
     }
 
+    /// Serialize `value` as JSON and set it as a signed cookie.
     pub fn set_signed_json<T: serde::Serialize>(
         &mut self,
         name: &str,
@@ -150,10 +171,13 @@ impl CookieManager {
         Ok(())
     }
 
+    /// Read an encrypted cookie and deserialize its value as JSON.
+    /// Returns `None` if the cookie is missing, decryption fails, or deserialization fails.
     pub fn get_encrypted_json<T: serde::de::DeserializeOwned>(&self, name: &str) -> Option<T> {
         deserialize_cookie_json(self.get_encrypted(name), name)
     }
 
+    /// Serialize `value` as JSON and set it as an encrypted cookie.
     pub fn set_encrypted_json<T: serde::Serialize>(
         &mut self,
         name: &str,

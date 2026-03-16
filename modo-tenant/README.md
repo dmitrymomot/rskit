@@ -63,12 +63,14 @@ use modo_tenant::TenantResolverService;
 async fn main(
     app: modo::app::AppBuilder,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let resolver = TenantResolverService::new(DbTenantResolver { /* … */ });
+    let resolver = TenantResolverService::new(DbTenantResolver { /* ... */ });
     app.service(resolver).run().await
 }
 ```
 
 ### Extract in handlers
+
+`Tenant<T>` implements `Deref<Target = T>`, so tenant fields are accessible directly. `OptionalTenant<T>` implements `Deref<Target = Option<T>>`.
 
 ```rust
 use modo_tenant::{Tenant, OptionalTenant};
@@ -78,7 +80,8 @@ async fn dashboard(tenant: Tenant<MyTenant>) {
     println!("tenant: {}", tenant.name);
 }
 
-// Optional — never rejects; inner value is None when no tenant matches.
+// Optional — never rejects on missing tenant; inner value is None when no
+// tenant matches. Returns HTTP 500 if the resolver fails or is not registered.
 async fn home(tenant: OptionalTenant<MyTenant>) {
     if let Some(t) = &*tenant {
         println!("tenant: {}", t.name);
@@ -100,7 +103,10 @@ let resolver = SubdomainResolver::new("myapp.com", |slug| async move {
 let svc = TenantResolverService::new(resolver);
 ```
 
-`acme.myapp.com` → slug `"acme"`. The bare domain and `www` subdomain return `None`. Port suffixes are stripped automatically.
+`acme.myapp.com` → slug `"acme"`. The bare domain and reserved subdomains
+(`"www"`, `"api"`, `"admin"`, `"mail"`) return `None`. Port suffixes are
+stripped automatically. Use `SubdomainResolver::with_reserved` to override
+the reserved list.
 
 #### HTTP header
 
@@ -145,13 +151,13 @@ use modo_tenant::{TenantContextLayer, TenantResolverService};
 async fn main(
     app: modo::app::AppBuilder,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let svc = TenantResolverService::new(DbTenantResolver { /* … */ });
+    let svc = TenantResolverService::new(DbTenantResolver { /* ... */ });
     let layer = TenantContextLayer::new(svc);
     app.layer(layer).run().await
 }
 ```
 
-Inside templates the tenant is accessible as `{{ tenant.name }}`. Resolution errors are logged at `WARN` level and the request continues without a tenant in context.
+Inside templates the tenant is accessible as `{{ tenant.name }}`. Resolution errors are logged at `WARN` level and the request continues without a tenant in context (fail-open). If your application requires tenant context for security-sensitive rendering, use the `Tenant<T>` extractor instead — it returns HTTP 500 on resolver errors.
 
 ## Key Types
 
@@ -160,7 +166,7 @@ Inside templates the tenant is accessible as `{{ tenant.name }}`. Resolution err
 | `HasTenantId` | Trait a tenant type must implement to expose its unique ID. |
 | `TenantResolver` | Trait for pluggable tenant resolution strategies. |
 | `TenantResolverService<T>` | Type-erased, cheaply cloneable wrapper registered via `AppBuilder::service()`. |
-| `Tenant<T>` | Extractor that requires a tenant; returns HTTP 404 when absent. |
+| `Tenant<T>` | Extractor that requires a tenant; returns HTTP 404 when absent, HTTP 500 on resolver error. |
 | `OptionalTenant<T>` | Extractor that yields `Option<T>`; never rejects on missing tenant. |
 | `SubdomainResolver<T, F>` | Resolves tenant from the subdomain of the `Host` header. |
 | `HeaderResolver<T, F>` | Resolves tenant from a named HTTP header. |

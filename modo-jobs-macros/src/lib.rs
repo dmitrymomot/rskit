@@ -11,7 +11,7 @@ mod job;
 ///
 /// The macro generates:
 /// - A unit struct `<FnName>Job` (PascalCase) that implements `JobHandler`.
-/// - A `pub const JOB_NAME: &'static str` on the struct holding the snake_case function name.
+/// - A `pub const JOB_NAME: &str` on the struct holding the snake_case function name.
 /// - `enqueue` and `enqueue_at` async methods on the struct (omitted for cron jobs).
 /// - An `inventory` registration so the job is discovered automatically at startup.
 ///
@@ -30,7 +30,7 @@ mod job;
 /// - The function must be `async`.
 /// - At most one plain parameter is treated as the **payload** (deserialized from JSON).
 /// - Use `Service<T>` as the parameter type to inject a registered service.
-/// - Use `Db` as the parameter type to inject the database pool.
+/// - Use `Db(db): Db` as the parameter pattern to inject the database pool.
 /// - Return type must be `Result<(), modo::Error>` (or any compatible alias, e.g. `HandlerResult<()>`).
 ///
 /// # Examples
@@ -59,7 +59,7 @@ mod job;
 /// ```
 ///
 /// The generated `SendWelcomeJob::enqueue` and `SendWelcomeJob::enqueue_at`
-/// methods accept a `&JobQueue` and optional payload, returning `Result<JobId, Error>`:
+/// methods accept a `&JobQueue` and optional payload, returning `Result<JobId, modo::Error>`:
 ///
 /// ```rust,ignore
 /// let job_id = SendWelcomeJob::enqueue(&queue, &payload).await?;

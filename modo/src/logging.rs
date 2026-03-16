@@ -7,12 +7,15 @@ use tower_http::trace::{
 };
 use tracing::{Level, Span};
 
+/// Tower-HTTP `MakeSpan` implementation that attaches `method`, `uri`, `version`,
+/// and `request_id` fields to every HTTP request span.
 #[derive(Clone, Debug)]
 pub struct ModoMakeSpan {
     level: Level,
 }
 
 impl ModoMakeSpan {
+    /// Create a new span factory at the given tracing level.
     pub fn new(level: Level) -> Self {
         Self { level }
     }
@@ -49,6 +52,8 @@ impl<B> MakeSpan<B> for ModoMakeSpan {
     }
 }
 
+/// Parse a log-level string (`"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`) into a
+/// [`tracing::Level`]. Returns `INFO` for unknown values.
 pub fn parse_level(s: &str) -> Level {
     match s.to_lowercase().as_str() {
         "trace" => Level::TRACE,
@@ -60,6 +65,7 @@ pub fn parse_level(s: &str) -> Level {
     }
 }
 
+/// Build a [`TraceLayer`] configured with [`ModoMakeSpan`] at the given level.
 pub fn trace_layer(
     level: Level,
 ) -> TraceLayer<
