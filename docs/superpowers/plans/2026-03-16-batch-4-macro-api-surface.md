@@ -1,6 +1,8 @@
 # Batch 4: Macro & API Surface — Implementation Plan
 
-> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status: COMPLETE** — All 2 issues (INC-18, INC-13) implemented and merged in PR `fix/review-issues`.
+
+> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Standardize all proc-macro crate re-exports behind `#[doc(hidden)] pub mod __internal` modules and eliminate duplicate ULID-based ID boilerplate via a shared `ulid_id!` macro.
 
@@ -59,8 +61,8 @@ Below is the complete catalog of paths each proc-macro crate emits in generated 
 
 ### Step 1.2: Create `modo::__internal` module
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo/src/lib.rs`
-- [ ] Add a `#[doc(hidden)] pub mod __internal` inline module that re-exports everything `modo-macros` generated code needs.
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo/src/lib.rs`
+- [x] Add a `#[doc(hidden)] pub mod __internal` inline module that re-exports everything `modo-macros` generated code needs.
 
 ```rust
 // In modo/src/lib.rs, add after existing re-exports:
@@ -119,8 +121,8 @@ pub mod __internal {
 
 ### Step 1.3: Create `modo_db::__internal` module
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-db/src/lib.rs`
-- [ ] Add a `#[doc(hidden)] pub mod __internal` inline module.
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-db/src/lib.rs`
+- [x] Add a `#[doc(hidden)] pub mod __internal` inline module.
 
 ```rust
 // In modo-db/src/lib.rs, add after existing re-exports:
@@ -152,8 +154,8 @@ pub mod __internal {
 
 ### Step 1.4: Create `modo_jobs::__internal` module
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-jobs/src/lib.rs`
-- [ ] Add a `#[doc(hidden)] pub mod __internal` inline module.
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-jobs/src/lib.rs`
+- [x] Add a `#[doc(hidden)] pub mod __internal` inline module.
 
 ```rust
 // In modo-jobs/src/lib.rs, add after existing re-exports:
@@ -177,12 +179,12 @@ pub mod __internal {
 
 ### Step 1.5: Verify `modo_upload::__internal` is complete
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-upload/src/lib.rs`
-- [ ] The existing `__internal` module already has `mime_matches`, `async_trait`, and `axum`. Verify no additions needed. The `FromMultipart` macro also references `modo::HttpError`, `modo::Error`, and `modo::validate::validation_error` but those go through the `modo` crate directly (the `modo-upload-macros` crate's user always has `modo` as a dependency), so they are fine. **No changes needed for modo-upload.**
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-upload/src/lib.rs`
+- [x] The existing `__internal` module already has `mime_matches`, `async_trait`, and `axum`. Verify no additions needed. The `FromMultipart` macro also references `modo::HttpError`, `modo::Error`, and `modo::validate::validation_error` but those go through the `modo` crate directly (the `modo-upload-macros` crate's user always has `modo` as a dependency), so they are fine. **No changes needed for modo-upload.**
 
 ### Step 1.6: Update `modo-macros` generated code to use `__internal` paths
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/handler.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/handler.rs`
 
 Replace every `modo::` path in generated code with `modo::__internal::` or `::modo::__internal::`:
 
@@ -197,7 +199,7 @@ Replace every `modo::` path in generated code with `modo::__internal::` or `::mo
 | `modo::router::RouteRegistration` | `modo::__internal::RouteRegistration` |
 | `modo::router::MiddlewareFn` | `modo::__internal::MiddlewareFn` |
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/middleware.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/middleware.rs`
 
 | Old path | New path |
 |---|---|
@@ -207,7 +209,7 @@ Replace every `modo::` path in generated code with `modo::__internal::` or `::mo
 | `modo::router::MiddlewareFn` | `modo::__internal::MiddlewareFn` |
 | `modo::router::RouterMiddlewareFn` | `modo::__internal::RouterMiddlewareFn` |
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/module.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/module.rs`
 
 | Old path | New path |
 |---|---|
@@ -215,7 +217,7 @@ Replace every `modo::` path in generated code with `modo::__internal::` or `::mo
 | `modo::inventory::submit!` | `modo::__internal::inventory::submit!` |
 | `modo::router::ModuleRegistration` | `modo::__internal::ModuleRegistration` |
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/error_handler.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/error_handler.rs`
 
 | Old path | New path |
 |---|---|
@@ -223,7 +225,7 @@ Replace every `modo::` path in generated code with `modo::__internal::` or `::mo
 | `modo::error::ErrorHandlerRegistration` | `modo::__internal::ErrorHandlerRegistration` |
 | `modo::error::ErrorHandlerFn` | `modo::__internal::ErrorHandlerFn` |
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/view.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/view.rs`
 
 | Old path | New path |
 |---|---|
@@ -238,7 +240,7 @@ Replace every `modo::` path in generated code with `modo::__internal::` or `::mo
 | `::modo::templates::TemplateContext` | `::modo::__internal::TemplateContext` |
 | `::modo::templates::TemplateError` | `::modo::__internal::TemplateError` |
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/template_function.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/template_function.rs`
 
 | Old path | New path |
 |---|---|
@@ -246,7 +248,7 @@ Replace every `modo::` path in generated code with `modo::__internal::` or `::mo
 | `::modo::templates::TemplateFunctionEntry` | `::modo::__internal::TemplateFunctionEntry` |
 | `::modo::minijinja::Environment` | `::modo::__internal::minijinja::Environment` |
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/template_filter.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/template_filter.rs`
 
 | Old path | New path |
 |---|---|
@@ -254,7 +256,7 @@ Replace every `modo::` path in generated code with `modo::__internal::` or `::mo
 | `::modo::templates::TemplateFilterEntry` | `::modo::__internal::TemplateFilterEntry` |
 | `::modo::minijinja::Environment` | `::modo::__internal::minijinja::Environment` |
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/main_macro.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/main_macro.rs`
 
 | Old path | New path |
 |---|---|
@@ -266,7 +268,7 @@ Replace every `modo::` path in generated code with `modo::__internal::` or `::mo
 | `modo::tracing::error!` | `modo::__internal::tracing::error!` |
 | `::modo::rust_embed` | `::modo::__internal::rust_embed` |
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/sanitize.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/sanitize.rs`
 
 | Old path | New path |
 |---|---|
@@ -275,7 +277,7 @@ Replace every `modo::` path in generated code with `modo::__internal::` or `::mo
 | `modo::sanitize::{trim,lowercase,...}` | `modo::__internal::{trim,lowercase,...}` |
 | `modo::inventory::submit!` | `modo::__internal::inventory::submit!` |
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/validate.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-macros/src/validate.rs`
 
 | Old path | New path |
 |---|---|
@@ -286,7 +288,7 @@ Replace every `modo::` path in generated code with `modo::__internal::` or `::mo
 
 ### Step 1.7: Update `modo-db-macros` generated code to use `__internal` paths
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-db-macros/src/entity.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-db-macros/src/entity.rs`
 
 All `modo_db::` path references in quote blocks become `modo_db::__internal::`:
 
@@ -310,7 +312,7 @@ All `modo_db::` path references in quote blocks become `modo_db::__internal::`:
 | `modo::Error` | `modo_db::__internal::modo::Error` |
 | `modo::HttpError::NotFound` | `modo_db::__internal::modo::HttpError::NotFound` |
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-db-macros/src/migration.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-db-macros/src/migration.rs`
 
 | Old path | New path |
 |---|---|
@@ -319,7 +321,7 @@ All `modo_db::` path references in quote blocks become `modo_db::__internal::`:
 
 ### Step 1.8: Update `modo-jobs-macros` generated code to use `__internal` paths
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-jobs-macros/src/job.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-jobs-macros/src/job.rs`
 
 | Old path | New path |
 |---|---|
@@ -336,14 +338,14 @@ All `modo_db::` path references in quote blocks become `modo_db::__internal::`:
 
 ### Step 1.9: Keep existing top-level re-exports
 
-- [ ] **Important:** Do NOT remove the existing top-level re-exports from `modo/src/lib.rs`, `modo-db/src/lib.rs`, or `modo-jobs/src/lib.rs`. Those are part of the public API (e.g., `pub use axum;`, `pub use sea_orm;`, `pub use inventory;`). The `__internal` module is strictly for proc-macro generated code. The top-level re-exports stay for user code.
+- [x] **Important:** Do NOT remove the existing top-level re-exports from `modo/src/lib.rs`, `modo-db/src/lib.rs`, or `modo-jobs/src/lib.rs`. Those are part of the public API (e.g., `pub use axum;`, `pub use sea_orm;`, `pub use inventory;`). The `__internal` module is strictly for proc-macro generated code. The top-level re-exports stay for user code.
 
 ### Step 1.10: Build and test
 
-- [ ] Run `cargo check` to verify all paths resolve correctly.
-- [ ] Run `cargo test --workspace` to verify no regressions.
-- [ ] Run `just check` (fmt + lint + test).
-- [ ] Build at least one example to confirm handler/module/view macros still work:
+- [x] Run `cargo check` to verify all paths resolve correctly.
+- [x] Run `cargo test --workspace` to verify no regressions.
+- [x] Run `just check` (fmt + lint + test).
+- [x] Build at least one example to confirm handler/module/view macros still work:
   ```bash
   cargo build -p todo-api
   cargo build -p templates
@@ -351,7 +353,7 @@ All `modo_db::` path references in quote blocks become `modo_db::__internal::`:
 
 ### Step 1.11: Commit
 
-- [ ] Commit with message: `refactor: standardize proc-macro re-exports behind __internal modules (INC-18)`
+- [x] Commit with message: `refactor: standardize proc-macro re-exports behind __internal modules (INC-18)`
 
 ---
 
@@ -359,7 +361,7 @@ All `modo_db::` path references in quote blocks become `modo_db::__internal::`:
 
 ### Step 2.1: Define the `ulid_id!` macro
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo/src/ulid_id.rs` (new file)
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo/src/ulid_id.rs` (new file)
 
 ```rust
 /// Generates a ULID-based newtype ID with standard trait implementations.
@@ -457,13 +459,13 @@ macro_rules! ulid_id {
 
 ### Step 2.2: Re-export the macro from `modo/src/lib.rs`
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo/src/lib.rs`
-- [ ] Add `mod ulid_id;` (before the public API re-exports section, with the other module declarations).
-- [ ] The `#[macro_export]` attribute automatically makes it available as `modo::ulid_id!`. No additional `pub use` needed.
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo/src/lib.rs`
+- [x] Add `mod ulid_id;` (before the public API re-exports section, with the other module declarations).
+- [x] The `#[macro_export]` attribute automatically makes it available as `modo::ulid_id!`. No additional `pub use` needed.
 
 ### Step 2.3: Replace `SessionId` in `modo-session`
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-session/src/types.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-session/src/types.rs`
 
 **Before:** Lines 1-52 contain a hand-rolled `SessionId` with:
 - `#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]`
@@ -495,7 +497,7 @@ The macro generates everything `SessionId` had, plus `From<String>`, `From<&str>
 
 ### Step 2.4: Replace `JobId` in `modo-jobs`
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-jobs/src/types.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-jobs/src/types.rs`
 
 **Before:** Lines 1-56 contain a hand-rolled `JobId` with:
 - `#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]`
@@ -518,7 +520,7 @@ modo::ulid_id!(JobId);
 
 **Note:** `JobId` previously derived `Default` (which called `Self(String::default())` producing an empty string). The macro's `Default` calls `new()`, generating a ULID. Check all usages to confirm no code relies on `JobId::default()` producing an empty string.
 
-- [ ] Verify no code relies on `JobId::default()` producing an empty string:
+- [x] Verify no code relies on `JobId::default()` producing an empty string:
   ```bash
   # Search for JobId::default() usage
   grep -rn "JobId::default\|Default.*JobId" modo-jobs/src/ --include="*.rs"
@@ -528,9 +530,9 @@ The macro also adds `from_raw()` which `JobId` didn't have before — this is ha
 
 ### Step 2.5: Verify `modo-session` depends on `modo`
 
-- [ ] Check that `modo-session/Cargo.toml` has `modo` as a dependency. The `ulid_id!` macro uses `$crate::ulid::Ulid` and `$crate::serde::*`, which resolve to `modo::ulid` and `modo::serde` — so this only works when invoked from crates that depend on `modo`.
+- [x] Check that `modo-session/Cargo.toml` has `modo` as a dependency. The `ulid_id!` macro uses `$crate::ulid::Ulid` and `$crate::serde::*`, which resolve to `modo::ulid` and `modo::serde` — so this only works when invoked from crates that depend on `modo`.
 
-- [ ] **If `modo-session` does NOT depend on `modo`:** Instead of using `modo::ulid_id!`, we have two options:
+- [x] **If `modo-session` does NOT depend on `modo`:** Instead of using `modo::ulid_id!`, we have two options:
   1. Add `modo` as a dependency to `modo-session`
   2. Keep `SessionId` hand-rolled
 
@@ -541,28 +543,28 @@ The macro also adds `from_raw()` which `JobId` didn't have before — this is ha
 
   If `modo-session` depends on `modo` already, proceed. If not, add it.
 
-- [ ] Similarly verify `modo-jobs` depends on `modo` (it does — confirmed from `modo-jobs/src/lib.rs` which has `pub use modo;`).
+- [x] Similarly verify `modo-jobs` depends on `modo` (it does — confirmed from `modo-jobs/src/lib.rs` which has `pub use modo;`).
 
 ### Step 2.6: Update imports in `modo-session` and `modo-jobs`
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-session/src/types.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-session/src/types.rs`
   - Remove the now-unused `use ulid::Ulid;` import (if present — actually the current code uses `ulid::Ulid::new()` inline).
   - Remove `use std::str::FromStr;` from the top **only if** it's no longer needed by other types in the file. `SessionToken` doesn't use `FromStr`, so it can likely stay removed. But `FromStr` is used by the test `s.parse()`. Since the macro generates the `FromStr` impl, the test just needs `use std::str::FromStr;` in scope — the `use` at file top covers this.
   - Actually, keep the existing `use` imports since `SessionToken` and `SessionData` in the same file need `Serialize`, `Deserialize`, `fmt`, etc. Only the `SessionId`-specific code is replaced.
 
-- [ ] **File:** `/Users/dmitrymomot/Dev/modo/modo-jobs/src/types.rs`
+- [x] **File:** `/Users/dmitrymomot/Dev/modo/modo-jobs/src/types.rs`
   - The remaining `JobState` enum still needs `serde::{Deserialize, Serialize}`, `std::fmt`, and `std::str::FromStr`. Keep those imports.
   - Remove `use ulid::Ulid;` if present (the current code uses `ulid::Ulid::new()` inline, so there's nothing to remove).
 
 ### Step 2.7: Build and test
 
-- [ ] Run `cargo check` to verify the macro expands correctly.
-- [ ] Run `cargo test --workspace` to verify `SessionId` and `JobId` tests pass.
-- [ ] Run `just check` (fmt + lint + test).
+- [x] Run `cargo check` to verify the macro expands correctly.
+- [x] Run `cargo test --workspace` to verify `SessionId` and `JobId` tests pass.
+- [x] Run `just check` (fmt + lint + test).
 
 ### Step 2.8: Commit
 
-- [ ] Commit with message: `refactor: replace hand-rolled ULID ID types with ulid_id! macro (INC-13)`
+- [x] Commit with message: `refactor: replace hand-rolled ULID ID types with ulid_id! macro (INC-13)`
 
 ---
 

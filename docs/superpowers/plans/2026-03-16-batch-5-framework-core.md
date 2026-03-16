@@ -1,6 +1,8 @@
 # Batch 5: Framework Core Features — Implementation Plan
 
-> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status: COMPLETE** — All 7 issues (DES-11, DES-12, DES-14, DES-18, DES-19, DES-21, DES-22) implemented and merged in PR `fix/review-issues`.
+
+> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Resolve 7 framework-core issues in the `modo` crate — error handler validation, redirect flexibility, config directory override, shutdown hook timeout, rate limit cleanup scaling, template error routing, and maintenance path matching.
 
@@ -18,7 +20,7 @@
 
 ### Steps
 
-- [ ] **Test (should fail initially):** Add test to `modo/src/app.rs` (or a new test file `modo/src/app_tests.rs` if `app.rs` has no test module).
+- [x] **Test (should fail initially):** Add test to `modo/src/app.rs` (or a new test file `modo/src/app_tests.rs` if `app.rs` has no test module).
 
 ```rust
 // In modo/src/app.rs, add at the bottom (or in a separate test file):
@@ -38,7 +40,7 @@ mod tests {
 }
 ```
 
-- [ ] **Implement:** In `app.rs` `run()` method, add validation BEFORE the error handler middleware block (before line 628). Insert this code right after the fallback is set (after line 548):
+- [x] **Implement:** In `app.rs` `run()` method, add validation BEFORE the error handler middleware block (before line 628). Insert this code right after the fallback is set (after line 548):
 
 ```rust
 // --- Validate error handler registrations ---
@@ -57,8 +59,8 @@ mod tests {
 }
 ```
 
-- [ ] **Verify:** `cargo test -p modo -- test_error_handler_count_validation`
-- [ ] **Run:** `just check`
+- [x] **Verify:** `cargo test -p modo -- test_error_handler_count_validation`
+- [x] **Run:** `just check`
 
 ---
 
@@ -70,7 +72,7 @@ mod tests {
 
 ### Steps
 
-- [ ] **Test (should fail initially):** Add test module to `modo/src/templates/view_response.rs`:
+- [x] **Test (should fail initially):** Add test module to `modo/src/templates/view_response.rs`:
 
 ```rust
 #[cfg(test)]
@@ -115,7 +117,7 @@ mod tests {
 }
 ```
 
-- [ ] **Implement:** Modify `ViewResponseKind::Redirect` to carry an optional `StatusCode`, and add the new method:
+- [x] **Implement:** Modify `ViewResponseKind::Redirect` to carry an optional `StatusCode`, and add the new method:
 
 Change `ViewResponseKind::Redirect` variant from:
 ```rust
@@ -160,7 +162,7 @@ ViewResponseKind::Redirect { url, status } => match HeaderValue::try_from(&url) 
 },
 ```
 
-- [ ] **Also update `ViewRenderer::redirect()`** in `modo/src/templates/view_renderer.rs` — add a new method:
+- [x] **Also update `ViewRenderer::redirect()`** in `modo/src/templates/view_renderer.rs` — add a new method:
 
 ```rust
 /// Smart redirect with custom status — returns redirect with given status
@@ -178,8 +180,8 @@ pub fn redirect_with_status(
 }
 ```
 
-- [ ] **Verify:** `cargo test -p modo -- test_redirect`
-- [ ] **Run:** `just check`
+- [x] **Verify:** `cargo test -p modo -- test_redirect`
+- [x] **Run:** `just check`
 
 ---
 
@@ -191,7 +193,7 @@ pub fn redirect_with_status(
 
 ### Steps
 
-- [ ] **Test (should fail initially):** Add tests to the existing test module in `modo/src/config.rs`:
+- [x] **Test (should fail initially):** Add tests to the existing test module in `modo/src/config.rs`:
 
 ```rust
 #[test]
@@ -233,7 +235,7 @@ fn test_config_dir_defaults_to_config() {
 }
 ```
 
-- [ ] **Implement:** Change `load_for_env()` in `modo/src/config.rs`:
+- [x] **Implement:** Change `load_for_env()` in `modo/src/config.rs`:
 
 Replace:
 ```rust
@@ -270,8 +272,8 @@ pub fn load_for_env<T: DeserializeOwned>(env: &str) -> Result<T, ConfigError> {
 
 Note: the `config_dir` was previously `&str` — now it becomes `String`. The `ConfigError::DirectoryNotFound` already expects `String` (`path: config_dir.to_string()` was the old code), so `path: config_dir` works directly.
 
-- [ ] **Verify:** `cargo test -p modo -- test_config_dir`
-- [ ] **Run:** `just check`
+- [x] **Verify:** `cargo test -p modo -- test_config_dir`
+- [x] **Run:** `just check`
 
 ---
 
@@ -285,7 +287,7 @@ Note: the `config_dir` was previously `&str` — now it becomes `String`. The `C
 
 ### Steps
 
-- [ ] **Test:** Add test to config tests in `modo/src/config.rs`:
+- [x] **Test:** Add test to config tests in `modo/src/config.rs`:
 
 ```rust
 #[test]
@@ -302,7 +304,7 @@ fn test_server_config_hook_timeout_yaml() {
 }
 ```
 
-- [ ] **Implement — config field:** In `modo/src/config.rs`, add `hook_timeout_secs` to `ServerConfig`:
+- [x] **Implement — config field:** In `modo/src/config.rs`, add `hook_timeout_secs` to `ServerConfig`:
 
 In the struct definition (after `shutdown_timeout_secs`):
 ```rust
@@ -315,7 +317,7 @@ In `Default for ServerConfig` (after `shutdown_timeout_secs: 30`):
 hook_timeout_secs: 5,
 ```
 
-- [ ] **Implement — usage:** In `modo/src/app.rs`, replace the hardcoded `Duration::from_secs(5)` at the shutdown hooks section (around line 807):
+- [x] **Implement — usage:** In `modo/src/app.rs`, replace the hardcoded `Duration::from_secs(5)` at the shutdown hooks section (around line 807):
 
 Replace:
 ```rust
@@ -328,8 +330,8 @@ if tokio::time::timeout(Duration::from_secs(server_config.hook_timeout_secs), ho
 
 Also update the doc comment on `on_shutdown` method (line 199) from "Each hook runs sequentially with a 5-second budget." to "Each hook runs sequentially with a configurable timeout (default 5s, set via `hook_timeout_secs` in ServerConfig)."
 
-- [ ] **Verify:** `cargo test -p modo -- test_server_config_hook_timeout`
-- [ ] **Run:** `just check`
+- [x] **Verify:** `cargo test -p modo -- test_server_config_hook_timeout`
+- [x] **Run:** `just check`
 
 ---
 
@@ -341,7 +343,7 @@ Also update the doc comment on `on_shutdown` method (line 199) from "Each hook r
 
 ### Steps
 
-- [ ] **Test (should fail initially):** Add tests to the existing test module in `modo/src/middleware/rate_limit.rs`:
+- [x] **Test (should fail initially):** Add tests to the existing test module in `modo/src/middleware/rate_limit.rs`:
 
 ```rust
 #[test]
@@ -366,7 +368,7 @@ fn test_cleanup_interval_calculation() {
 }
 ```
 
-- [ ] **Implement:** Add the helper function and update `spawn_cleanup_task` in `modo/src/middleware/rate_limit.rs`:
+- [x] **Implement:** Add the helper function and update `spawn_cleanup_task` in `modo/src/middleware/rate_limit.rs`:
 
 Add the helper (above `spawn_cleanup_task`):
 ```rust
@@ -397,8 +399,8 @@ pub fn spawn_cleanup_task(limiter: Arc<RateLimiterState>) -> tokio::task::JoinHa
 }
 ```
 
-- [ ] **Verify:** `cargo test -p modo -- test_cleanup_interval_calculation`
-- [ ] **Run:** `just check`
+- [x] **Verify:** `cargo test -p modo -- test_cleanup_interval_calculation`
+- [x] **Run:** `just check`
 
 ---
 
@@ -412,7 +414,7 @@ pub fn spawn_cleanup_task(limiter: Arc<RateLimiterState>) -> tokio::task::JoinHa
 
 ### Steps
 
-- [ ] **Test:** Add test to `modo/src/templates/render.rs` (in a new test module):
+- [x] **Test:** Add test to `modo/src/templates/render.rs` (in a new test module):
 
 ```rust
 #[cfg(test)]
@@ -472,7 +474,7 @@ mod tests {
 }
 ```
 
-- [ ] **Implement:** In `modo/src/templates/render.rs`, replace the error branch (lines 109-121):
+- [x] **Implement:** In `modo/src/templates/render.rs`, replace the error branch (lines 109-121):
 
 Replace:
 ```rust
@@ -505,8 +507,8 @@ This works because `Error::into_response()` (defined in `modo/src/error.rs` line
 
 Note: In debug mode, developers lose the detailed HTML error page showing the template error. However, the error message is still in the `Error`'s message field (and logged via `tracing::error!`), and the user's `#[error_handler]` can render its own debug-friendly page using `error.message_str()`. This is the correct trade-off — errors should flow through the error handler consistently.
 
-- [ ] **Verify:** `cargo test -p modo --features templates -- render_error_inserts_error`
-- [ ] **Run:** `just check`
+- [x] **Verify:** `cargo test -p modo --features templates -- render_error_inserts_error`
+- [x] **Run:** `just check`
 
 ---
 
@@ -518,7 +520,7 @@ Note: In debug mode, developers lose the detailed HTML error page showing the te
 
 ### Steps
 
-- [ ] **Test (should fail initially):** Add test module to `modo/src/middleware/maintenance.rs`:
+- [x] **Test (should fail initially):** Add test module to `modo/src/middleware/maintenance.rs`:
 
 ```rust
 #[cfg(test)]
@@ -599,7 +601,7 @@ mod tests {
 }
 ```
 
-- [ ] **Implement:** In `modo/src/middleware/maintenance.rs`, normalize the path before comparison:
+- [x] **Implement:** In `modo/src/middleware/maintenance.rs`, normalize the path before comparison:
 
 Replace:
 ```rust
@@ -624,14 +626,14 @@ Note: We normalize both sides — the request path AND the config paths — so t
 
 Edge case: the root path `/` should not be stripped to empty string. `"/".strip_suffix('/')` returns `Some("")`, which is fine because health paths are never root.
 
-- [ ] **Verify:** `cargo test -p modo -- maintenance`
-- [ ] **Run:** `just check`
+- [x] **Verify:** `cargo test -p modo -- maintenance`
+- [x] **Run:** `just check`
 
 ---
 
 ## Final Checklist
 
-- [ ] All 7 items implemented and tested
-- [ ] `just check` passes (fmt-check + lint + test)
-- [ ] One commit per item (7 commits total)
-- [ ] No changes outside `modo/` crate
+- [x] All 7 items implemented and tested
+- [x] `just check` passes (fmt-check + lint + test)
+- [x] One commit per item (7 commits total)
+- [x] No changes outside `modo/` crate

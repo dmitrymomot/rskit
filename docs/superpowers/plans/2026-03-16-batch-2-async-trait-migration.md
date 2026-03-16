@@ -1,6 +1,8 @@
 # Batch 2: Async Trait Migration — Implementation Plan
 
-> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status: COMPLETE** — All 3 issues (INC-01a, INC-01b, INC-01c) implemented and merged in PR `fix/review-issues`.
+
+> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Remove `async-trait` crate from `modo-email` and `modo-upload` by migrating to native async fn in traits (stabilized in Rust 1.75), using `trait-variant` for object-safe companion traits.
 **Architecture:** Each async trait (`MailTransport`, `FileStorage`) gets `#[trait_variant::make(TraitDyn: Send)]` applied, which auto-generates an object-safe `TraitDyn` companion. All `Arc<dyn Trait>` usages switch to `Arc<dyn TraitDyn>`. The `FromMultipart` trait in `modo-upload` also uses `#[async_trait]` (including generated code from `modo-upload-macros`), so it must be migrated too before the dependency can be dropped.
@@ -20,7 +22,7 @@
 - Modify: `modo-email/src/lib.rs`
 - Modify: `modo-email/tests/integration.rs`
 
-- [ ] **Step 1: Add `trait-variant` dependency to `modo-email/Cargo.toml`**
+- [x] **Step 1: Add `trait-variant` dependency to `modo-email/Cargo.toml`**
 
   In `modo-email/Cargo.toml`, add `trait-variant` to `[dependencies]`:
 
@@ -40,7 +42,7 @@
 
   Note: `async-trait` stays for now — it is removed in Task 3.
 
-- [ ] **Step 2: Migrate `MailTransport` trait definition**
+- [x] **Step 2: Migrate `MailTransport` trait definition**
 
   Replace the entire content of `modo-email/src/transport/trait_def.rs`:
 
@@ -82,7 +84,7 @@
   - Added `#[trait_variant::make(MailTransportDyn: Send)]`
   - Removed `Send` from the base trait bounds (the `MailTransportDyn` companion adds `Send` automatically; keeping `Send` on the base would be redundant since `trait_variant` adds it to the Dyn variant)
 
-- [ ] **Step 3: Update `mod.rs` to re-export `MailTransportDyn`**
+- [x] **Step 3: Update `mod.rs` to re-export `MailTransportDyn`**
 
   In `modo-email/src/transport/mod.rs`, add re-export of `MailTransportDyn`:
 
@@ -96,7 +98,7 @@
   pub use trait_def::{MailTransport, MailTransportDyn};
   ```
 
-- [ ] **Step 4: Update `lib.rs` to re-export `MailTransportDyn`**
+- [x] **Step 4: Update `lib.rs` to re-export `MailTransportDyn`**
 
   In `modo-email/src/lib.rs`, update the transport re-export:
 
@@ -110,7 +112,7 @@
   pub use transport::{MailTransport, MailTransportDyn};
   ```
 
-- [ ] **Step 5: Remove `#[async_trait]` from SMTP impl**
+- [x] **Step 5: Remove `#[async_trait]` from SMTP impl**
 
   In `modo-email/src/transport/smtp.rs`, remove the attribute:
 
@@ -127,7 +129,7 @@
 
   The `async fn send(...)` signature remains unchanged.
 
-- [ ] **Step 6: Remove `#[async_trait]` from Resend impl**
+- [x] **Step 6: Remove `#[async_trait]` from Resend impl**
 
   In `modo-email/src/transport/resend.rs`, remove the attribute:
 
@@ -142,7 +144,7 @@
   impl MailTransport for ResendTransport {
   ```
 
-- [ ] **Step 7: Update `factory.rs` — use `MailTransportDyn` in return type**
+- [x] **Step 7: Update `factory.rs` — use `MailTransportDyn` in return type**
 
   In `modo-email/src/transport/factory.rs`:
 
@@ -168,7 +170,7 @@
 
   The body is unchanged — concrete types that `impl MailTransport` automatically impl `MailTransportDyn` too.
 
-- [ ] **Step 8: Update `mailer.rs` — use `MailTransportDyn` in struct and constructor**
+- [x] **Step 8: Update `mailer.rs` — use `MailTransportDyn` in struct and constructor**
 
   In `modo-email/src/mailer.rs`, update the import, struct field, and constructor:
 
@@ -245,7 +247,7 @@
 
   Also update the import at the top of the test module. The test module uses `use super::*;` which will pick up the new `MailTransportDyn` import.
 
-- [ ] **Step 9: Update `integration.rs` test file**
+- [x] **Step 9: Update `integration.rs` test file**
 
   In `modo-email/tests/integration.rs`:
 
@@ -291,7 +293,7 @@
       let transport: Arc<dyn MailTransportDyn> = Arc::new(FailingTransport);
   ```
 
-- [ ] **Step 10: Verify compilation and tests**
+- [x] **Step 10: Verify compilation and tests**
 
   Run:
   ```bash
@@ -305,7 +307,7 @@
   ```
   Expected: All tests pass.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
   ```
   refactor(email): migrate MailTransport to native async trait
@@ -329,7 +331,7 @@
 - Modify: `modo-upload/src/lib.rs`
 - Modify: `examples/upload/src/handlers.rs`
 
-- [ ] **Step 1: Add `trait-variant` dependency to `modo-upload/Cargo.toml`**
+- [x] **Step 1: Add `trait-variant` dependency to `modo-upload/Cargo.toml`**
 
   In `modo-upload/Cargo.toml`, add `trait-variant` to `[dependencies]`:
 
@@ -351,7 +353,7 @@
 
   Note: `async-trait` stays for now — `FromMultipart` still needs it. Removed in Task 3.
 
-- [ ] **Step 2: Migrate `FileStorage` trait definition**
+- [x] **Step 2: Migrate `FileStorage` trait definition**
 
   Replace the trait definition in `modo-upload/src/storage/types.rs`:
 
@@ -459,7 +461,7 @@
   - Added `#[trait_variant::make(FileStorageDyn: Send)]`
   - Removed `Send` from the base trait bounds
 
-- [ ] **Step 3: Update `storage/mod.rs` to re-export `FileStorageDyn`**
+- [x] **Step 3: Update `storage/mod.rs` to re-export `FileStorageDyn`**
 
   In `modo-upload/src/storage/mod.rs`:
 
@@ -473,7 +475,7 @@
   pub use types::{FileStorage, FileStorageDyn, StoredFile};
   ```
 
-- [ ] **Step 4: Update `lib.rs` to re-export `FileStorageDyn`**
+- [x] **Step 4: Update `lib.rs` to re-export `FileStorageDyn`**
 
   In `modo-upload/src/lib.rs`:
 
@@ -499,7 +501,7 @@
   //!     file_storage: Service<Arc<dyn FileStorageDyn>>,
   ```
 
-- [ ] **Step 5: Remove `#[async_trait]` from LocalStorage impl**
+- [x] **Step 5: Remove `#[async_trait]` from LocalStorage impl**
 
   In `modo-upload/src/storage/local.rs`:
 
@@ -514,7 +516,7 @@
   impl FileStorage for LocalStorage {
   ```
 
-- [ ] **Step 6: Remove `#[async_trait]` from OpendalStorage impl**
+- [x] **Step 6: Remove `#[async_trait]` from OpendalStorage impl**
 
   In `modo-upload/src/storage/opendal.rs`:
 
@@ -529,7 +531,7 @@
   impl FileStorage for OpendalStorage {
   ```
 
-- [ ] **Step 7: Update `storage/factory.rs` — use `FileStorageDyn` in return type**
+- [x] **Step 7: Update `storage/factory.rs` — use `FileStorageDyn` in return type**
 
   In `modo-upload/src/storage/factory.rs`:
 
@@ -553,7 +555,7 @@
   pub fn storage(config: &crate::config::UploadConfig) -> Result<Arc<dyn FileStorageDyn>, modo::Error> {
   ```
 
-- [ ] **Step 8: Update `examples/upload/src/handlers.rs`**
+- [x] **Step 8: Update `examples/upload/src/handlers.rs`**
 
   In `examples/upload/src/handlers.rs`:
 
@@ -579,7 +581,7 @@
   ) -> JsonResult<serde_json::Value> {
   ```
 
-- [ ] **Step 9: Verify compilation and tests**
+- [x] **Step 9: Verify compilation and tests**
 
   Run:
   ```bash
@@ -599,7 +601,7 @@
   ```
   Expected: No errors.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
   ```
   refactor(upload): migrate FileStorage to native async trait
@@ -626,7 +628,7 @@ The `FromMultipart` trait is NOT object-safe (returns `Self`), so it does not ne
 - Modify: `modo-upload/src/lib.rs` (remove `async_trait` re-export from `__internal`)
 - Modify: `modo-upload-macros/src/from_multipart.rs` (remove generated `#[async_trait]`)
 
-- [ ] **Step 1: Migrate `FromMultipart` trait definition**
+- [x] **Step 1: Migrate `FromMultipart` trait definition**
 
   In `modo-upload/src/from_multipart.rs`:
 
@@ -669,7 +671,7 @@ The `FromMultipart` trait is NOT object-safe (returns `Self`), so it does not ne
 
   Note: We use `-> impl Future + Send` instead of `async fn` because `async fn` in traits without `#[async_trait]` returns an opaque `impl Future` that is NOT `Send` by default. The `FromMultipart` trait is used in an axum extractor which requires `Send` futures. Using `-> impl Future<...> + Send` explicitly guarantees `Send`-ness. This is the correct approach for traits where you need `Send` but do NOT need trait objects (no `dyn FromMultipart`).
 
-- [ ] **Step 2: Remove generated `#[async_trait]` from proc macro and wrap body in `async move`**
+- [x] **Step 2: Remove generated `#[async_trait]` from proc macro and wrap body in `async move`**
 
   In `modo-upload-macros/src/from_multipart.rs`, replace the entire `quote!` block (lines 435-460):
 
@@ -739,7 +741,7 @@ The `FromMultipart` trait is NOT object-safe (returns `Self`), so it does not ne
   - Changed `async fn from_multipart(...)  -> Result<Self, modo::Error>` to `fn from_multipart(...) -> impl std::future::Future<Output = Result<Self, modo::Error>> + Send`
   - Wrapped the entire function body in `async move { ... }`
 
-- [ ] **Step 4: Remove `async_trait` from `modo-upload/src/lib.rs` internal re-exports**
+- [x] **Step 4: Remove `async_trait` from `modo-upload/src/lib.rs` internal re-exports**
 
   In `modo-upload/src/lib.rs`:
 
@@ -764,21 +766,21 @@ The `FromMultipart` trait is NOT object-safe (returns `Self`), so it does not ne
   }
   ```
 
-- [ ] **Step 5: Remove `async-trait` from `modo-email/Cargo.toml`**
+- [x] **Step 5: Remove `async-trait` from `modo-email/Cargo.toml`**
 
   In `modo-email/Cargo.toml`, remove the line:
   ```toml
   async-trait = "0.1"
   ```
 
-- [ ] **Step 6: Remove `async-trait` from `modo-upload/Cargo.toml`**
+- [x] **Step 6: Remove `async-trait` from `modo-upload/Cargo.toml`**
 
   In `modo-upload/Cargo.toml`, remove the line:
   ```toml
   async-trait = "0.1"
   ```
 
-- [ ] **Step 7: Grep to verify complete removal**
+- [x] **Step 7: Grep to verify complete removal**
 
   Run the following to confirm no `async-trait` / `async_trait` references remain (other than docs/plans):
 
@@ -792,7 +794,7 @@ The `FromMultipart` trait is NOT object-safe (returns `Self`), so it does not ne
 
   Expected: No matches in any `Cargo.toml`. No matches in any `.rs` file (excluding `target/`, docs, and this plan file).
 
-- [ ] **Step 8: Run all tests**
+- [x] **Step 8: Run all tests**
 
   ```bash
   cargo test -p modo-email
@@ -803,14 +805,14 @@ The `FromMultipart` trait is NOT object-safe (returns `Self`), so it does not ne
   ```
   Expected: All pass.
 
-- [ ] **Step 9: Run full workspace check**
+- [x] **Step 9: Run full workspace check**
 
   ```bash
   just check
   ```
   Expected: fmt, lint, and all tests pass.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
   ```
   refactor: drop async-trait dependency from modo-email and modo-upload

@@ -1,6 +1,8 @@
 # Batch 3: Logging & Observability — Implementation Plan
 
-> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status: COMPLETE** — All 3 issues (INC-04, INC-05, INC-07) implemented and merged in PR `fix/review-issues`.
+
+> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add structured tracing instrumentation to modo-auth and modo-email, and standardize tracing field naming conventions across the entire workspace.
 **Architecture:** Each crate gets targeted `tracing` calls at key decision points (auth resolution, password verification, email rendering/sending) using structured fields. A workspace-wide audit enforces snake_case field naming with no dotted names. The convention is documented in CLAUDE.md.
@@ -12,7 +14,7 @@
 
 ### Step 1: Add `tracing` dependency to modo-auth
 
-- [ ] Edit `modo-auth/Cargo.toml` — add `tracing` to `[dependencies]`:
+- [x] Edit `modo-auth/Cargo.toml` — add `tracing` to `[dependencies]`:
 
 **File:** `/Users/dmitrymomot/Dev/modo/modo-auth/Cargo.toml`
 
@@ -36,7 +38,7 @@ tracing = "0.1"
 
 ### Step 2: Add tracing to `extractor.rs` (auth resolution, cache hits/misses)
 
-- [ ] Edit `/Users/dmitrymomot/Dev/modo/modo-auth/src/extractor.rs`
+- [x] Edit `/Users/dmitrymomot/Dev/modo/modo-auth/src/extractor.rs`
 
 In `resolve_user` function, add tracing for cache hit, user lookup, and auth outcomes.
 
@@ -92,7 +94,7 @@ The `Auth<U>` and `OptionalAuth<U>` `FromRequestParts` impls remain unchanged (t
 
 ### Step 3: Add tracing to `password.rs` (password hashing and verification timing)
 
-- [ ] Edit `/Users/dmitrymomot/Dev/modo/modo-auth/src/password.rs`
+- [x] Edit `/Users/dmitrymomot/Dev/modo/modo-auth/src/password.rs`
 
 Add `use std::time::Instant;` at the top (after the existing imports).
 
@@ -160,7 +162,7 @@ In `verify_password`, wrap with timing and log the outcome:
 
 ### Step 4: Add tracing to `context_layer.rs` (user context injection)
 
-- [ ] Edit `/Users/dmitrymomot/Dev/modo/modo-auth/src/context_layer.rs`
+- [x] Edit `/Users/dmitrymomot/Dev/modo/modo-auth/src/context_layer.rs`
 
 Inside the `call` method of `UserContextMiddleware`, add tracing around the user resolution:
 
@@ -192,9 +194,9 @@ Replace the async block body (lines 99-116) with:
 
 ### Step 5: Verify INC-04
 
-- [ ] Run: `cargo check -p modo-auth --all-features`
-- [ ] Run: `cargo test -p modo-auth`
-- [ ] Run: `cargo test -p modo-auth --features templates`
+- [x] Run: `cargo check -p modo-auth --all-features`
+- [x] Run: `cargo test -p modo-auth`
+- [x] Run: `cargo test -p modo-auth --features templates`
 
 ---
 
@@ -202,7 +204,7 @@ Replace the async block body (lines 99-116) with:
 
 ### Step 1: Add `tracing` dependency to modo-email
 
-- [ ] Edit `modo-email/Cargo.toml` — add `tracing` to `[dependencies]`:
+- [x] Edit `modo-email/Cargo.toml` — add `tracing` to `[dependencies]`:
 
 **File:** `/Users/dmitrymomot/Dev/modo/modo-email/Cargo.toml`
 
@@ -228,7 +230,7 @@ reqwest = { version = "0.12", features = ["json"], optional = true }
 
 ### Step 2: Add tracing to `mailer.rs` (render and send)
 
-- [ ] Edit `/Users/dmitrymomot/Dev/modo/modo-email/src/mailer.rs`
+- [x] Edit `/Users/dmitrymomot/Dev/modo/modo-email/src/mailer.rs`
 
 In the `render` method, add tracing for template resolution and layout rendering:
 
@@ -333,7 +335,7 @@ In the `send` method, add tracing for send attempts and failures:
 
 ### Step 3: Add tracing to `template/filesystem.rs` (template resolution)
 
-- [ ] Edit `/Users/dmitrymomot/Dev/modo/modo-email/src/template/filesystem.rs`
+- [x] Edit `/Users/dmitrymomot/Dev/modo/modo-email/src/template/filesystem.rs`
 
 In the `TemplateProvider::get` implementation for `FilesystemProvider`, add debug tracing:
 
@@ -369,7 +371,7 @@ impl TemplateProvider for FilesystemProvider {
 
 ### Step 4: Add tracing to `template/layout.rs` (layout rendering)
 
-- [ ] Edit `/Users/dmitrymomot/Dev/modo/modo-email/src/template/layout.rs`
+- [x] Edit `/Users/dmitrymomot/Dev/modo/modo-email/src/template/layout.rs`
 
 In the `render` method of `LayoutEngine`, add debug tracing:
 
@@ -399,7 +401,7 @@ In the `render` method of `LayoutEngine`, add debug tracing:
 
 ### Step 5: Add tracing to transport implementations
 
-- [ ] Edit `/Users/dmitrymomot/Dev/modo/modo-email/src/transport/smtp.rs`
+- [x] Edit `/Users/dmitrymomot/Dev/modo/modo-email/src/transport/smtp.rs`
 
 In the `MailTransport::send` impl for `SmtpTransport`, add tracing around the send call. Replace the final `self.mailer.send(email)...` block:
 
@@ -417,7 +419,7 @@ In the `MailTransport::send` impl for `SmtpTransport`, add tracing around the se
         Ok(())
 ```
 
-- [ ] Edit `/Users/dmitrymomot/Dev/modo/modo-email/src/transport/resend.rs`
+- [x] Edit `/Users/dmitrymomot/Dev/modo/modo-email/src/transport/resend.rs`
 
 In the `MailTransport::send` impl for `ResendTransport`, add tracing. Replace the response check block:
 
@@ -450,9 +452,9 @@ In the `MailTransport::send` impl for `ResendTransport`, add tracing. Replace th
 
 ### Step 6: Verify INC-05
 
-- [ ] Run: `cargo check -p modo-email --all-features`
-- [ ] Run: `cargo test -p modo-email`
-- [ ] Run: `cargo test -p modo-email --features resend`
+- [x] Run: `cargo check -p modo-email --all-features`
+- [x] Run: `cargo test -p modo-email`
+- [x] Run: `cargo test -p modo-email --features resend`
 
 ---
 
@@ -752,7 +754,7 @@ tracing::warn!(error = %e, "TenantContextLayer: tenant resolution failed");
 
 ### Step 1: Fix `panic.message` dotted field
 
-- [ ] Edit `/Users/dmitrymomot/Dev/modo/modo/src/middleware/catch_panic.rs`
+- [x] Edit `/Users/dmitrymomot/Dev/modo/modo/src/middleware/catch_panic.rs`
 
 **Before:**
 ```rust
@@ -766,7 +768,7 @@ tracing::warn!(error = %e, "TenantContextLayer: tenant resolution failed");
 
 ### Step 2: Fix unstructured `worker_id` in jobs runner
 
-- [ ] Edit `/Users/dmitrymomot/Dev/modo/modo-jobs/src/runner.rs`
+- [x] Edit `/Users/dmitrymomot/Dev/modo/modo-jobs/src/runner.rs`
 
 **Before (line 236):**
 ```rust
@@ -780,7 +782,7 @@ tracing::warn!(error = %e, "TenantContextLayer: tenant resolution failed");
 
 ### Step 3: Fix unstructured error in tenant context layer
 
-- [ ] Edit `/Users/dmitrymomot/Dev/modo/modo-tenant/src/context_layer.rs`
+- [x] Edit `/Users/dmitrymomot/Dev/modo/modo-tenant/src/context_layer.rs`
 
 **Before (line 120):**
 ```rust
@@ -794,7 +796,7 @@ tracing::warn!(error = %e, "TenantContextLayer: tenant resolution failed");
 
 ### Step 4: Document tracing field naming convention in CLAUDE.md
 
-- [ ] Edit `/Users/dmitrymomot/Dev/modo/CLAUDE.md`
+- [x] Edit `/Users/dmitrymomot/Dev/modo/CLAUDE.md`
 
 Add the following entry at the end of the `## Conventions` section (after the `modo-db update` line):
 
@@ -804,7 +806,7 @@ Add the following entry at the end of the `## Conventions` section (after the `m
 
 ### Step 5: Verify INC-07
 
-- [ ] Run: `just check`
+- [x] Run: `just check`
 
 ---
 

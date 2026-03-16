@@ -1,6 +1,8 @@
 # Batch 1: Quick Consistency Wins + Last Security — Implementation Plan
 
-> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status: COMPLETE** — All 8 issues implemented and merged in PR `fix/review-issues`.
+
+> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Fix 8 issues covering one remaining security gap (magic-bytes upload validation), five consistency improvements (error casing, tracing imports, missing-config fail-fast, workspace deps, rename), one doc clarification, and one unsafe test replacement.
 **Architecture:** All changes are isolated per-crate. SEC-08 adds `infer` crate to `modo-upload` for file content sniffing in the existing `UploadValidator`. INC-15 is a mechanical rename across `modo` and its test files. INC-12 lifts three dependency specs to the workspace root. DES-36 replaces unsafe `env::set_var` with `temp_env` scoped helpers.
@@ -15,14 +17,14 @@
 - Modify: `modo-upload/src/validate.rs`
 - Test: inline `#[cfg(test)]` in `modo-upload/src/validate.rs`
 
-- [ ] **Step 1: Add `infer` dependency**
+- [x] **Step 1: Add `infer` dependency**
   In `modo-upload/Cargo.toml`, add `infer` to `[dependencies]`:
   ```toml
   infer = "0.16"
   ```
   Add it after the `futures-util` line.
 
-- [ ] **Step 2: Write failing tests**
+- [x] **Step 2: Write failing tests**
   In `modo-upload/src/validate.rs`, add these tests to the existing `#[cfg(test)] mod tests` block:
   ```rust
   #[test]
@@ -83,11 +85,11 @@
   }
   ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
   Run: `cargo test -p modo-upload -- accept_rejects_mismatched_magic_bytes`
   Expected: FAIL (currently `accept()` only checks header, not bytes)
 
-- [ ] **Step 4: Write implementation**
+- [x] **Step 4: Write implementation**
   In `modo-upload/src/validate.rs`, modify the `accept` method and add a helper function.
 
   Replace the existing `accept` method:
@@ -148,14 +150,14 @@
   }
   ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
   Run: `cargo test -p modo-upload -- accept_rejects_mismatched_magic_bytes accept_passes_matching_magic_bytes accept_passes_matching_wildcard accept_rejects_wildcard_when_bytes_mismatch accept_skips_magic_bytes_for_unknown accept_skips_magic_bytes_for_empty accept_star_star_skips`
   Expected: ALL PASS
 
-- [ ] **Step 6: Run full check**
+- [x] **Step 6: Run full check**
   Run: `just check`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
   ```bash
   git add modo-upload/Cargo.toml modo-upload/src/validate.rs
   git commit -m "fix(upload): verify content type against file magic bytes (SEC-08)"
@@ -208,64 +210,64 @@
 
 The following messages are the ones that need lowercasing. Each line shows: file, current string, replacement string.
 
-- [ ] **Step 1: Fix `modo/src/request_id.rs`**
+- [x] **Step 1: Fix `modo/src/request_id.rs`**
   ```
   "RequestId not found in request extensions"
   → "request ID not found in request extensions"
   ```
 
-- [ ] **Step 2: Fix `modo/src/i18n/extractor.rs`**
+- [x] **Step 2: Fix `modo/src/i18n/extractor.rs`**
   ```
   "TranslationStore not registered in services"
   → "translation store not registered in services"
   ```
 
-- [ ] **Step 3: Fix `modo/src/middleware/rate_limit.rs`**
+- [x] **Step 3: Fix `modo/src/middleware/rate_limit.rs`**
   ```
   "RateLimitInfo not found in request extensions"
   → "rate limit info not found in request extensions"
   ```
 
-- [ ] **Step 4: Fix `modo/src/middleware/client_ip.rs`**
+- [x] **Step 4: Fix `modo/src/middleware/client_ip.rs`**
   ```
   "ClientIp not found in request extensions"
   → "client IP not found in request extensions"
   ```
 
-- [ ] **Step 5: Fix `modo/src/middleware/maintenance.rs`**
+- [x] **Step 5: Fix `modo/src/middleware/maintenance.rs`**
   ```
   "Service temporarily unavailable"
   → "service temporarily unavailable"
   ```
 
-- [ ] **Step 6: Fix `modo/src/extractor/service.rs`**
+- [x] **Step 6: Fix `modo/src/extractor/service.rs`**
   ```
   "Service not registered: {}"
   → "service not registered: {}"
   ```
 
-- [ ] **Step 7: Fix `modo/src/templates/view_renderer.rs`**
+- [x] **Step 7: Fix `modo/src/templates/view_renderer.rs`**
   ```
   "ViewRenderer requires TemplateEngine. \
    Register it as a service or add Extension(Arc::new(engine))."
   → "view renderer requires TemplateEngine — register it as a service or add Extension(Arc::new(engine))"
   ```
 
-- [ ] **Step 8: Fix `modo/src/sse/event.rs`**
+- [x] **Step 8: Fix `modo/src/sse/event.rs`**
   ```
   "SSE JSON serialization failed: {e}"
   → "SSE JSON serialization failed: {e}"
   ```
   (Already lowercase-ish — "SSE" is an acronym. **No change needed.**)
 
-- [ ] **Step 9: Fix `modo/src/sse/sender.rs`**
+- [x] **Step 9: Fix `modo/src/sse/sender.rs`**
   ```
   "SSE client disconnected"
   → "SSE client disconnected"
   ```
   (Already correct — "SSE" is an acronym. **No change needed.**)
 
-- [ ] **Step 10: Fix `modo/src/csrf/middleware.rs`**
+- [x] **Step 10: Fix `modo/src/csrf/middleware.rs`**
   ```
   "Invalid CSRF configuration"
   → "invalid CSRF configuration"
@@ -280,13 +282,13 @@ The following messages are the ones that need lowercasing. Each line shows: file
   ```
   Only `"Invalid CSRF configuration"` and `"Request body too large"` need lowercasing. The "CSRF validation failed: ..." messages start with an acronym — they are already correct.
 
-- [ ] **Step 11: Fix `modo/src/error.rs`**
+- [x] **Step 11: Fix `modo/src/error.rs`**
   ```
   "Template render failed: {e}"
   → "template render failed: {e}"
   ```
 
-- [ ] **Step 12: Fix `modo-auth/src/extractor.rs`**
+- [x] **Step 12: Fix `modo-auth/src/extractor.rs`**
   ```
   "Auth requires session middleware"
   → "auth requires session middleware"
@@ -304,13 +306,13 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "auth requires session middleware"
   ```
 
-- [ ] **Step 13: Fix `modo-session/src/manager.rs`**
+- [x] **Step 13: Fix `modo-session/src/manager.rs`**
   ```
   "SessionManager requires session middleware"
   → "session manager requires session middleware"
   ```
 
-- [ ] **Step 14: Fix `modo-upload/src/file.rs`**
+- [x] **Step 14: Fix `modo-upload/src/file.rs`**
   ```
   "Failed to read multipart chunk: {e}"
   → "failed to read multipart chunk: {e}"
@@ -318,7 +320,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "upload exceeds maximum allowed size"
   ```
 
-- [ ] **Step 15: Fix `modo-upload/src/stream.rs`**
+- [x] **Step 15: Fix `modo-upload/src/stream.rs`**
   ```
   "Failed to read multipart chunk: {e}"
   → "failed to read multipart chunk: {e}"
@@ -326,13 +328,13 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "upload exceeds maximum allowed size"
   ```
 
-- [ ] **Step 16: Fix `modo-upload/src/storage/utils.rs`**
+- [x] **Step 16: Fix `modo-upload/src/storage/utils.rs`**
   ```
   "Invalid storage path"  (3 occurrences)
   → "invalid storage path"
   ```
 
-- [ ] **Step 17: Fix `modo-upload/src/storage/local.rs`**
+- [x] **Step 17: Fix `modo-upload/src/storage/local.rs`**
   ```
   "Failed to create directory: {e}"  (2 occurrences)
   → "failed to create directory: {e}"
@@ -352,7 +354,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "failed to check file: {e}"
   ```
 
-- [ ] **Step 18: Fix `modo-upload/src/storage/opendal.rs`**
+- [x] **Step 18: Fix `modo-upload/src/storage/opendal.rs`**
   ```
   "Failed to store file: {e}"  (2 occurrences)
   → "failed to store file: {e}"
@@ -362,7 +364,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "failed to check file: {e}"
   ```
 
-- [ ] **Step 19: Fix `modo-upload/src/storage/factory.rs`**
+- [x] **Step 19: Fix `modo-upload/src/storage/factory.rs`**
   ```
   "Failed to configure S3 storage: {e}"
   → "failed to configure S3 storage: {e}"
@@ -372,7 +374,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → (already starts lowercase "S3" is an acronym — no change)
   ```
 
-- [ ] **Step 20: Fix `modo-upload/src/validate.rs`**
+- [x] **Step 20: Fix `modo-upload/src/validate.rs`**
   ```
   "File exceeds maximum size of {}"
   → "file exceeds maximum size of {}"
@@ -380,7 +382,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "file type must match {pattern}"
   ```
 
-- [ ] **Step 21: Fix `modo-db/src/connect.rs`**
+- [x] **Step 21: Fix `modo-db/src/connect.rs`**
   ```
   "Database connection failed: {e}"
   → "database connection failed: {e}"
@@ -396,14 +398,14 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → (already starts with acronym "SQLite" — no change)
   ```
 
-- [ ] **Step 22: Fix `modo-db/src/extractor.rs`**
+- [x] **Step 22: Fix `modo-db/src/extractor.rs`**
   ```
   "Database not configured. Register DbPool via app.managed_service(db)."
   → "database not configured — register DbPool via app.managed_service(db)"
   ```
   (Also remove trailing period.)
 
-- [ ] **Step 23: Fix `modo-db/src/sync.rs`**
+- [x] **Step 23: Fix `modo-db/src/sync.rs`**
   ```
   "Failed to bootstrap migrations table: {e}"
   → "failed to bootstrap migrations table: {e}"
@@ -421,7 +423,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "migration version {} exceeds maximum ({})"
   ```
 
-- [ ] **Step 24: Fix `modo-email/src/template/email_template.rs`**
+- [x] **Step 24: Fix `modo-email/src/template/email_template.rs`**
   ```
   "Email template must start with YAML frontmatter (---)" (line ~28)
   → "email template must start with YAML frontmatter (---)"
@@ -431,7 +433,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "invalid frontmatter: {e}"
   ```
 
-- [ ] **Step 25: Fix `modo-email/src/template/filesystem.rs`**
+- [x] **Step 25: Fix `modo-email/src/template/filesystem.rs`**
   ```
   "Email template not found: {name}"
   → "email template not found: {name}"
@@ -439,7 +441,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "failed to read template {}: {e}"
   ```
 
-- [ ] **Step 26: Fix `modo-email/src/template/layout.rs`**
+- [x] **Step 26: Fix `modo-email/src/template/layout.rs`**
   ```
   "Invalid layout template '{stem}.html': {e}" (line ~78)
   → "invalid layout template '{stem}.html': {e}"
@@ -449,7 +451,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "layout render error: {e}"
   ```
 
-- [ ] **Step 27: Fix `modo-email/src/transport/smtp.rs`**
+- [x] **Step 27: Fix `modo-email/src/transport/smtp.rs`**
   ```
   "SMTP config error: {e}"
   → "SMTP config error: {e}"
@@ -469,7 +471,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   ```
   (Acronym start — no change needed.)
 
-- [ ] **Step 28: Fix `modo-email/src/transport/resend.rs`**
+- [x] **Step 28: Fix `modo-email/src/transport/resend.rs`**
   ```
   "Resend request failed: {e}"
   → "resend request failed: {e}"
@@ -477,7 +479,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "resend API error ({status}): {text}"
   ```
 
-- [ ] **Step 29: Fix `modo-email/src/transport/factory.rs`**
+- [x] **Step 29: Fix `modo-email/src/transport/factory.rs`**
   ```
   "SMTP transport requires the `smtp` feature"
   → (already starts with acronym "SMTP" — no change)
@@ -485,16 +487,16 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "resend transport requires the `resend` feature"
   ```
 
-- [ ] **Step 30: Fix `modo-jobs/src/config.rs`**
+- [x] **Step 30: Fix `modo-jobs/src/config.rs`**
   All messages already lowercase. **No changes needed.**
 
-- [ ] **Step 31: Fix `modo-jobs/src/extractor.rs`**
+- [x] **Step 31: Fix `modo-jobs/src/extractor.rs`**
   ```
   "JobQueue not configured. Start the job runner and register JobsHandle as a service."
   → "job queue not configured — start the job runner and register JobsHandle as a service"
   ```
 
-- [ ] **Step 32: Fix `modo-jobs/src/handler.rs`**
+- [x] **Step 32: Fix `modo-jobs/src/handler.rs`**
   ```
   "Failed to deserialize job payload: {e}"
   → "failed to deserialize job payload: {e}"
@@ -504,7 +506,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "database not available in job context"
   ```
 
-- [ ] **Step 33: Fix `modo-jobs/src/queue.rs`**
+- [x] **Step 33: Fix `modo-jobs/src/queue.rs`**
   ```
   "No job registered with name: {name}"
   → "no job registered with name: {name}"
@@ -520,7 +522,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "failed to insert job: {e}"
   ```
 
-- [ ] **Step 34: Fix `modo-jobs/src/runner.rs`**
+- [x] **Step 34: Fix `modo-jobs/src/runner.rs`**
   ```
   "Unsupported database backend"
   → "unsupported database backend"
@@ -530,11 +532,11 @@ The following messages are the ones that need lowercasing. Each line shows: file
   → "claim query failed: {e}"
   ```
 
-- [ ] **Step 35: Run full check**
+- [x] **Step 35: Run full check**
   Run: `just check`
   Expected: PASS. Some test assertions on error message text may need updating (check `modo/tests/error_handling.rs` — the test on line 69 uses `"DB connection failed"` which is a test-only value, not production code).
 
-- [ ] **Step 36: Commit**
+- [x] **Step 36: Commit**
   ```bash
   git add -A
   git commit -m "refactor: standardize error messages to lowercase convention (INC-03)"
@@ -548,13 +550,13 @@ The following messages are the ones that need lowercasing. Each line shows: file
 - Modify: `modo-upload/Cargo.toml`
 - Modify: `modo-upload/src/extractor.rs`
 
-- [ ] **Step 1: Add `tracing` as direct dependency**
+- [x] **Step 1: Add `tracing` as direct dependency**
   In `modo-upload/Cargo.toml`, add to `[dependencies]`:
   ```toml
   tracing = "0.1"
   ```
 
-- [ ] **Step 2: Replace re-exported tracing usage**
+- [x] **Step 2: Replace re-exported tracing usage**
   In `modo-upload/src/extractor.rs`, line 65, replace:
   ```rust
                     modo::tracing::warn!(
@@ -564,11 +566,11 @@ The following messages are the ones that need lowercasing. Each line shows: file
                     tracing::warn!(
   ```
 
-- [ ] **Step 3: Run full check**
+- [x] **Step 3: Run full check**
   Run: `just check`
   Expected: PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   ```bash
   git add modo-upload/Cargo.toml modo-upload/src/extractor.rs
   git commit -m "refactor(upload): use tracing as direct dependency (INC-06)"
@@ -584,7 +586,7 @@ The following messages are the ones that need lowercasing. Each line shows: file
 
 Note: This extractor requires `AppState` which makes unit testing complex. Instead, we'll implement the change and verify via `just check`. The behavior change is straightforward: log a warning rather than silently using defaults.
 
-- [ ] **Step 1: Modify `from_request` to warn on missing config**
+- [x] **Step 1: Modify `from_request` to warn on missing config**
   In `modo-upload/src/extractor.rs`, replace the current config resolution block (lines 59-61):
   ```rust
         let default_config = crate::config::UploadConfig::default();
@@ -604,15 +606,15 @@ Note: This extractor requires `AppState` which makes unit testing complex. Inste
         };
   ```
 
-- [ ] **Step 2: Remove unused import if needed**
+- [x] **Step 2: Remove unused import if needed**
   The `default_config` variable is removed, so no `UploadConfig::default()` call remains.
   Verify no unused import warnings.
 
-- [ ] **Step 3: Run full check**
+- [x] **Step 3: Run full check**
   Run: `just check`
   Expected: PASS (examples that use `MultipartForm` should already register `UploadConfig`)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   ```bash
   git add modo-upload/src/extractor.rs
   git commit -m "fix(upload): fail with 500 when UploadConfig not registered (INC-09)"
@@ -637,7 +639,7 @@ Current state of duplicated deps:
 - `async-trait = "0.1"` in: `modo-upload/Cargo.toml`, `modo-email/Cargo.toml`
 - `serde_yaml_ng = "0.10"` in: `modo/Cargo.toml`, `modo-session/Cargo.toml` (dev), `modo-db/Cargo.toml` (dev), `modo-jobs/Cargo.toml` (dev), `modo-email/Cargo.toml`, `modo-auth/Cargo.toml` (dev)
 
-- [ ] **Step 1: Add deps to `[workspace.dependencies]` in root `Cargo.toml`**
+- [x] **Step 1: Add deps to `[workspace.dependencies]` in root `Cargo.toml`**
   Add these three lines to the `[workspace.dependencies]` section (after the existing crate entries):
   ```toml
   async-trait = "0.1"
@@ -645,7 +647,7 @@ Current state of duplicated deps:
   serde_yaml_ng = "0.10"
   ```
 
-- [ ] **Step 2: Update `modo/Cargo.toml`**
+- [x] **Step 2: Update `modo/Cargo.toml`**
   Replace:
   ```toml
   inventory = "0.3"
@@ -663,7 +665,7 @@ Current state of duplicated deps:
   serde_yaml_ng.workspace = true
   ```
 
-- [ ] **Step 3: Update `modo-db/Cargo.toml`**
+- [x] **Step 3: Update `modo-db/Cargo.toml`**
   In `[dependencies]`, replace:
   ```toml
   inventory = "0.3"
@@ -681,7 +683,7 @@ Current state of duplicated deps:
   serde_yaml_ng.workspace = true
   ```
 
-- [ ] **Step 4: Update `modo-jobs/Cargo.toml`**
+- [x] **Step 4: Update `modo-jobs/Cargo.toml`**
   In `[dependencies]`, replace:
   ```toml
   inventory = "0.3"
@@ -699,7 +701,7 @@ Current state of duplicated deps:
   serde_yaml_ng.workspace = true
   ```
 
-- [ ] **Step 5: Update `modo-upload/Cargo.toml`**
+- [x] **Step 5: Update `modo-upload/Cargo.toml`**
   In `[dependencies]`, replace:
   ```toml
   async-trait = "0.1"
@@ -709,7 +711,7 @@ Current state of duplicated deps:
   async-trait.workspace = true
   ```
 
-- [ ] **Step 6: Update `modo-email/Cargo.toml`**
+- [x] **Step 6: Update `modo-email/Cargo.toml`**
   In `[dependencies]`, replace:
   ```toml
   serde_yaml_ng = "0.10"
@@ -727,7 +729,7 @@ Current state of duplicated deps:
   async-trait.workspace = true
   ```
 
-- [ ] **Step 7: Update `modo-session/Cargo.toml`**
+- [x] **Step 7: Update `modo-session/Cargo.toml`**
   In `[dev-dependencies]`, replace:
   ```toml
   serde_yaml_ng = "0.10"
@@ -737,7 +739,7 @@ Current state of duplicated deps:
   serde_yaml_ng.workspace = true
   ```
 
-- [ ] **Step 8: Update `modo-auth/Cargo.toml`**
+- [x] **Step 8: Update `modo-auth/Cargo.toml`**
   In `[dev-dependencies]`, replace:
   ```toml
   serde_yaml_ng = "0.10"
@@ -747,11 +749,11 @@ Current state of duplicated deps:
   serde_yaml_ng.workspace = true
   ```
 
-- [ ] **Step 9: Run full check**
+- [x] **Step 9: Run full check**
   Run: `just check`
   Expected: PASS
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
   ```bash
   git add Cargo.toml modo/Cargo.toml modo-db/Cargo.toml modo-jobs/Cargo.toml modo-upload/Cargo.toml modo-email/Cargo.toml modo-session/Cargo.toml modo-auth/Cargo.toml
   git commit -m "refactor: move inventory, async-trait, serde_yaml_ng to workspace deps (INC-12)"
@@ -773,7 +775,7 @@ Current state of duplicated deps:
 - Modify: `modo/tests/templates_view_renderer.rs`
 - Modify: `CLAUDE.md` (convention example)
 
-- [ ] **Step 1: Rename struct in `modo/src/templates/middleware.rs`**
+- [x] **Step 1: Rename struct in `modo/src/templates/middleware.rs`**
   Replace all occurrences of `ContextLayer` with `TemplateContextLayer`:
   ```rust
   // Line 11:
@@ -791,7 +793,7 @@ Current state of duplicated deps:
   ```
   (No change needed to the doc comment itself — it doesn't reference `ContextLayer` by name.)
 
-- [ ] **Step 2: Update re-export in `modo/src/templates/mod.rs`**
+- [x] **Step 2: Update re-export in `modo/src/templates/mod.rs`**
   Replace:
   ```rust
   pub use middleware::ContextLayer;
@@ -801,7 +803,7 @@ Current state of duplicated deps:
   pub use middleware::TemplateContextLayer;
   ```
 
-- [ ] **Step 3: Update warn message in `modo/src/templates/view_renderer.rs`**
+- [x] **Step 3: Update warn message in `modo/src/templates/view_renderer.rs`**
   Replace:
   ```rust
                     "TemplateContext not found in request extensions. \
@@ -813,7 +815,7 @@ Current state of duplicated deps:
                      Ensure TemplateContextLayer is applied."
   ```
 
-- [ ] **Step 4: Update warn message in `modo/src/templates/render.rs`**
+- [x] **Step 4: Update warn message in `modo/src/templates/render.rs`**
   Replace:
   ```rust
                 warn!("TemplateContext not found in request extensions; was ContextLayer applied?");
@@ -823,7 +825,7 @@ Current state of duplicated deps:
                 warn!("TemplateContext not found in request extensions; was TemplateContextLayer applied?");
   ```
 
-- [ ] **Step 5: Update usage in `modo/src/app.rs`**
+- [x] **Step 5: Update usage in `modo/src/app.rs`**
   Replace:
   ```rust
             router = router.layer(crate::templates::ContextLayer::new());
@@ -841,7 +843,7 @@ Current state of duplicated deps:
             // Inject request_id into TemplateContext (runs after TemplateContextLayer creates it)
   ```
 
-- [ ] **Step 6: Update `modo/tests/templates_context_layer.rs`**
+- [x] **Step 6: Update `modo/tests/templates_context_layer.rs`**
   Replace all occurrences:
   ```rust
   use modo::templates::middleware::ContextLayer;
@@ -860,7 +862,7 @@ Current state of duplicated deps:
   ```
   (2 occurrences in this file: lines 26 and 63)
 
-- [ ] **Step 7: Update `modo/tests/templates_e2e.rs`**
+- [x] **Step 7: Update `modo/tests/templates_e2e.rs`**
   Replace:
   ```rust
   use modo::templates::middleware::ContextLayer;
@@ -871,7 +873,7 @@ Current state of duplicated deps:
   ```
   And all `.layer(ContextLayer::new())` with `.layer(TemplateContextLayer::new())` (2 occurrences: lines 66 and 99)
 
-- [ ] **Step 8: Update `modo/tests/templates_render_layer.rs`**
+- [x] **Step 8: Update `modo/tests/templates_render_layer.rs`**
   Replace:
   ```rust
   use modo::templates::middleware::ContextLayer;
@@ -882,7 +884,7 @@ Current state of duplicated deps:
   ```
   And all `.layer(ContextLayer::new())` with `.layer(TemplateContextLayer::new())` (3 occurrences: lines 46, 75, 108)
 
-- [ ] **Step 9: Update `modo/tests/templates_view_renderer.rs`**
+- [x] **Step 9: Update `modo/tests/templates_view_renderer.rs`**
   Replace:
   ```rust
   use modo::templates::{ContextLayer, TemplateEngine, ViewRenderer};
@@ -893,7 +895,7 @@ Current state of duplicated deps:
   ```
   And all `.layer(ContextLayer::new())` with `.layer(TemplateContextLayer::new())` (2 occurrences: lines 89 and 238)
 
-- [ ] **Step 10: Update `CLAUDE.md`**
+- [x] **Step 10: Update `CLAUDE.md`**
   Replace the convention line:
   ```
   - Middleware layer naming: use "ContextLayer" suffix for layers that inject template context (e.g. `SessionContextLayer`, `UserContextLayer`, `TenantContextLayer`)
@@ -903,11 +905,11 @@ Current state of duplicated deps:
   - Middleware layer naming: use "ContextLayer" suffix for layers that inject template context (e.g. `TemplateContextLayer`, `SessionContextLayer`, `UserContextLayer`, `TenantContextLayer`)
   ```
 
-- [ ] **Step 11: Run full check**
+- [x] **Step 11: Run full check**
   Run: `just check`
   Expected: PASS
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
   ```bash
   git add modo/src/templates/middleware.rs modo/src/templates/mod.rs modo/src/templates/view_renderer.rs modo/src/templates/render.rs modo/src/app.rs modo/tests/templates_context_layer.rs modo/tests/templates_e2e.rs modo/tests/templates_render_layer.rs modo/tests/templates_view_renderer.rs CLAUDE.md
   git commit -m "refactor: rename ContextLayer to TemplateContextLayer (INC-15)"
@@ -920,7 +922,7 @@ Current state of duplicated deps:
 **Files:**
 - Modify: `modo-auth/src/extractor.rs`
 
-- [ ] **Step 1: Update doc comment**
+- [x] **Step 1: Update doc comment**
   In `modo-auth/src/extractor.rs`, replace lines 89-96:
   ```rust
   /// Extractor that optionally loads the authenticated user.
@@ -948,11 +950,11 @@ Current state of duplicated deps:
   /// absence* is treated as `None`; infrastructure failures are propagated.
   ```
 
-- [ ] **Step 2: Run full check**
+- [x] **Step 2: Run full check**
   Run: `just check`
   Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   ```bash
   git add modo-auth/src/extractor.rs
   git commit -m "docs(auth): clarify OptionalAuth error behavior (DES-26)"
@@ -966,13 +968,13 @@ Current state of duplicated deps:
 - Modify: `modo/Cargo.toml` (add `temp_env` dev-dependency)
 - Modify: `modo/src/config.rs` (test module)
 
-- [ ] **Step 1: Add `temp_env` dev-dependency**
+- [x] **Step 1: Add `temp_env` dev-dependency**
   In `modo/Cargo.toml`, add to `[dev-dependencies]`:
   ```toml
   temp-env = "0.3"
   ```
 
-- [ ] **Step 2: Rewrite `test_substitute_simple_var`**
+- [x] **Step 2: Rewrite `test_substitute_simple_var`**
   Replace:
   ```rust
   #[test]
@@ -992,7 +994,7 @@ Current state of duplicated deps:
   }
   ```
 
-- [ ] **Step 3: Rewrite `test_substitute_with_default`**
+- [x] **Step 3: Rewrite `test_substitute_with_default`**
   Replace:
   ```rust
   #[test]
@@ -1017,7 +1019,7 @@ Current state of duplicated deps:
   }
   ```
 
-- [ ] **Step 4: Rewrite `test_substitute_empty_uses_default`**
+- [x] **Step 4: Rewrite `test_substitute_empty_uses_default`**
   Replace:
   ```rust
   #[test]
@@ -1043,7 +1045,7 @@ Current state of duplicated deps:
   }
   ```
 
-- [ ] **Step 5: Rewrite `test_substitute_set_var_ignores_default`**
+- [x] **Step 5: Rewrite `test_substitute_set_var_ignores_default`**
   Replace:
   ```rust
   #[test]
@@ -1063,7 +1065,7 @@ Current state of duplicated deps:
   }
   ```
 
-- [ ] **Step 6: Rewrite `test_substitute_no_default_unset`**
+- [x] **Step 6: Rewrite `test_substitute_no_default_unset`**
   Replace:
   ```rust
   #[test]
@@ -1082,7 +1084,7 @@ Current state of duplicated deps:
   }
   ```
 
-- [ ] **Step 7: Rewrite `test_substitute_mixed`**
+- [x] **Step 7: Rewrite `test_substitute_mixed`**
   Replace:
   ```rust
   #[test]
@@ -1115,15 +1117,15 @@ Current state of duplicated deps:
   }
   ```
 
-- [ ] **Step 8: Run tests to verify**
+- [x] **Step 8: Run tests to verify**
   Run: `cargo test -p modo -- test_substitute`
   Expected: ALL PASS
 
-- [ ] **Step 9: Run full check**
+- [x] **Step 9: Run full check**
   Run: `just check`
   Expected: PASS
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
   ```bash
   git add modo/Cargo.toml modo/src/config.rs
   git commit -m "refactor: replace unsafe env::set_var with temp_env in config tests (DES-36)"
