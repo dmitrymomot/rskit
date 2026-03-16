@@ -18,16 +18,20 @@ async fn resolve_user<U: Clone + Send + Sync + 'static>(
 ) -> Result<Option<U>, Error> {
     // Fast path: user already resolved by UserContextLayer or a prior extractor
     if let Some(cached) = parts.extensions.get::<ResolvedUser<U>>() {
+        tracing::debug!(cache_hit = true, "auth user resolved from extension cache");
         return Ok(Some((*cached.0).clone()));
     }
 
     let session = SessionManager::from_request_parts(parts, state)
         .await
-        .map_err(|_| Error::internal("auth requires session middleware"))?;
+        .map_err(|_| Error::internal("Auth requires session middleware"))?;
 
     let user_id = match session.user_id().await {
         Some(id) => id,
-        None => return Ok(None),
+        None => {
+            tracing::debug!("no session user_id, skipping auth resolution");
+            return Ok(None);
+        }
     };
 
     let provider = state
@@ -43,7 +47,10 @@ async fn resolve_user<U: Clone + Send + Sync + 'static>(
     let user = provider.find_by_id(&user_id).await?;
 
     if let Some(ref u) = user {
+        tracing::debug!(user_id = %user_id, cache_hit = false, "auth user resolved from provider");
         parts.extensions.insert(ResolvedUser(Arc::new(u.clone())));
+    } else {
+        tracing::warn!(user_id = %user_id, "session references non-existent user");
     }
 
     Ok(user)

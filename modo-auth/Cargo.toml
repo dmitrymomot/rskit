@@ -14,6 +14,7 @@ futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
 tower = { version = "0.5", features = ["util"] }
 tokio = { version = "1", features = ["rt"] }
+tracing = "0.1"
 
 [features]
 default = []
