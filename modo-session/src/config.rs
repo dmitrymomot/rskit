@@ -1,5 +1,16 @@
 use serde::Deserialize;
 
+fn deserialize_nonzero_usize<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = usize::deserialize(deserializer)?;
+    if value == 0 {
+        panic!("max_sessions_per_user must be > 0; setting it to 0 would lock out all users");
+    }
+    Ok(value)
+}
+
 /// Configuration for the session subsystem.
 ///
 /// All fields have sane defaults (see [`Default`]). Deserialises from YAML/TOML
@@ -33,6 +44,11 @@ pub struct SessionConfig {
     pub touch_interval_secs: u64,
     /// Maximum number of concurrent active sessions per user before the
     /// least-recently-used session is evicted (default: 10).
+    ///
+    /// # Panics
+    ///
+    /// Panics at startup if set to 0, which would lock out all users.
+    #[serde(deserialize_with = "deserialize_nonzero_usize")]
     pub max_sessions_per_user: usize,
     /// CIDR ranges of trusted reverse-proxy addresses.
     ///
@@ -88,5 +104,23 @@ cookie_name: "my_sess"
         assert!(config.validate_fingerprint);
         assert_eq!(config.touch_interval_secs, 300);
         assert_eq!(config.max_sessions_per_user, 10);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_sessions_per_user must be > 0")]
+    fn zero_max_sessions_panics() {
+        let yaml = r#"
+max_sessions_per_user: 0
+"#;
+        let _config: SessionConfig = serde_yaml_ng::from_str(yaml).unwrap();
+    }
+
+    #[test]
+    fn nonzero_max_sessions_accepted() {
+        let yaml = r#"
+max_sessions_per_user: 1
+"#;
+        let config: SessionConfig = serde_yaml_ng::from_str(yaml).unwrap();
+        assert_eq!(config.max_sessions_per_user, 1);
     }
 }
