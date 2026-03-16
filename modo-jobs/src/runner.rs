@@ -4,6 +4,7 @@ use crate::handler::{JobContext, JobHandlerDyn, JobRegistration};
 use crate::queue::JobQueue;
 use crate::types::{JobId, JobState};
 use chrono::{DateTime, Utc};
+use futures_util::FutureExt;
 use modo::app::ServiceRegistry;
 use modo_db::sea_orm::{
     ColumnTrait, DatabaseBackend, EntityTrait, ExprTrait, FromQueryResult, QueryFilter, Statement,
@@ -11,6 +12,7 @@ use modo_db::sea_orm::{
 };
 use std::collections::HashMap;
 use std::ops::Deref;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Notify, Semaphore};
@@ -386,14 +388,23 @@ async fn execute_job(
         payload_json: job.payload.clone(),
     };
 
-    let result =
-        tokio::time::timeout(Duration::from_secs(timeout_secs), handler.run_dyn(ctx)).await;
+    // Wrap the entire timeout+handler in catch_unwind to prevent panics
+    // from crashing the worker loop. Only catches unwinding panics
+    // (abort panics cannot be caught).
+    let panic_result = AssertUnwindSafe(tokio::time::timeout(
+        Duration::from_secs(timeout_secs),
+        handler.run_dyn(ctx),
+    ))
+    .catch_unwind()
+    .await;
 
-    match result {
-        Ok(Ok(())) => {
+    match panic_result {
+        Ok(Ok(Ok(()))) => {
+            // timeout Ok, handler Ok
             mark_completed(db, &job.id).await;
         }
-        Ok(Err(e)) => {
+        Ok(Ok(Err(e))) => {
+            // timeout Ok, handler Err
             error!(
                 job_id = %job.id, job_name = %job_name, queue = %queue,
                 attempt = job.attempts, max_attempts = job.max_attempts,
@@ -401,7 +412,8 @@ async fn execute_job(
             );
             handle_failure(db, &job, Some(&e.to_string())).await;
         }
-        Err(_) => {
+        Ok(Err(_)) => {
+            // timeout elapsed
             error!(
                 job_id = %job.id, job_name = %job_name, queue = %queue,
                 attempt = job.attempts, max_attempts = job.max_attempts,
@@ -413,6 +425,21 @@ async fn execute_job(
                 Some(&format!("Job timed out after {timeout_secs}s")),
             )
             .await;
+        }
+        Err(panic_payload) => {
+            // Handler panicked — extract the panic message
+            let panic_msg = panic_payload
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| panic_payload.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_else(|| "unknown panic".to_string());
+
+            error!(
+                job_id = %job.id, job_name = %job_name, queue = %queue,
+                attempt = job.attempts, max_attempts = job.max_attempts,
+                panic = %panic_msg, "Job panicked"
+            );
+            handle_failure(db, &job, Some(&format!("Job panicked: {panic_msg}"))).await;
         }
     }
 }
@@ -600,5 +627,59 @@ async fn cleanup_loop(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn panic_payload_extraction_string() {
+        let payload: Box<dyn std::any::Any + Send> = Box::new("test panic".to_string());
+        let msg = payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_else(|| "unknown panic".to_string());
+        assert_eq!(msg, "test panic");
+    }
+
+    #[test]
+    fn panic_payload_extraction_str() {
+        let payload: Box<dyn std::any::Any + Send> = Box::new("test panic");
+        let msg = payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_else(|| "unknown panic".to_string());
+        assert_eq!(msg, "test panic");
+    }
+
+    #[test]
+    fn panic_payload_extraction_unknown() {
+        let payload: Box<dyn std::any::Any + Send> = Box::new(42i32);
+        let msg = payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_else(|| "unknown panic".to_string());
+        assert_eq!(msg, "unknown panic");
+    }
+
+    #[tokio::test]
+    async fn catch_unwind_catches_panic_in_future() {
+        use futures_util::FutureExt;
+        use std::panic::AssertUnwindSafe;
+
+        let result = AssertUnwindSafe(async { panic!("boom") })
+            .catch_unwind()
+            .await;
+
+        assert!(result.is_err());
+        let payload = result.unwrap_err();
+        let msg = payload
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        assert_eq!(msg, "boom");
     }
 }
