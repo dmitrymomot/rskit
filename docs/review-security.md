@@ -44,13 +44,13 @@ When the form body exceeds `max_body_bytes`, the error is swallowed and `Body::e
 
 ---
 
-### SEC-05: Email template variable injection (no HTML escaping)
+### ~~SEC-05: Email template variable injection (no HTML escaping)~~ [FIXED]
 
 **Location:** `modo-email/src/template/vars.rs:8`, `modo-email/src/template/layout.rs:115`
 
 Template `{{key}}` substitution inserts values verbatim, and MiniJinja auto-escape is explicitly disabled. User-supplied values (e.g., user names in welcome emails) can inject arbitrary HTML/JS into email bodies.
 
-**Fix:** Either re-enable auto-escape for template variables in the layout engine, or provide a `html_escape()` utility and document that user-supplied values must be escaped before passing to `SendEmail`.
+**Fix:** Added `html_escape()` helper and `substitute_html()` function. Email body substitution now uses `substitute_html()` which HTML-escapes all substituted values. Subject line continues using plain `substitute()` (no escaping needed for RFC 5322 headers). Layout context variables remain unescaped (app-controlled, not user-supplied).
 
 ---
 
@@ -106,13 +106,13 @@ The `mime_matches` function compares only the `Content-Type` header from the mul
 
 ---
 
-### SEC-11: TenantContextLayer fails open on resolver errors
+### ~~SEC-11: TenantContextLayer fails open on resolver errors~~ [FIXED]
 
 **Location:** `modo-tenant/src/context_layer.rs:107`
 
 When the tenant resolver returns an error (e.g., DB unavailable), the error is logged at WARN level and the request continues without tenant context. Templates that gate content on `{% if tenant %}` will silently render the public/unauthenticated view during infrastructure failures.
 
-**Fix:** Document this behavior prominently. Consider an option to fail-closed (return 503) instead of failing open.
+**Fix:** Added prominent `# Security: Fail-Open Behavior` doc section to `TenantContextLayer` struct, explaining the fail-open behavior and directing users to the `Tenant<T>` extractor for security-sensitive rendering.
 
 ---
 
@@ -126,13 +126,13 @@ When the tenant resolver returns an error (e.g., DB unavailable), the error is l
 
 ---
 
-### SEC-13: i18n interpolate variable expansion is recursive
+### ~~SEC-13: i18n interpolate variable expansion is recursive~~ [FIXED]
 
 **Location:** `modo/src/i18n/interpolate.rs:7`
 
 A user-supplied translation value containing `{admin}` could expand another variable in a later iteration. This is documented in the function docstring but not mitigated.
 
-**Fix:** Use a single-pass substitution that does not re-scan already-substituted text.
+**Fix:** Rewrote `interpolate()` to use single-pass character-by-character parsing. Substituted values are never re-scanned, preventing recursive variable expansion by construction.
 
 ---
 
@@ -148,30 +148,30 @@ The middleware accepts client-supplied `X-Request-ID` headers verbatim. A client
 
 ---
 
-### SEC-15: IP spoofing when trusted_proxies is empty (default)
+### ~~SEC-15: IP spoofing when trusted_proxies is empty (default)~~ [FIXED]
 
 **Location:** `modo-session/src/meta.rs:66-83`
 
 When `trusted_proxies` is empty (the default), `extract_client_ip` unconditionally trusts `X-Forwarded-For` and `X-Real-IP` headers. Any client can forge their IP address.
 
-**Fix:** Document this clearly. Consider a `no_proxies` mode that ignores forwarded headers entirely, distinct from an empty list.
+**Fix:** Added prominent `# Security` doc sections to `extract_client_ip` function and `trusted_proxies` field, warning about IP spoofing risk and providing production configuration guidance.
 
 ---
 
-### SEC-16: DB error messages may expose internal details
+### ~~SEC-16: DB error messages may expose internal details~~ [FIXED]
 
 **Location:** `modo-db/src/error.rs:27`
 
 All non-constraint, non-RecordNotFound DB errors are mapped to 500 with the full `DbErr.to_string()`. If `modo::Error::internal` surfaces this in responses, table names, schema info, and query structure could leak to clients.
 
-**Fix:** Verify that `Error::internal` sanitizes the response body (it does via `default_response`), and add structured logging of the original error before conversion so the detail is captured in server logs.
+**Fix:** Catch-all arm now logs the full error via `tracing::error!` for operators but returns generic `"database error"` message to clients.
 
 ---
 
-### SEC-17: Layout compile errors silently dropped
+### ~~SEC-17: Layout compile errors silently dropped~~ [FIXED]
 
 **Location:** `modo-email/src/template/layout.rs:74`
 
 `env.add_template_owned(...).ok()` discards any error from loading a custom layout file. A corrupted or syntactically invalid layout is silently ignored, and the template falls back to a missing-template error only at render time.
 
-**Fix:** Propagate the error from `add_template_owned` and fail at `Mailer` construction time.
+**Fix:** Added `LayoutEngine::try_new()` that returns `Result` on invalid template syntax. `new()` delegates to `try_new().expect(...)`. Factory uses `try_new()?` so errors propagate at `Mailer` construction time.

@@ -15,7 +15,7 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 | ~~SEC-03~~ | ~~Return 413 on CSRF body overflow instead of empty body~~ | ~~S~~  | ~~modo~~         | FIXED          |
 | ~~SEC-09~~ | ~~Guard against CORS Mirror + credentials: true~~          | ~~S~~  | ~~modo~~         | FIXED          |
 | ~~SEC-10~~ | ~~Replace CSRF `debug_assert!` with startup validation~~   | ~~S~~  | ~~modo~~         | FIXED          |
-| SEC-05     | Add HTML escaping option for email template variables      | M      | modo-email       |
+| ~~SEC-05~~ | ~~Add HTML escaping option for email template variables~~  | ~~M~~  | ~~modo-email~~   | FIXED          |
 | ~~SEC-06~~ | ~~Document HeaderResolver security preconditions prominently~~ | ~~S~~ | ~~modo-tenant~~ | FIXED          |
 | ~~SEC-14~~ | ~~Validate or regenerate client-supplied Request IDs~~     | ~~S~~  | ~~modo~~         | FIXED          |
 
@@ -132,7 +132,7 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 | ------ | ----------------------------------------------------------- | ------ | ------ |
 | DES-34 | SMTPS (implicit TLS on port 465) support                    | M      | High   |
 | DES-35 | Async template provider or in-process cache                 | M      | Medium |
-| SEC-17 | Propagate layout compile errors at Mailer construction time | S      | Medium |
+| ~~SEC-17~~ | ~~Propagate layout compile errors at Mailer construction time~~ | ~~S~~ | ~~Medium~~ | FIXED |
 
 ### Upload
 
@@ -154,7 +154,7 @@ Prioritized recommendations from comprehensive framework review (2026-03-15).
 
 | ID     | Feature                                             | Effort | Value  |
 | ------ | --------------------------------------------------- | ------ | ------ |
-| SEC-11 | Option to fail-closed (503) on resolver errors      | S      | Medium |
+| ~~SEC-11~~ | ~~Option to fail-closed (503) on resolver errors~~ | ~~S~~ | ~~Medium~~ | FIXED — documented fail-open behavior |
 | —      | `www` and reserved subdomain exclusion configurable | S      | Low    |
 
 ---
