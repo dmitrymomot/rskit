@@ -433,28 +433,29 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     Ok(quote! {
-        #[modo_upload::__internal::async_trait]
         impl #impl_generics modo_upload::FromMultipart for #struct_name #ty_generics #where_clause {
-            async fn from_multipart(
+            fn from_multipart(
                 multipart: &mut modo_upload::__internal::axum::extract::Multipart,
                 __max_file_size: Option<usize>,
-            ) -> Result<Self, modo::Error> {
-                #(#var_decls)*
+            ) -> impl std::future::Future<Output = Result<Self, modo::Error>> + Send {
+                async move {
+                    #(#var_decls)*
 
-                while let Some(__field) = multipart.next_field().await
-                    .map_err(|e| modo::HttpError::BadRequest.with_message(format!("{e}")))?
-                {
-                    match __field.name() {
-                        #(#match_arms)*
-                        _ => {}
+                    while let Some(__field) = multipart.next_field().await
+                        .map_err(|e| modo::HttpError::BadRequest.with_message(format!("{e}")))?
+                    {
+                        match __field.name() {
+                            #(#match_arms)*
+                            _ => {}
+                        }
                     }
+
+                    #(#validation_stmts)*
+
+                    Ok(Self {
+                        #(#field_assignments),*
+                    })
                 }
-
-                #(#validation_stmts)*
-
-                Ok(Self {
-                    #(#field_assignments),*
-                })
             }
         }
     })

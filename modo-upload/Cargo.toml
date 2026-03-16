@@ -16,7 +16,6 @@ modo.workspace = true
 modo-upload-macros.workspace = true
 serde = { version = "1", features = ["derive"] }
 axum = { version = "0.8", features = ["multipart"] }
-async-trait.workspace = true
 trait-variant = "0.1"
 bytes = "1"
 futures-util = "0.3"

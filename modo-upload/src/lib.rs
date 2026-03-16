@@ -80,6 +80,5 @@ pub use validate::{gb, kb, mb};
 #[doc(hidden)]
 pub mod __internal {
     pub use crate::validate::mime_matches;
-    pub use async_trait::async_trait;
     pub use axum;
 }
