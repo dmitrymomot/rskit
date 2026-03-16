@@ -15,7 +15,7 @@ impl ResponseForPanic for PanicHandler {
         err: Box<dyn Any + Send + 'static>,
     ) -> axum::http::Response<Body> {
         let msg = extract_panic_message(&err);
-        tracing::error!(panic.message = %msg, "Handler panicked");
+        tracing::error!(panic_message = %msg, "Handler panicked");
         Error::internal_panic(&msg).into_response()
     }
 }

@@ -233,7 +233,7 @@ async fn start_inner(
         });
     }
 
-    info!("Job runner started (worker_id={worker_id})");
+    info!(worker_id = %worker_id, "Job runner started");
 
     Ok(JobsHandle {
         queue,

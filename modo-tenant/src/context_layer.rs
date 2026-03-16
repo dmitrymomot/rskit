@@ -117,7 +117,7 @@ where
             let tenant = match crate::extractor::resolve_and_cache(&mut parts, &tenant_svc).await {
                 Ok(t) => t,
                 Err(e) => {
-                    tracing::warn!("TenantContextLayer: tenant resolution failed: {e}");
+                    tracing::warn!(error = %e, "TenantContextLayer: tenant resolution failed");
                     None
                 }
             };

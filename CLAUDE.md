@@ -38,6 +38,7 @@ Rust web framework for small monolithic apps. Single binary, compile-time magic,
 - modo-db queries: use `Todo::query().filter(...).all(&*db)` (returns domain types) — fall back to raw SeaORM via `.into_select()` only when needed
 - modo-db `find_by_id` returns `Result<T, Error>` with auto-404 — no `.ok_or(NotFound)?` needed
 - modo-db `update(&mut self)` refreshes all fields from DB after write — no re-fetch needed
+- Tracing fields: always snake_case (`user_id`, `session_id`, `job_id`) — never dotted names (`panic.message`) which require string literal syntax and can break subscribers
 
 ## Gotchas
 
