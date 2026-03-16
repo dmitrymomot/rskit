@@ -62,16 +62,16 @@ impl JobQueue {
         let reg = inventory::iter::<JobRegistration>
             .into_iter()
             .find(|r| r.name == name)
-            .ok_or_else(|| modo::Error::internal(format!("No job registered with name: {name}")))?;
+            .ok_or_else(|| modo::Error::internal(format!("no job registered with name: {name}")))?;
 
         let payload_json = serde_json::to_string(payload)
-            .map_err(|e| modo::Error::internal(format!("Failed to serialize job payload: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to serialize job payload: {e}")))?;
 
         if let Some(max) = self.max_payload_bytes
             && payload_json.len() > max
         {
             return Err(modo::Error::internal(format!(
-                "Job payload size ({} bytes) exceeds limit ({max} bytes)",
+                "job payload size ({} bytes) exceeds limit ({max} bytes)",
                 payload_json.len()
             )));
         }
@@ -99,11 +99,11 @@ impl JobQueue {
             &self.db,
         )
         .await
-        .map_err(|e| modo::Error::internal(format!("Failed to cancel job: {e}")))?;
+        .map_err(|e| modo::Error::internal(format!("failed to cancel job: {e}")))?;
 
         if result.rows_affected == 0 {
             return Err(modo::HttpError::Conflict
-                .with_message(format!("Job {} not found or not in pending state", id)));
+                .with_message(format!("job {} not found or not in pending state", id)));
         }
 
         Ok(())
@@ -138,7 +138,7 @@ impl JobQueue {
         model
             .insert(&self.db)
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to insert job: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to insert job: {e}")))?;
 
         Ok(id)
     }

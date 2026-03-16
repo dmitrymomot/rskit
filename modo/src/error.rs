@@ -284,7 +284,7 @@ impl From<HttpError> for Error {
 #[cfg(feature = "templates")]
 impl From<crate::templates::TemplateError> for Error {
     fn from(e: crate::templates::TemplateError) -> Self {
-        Error::internal(format!("Template render failed: {e}"))
+        Error::internal(format!("template render failed: {e}"))
     }
 }
 

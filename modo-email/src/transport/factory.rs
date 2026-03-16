@@ -20,7 +20,7 @@ pub fn transport(config: &EmailConfig) -> Result<Arc<dyn MailTransport>, modo::E
         )),
         #[cfg(not(feature = "resend"))]
         crate::config::TransportBackend::Resend => Err(modo::Error::internal(
-            "Resend transport requires the `resend` feature",
+            "resend transport requires the `resend` feature",
         )),
     }
 }

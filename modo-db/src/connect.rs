@@ -14,7 +14,7 @@ pub async fn connect(config: &DatabaseConfig) -> Result<DbPool, modo::Error> {
 
     let conn = Database::connect(opts)
         .await
-        .map_err(|e| modo::Error::internal(format!("Database connection failed: {e}")))?;
+        .map_err(|e| modo::Error::internal(format!("database connection failed: {e}")))?;
 
     // Apply backend-specific settings
     if conn.get_database_backend() == sea_orm::DatabaseBackend::Sqlite {
@@ -31,16 +31,16 @@ async fn apply_sqlite_pragmas(conn: &sea_orm::DatabaseConnection) -> Result<(), 
 
     conn.execute_unprepared("PRAGMA journal_mode=WAL")
         .await
-        .map_err(|e| modo::Error::internal(format!("Failed to set WAL mode: {e}")))?;
+        .map_err(|e| modo::Error::internal(format!("failed to set WAL mode: {e}")))?;
     conn.execute_unprepared("PRAGMA busy_timeout=5000")
         .await
-        .map_err(|e| modo::Error::internal(format!("Failed to set busy_timeout: {e}")))?;
+        .map_err(|e| modo::Error::internal(format!("failed to set busy_timeout: {e}")))?;
     conn.execute_unprepared("PRAGMA synchronous=NORMAL")
         .await
-        .map_err(|e| modo::Error::internal(format!("Failed to set synchronous: {e}")))?;
+        .map_err(|e| modo::Error::internal(format!("failed to set synchronous: {e}")))?;
     conn.execute_unprepared("PRAGMA foreign_keys=ON")
         .await
-        .map_err(|e| modo::Error::internal(format!("Failed to enable foreign_keys: {e}")))?;
+        .map_err(|e| modo::Error::internal(format!("failed to enable foreign_keys: {e}")))?;
     Ok(())
 }
 

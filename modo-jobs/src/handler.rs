@@ -29,7 +29,7 @@ impl JobContext {
     /// Returns an error if deserialization fails.
     pub fn payload<T: serde::de::DeserializeOwned>(&self) -> Result<T, modo::Error> {
         serde_json::from_str(&self.payload_json)
-            .map_err(|e| modo::Error::internal(format!("Failed to deserialize job payload: {e}")))
+            .map_err(|e| modo::Error::internal(format!("failed to deserialize job payload: {e}")))
     }
 
     /// Retrieve a service from the registry by type.
@@ -38,7 +38,7 @@ impl JobContext {
     pub fn service<T: Send + Sync + 'static>(&self) -> Result<Arc<T>, modo::Error> {
         self.services.get::<T>().ok_or_else(|| {
             modo::Error::internal(format!(
-                "Service not registered: {}",
+                "service not registered: {}",
                 std::any::type_name::<T>()
             ))
         })
@@ -51,7 +51,7 @@ impl JobContext {
     pub fn db(&self) -> Result<Arc<DbPool>, modo::Error> {
         self.services
             .get::<DbPool>()
-            .ok_or_else(|| modo::Error::internal("Database not available in job context"))
+            .ok_or_else(|| modo::Error::internal("database not available in job context"))
     }
 }
 

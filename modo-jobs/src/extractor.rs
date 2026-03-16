@@ -24,7 +24,7 @@ impl FromRequestParts<AppState> for JobQueue {
             .map(|handle| handle.queue.clone())
             .ok_or_else(|| {
                 Error::internal(
-                    "JobQueue not configured. Start the job runner and register JobsHandle as a service.",
+                    "job queue not configured — start the job runner and register JobsHandle as a service",
                 )
             })
     }

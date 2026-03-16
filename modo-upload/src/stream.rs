@@ -32,14 +32,14 @@ impl BufferedUpload {
         let mut total_size: usize = 0;
         let mut field = field;
         while let Some(chunk) = field.chunk().await.map_err(|e| {
-            modo::HttpError::BadRequest.with_message(format!("Failed to read multipart chunk: {e}"))
+            modo::HttpError::BadRequest.with_message(format!("failed to read multipart chunk: {e}"))
         })? {
             total_size += chunk.len();
             if let Some(max) = max_size
                 && total_size > max
             {
                 return Err(modo::HttpError::PayloadTooLarge
-                    .with_message("Upload exceeds maximum allowed size"));
+                    .with_message("upload exceeds maximum allowed size"));
             }
             chunks.push(chunk);
         }

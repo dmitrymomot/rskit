@@ -72,8 +72,8 @@ impl<S: Send + Sync> FromRequestParts<S> for ViewRenderer {
             .cloned()
             .ok_or_else(|| {
                 Error::internal(
-                    "ViewRenderer requires TemplateEngine. \
-                     Register it as a service or add Extension(Arc::new(engine)).",
+                    "view renderer requires TemplateEngine \
+                     — register it as a service or add Extension(Arc::new(engine))",
                 )
             })?;
 

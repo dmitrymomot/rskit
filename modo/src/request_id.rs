@@ -46,7 +46,7 @@ impl FromRequestParts<AppState> for RequestId {
             .extensions
             .get::<RequestId>()
             .cloned()
-            .ok_or_else(|| Error::internal("RequestId not found in request extensions"))
+            .ok_or_else(|| Error::internal("request ID not found in request extensions"))
     }
 }
 

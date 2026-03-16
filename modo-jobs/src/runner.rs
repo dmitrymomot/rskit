@@ -167,7 +167,7 @@ async fn start_inner(
         }
         if !queue_names.contains_key(reg.queue) {
             return Err(modo::Error::internal(format!(
-                "Job '{}' references queue '{}' which is not configured. Available queues: {:?}",
+                "job '{}' references queue '{}' which is not configured, available queues: {:?}",
                 reg.name,
                 reg.queue,
                 queue_names.keys().collect::<Vec<_>>()
@@ -336,7 +336,7 @@ pub async fn claim_next(
              ) \
              RETURNING *"
         }
-        _ => return Err(modo::Error::internal("Unsupported database backend")),
+        _ => return Err(modo::Error::internal("unsupported database backend")),
     };
     let values = vec![
         worker_id.into(),
@@ -350,7 +350,7 @@ pub async fn claim_next(
     let result = job::Model::find_by_statement(stmt)
         .one(db)
         .await
-        .map_err(|e| modo::Error::internal(format!("Claim query failed: {e}")))?;
+        .map_err(|e| modo::Error::internal(format!("claim query failed: {e}")))?;
 
     Ok(result)
 }

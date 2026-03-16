@@ -31,7 +31,7 @@ impl FileStorage for OpendalStorage {
         self.operator
             .write(&path, file.data().clone())
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to store file: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to store file: {e}")))?;
 
         Ok(StoredFile { path, size })
     }
@@ -51,7 +51,7 @@ impl FileStorage for OpendalStorage {
         self.operator
             .write(&path, data)
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to store file: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to store file: {e}")))?;
 
         Ok(StoredFile { path, size })
     }
@@ -61,7 +61,7 @@ impl FileStorage for OpendalStorage {
         self.operator
             .delete(path)
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to delete file: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to delete file: {e}")))?;
         Ok(())
     }
 
@@ -70,6 +70,6 @@ impl FileStorage for OpendalStorage {
         self.operator
             .exists(path)
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to check file: {e}")))
+            .map_err(|e| modo::Error::internal(format!("failed to check file: {e}")))
     }
 }

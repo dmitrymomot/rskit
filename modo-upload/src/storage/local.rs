@@ -37,12 +37,12 @@ impl FileStorage for LocalStorage {
         if let Some(parent) = full_path.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
-                .map_err(|e| modo::Error::internal(format!("Failed to create directory: {e}")))?;
+                .map_err(|e| modo::Error::internal(format!("failed to create directory: {e}")))?;
         }
 
         tokio::fs::write(&full_path, file.data())
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to write file: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to write file: {e}")))?;
 
         Ok(StoredFile {
             path: rel_path,
@@ -62,25 +62,25 @@ impl FileStorage for LocalStorage {
         if let Some(parent) = full_path.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
-                .map_err(|e| modo::Error::internal(format!("Failed to create directory: {e}")))?;
+                .map_err(|e| modo::Error::internal(format!("failed to create directory: {e}")))?;
         }
 
         let mut file = tokio::fs::File::create(&full_path)
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to create file: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to create file: {e}")))?;
 
         let mut total_size: u64 = 0;
         while let Some(chunk) = stream.chunk().await {
             let chunk =
-                chunk.map_err(|e| modo::Error::internal(format!("Failed to read chunk: {e}")))?;
+                chunk.map_err(|e| modo::Error::internal(format!("failed to read chunk: {e}")))?;
             total_size += chunk.len() as u64;
             file.write_all(&chunk)
                 .await
-                .map_err(|e| modo::Error::internal(format!("Failed to write chunk: {e}")))?;
+                .map_err(|e| modo::Error::internal(format!("failed to write chunk: {e}")))?;
         }
         file.flush()
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to flush file: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to flush file: {e}")))?;
 
         Ok(StoredFile {
             path: rel_path,
@@ -92,7 +92,7 @@ impl FileStorage for LocalStorage {
         let full_path = ensure_within(&self.base_dir, Path::new(path))?;
         tokio::fs::remove_file(&full_path)
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to delete file: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to delete file: {e}")))?;
         Ok(())
     }
 
@@ -100,6 +100,6 @@ impl FileStorage for LocalStorage {
         let full_path = ensure_within(&self.base_dir, Path::new(path))?;
         Ok(tokio::fs::try_exists(&full_path)
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to check file: {e}")))?)
+            .map_err(|e| modo::Error::internal(format!("failed to check file: {e}")))?)
     }
 }

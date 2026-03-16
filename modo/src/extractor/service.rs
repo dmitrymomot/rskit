@@ -29,7 +29,7 @@ impl<T: Send + Sync + 'static> FromRequestParts<AppState> for Service<T> {
     ) -> Result<Self, Self::Rejection> {
         state.services.get::<T>().map(Service).ok_or_else(|| {
             Error::internal(format!(
-                "Service not registered: {}",
+                "service not registered: {}",
                 std::any::type_name::<T>()
             ))
         })

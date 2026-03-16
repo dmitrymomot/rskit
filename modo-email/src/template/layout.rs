@@ -75,7 +75,7 @@ impl LayoutEngine {
                     env.add_template_owned(format!("layouts/{stem}.html"), content)
                         .map_err(|e| {
                             modo::Error::internal(format!(
-                                "Invalid layout template '{stem}.html': {e}"
+                                "invalid layout template '{stem}.html': {e}"
                             ))
                         })?;
                 }
@@ -118,10 +118,10 @@ impl LayoutEngine {
         let tmpl = self
             .env
             .get_template(&template_name)
-            .map_err(|_| modo::Error::internal(format!("Layout not found: {layout_name}")))?;
+            .map_err(|_| modo::Error::internal(format!("layout not found: {layout_name}")))?;
 
         tmpl.render(context)
-            .map_err(|e| modo::Error::internal(format!("Layout render error: {e}")))
+            .map_err(|e| modo::Error::internal(format!("layout render error: {e}")))
     }
 
     /// Creates a base environment with the built-in default layout and

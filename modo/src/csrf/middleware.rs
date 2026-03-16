@@ -41,7 +41,7 @@ pub async fn csrf_protection(
     if let Err(e) = config.validate() {
         tracing::error!(error = %e, "Invalid CsrfConfig — rejecting request");
         return HttpError::InternalServerError
-            .with_message("Invalid CSRF configuration")
+            .with_message("invalid CSRF configuration")
             .into_response();
     }
 
@@ -213,7 +213,7 @@ async fn extract_from_form_body(
         Ok(b) => b,
         Err(_) => {
             return Err(HttpError::PayloadTooLarge
-                .with_message("Request body too large")
+                .with_message("request body too large")
                 .into_response());
         }
     };

@@ -121,7 +121,7 @@ impl FromRequestParts<AppState> for RateLimitInfo {
             .extensions
             .get::<RateLimitInfo>()
             .cloned()
-            .ok_or_else(|| Error::internal("RateLimitInfo not found in request extensions"))
+            .ok_or_else(|| Error::internal("rate limit info not found in request extensions"))
     }
 }
 

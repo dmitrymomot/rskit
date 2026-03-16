@@ -21,7 +21,7 @@ pub async fn maintenance_middleware(
         .http
         .maintenance_message
         .as_deref()
-        .unwrap_or("Service temporarily unavailable");
+        .unwrap_or("service temporarily unavailable");
 
     HttpError::ServiceUnavailable
         .with_message(msg)

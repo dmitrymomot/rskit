@@ -23,7 +23,7 @@ async fn resolve_user<U: Clone + Send + Sync + 'static>(
 
     let session = SessionManager::from_request_parts(parts, state)
         .await
-        .map_err(|_| Error::internal("Auth requires session middleware"))?;
+        .map_err(|_| Error::internal("auth requires session middleware"))?;
 
     let user_id = match session.user_id().await {
         Some(id) => id,

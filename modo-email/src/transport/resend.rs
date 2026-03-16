@@ -43,13 +43,13 @@ impl MailTransport for ResendTransport {
             .json(&body)
             .send()
             .await
-            .map_err(|e| modo::Error::internal(format!("Resend request failed: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("resend request failed: {e}")))?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             return Err(modo::Error::internal(format!(
-                "Resend API error ({status}): {text}"
+                "resend API error ({status}): {text}"
             )));
         }
 

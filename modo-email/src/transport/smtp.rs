@@ -45,20 +45,20 @@ impl MailTransport for SmtpTransport {
                 message
                     .from
                     .parse()
-                    .map_err(|e| modo::Error::internal(format!("Invalid from address: {e}")))?,
+                    .map_err(|e| modo::Error::internal(format!("invalid from address: {e}")))?,
             )
             .subject(&message.subject);
 
         for recipient in &message.to {
             builder = builder.to(recipient
                 .parse()
-                .map_err(|e| modo::Error::internal(format!("Invalid to address: {e}")))?);
+                .map_err(|e| modo::Error::internal(format!("invalid to address: {e}")))?);
         }
 
         if let Some(ref reply_to) = message.reply_to {
             builder =
                 builder.reply_to(reply_to.parse().map_err(|e| {
-                    modo::Error::internal(format!("Invalid reply-to address: {e}"))
+                    modo::Error::internal(format!("invalid reply-to address: {e}"))
                 })?);
         }
 
@@ -76,7 +76,7 @@ impl MailTransport for SmtpTransport {
                             .body(message.html.clone()),
                     ),
             )
-            .map_err(|e| modo::Error::internal(format!("Failed to build email: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to build email: {e}")))?;
 
         self.mailer
             .send(email)

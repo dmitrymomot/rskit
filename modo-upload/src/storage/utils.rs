@@ -10,7 +10,7 @@ pub(crate) fn ensure_within(base: &Path, path: &Path) -> Result<PathBuf, modo::E
             // `.` is harmless in filesystem paths — silently stripped.
             // (Object-store keys must be canonical, so `validate_logical_path` rejects `.`.)
             Component::CurDir => {}
-            _ => return Err(modo::Error::internal("Invalid storage path")),
+            _ => return Err(modo::Error::internal("invalid storage path")),
         }
     }
     Ok(result)
@@ -20,11 +20,11 @@ pub(crate) fn ensure_within(base: &Path, path: &Path) -> Result<PathBuf, modo::E
 #[cfg(feature = "opendal")]
 pub(crate) fn validate_logical_path(path: &str) -> Result<(), modo::Error> {
     if path.starts_with('/') {
-        return Err(modo::Error::internal("Invalid storage path"));
+        return Err(modo::Error::internal("invalid storage path"));
     }
     for segment in path.split('/') {
         if segment == ".." || segment == "." {
-            return Err(modo::Error::internal("Invalid storage path"));
+            return Err(modo::Error::internal("invalid storage path"));
         }
     }
     Ok(())

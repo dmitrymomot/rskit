@@ -25,20 +25,20 @@ impl EmailTemplate {
         let raw = raw.trim();
         if !raw.starts_with("---") {
             return Err(modo::Error::internal(
-                "Email template must start with YAML frontmatter (---)",
+                "email template must start with YAML frontmatter (---)",
             ));
         }
 
         let after_first = &raw[3..];
         let end = after_first.find("---").ok_or_else(|| {
-            modo::Error::internal("Email template frontmatter missing closing ---")
+            modo::Error::internal("email template frontmatter missing closing ---")
         })?;
 
         let yaml = &after_first[..end];
         let body = &after_first[end + 3..];
 
         let fm: Frontmatter = serde_yaml_ng::from_str(yaml)
-            .map_err(|e| modo::Error::internal(format!("Invalid frontmatter: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("invalid frontmatter: {e}")))?;
 
         Ok(Self {
             subject: fm.subject,

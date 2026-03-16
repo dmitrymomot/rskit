@@ -23,7 +23,7 @@ impl<'a> UploadValidator<'a> {
     pub fn max_size(mut self, max: usize) -> Self {
         if self.file.size() > max {
             self.errors
-                .push(format!("File exceeds maximum size of {}", format_size(max)));
+                .push(format!("file exceeds maximum size of {}", format_size(max)));
         }
         self
     }
@@ -42,7 +42,7 @@ impl<'a> UploadValidator<'a> {
     /// detection succeeds.
     pub fn accept(mut self, pattern: &str) -> Self {
         if !mime_matches(self.file.content_type(), pattern) {
-            self.errors.push(format!("File type must match {pattern}"));
+            self.errors.push(format!("file type must match {pattern}"));
             return self;
         }
         // Skip magic-bytes validation for catch-all or empty files

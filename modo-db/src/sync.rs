@@ -37,7 +37,7 @@ async fn do_sync(db: &DbPool, group_filter: Option<&str>) -> Result<(), modo::Er
         )",
     )
     .await
-    .map_err(|e| modo::Error::internal(format!("Failed to bootstrap migrations table: {e}")))?;
+    .map_err(|e| modo::Error::internal(format!("failed to bootstrap migrations table: {e}")))?;
 
     // 2. Collect entities, optionally filtered by group
     let (framework, user): (Vec<_>, Vec<_>) = inventory::iter::<EntityRegistration>
@@ -64,7 +64,7 @@ async fn do_sync(db: &DbPool, group_filter: Option<&str>) -> Result<(), modo::Er
     builder
         .sync(conn)
         .await
-        .map_err(|e| modo::Error::internal(format!("Schema sync failed: {e}")))?;
+        .map_err(|e| modo::Error::internal(format!("schema sync failed: {e}")))?;
     info!("Schema sync complete");
 
     // 4. Run extra SQL (composite indices, partial unique indices, etc.)
@@ -78,7 +78,7 @@ async fn do_sync(db: &DbPool, group_filter: Option<&str>) -> Result<(), modo::Er
                     "Failed to execute extra SQL for entity"
                 );
                 return Err(modo::Error::internal(format!(
-                    "Extra SQL for {} failed: {e}",
+                    "extra SQL for {} failed: {e}",
                     reg.table_name
                 )));
             }
@@ -116,7 +116,7 @@ async fn run_pending_migrations(
     for m in &migrations {
         if !seen.insert(m.version) {
             return Err(modo::Error::internal(format!(
-                "Duplicate migration version: {}",
+                "duplicate migration version: {}",
                 m.version
             )));
         }
@@ -128,7 +128,7 @@ async fn run_pending_migrations(
     let executed: Vec<migration_entity::Model> = migration_entity::Entity::find()
         .all(db)
         .await
-        .map_err(|e| modo::Error::internal(format!("Failed to query migrations: {e}")))?;
+        .map_err(|e| modo::Error::internal(format!("failed to query migrations: {e}")))?;
     let executed_versions: HashSet<u64> = executed.iter().map(|m| m.version as u64).collect();
 
     // Run pending
@@ -146,7 +146,7 @@ async fn run_pending_migrations(
         // Record migration as executed
         let version_i64 = i64::try_from(migration.version).map_err(|_| {
             modo::Error::internal(format!(
-                "Migration version {} exceeds maximum ({})",
+                "migration version {} exceeds maximum ({})",
                 migration.version,
                 i64::MAX
             ))
@@ -159,7 +159,7 @@ async fn run_pending_migrations(
         migration_entity::Entity::insert(record)
             .exec(db)
             .await
-            .map_err(|e| modo::Error::internal(format!("Failed to record migration: {e}")))?;
+            .map_err(|e| modo::Error::internal(format!("failed to record migration: {e}")))?;
         info!("Migration v{} complete", migration.version);
     }
 
