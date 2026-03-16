@@ -198,31 +198,33 @@ mod tests {
 
     #[tokio::test]
     async fn custom_reserved_subdomains() {
+        // Use a list that differs from the default to prove with_reserved
+        // actually overrides the default list (not just duplicates it).
         let resolver = SubdomainResolver::with_reserved(
             "myapp.com",
-            vec![
-                "www".to_string(),
-                "api".to_string(),
-                "admin".to_string(),
-                "mail".to_string(),
-            ],
+            vec!["staging".to_string(), "internal".to_string()],
             |slug| async move { Ok(Some(TestTenant { id: slug })) },
         );
 
-        // "api" is reserved
-        let p = parts("api.myapp.com");
+        // "staging" is in the custom reserved list
+        let p = parts("staging.myapp.com");
         let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
         assert_eq!(result, None);
 
-        // "admin" is reserved
-        let p = parts("admin.myapp.com");
+        // "internal" is in the custom reserved list
+        let p = parts("internal.myapp.com");
         let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
         assert_eq!(result, None);
 
-        // "mail" is reserved
-        let p = parts("mail.myapp.com");
+        // "www" is NOT in the custom list (proves default is replaced, not merged)
+        let p = parts("www.myapp.com");
         let result = crate::TenantResolver::resolve(&resolver, &p).await.unwrap();
-        assert_eq!(result, None);
+        assert_eq!(
+            result,
+            Some(TestTenant {
+                id: "www".to_string()
+            })
+        );
 
         // "acme" is NOT reserved
         let p = parts("acme.myapp.com");

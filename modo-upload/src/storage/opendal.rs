@@ -70,6 +70,7 @@ impl FileStorageSend for OpendalStorage {
         }
 
         if let Err(e) = writer.close().await {
+            let _ = writer.abort().await;
             let _ = self.operator.delete(&path).await;
             return Err(modo::Error::internal(format!(
                 "Failed to finalize write: {e}"
