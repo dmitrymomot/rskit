@@ -50,10 +50,10 @@ email:
         port: 587
         username: "user"
         password: "pass"
-        tls: true
+        security: starttls  # none | starttls | implicit_tls
 ```
 
-All fields have defaults (`templates_path` defaults to `"emails"`, `smtp.port` to `587`, `smtp.tls` to `true`). Only specify what you need to override.
+All fields have defaults (`templates_path` defaults to `"emails"`, `smtp.host` to `"localhost"`, `smtp.port` to `587`, `smtp.security` to `starttls`). Only specify what you need to override.
 
 ### Send a Templated Email
 
@@ -352,25 +352,27 @@ email:
 
 ### `EmailConfig`
 
-| Field                | Type              | Default    | Description                                 |
-| -------------------- | ----------------- | ---------- | ------------------------------------------- |
-| `transport`          | `smtp` / `resend` | `smtp`     | Which transport backend to use              |
-| `templates_path`     | `String`          | `"emails"` | Directory containing `.md` templates        |
-| `default_from_name`  | `String`          | `""`       | Default sender display name                 |
-| `default_from_email` | `String`          | `""`       | Default sender email address                |
-| `default_reply_to`   | `Option<String>`  | `None`     | Default reply-to address                    |
-| `smtp`               | `SmtpConfig`      | see below  | SMTP settings (requires `smtp` feature)     |
-| `resend`             | `ResendConfig`    | see below  | Resend settings (requires `resend` feature) |
+| Field                 | Type              | Default    | Description                                              |
+| --------------------- | ----------------- | ---------- | -------------------------------------------------------- |
+| `transport`           | `smtp` / `resend` | `smtp`     | Which transport backend to use                           |
+| `templates_path`      | `String`          | `"emails"` | Directory containing `.md` templates                     |
+| `default_from_name`   | `String`          | `""`       | Default sender display name                              |
+| `default_from_email`  | `String`          | `""`       | Default sender email address                             |
+| `default_reply_to`    | `Option<String>`  | `None`     | Default reply-to address                                 |
+| `cache_templates`     | `bool`            | `true`     | Cache compiled templates; set to `false` for hot-reload  |
+| `template_cache_size` | `usize`           | `100`      | Maximum number of templates kept in the LRU cache        |
+| `smtp`                | `SmtpConfig`      | see below  | SMTP settings (requires `smtp` feature)                  |
+| `resend`              | `ResendConfig`    | see below  | Resend settings (requires `resend` feature)              |
 
 ### `SmtpConfig`
 
-| Field      | Type     | Default       | Description                |
-| ---------- | -------- | ------------- | -------------------------- |
-| `host`     | `String` | `"localhost"` | SMTP server hostname       |
-| `port`     | `u16`    | `587`         | SMTP server port           |
-| `username` | `String` | `""`          | SMTP auth username         |
-| `password` | `String` | `""`          | SMTP auth password         |
-| `tls`      | `bool`   | `true`        | Enable STARTTLS (port 587) |
+| Field      | Type           | Default       | Description                                                              |
+| ---------- | -------------- | ------------- | ------------------------------------------------------------------------ |
+| `host`     | `String`       | `"localhost"` | SMTP server hostname                                                     |
+| `port`     | `u16`          | `587`         | SMTP server port                                                         |
+| `username` | `String`       | `""`          | SMTP auth username (skipped if empty)                                    |
+| `password` | `String`       | `""`          | SMTP auth password                                                       |
+| `security` | `SmtpSecurity` | `starttls`    | TLS mode: `none`, `starttls` (port 587), or `implicit_tls` (port 465)   |
 
 ### `ResendConfig`
 

@@ -168,8 +168,9 @@ server:
     secret_key: "${SECRET_KEY}"
     log_level: "info"
     shutdown_timeout_secs: 30
+    hook_timeout_secs: 5
     http:
-        timeout: 30 # request timeout in seconds
+        timeout: 30 # request timeout in seconds; omit to disable
         body_limit: "2mb"
         compression: false
         catch_panic: true
@@ -205,6 +206,8 @@ cookies:
 | `CookieManager`    | Plain, signed, and encrypted cookie read/write extractor          |
 | `JsonReq<T>`       | JSON request extractor with auto-sanitization                     |
 | `FormReq<T>`       | Form request extractor with auto-sanitization                     |
+| `PathReq<T>`       | Path parameter extractor (re-export of `axum::extract::Path`)     |
+| `QueryReq<T>`      | Query string extractor (re-export of `axum::extract::Query`)      |
 | `RequestId`        | ULID request ID injected by middleware and propagated via headers |
 | `ClientIp`         | Resolved client IP (supports trusted proxies and Cloudflare)      |
 | `RateLimitInfo`    | Rate limit header info available as a request extractor           |

@@ -119,6 +119,10 @@ mod admin {
 All `#[handler]` attributes inside the module are automatically associated with
 the module's prefix and middleware at compile time via `inventory`.
 
+Bare `mod foo;` declarations inside the module body are allowed. Inline nested
+`mod foo { ... }` blocks are not supported and produce a compile error, because
+their handlers would not receive the outer prefix.
+
 ### Custom error handler
 
 ```rust
@@ -156,6 +160,7 @@ Available `#[clean(...)]` rules: `trim`, `lowercase`, `uppercase`,
 `custom = "path::to::fn"`.
 
 Sanitization runs automatically inside `JsonReq` and `FormReq` extractors.
+Generic structs are not supported.
 
 ### Input validation
 

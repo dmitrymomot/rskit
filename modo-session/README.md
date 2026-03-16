@@ -22,7 +22,7 @@ Create a `SessionStore`, register it as a service, and install the middleware la
 Both steps are required: the service makes the store available to background jobs;
 the layer handles cookie reading and writing per request.
 
-```rust
+```rust,no_run
 use modo_session::{SessionConfig, SessionStore, layer};
 
 let session_store = SessionStore::new(
@@ -41,7 +41,7 @@ app.config(config.core)
 
 ### Authentication
 
-```rust
+```rust,no_run
 use modo_session::SessionManager;
 
 #[modo::handler(POST, "/login")]
@@ -62,7 +62,7 @@ async fn login_with_data(session: SessionManager) -> modo::HandlerResult<()> {
 
 ### Logout
 
-```rust
+```rust,no_run
 #[modo::handler(POST, "/logout")]
 async fn logout(session: SessionManager) -> modo::HandlerResult<()> {
     session.logout().await?;           // destroy current session
@@ -74,7 +74,7 @@ async fn logout(session: SessionManager) -> modo::HandlerResult<()> {
 
 ### Reading session state
 
-```rust
+```rust,no_run
 #[modo::handler(GET, "/me")]
 async fn me(session: SessionManager) -> modo::HandlerResult<String> {
     let user_id = session.user_id().await
@@ -85,7 +85,7 @@ async fn me(session: SessionManager) -> modo::HandlerResult<String> {
 
 ### Session data (key/value store)
 
-```rust
+```rust,no_run
 #[modo::handler(POST, "/set-flag")]
 async fn set_flag(session: SessionManager) -> modo::HandlerResult<()> {
     session.set("onboarded", &true).await?;
@@ -105,7 +105,7 @@ When you need the current user ID inside a Tower layer (not a handler), use the
 non-blocking helper. It reads from request extensions injected by the session
 middleware:
 
-```rust
+```rust,no_run
 use modo_session::user_id_from_extensions;
 
 // Inside a FromRequestParts or tower::Service impl:
@@ -135,8 +135,9 @@ Requires `modo-jobs` and a running job runner.
 modo-session = { version = "0.2", features = ["cleanup-job"] }
 ```
 
-The job is auto-registered via `inventory` — no explicit startup call is needed,
-but `SessionStore` must be registered as a service with `app.service(session_store)`.
+The job is registered automatically by the `modo-jobs` macro — no explicit startup
+call is needed, but `SessionStore` must be registered as a service with
+`app.service(session_store)` so the job runner can inject it.
 
 ## Key Types
 
@@ -144,7 +145,7 @@ but `SessionStore` must be registered as a service with `app.service(session_sto
 | ------------------------- | ------------------------------------------------------------------------ |
 | `SessionConfig`           | Tunable parameters: TTL, cookie name, fingerprint, proxies.              |
 | `SessionStore`            | Low-level DB store; register as a managed service for background jobs.   |
-| `SessionManager`          | Axum extractor for request-scoped session operations.                    |
+| `SessionManager`          | Per-request axum extractor for session operations.                       |
 | `SessionData`             | Full session record (ID, user, device info, JSON payload, timestamps).   |
 | `SessionId`               | Opaque ULID-based session identifier.                                    |
 | `SessionToken`            | 32-byte random token; serialises as hex; `Debug`/`Display` are redacted. |

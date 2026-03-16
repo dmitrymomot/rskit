@@ -167,10 +167,12 @@ Only jobs in the `Pending` state can be cancelled.
 `JobsConfig` can be deserialized from YAML:
 
 ```yaml
-poll_interval_secs: 1       # how often each queue polls (default: 1)
-stale_threshold_secs: 600   # re-queue jobs locked longer than this (default: 600)
-drain_timeout_secs: 30      # max wait during shutdown (default: 30)
-max_payload_bytes: null     # payload size limit, null = unlimited (default: null)
+poll_interval_secs: 1          # how often each queue polls (default: 1)
+stale_threshold_secs: 600      # re-queue jobs locked longer than this (default: 600)
+stale_reaper_interval_secs: 60 # how often the stale reaper runs (default: 60)
+drain_timeout_secs: 30         # max wait during shutdown (default: 30)
+max_payload_bytes: null        # payload size limit, null = unlimited (default: null)
+max_queue_depth: null          # max pending jobs per queue, null = unlimited (default: null)
 
 queues:
   - name: default
@@ -185,6 +187,10 @@ cleanup:
 ```
 
 Queue names in YAML must match the `queue` attribute used in `#[job(queue = "...")]`.
+
+When `max_queue_depth` is set and a queue is full, `enqueue()` returns a 503
+error. The depth check is a soft limit — concurrent enqueues may briefly exceed
+the cap because the count and insert are not atomic.
 
 ## Key Types
 

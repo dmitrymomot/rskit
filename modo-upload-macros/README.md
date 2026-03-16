@@ -87,7 +87,7 @@ In a modo handler, use `MultipartForm<T>` from `modo_upload` to extract and vali
 ```rust
 use std::sync::Arc;
 use modo::{Json, JsonResult, Service};
-use modo_upload::{FileStorage, FromMultipart, MultipartForm, UploadedFile};
+use modo_upload::{FileStorageDyn, FromMultipart, MultipartForm, UploadedFile};
 
 #[derive(FromMultipart)]
 struct ProfileForm {
@@ -98,7 +98,7 @@ struct ProfileForm {
 
 #[modo::handler(POST, "/profile")]
 async fn update_profile(
-    storage: Service<Arc<dyn FileStorage>>,
+    storage: Service<Arc<dyn FileStorageDyn>>,
     form: MultipartForm<ProfileForm>,
 ) -> JsonResult<serde_json::Value> {
     let stored = storage.store("avatars", &form.avatar).await?;
@@ -134,7 +134,7 @@ Overrides the multipart field name. By default the Rust field name is used.
 | `UploadedFile`         | yes      | Single file; validation error if missing         |
 | `Option<UploadedFile>` | no       | Optional single file                             |
 | `Vec<UploadedFile>`    | no       | Zero or more files under the same multipart name |
-| `BufferedUpload`       | yes      | Buffered upload; at most one field per struct    |
+| `BufferedUpload`       | yes      | Buffered upload; only one field allowed per struct |
 | `String`               | yes      | Required text field                              |
 | `Option<String>`       | no       | Optional text field                              |
 | `T: FromStr`           | yes      | Required text field parsed via `FromStr`         |

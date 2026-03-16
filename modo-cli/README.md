@@ -74,11 +74,25 @@ The CLI prints the recommended next steps. For a `web` project:
 
 ```
 cd my-app
-just assets-download     # download HTMX, Alpine.js (first time only)
+just assets-download     # download HTMX, Alpine.js, Tailwind Elements (first time only)
 just dev                 # start Docker services, build CSS, run dev server
 ```
 
-For other templates:
+For `api` or `worker` projects with SQLite:
+
+```
+cd my-service
+just dev
+```
+
+For `api` or `worker` projects with PostgreSQL, `just dev` also starts the Docker Compose services (Postgres):
+
+```
+cd my-api
+just dev
+```
+
+For `minimal` projects:
 
 ```
 cd my-service

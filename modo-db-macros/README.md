@@ -1,7 +1,5 @@
 # modo-db-macros
 
-[![docs.rs](https://img.shields.io/docsrs/modo-db-macros)](https://docs.rs/modo-db-macros)
-
 Procedural macros powering the `modo-db` entity and migration system.
 
 This crate is an implementation detail of `modo-db`. Consume these macros through the
@@ -28,7 +26,7 @@ Place these as a second `#[entity(...)]` attribute on the struct itself.
 
 | Option                              | Effect                                                                                    |
 | ----------------------------------- | ----------------------------------------------------------------------------------------- |
-| `timestamps`                        | Injects `created_at` and `updated_at: DateTime<Utc>` columns; set automatically via `Record::apply_auto_fields` on every insert and update. |
+| `timestamps`                        | Injects `created_at` and `updated_at: DateTime<Utc>` columns; set automatically on every insert and update. |
 | `soft_delete`                       | Injects `deleted_at: Option<DateTime<Utc>>`. The `delete` method becomes a soft-delete (sets `deleted_at`). Extra methods generated: `with_deleted`, `only_deleted`, `restore`, `force_delete`, `force_delete_by_id`, `delete_many` (bulk soft-delete), `force_delete_many` (bulk hard-delete). `find_all` and `query` exclude soft-deleted rows automatically. |
 | `framework`                         | Marks the entity as framework-internal (hidden from user schema).                         |
 | `index(columns = ["col1", "col2"])` | Creates a composite index. Add `unique` inside for a unique index.                        |
@@ -44,6 +42,7 @@ Place these as `#[entity(...)]` on individual struct fields.
 | `auto = "ulid"\|"short_id"`    | Generates a ULID or short ID before insert. Only valid on `primary_key` fields.  |
 | `unique`                       | Adds a unique constraint.                                                        |
 | `indexed`                      | Creates a single-column index.                                                   |
+| `nullable`                     | Accepted but has no effect. `Option<T>` already implies nullable in SeaORM.      |
 | `column_type = "<type>"`       | Overrides the inferred SeaORM column type string.                                |
 | `default_value = <literal>`    | Sets a column default value.                                                     |
 | `default_expr = "<expr>"`      | Sets a default SQL expression.                                                   |
@@ -51,10 +50,10 @@ Place these as `#[entity(...)]` on individual struct fields.
 | `to_column = "<Column>"`       | Overrides the target column for a `belongs_to` FK (default: `"Id"`).            |
 | `on_delete = "<action>"`       | FK action on delete: `Cascade`, `SetNull`, `Restrict`, `NoAction`, `SetDefault`. |
 | `on_update = "<action>"`       | FK action on update. Same values as `on_delete`.                                 |
-| `has_many`                     | Declares a `HasMany` relation (field excluded from the model columns).           |
+| `has_many`                     | Declares a `HasMany` relation (field excluded from the model columns). Requires `target = "<Entity>"`. |
 | `has_one`                      | Declares a `HasOne` relation (field excluded from the model columns).            |
 | `via = "<JoinEntity>"`         | Many-to-many via a join entity. Used with `has_many` or `has_one`.               |
-| `target = "<Entity>"`          | Overrides the inferred target entity name for `has_many` / `has_one` when the field name does not match the entity name. |
+| `target = "<Entity>"`          | Overrides the inferred target entity name for `has_many` / `has_one` when the field name does not match the entity name. Required for `has_many`. |
 | `renamed_from = "<old>"`       | Records a rename hint as a column comment.                                       |
 
 #### What the macro emits
@@ -62,7 +61,7 @@ Place these as `#[entity(...)]` on individual struct fields.
 For a struct named `Foo`, the macro emits:
 
 - The original `Foo` struct with `#[derive(Clone, Debug, serde::Serialize)]`
-- `impl Default for Foo` — auto-generates IDs (ULID/NanoID), sets timestamps to `Utc::now()`,
+- `impl Default for Foo` — auto-generates IDs (ULID/short_id), sets timestamps to `Utc::now()`,
   uses type defaults for all other fields (`String::new()`, `false`, `0`, `None`, etc.)
 - `impl From<foo::Model> for Foo` — converts a SeaORM model to the domain struct
 - `pub mod foo { ... }` containing:
@@ -125,8 +124,8 @@ pub struct User {
     pub id: String,
     #[entity(unique)]
     pub email: String,
-    // Relation field — excluded from model columns
-    #[entity(has_many)]
+    // Relation field — excluded from model columns; target is required for has_many
+    #[entity(has_many, target = "Post")]
     pub posts: (),
 }
 
@@ -159,8 +158,7 @@ The optional `group` parameter (defaults to `"default"`) assigns the migration t
 Migrations in a group run only when `modo_db::sync_and_migrate_group` is called with the
 matching group name.
 
-The annotated function must be `async fn(db: &sea_orm::DatabaseConnection) -> Result<(), modo::Error>`.
-The `db` parameter implements `ConnectionTrait`, so the full SeaORM typed API is available:
+The annotated function must be `async fn(db: &sea_orm::DatabaseConnection) -> Result<(), modo::Error>`:
 
 ```rust,ignore
 #[modo_db::migration(version = 1, description = "seed default roles")]
