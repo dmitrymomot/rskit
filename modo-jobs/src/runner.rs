@@ -358,6 +358,19 @@ pub async fn claim_next(
     Ok(result)
 }
 
+/// Extract a human-readable message from a panic payload.
+///
+/// Handles `String` and `&str` payloads (the two types produced by
+/// `panic!()` and `panic!("{}", ...)`) and falls back to `"unknown panic"`
+/// for anything else.
+fn extract_panic_msg(payload: Box<dyn std::any::Any + Send>) -> String {
+    payload
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_else(|| "unknown panic".to_string())
+}
+
 async fn execute_job(
     db: &modo_db::sea_orm::DatabaseConnection,
     job: job::Model,
@@ -427,12 +440,7 @@ async fn execute_job(
             .await;
         }
         Err(panic_payload) => {
-            // Handler panicked — extract the panic message
-            let panic_msg = panic_payload
-                .downcast_ref::<String>()
-                .cloned()
-                .or_else(|| panic_payload.downcast_ref::<&str>().map(|s| s.to_string()))
-                .unwrap_or_else(|| "unknown panic".to_string());
+            let panic_msg = extract_panic_msg(panic_payload);
 
             error!(
                 job_id = %job.id, job_name = %job_name, queue = %queue,
@@ -635,34 +643,19 @@ mod tests {
     #[test]
     fn panic_payload_extraction_string() {
         let payload: Box<dyn std::any::Any + Send> = Box::new("test panic".to_string());
-        let msg = payload
-            .downcast_ref::<String>()
-            .cloned()
-            .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
-            .unwrap_or_else(|| "unknown panic".to_string());
-        assert_eq!(msg, "test panic");
+        assert_eq!(super::extract_panic_msg(payload), "test panic");
     }
 
     #[test]
     fn panic_payload_extraction_str() {
         let payload: Box<dyn std::any::Any + Send> = Box::new("test panic");
-        let msg = payload
-            .downcast_ref::<String>()
-            .cloned()
-            .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
-            .unwrap_or_else(|| "unknown panic".to_string());
-        assert_eq!(msg, "test panic");
+        assert_eq!(super::extract_panic_msg(payload), "test panic");
     }
 
     #[test]
     fn panic_payload_extraction_unknown() {
         let payload: Box<dyn std::any::Any + Send> = Box::new(42i32);
-        let msg = payload
-            .downcast_ref::<String>()
-            .cloned()
-            .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
-            .unwrap_or_else(|| "unknown panic".to_string());
-        assert_eq!(msg, "unknown panic");
+        assert_eq!(super::extract_panic_msg(payload), "unknown panic");
     }
 
     #[tokio::test]

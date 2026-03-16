@@ -93,9 +93,9 @@ impl JobQueue {
                 .filter(job::Column::State.eq(JobState::Pending.as_str()))
                 .count(&self.db)
                 .await
-                .map_err(|e| modo::Error::internal(format!("Failed to count queue depth: {e}")))?;
+                .map_err(|e| modo::Error::internal(format!("failed to count queue depth: {e}")))?;
 
-            if count as usize >= max_depth {
+            if count >= max_depth as u64 {
                 return Err(modo::HttpError::ServiceUnavailable.with_message(format!(
                     "Queue '{}' is full ({max_depth} pending jobs)",
                     reg.queue
@@ -177,7 +177,28 @@ impl JobQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::handler::{JobHandlerDyn, JobRegistration};
     use modo_db::sea_orm::{ConnectionTrait, Database, Schema};
+
+    // Dummy handler for queue depth tests
+    struct DummyHandler;
+    impl crate::handler::JobHandler for DummyHandler {
+        async fn run(&self, _ctx: crate::handler::JobContext) -> Result<(), modo::Error> {
+            Ok(())
+        }
+    }
+
+    inventory::submit! {
+        JobRegistration {
+            name: "__test_dummy",
+            queue: "default",
+            priority: 0,
+            max_attempts: 3,
+            timeout_secs: 30,
+            cron: None,
+            handler_factory: || Box::new(DummyHandler) as Box<dyn JobHandlerDyn>,
+        }
+    }
 
     async fn setup_db() -> modo_db::sea_orm::DatabaseConnection {
         let db = Database::connect("sqlite::memory:")
@@ -221,8 +242,16 @@ mod tests {
             max_queue_depth: Some(2),
         };
 
-        // At minimum, verify the queue construction doesn't panic
-        assert!(queue.max_queue_depth == Some(2));
+        // Fill the queue up to the limit
+        let _id1 = queue.enqueue("__test_dummy", &"a").await.unwrap();
+        let _id2 = queue.enqueue("__test_dummy", &"b").await.unwrap();
+
+        // Third enqueue should be rejected with 503
+        let err = queue.enqueue("__test_dummy", &"c").await.unwrap_err();
+        assert_eq!(
+            err.status_code(),
+            modo::axum::http::StatusCode::SERVICE_UNAVAILABLE,
+        );
     }
 
     #[tokio::test]
