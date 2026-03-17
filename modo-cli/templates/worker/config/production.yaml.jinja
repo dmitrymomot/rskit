@@ -16,3 +16,7 @@ jobs:
   queues:
     - name: default
       concurrency: 4
+sentry:
+  dsn: ${SENTRY_DSN}
+  environment: production
+  traces_sample_rate: 0.2
