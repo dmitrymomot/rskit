@@ -659,7 +659,7 @@ pub struct User {
     #[entity(primary_key, auto = "ulid")]
     pub id: String,
     pub email: String,
-    #[entity(has_many)]
+    #[entity(has_many, target = "Post")]
     pub posts: (),        // field excluded from DB model
 }
 ```
@@ -1051,13 +1051,15 @@ async fn normalize_emails(db: &sea_orm::DatabaseConnection)
 {
     use modo_db::sea_orm::{EntityTrait, ColumnTrait, QueryFilter};
 
-    let users = user::Entity::find().all(db).await?;
+    let users = user::Entity::find().all(db).await
+        .map_err(|e| modo::Error::internal(e.to_string()))?;
     for u in users {
         let mut am: user::ActiveModel = u.into();
         if let sea_orm::ActiveValue::Set(ref mut email) = am.email {
             *email = email.to_lowercase();
         }
-        am.update(db).await?;
+        am.update(db).await
+            .map_err(|e| modo::Error::internal(e.to_string()))?;
     }
     Ok(())
 }
