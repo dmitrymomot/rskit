@@ -1,0 +1,15 @@
+[package]
+name = "modo-sqlite-macros"
+version.workspace = true
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+description = "Proc macros for modo-sqlite (embed_migrations)"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }

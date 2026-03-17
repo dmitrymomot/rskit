@@ -14,6 +14,8 @@ members = [
   "modo-upload",
   "modo-upload-macros",
   "modo-cli",
+  "modo-sqlite",
+  "modo-sqlite-macros",
   "examples/*",
 ]
 
@@ -35,5 +37,7 @@ modo-auth = { path = "modo-auth", version = "0.3" }
 modo-tenant = { path = "modo-tenant", version = "0.3" }
 modo-upload = { path = "modo-upload", version = "0.3" }
 modo-upload-macros = { path = "modo-upload-macros", version = "0.3" }
+modo-sqlite = { path = "modo-sqlite", version = "0.3" }
+modo-sqlite-macros = { path = "modo-sqlite-macros", version = "0.3" }
 inventory = "0.3"
 serde_yaml_ng = "0.10"
