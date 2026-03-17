@@ -12,6 +12,7 @@ templates:
 cookie:
     secure: false
 database:
-    url: ${DATABASE_URL:-sqlite://chat.db?mode=rwc}
+    sqlite:
+        path: ${DATABASE_URL:-data/chat.db}
     max_connections: 5
     min_connections: 1

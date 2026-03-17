@@ -2,6 +2,7 @@ server:
   port: 3001
   secret_key: ${SECRET_KEY:-todo-api-dev-secret-key-change-in-production}
 database:
-  url: ${DATABASE_URL:-sqlite://todos.db?mode=rwc}
+  sqlite:
+    path: ${DATABASE_URL:-data/todos.db}
   max_connections: 5
   min_connections: 1
