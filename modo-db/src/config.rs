@@ -27,10 +27,6 @@ pub struct DatabaseConfig {
     pub sqlite: Option<SqliteDbConfig>,
     /// Postgres-specific config. Presence selects Postgres backend.
     pub postgres: Option<PostgresDbConfig>,
-    /// Legacy connection URL — used by `connect.rs` until it is rewritten.
-    /// Will be removed in the next breaking change.
-    #[serde(default = "default_url")]
-    pub url: String,
 }
 
 fn default_max_connections() -> u32 {
@@ -48,10 +44,6 @@ fn default_idle_timeout() -> u64 {
 fn default_max_lifetime() -> u64 {
     1800
 }
-fn default_url() -> String {
-    "sqlite://data/main.db?mode=rwc".to_string()
-}
-
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
@@ -62,7 +54,6 @@ impl Default for DatabaseConfig {
             max_lifetime_secs: default_max_lifetime(),
             sqlite: Some(SqliteDbConfig::default()),
             postgres: None,
-            url: default_url(),
         }
     }
 }
