@@ -30,8 +30,8 @@ async fn test_pragmas_applied_on_all_connections() {
     };
     let db = modo_db::connect(&config).await.unwrap();
 
-    // Query PRAGMA on multiple connections by running concurrent queries.
-    // Each should return the configured value, not the default.
+    // Query PRAGMA value — all connections are pre-warmed via after_connect,
+    // so any connection from the pool should return the configured value.
     use sea_orm::ConnectionTrait;
     for _ in 0..3 {
         let result = db
