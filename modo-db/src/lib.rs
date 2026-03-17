@@ -56,7 +56,10 @@ mod record;
 pub mod sync;
 
 // Public API
-pub use config::DatabaseConfig;
+pub use config::{
+    DatabaseConfig, JournalMode, PostgresDbConfig, SqliteConfig, SqliteDbConfig, SynchronousMode,
+    TempStore,
+};
 pub use connect::connect;
 pub use entity::EntityRegistration;
 #[doc(hidden)]
