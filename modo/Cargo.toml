@@ -35,6 +35,7 @@ anyhow = "1"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
+sentry = { version = "0.37", features = ["tracing", "tower", "tower-http"] }
 
 # Config
 dotenvy = "0.15"
