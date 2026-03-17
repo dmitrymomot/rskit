@@ -1,30 +1,30 @@
 use std::future::Future;
 use std::pin::Pin;
 
-/// Trait implemented by pool types that can be used for database writes
-/// (and therefore for running migrations).
+/// Marker trait for pool types that can be used for database writes and migrations.
 ///
-/// # Design rationale
+/// Both [`Pool`] and [`WritePool`] implement this trait. [`ReadPool`] intentionally
+/// does **not**, so that write-path operations (including migrations) can only be
+/// called with a writable pool at compile time.
 ///
-/// [`ReadPool`] intentionally does NOT implement `AsPool`. This ensures
-/// migrations — and any other write-path code that accepts `&impl AsPool` —
-/// can only be called with a writable pool (`Pool` or `WritePool`).
+/// # Compile-time enforcement
 ///
-/// To verify the compile-time enforcement, the following snippet must fail:
+/// The following snippet must fail to compile because `ReadPool` does not implement `AsPool`:
+///
 /// ```compile_fail
 /// # use modo_sqlite::pool::{AsPool, ReadPool};
 /// fn _assert(_: &impl AsPool) {}
 /// _assert(&ReadPool(todo!()));
 /// ```
 pub trait AsPool {
+    /// Returns a reference to the underlying [`sqlx::SqlitePool`].
     fn pool(&self) -> &sqlx::SqlitePool;
 }
 
-// ReadPool intentionally does NOT implement AsPool.
-// This ensures migrations can only run through writable pools.
-// To verify: `fn _assert(_: &impl AsPool) {} _assert(&ReadPool(...))` would fail to compile.
-
 /// A general-purpose SQLite connection pool (readable and writable).
+///
+/// Implements [`AsPool`] and [`modo::GracefulShutdown`].
+/// Obtained from [`crate::connect()`].
 #[derive(Debug, Clone)]
 pub struct Pool(pub(crate) sqlx::SqlitePool);
 
@@ -32,10 +32,14 @@ pub struct Pool(pub(crate) sqlx::SqlitePool);
 ///
 /// Does **not** implement [`AsPool`] — write-path operations (e.g. migrations)
 /// are intentionally unavailable through this type.
+/// Obtained from [`crate::connect_rw`].
 #[derive(Debug, Clone)]
 pub struct ReadPool(pub(crate) sqlx::SqlitePool);
 
 /// A write-only SQLite connection pool.
+///
+/// Implements [`AsPool`] and [`modo::GracefulShutdown`].
+/// Obtained from [`crate::connect_rw`].
 #[derive(Debug, Clone)]
 pub struct WritePool(pub(crate) sqlx::SqlitePool);
 

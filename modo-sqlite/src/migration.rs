@@ -1,27 +1,60 @@
 use crate::pool::AsPool;
 
 /// Registration entry for an embedded SQL migration.
-/// Collected via `inventory` from `embed_migrations!()` calls.
+///
+/// Populated at compile time by `embed_migrations!` and collected via `inventory`.
+/// You never construct this type manually.
 pub struct MigrationRegistration {
+    /// Numeric version derived from the `YYYYMMDDHHmmss` filename prefix.
     pub version: u64,
+    /// Human-readable description derived from the filename suffix.
     pub description: &'static str,
+    /// Migration group (defaults to `"default"`).
     pub group: &'static str,
+    /// Full SQL content embedded at compile time via `include_str!`.
     pub sql: &'static str,
 }
 
 inventory::collect!(MigrationRegistration);
 
-/// Run ALL pending migrations (every group).
+/// Run all pending migrations across every group.
+///
+/// Creates the `_modo_sqlite_migrations` tracking table if it does not yet exist.
+/// Each migration is applied inside its own transaction and recorded atomically.
+/// Already-executed migrations (by version number) are skipped, making this call
+/// idempotent.
+///
+/// # Errors
+///
+/// Returns [`crate::Error`] if:
+/// - Two registered migrations share the same version number (checked before any SQL runs).
+/// - The tracking table cannot be created or queried.
+/// - Any migration SQL fails to execute.
 pub async fn run_migrations(pool: &impl AsPool) -> Result<(), crate::Error> {
     run_migrations_filtered(pool, |_| true).await
 }
 
-/// Run pending migrations for a specific group only.
+/// Run pending migrations for a single named group only.
+///
+/// All other groups are ignored. The global duplicate-version check still covers
+/// all registered migrations (not just the selected group), so a version collision
+/// in an excluded group is still detected and returns an error.
+///
+/// # Errors
+///
+/// Same conditions as [`run_migrations`].
 pub async fn run_migrations_group(pool: &impl AsPool, group: &str) -> Result<(), crate::Error> {
     run_migrations_filtered(pool, |m| m.group == group).await
 }
 
-/// Run pending migrations for all groups except the excluded ones.
+/// Run pending migrations for all groups except the ones listed in `exclude`.
+///
+/// Useful when multiple databases are in use and each database should only apply
+/// its own group of migrations.
+///
+/// # Errors
+///
+/// Same conditions as [`run_migrations`].
 pub async fn run_migrations_except(
     pool: &impl AsPool,
     exclude: &[&str],

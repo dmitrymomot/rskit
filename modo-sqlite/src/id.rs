@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const BASE36_CHARS: &[u8; 36] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 const SHORT_ID_LEN: usize = 13;
 
-/// Generate a new ULID string (26 chars, Crockford Base32).
+/// Generate a new ULID string (26 chars, Crockford Base32, monotonically sortable).
 pub fn generate_ulid() -> String {
     modo::ulid::Ulid::new().to_string()
 }

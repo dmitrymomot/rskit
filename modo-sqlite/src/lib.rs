@@ -1,7 +1,21 @@
 //! Pure sqlx SQLite layer for the modo framework.
 //!
 //! Provides connection pool management with optional read/write split,
-//! configurable SQLite PRAGMAs, and embedded SQL migrations via `inventory`.
+//! configurable SQLite PRAGMAs applied on every connection, and embedded SQL
+//! migrations discovered at compile time via `inventory`.
+//!
+//! ## Quick start
+//!
+//! ```ignore
+//! use modo_sqlite::{SqliteConfig, connect, run_migrations};
+//!
+//! let config = SqliteConfig::default(); // path: "data/app.db"
+//! let pool = connect(&config).await?;
+//! run_migrations(&pool).await?;
+//!
+//! // Register pool and run the app
+//! app.managed_service(pool).run().await
+//! ```
 
 pub mod config;
 pub mod connect;

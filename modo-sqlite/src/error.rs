@@ -1,4 +1,15 @@
 /// Error type for modo-sqlite operations.
+///
+/// Converts automatically from [`sqlx::Error`] and can be converted into
+/// [`modo::Error`] with appropriate HTTP status codes:
+///
+/// | Variant | HTTP status |
+/// |---------|------------|
+/// | `NotFound` | 404 Not Found |
+/// | `UniqueViolation` | 409 Conflict |
+/// | `ForeignKeyViolation` | 400 Bad Request |
+/// | `PoolTimeout` | 500 Internal Server Error |
+/// | `Query` | 500 Internal Server Error |
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// No matching record was found.

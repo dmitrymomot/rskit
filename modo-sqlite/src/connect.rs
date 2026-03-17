@@ -115,6 +115,10 @@ async fn build_pool(params: PoolParams) -> Result<sqlx::SqlitePool, sqlx::Error>
 /// All PRAGMAs are applied to every connection on connect, using the top-level
 /// values in `config`. Works with `:memory:` databases.
 ///
+/// Register the returned [`Pool`] with `app.managed_service(pool)` to hook it
+/// into graceful shutdown and make it available to the [`crate::extractor::Db`]
+/// extractor.
+///
 /// # Errors
 ///
 /// Returns [`crate::Error`] if the database file cannot be created, the URL is
@@ -147,7 +151,14 @@ pub async fn connect(config: &SqliteConfig) -> Result<Pool, crate::Error> {
 ///
 /// Returns `(ReadPool, WritePool)`. Per-pool overrides in `config.reader` and
 /// `config.writer` take precedence over the top-level values for their
-/// respective pools.
+/// respective pools. Both pools connect to the same database file.
+///
+/// Register each pool separately with `app.managed_service`:
+///
+/// ```ignore
+/// let (reader, writer) = modo_sqlite::connect_rw(&config.sqlite).await?;
+/// app.managed_service(reader).managed_service(writer)
+/// ```
 ///
 /// # Errors
 ///
