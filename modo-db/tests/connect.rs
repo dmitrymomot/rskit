@@ -25,7 +25,6 @@ async fn test_pragmas_applied_on_all_connections() {
                 busy_timeout: 7777,
                 ..Default::default()
             },
-            ..Default::default()
         }),
         ..Default::default()
     };

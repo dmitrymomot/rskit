@@ -12,11 +12,9 @@ use tracing::info;
 /// - Both set → returns an error
 pub async fn connect(config: &DatabaseConfig) -> Result<DbPool, modo::Error> {
     match (&config.sqlite, &config.postgres) {
-        (Some(_), Some(_)) => {
-            return Err(modo::Error::internal(
-                "both `sqlite` and `postgres` are set in database config — pick one",
-            ));
-        }
+        (Some(_), Some(_)) => Err(modo::Error::internal(
+            "both `sqlite` and `postgres` are set in database config — pick one",
+        )),
         (Some(sqlite), None) => connect_sqlite(sqlite, config).await,
         (None, Some(pg)) => connect_postgres(pg, config).await,
         (None, None) => {
@@ -40,15 +38,15 @@ async fn connect_sqlite(
         "sqlite::memory:".to_string()
     } else {
         // Ensure parent directory exists
-        if let Some(parent) = std::path::Path::new(&sqlite.path).parent() {
-            if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    modo::Error::internal(format!(
-                        "failed to create database directory {}: {e}",
-                        parent.display()
-                    ))
-                })?;
-            }
+        if let Some(parent) = std::path::Path::new(&sqlite.path).parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                modo::Error::internal(format!(
+                    "failed to create database directory {}: {e}",
+                    parent.display()
+                ))
+            })?;
         }
         format!("sqlite://{}?mode=rwc", sqlite.path)
     };
