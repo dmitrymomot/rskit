@@ -83,15 +83,15 @@ async fn run_migrations_filtered(
             "running migration"
         );
 
-        // Execute the SQL
-        sqlx::query(m.sql).execute(pool.pool()).await?;
-
-        // Record it
+        // Execute the SQL and record it in a transaction
+        let mut tx = pool.pool().begin().await?;
+        sqlx::query(m.sql).execute(&mut *tx).await?;
         sqlx::query("INSERT INTO _modo_sqlite_migrations (version, description) VALUES (?, ?)")
             .bind(m.version as i64)
             .bind(m.description)
-            .execute(pool.pool())
+            .execute(&mut *tx)
             .await?;
+        tx.commit().await?;
     }
 
     Ok(())

@@ -12,7 +12,6 @@ modo-sqlite-macros.workspace = true
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-native-tls"] }
 inventory.workspace = true
 serde = { version = "1", features = ["derive"] }
-chrono = { version = "0.4", features = ["serde"] }
 rand = "0.9"
 thiserror = "2"
 tracing = "0.1"
