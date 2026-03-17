@@ -4,15 +4,18 @@ server:
   show_banner: true
 database:
 {%- if db_driver == "sqlite" %}
-  url: ${DATABASE_URL:-sqlite://data/main.db?mode=rwc}
+  sqlite:
+    path: ${DATABASE_URL:-data/main.db}
 {%- else %}
-  url: ${DATABASE_URL:-postgres://postgres:postgres@localhost:5432/{{ project_name }}}
+  postgres:
+    url: ${DATABASE_URL:-postgres://postgres:postgres@localhost:5432/{{ project_name }}}
 {%- endif %}
   max_connections: 5
   min_connections: 1
 {%- if db_driver == "sqlite" %}
 jobs_database:
-  url: ${JOBS_DATABASE_URL:-sqlite://data/jobs.db?mode=rwc}
+  sqlite:
+    path: ${JOBS_DATABASE_URL:-data/jobs.db}
   max_connections: 5
   min_connections: 1
 {%- endif %}

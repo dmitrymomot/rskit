@@ -3,12 +3,19 @@ server:
   secret_key: ${SECRET_KEY}
   show_banner: false
 database:
-  url: ${DATABASE_URL}
+{%- if db_driver == "sqlite" %}
+  sqlite:
+    path: ${DATABASE_URL}
+{%- else %}
+  postgres:
+    url: ${DATABASE_URL}
+{%- endif %}
   max_connections: 20
   min_connections: 5
 {%- if db_driver == "sqlite" %}
 jobs_database:
-  url: ${JOBS_DATABASE_URL}
+  sqlite:
+    path: ${JOBS_DATABASE_URL}
   max_connections: 10
   min_connections: 2
 {%- endif %}
