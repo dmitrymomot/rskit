@@ -8,7 +8,7 @@ use http::Request;
 use modo::{AppState, ServerConfig, ServiceRegistry};
 use modo_auth::{Auth, OptionalAuth, UserProvider, UserProviderService};
 use modo_db::sea_orm::{ConnectionTrait, Schema};
-use modo_db::{DatabaseConfig, DbPool};
+use modo_db::{DatabaseConfig, DbPool, SqliteDbConfig};
 use modo_session::{SessionConfig, SessionMeta, SessionStore};
 use tower::ServiceExt;
 
@@ -39,7 +39,10 @@ impl UserProvider for TestProvider {
 
 async fn setup_db() -> DbPool {
     let config = DatabaseConfig {
-        url: "sqlite::memory:".to_string(),
+        sqlite: Some(SqliteDbConfig {
+            path: ":memory:".to_string(),
+            ..Default::default()
+        }),
         max_connections: 1,
         min_connections: 1,
         ..Default::default()

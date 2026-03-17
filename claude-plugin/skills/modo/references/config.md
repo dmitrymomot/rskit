@@ -79,7 +79,8 @@ server:
   secret_key: ${SECRET_KEY:-dev-only-insecure-key}
 
 database:
-  url: ${DATABASE_URL:-sqlite://app.db?mode=rwc}
+  sqlite:
+    path: ${DATABASE_URL:-data/app.db}
 ```
 
 This pattern makes development configs work without a `.env` file while production uses real secrets from the environment.

@@ -8,7 +8,7 @@ description = "Database layer for modo using SeaORM"
 
 [features]
 default = ["sqlite"]
-sqlite = ["sea-orm/sqlx-sqlite"]
+sqlite = ["sea-orm/sqlx-sqlite", "dep:sqlx"]
 postgres = ["sea-orm/sqlx-postgres"]
 
 [dependencies]
@@ -25,6 +25,7 @@ inventory.workspace = true
 serde = { version = "1", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
 rand = "0.9"
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-native-tls"], optional = true }
 tracing = "0.1"
 thiserror = "2"
 
