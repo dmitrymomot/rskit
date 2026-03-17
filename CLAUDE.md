@@ -39,6 +39,7 @@ Rust web framework for small monolithic apps. Single binary, compile-time magic,
 - modo-db `find_by_id` returns `Result<T, Error>` with auto-404 — no `.ok_or(NotFound)?` needed
 - modo-db `update(&mut self)` refreshes all fields from DB after write — no re-fetch needed
 - Tracing fields: always snake_case (`user_id`, `session_id`, `job_id`) — never dotted names (`panic.message`) which require string literal syntax and can break subscribers
+- Sentry integration: opt-in via `sentry` feature flag — add `features = ["sentry"]` to modo dependency; custom configs must impl `SentryConfigProvider` (delegate to `self.core.sentry_config()`)
 
 ## Gotchas
 
@@ -70,4 +71,5 @@ Rust web framework for small monolithic apps. Single binary, compile-time magic,
 - SeaORM `UpdateMany`: no `.set(col, val)` method — use `.col_expr(col, Expr::value(val))` instead
 - `just test` may fail in sandboxed environments (missing `/tmp` dir) — run with `TMPDIR` set or outside sandbox
 - `#[template_function]` / `#[template_filter]` name override: use `name = "alias"` syntax — bare string `("alias")` does NOT work
+- Sentry is behind `sentry` feature flag — `SentryConfig`, `SentryConfigProvider`, and `modo::sentry` module all require `#[cfg(feature = "sentry")]`; without the feature, tracing init falls back to stdout-only in the macro
 - Publish workflow (`.github/workflows/publish.yml`) uses single workspace version — compares root `Cargo.toml` version against crates.io, publishes all or none

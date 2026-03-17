@@ -343,6 +343,13 @@ impl AppBuilder {
 
         server_config.environment = crate::config::detect_env();
 
+        #[cfg(feature = "sentry")]
+        let sentry_active = app_config
+            .sentry
+            .as_ref()
+            .is_some_and(|s| !s.dsn.is_empty())
+            && sentry::Hub::current().client().is_some();
+
         let http_config = &server_config.http;
 
         let cookie_key = if server_config.secret_key.is_empty() {
@@ -565,6 +572,7 @@ impl AppBuilder {
         // =====================================================================
         // Middleware stack (applied bottom-up; last .layer() call = outermost)
         // Stack order: CORS > Maintenance > Catch Panic > Request ID >
+        //   Sentry Hub > Sentry Request ID Tag > Sentry HTTP >
         //   Sensitive Headers > Tracing > Client IP > Timeout > Trailing Slash >
         //   Compression > Body Limit > Security Headers > Error Handler >
         //   Rate Limiter > Context Layer > Request ID Injector > User Layers > Render Layer >
@@ -710,6 +718,18 @@ impl AppBuilder {
                 sensitive.clone(),
             ));
             router = router.layer(SetSensitiveResponseHeadersLayer::from_shared(sensitive));
+        }
+
+        // --- Sentry request context (if active) ---
+        #[cfg(feature = "sentry")]
+        if sentry_active {
+            router = router.layer(sentry::integrations::tower::SentryHttpLayer::with_transaction());
+            router = router.layer(axum::middleware::from_fn(
+                crate::sentry::sentry_request_id_middleware,
+            ));
+            router = router.layer(sentry::integrations::tower::NewSentryLayer::<
+                axum::http::Request<axum::body::Body>,
+            >::new_from_top());
         }
 
         // --- Request ID (always on) ---

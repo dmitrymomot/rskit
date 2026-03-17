@@ -93,6 +93,28 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         ));
     }
 
+    let sentry_init_tokens;
+    #[cfg(feature = "sentry")]
+    {
+        sentry_init_tokens = quote! {
+            let _sentry_guard = modo::__internal::init_tracing(
+                modo::__internal::SentryConfigProvider::sentry_config(&#config_ident)
+            );
+        };
+    }
+    #[cfg(not(feature = "sentry"))]
+    {
+        sentry_init_tokens = quote! {
+            {
+                let __env_filter = modo::__internal::tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| modo::__internal::tracing_subscriber::EnvFilter::new("info,sqlx::query=warn"));
+                modo::__internal::tracing_subscriber::fmt()
+                    .with_env_filter(__env_filter)
+                    .init();
+            }
+        };
+    }
+
     let static_embed_tokens;
     #[cfg(feature = "static-embed")]
     {
@@ -123,26 +145,23 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
                 .build()
                 .expect("failed to build tokio runtime")
                 .block_on(async {
-                    let stdout_filter = modo::__internal::tracing_subscriber::EnvFilter::try_from_default_env()
-                        .unwrap_or_else(|_| modo::__internal::tracing_subscriber::EnvFilter::new("info,sqlx::query=warn"));
-
-                    modo::__internal::tracing_subscriber::fmt()
-                        .with_env_filter(stdout_filter)
-                        .init();
-
-                    let #app_ident = modo::__internal::AppBuilder::new();
-
-                    #static_embed_tokens
-
                     let __modo_result: std::result::Result<(), Box<dyn std::error::Error>> = {
                         async move {
                             let #config_ident: #config_ty = modo::__internal::load_or_default()?;
+
+                            #sentry_init_tokens
+
+                            let #app_ident = modo::__internal::AppBuilder::new();
+
+                            #static_embed_tokens
+
                             #(#stmts)*
                         }
                     }.await;
 
                     if let Err(e) = __modo_result {
                         modo::__internal::tracing::error!("Application error: {e}");
+                        eprintln!("Application error: {e}");
                         std::process::exit(1);
                     }
                 });

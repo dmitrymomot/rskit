@@ -9,3 +9,6 @@ modo.workspace = true
 modo-upload.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+[features]
+sentry = ["modo/sentry"]

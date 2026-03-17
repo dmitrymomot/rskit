@@ -247,6 +247,7 @@ The `modo` core crate has these optional features (all off by default):
 | `i18n`         | Locale detection and internationalization          |
 | `sse`          | Server-Sent Events support                         |
 | `static-fs`    | Serve static files from a directory at runtime     |
+| `sentry`       | Sentry error tracking with request metadata        |
 | `static-embed` | Embed static files into the binary at compile time |
 
 </details>

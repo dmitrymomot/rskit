@@ -16,4 +16,5 @@ proc-macro2 = "1"
 
 [features]
 default = []
+sentry = []
 static-embed = []
