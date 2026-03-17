@@ -8,5 +8,12 @@ async fn main(
     config: config::Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let storage = modo_upload::storage(&config.upload)?;
-    app.config(config.core).service(storage).run().await
+    // Register both the storage backend and the upload config.
+    // MultipartForm reads UploadConfig from the service registry to apply
+    // the global max_file_size limit.
+    app.config(config.core)
+        .service(storage)
+        .service(config.upload)
+        .run()
+        .await
 }

@@ -12,8 +12,8 @@
 //!
 //! # Quick start
 //!
-//! Define a form struct, register the storage backend as a service, then
-//! extract the form in a handler:
+//! Define a form struct, register the storage backend **and** the upload config
+//! as services, then extract the form in a handler:
 //!
 //! ```rust,ignore
 //! use std::sync::Arc;
@@ -52,7 +52,14 @@
 //!     config: AppSettings,
 //! ) -> Result<(), Box<dyn std::error::Error>> {
 //!     let file_storage = storage(&config.upload)?;
-//!     app.config(config.core).service(file_storage).run().await
+//!     // Register both the storage backend AND the upload config.
+//!     // MultipartForm reads UploadConfig from the service registry to apply
+//!     // the global max_file_size limit.
+//!     app.config(config.core)
+//!         .service(file_storage)
+//!         .service(config.upload)
+//!         .run()
+//!         .await
 //! }
 //! ```
 

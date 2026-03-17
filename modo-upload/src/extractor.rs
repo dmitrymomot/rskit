@@ -14,9 +14,13 @@ use std::ops::Deref;
 /// (derived with `#[derive(modo::Validate)]`), the `.validate()` method becomes
 /// available after extraction.
 ///
-/// The global `max_file_size` from [`crate::UploadConfig`] is applied to every
-/// file field unless a per-field `#[upload(max_size = "...")]` attribute
-/// overrides it.
+/// [`UploadConfig`](crate::UploadConfig) **must be registered as a service** via
+/// `.service(config.upload)` on the app builder. The extractor reads it from the
+/// service registry to apply the global `max_file_size` limit to every file
+/// field. A missing `UploadConfig` returns a 500 Internal Server Error.
+///
+/// Per-field `#[upload(max_size = "...")]` attributes override the global limit
+/// for that specific field.
 pub struct MultipartForm<T>(pub T);
 
 impl<T> Deref for MultipartForm<T> {
@@ -61,7 +65,7 @@ where
             Some(cfg) => cfg,
             None => {
                 return Err(Error::internal(
-                    "UploadConfig not configured — register it via .service(upload_config)",
+                    "UploadConfig not configured — register it via .service(config.upload)",
                 ));
             }
         };
