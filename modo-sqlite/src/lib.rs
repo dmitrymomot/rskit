@@ -4,9 +4,11 @@
 //! configurable SQLite PRAGMAs, and embedded SQL migrations via `inventory`.
 
 pub mod config;
+pub mod connect;
 pub mod error;
 pub mod pool;
 
 pub use config::{JournalMode, PoolOverrides, SqliteConfig, SynchronousMode, TempStore};
+pub use connect::{connect, connect_rw};
 pub use error::Error;
 pub use pool::{AsPool, Pool, ReadPool, WritePool};
