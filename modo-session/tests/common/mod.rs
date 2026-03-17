@@ -1,9 +1,12 @@
 use modo_db::sea_orm::{ConnectionTrait, Schema};
-use modo_db::{DatabaseConfig, DbPool};
+use modo_db::{DatabaseConfig, DbPool, SqliteDbConfig};
 
 pub async fn setup_db() -> DbPool {
     let config = DatabaseConfig {
-        url: "sqlite::memory:".to_string(),
+        sqlite: Some(SqliteDbConfig {
+            path: ":memory:".to_string(),
+            ..Default::default()
+        }),
         max_connections: 1,
         min_connections: 1,
         ..Default::default()
