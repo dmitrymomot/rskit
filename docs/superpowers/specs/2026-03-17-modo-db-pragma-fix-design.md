@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-17
 **Status:** Approved
-**Scope:** Bug fix + configuration enhancement — no API changes
+**Scope:** Bug fix + configuration enhancement (minor API change: `url` → `path` in `DatabaseConfig`)
 
 ## Problem
 
@@ -32,7 +32,11 @@ Add `SqliteConfig` nested inside `DatabaseConfig`. Use enums for string-valued P
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct DatabaseConfig {
-    pub url: String,
+    /// For SQLite: plain file path (e.g. "data/app.db"). Crate builds sqlite:// URL internally.
+    /// For Postgres: full connection URL (e.g. "postgres://localhost/myapp").
+    /// Creates parent directories for SQLite paths automatically.
+    /// Special case: ":memory:" for in-memory SQLite.
+    pub path: String,               // "data/main.db" (changed from `url`)
     pub max_connections: u32,       // 5 (unchanged)
     pub min_connections: u32,       // 1
     pub acquire_timeout_secs: u64,  // 30
@@ -100,13 +104,20 @@ impl Default for SqliteConfig {
 
 All defaults match current behavior or SQLite defaults. `max_connections` stays at 5 — no behavioral changes beyond the bug fix. Users opt into performance tuning explicitly via YAML:
 
+SQLite:
 ```yaml
 database:
-    url: "sqlite://data.db?mode=rwc"
+    path: "data/app.db"
     sqlite:
         busy_timeout: 5000
         cache_size: -64000
         mmap_size: 268435456
+```
+
+Postgres:
+```yaml
+database:
+    path: "postgres://localhost/myapp"
 ```
 
 Note: `journal_mode` is a database-level setting that persists across connections and restarts. Running it in `after_connect` is technically redundant but harmless — it ensures correctness if the database was previously opened with a different journal mode.
@@ -117,16 +128,19 @@ Replace the current flow:
 
 ```
 Current:  SeaORM ConnectOptions → Database::connect() → apply_sqlite_pragmas() on ONE connection
-New:      sqlx PoolOptions::new()
-            .max_connections(...)
-            .min_connections(...)
-            .acquire_timeout(...)
-            .idle_timeout(...)
-            .max_lifetime(...)
-            .after_connect(|conn| { run PRAGMAs on THIS connection })
-          → sqlx::SqlitePool
-          → SqlxSqliteConnector::from_sqlx_sqlite_pool(pool)
-          → DbPool
+New:      detect backend from config.path (starts with "postgres://" → Postgres, else → SQLite)
+          SQLite path:
+            create parent dirs → build "sqlite://{path}?mode=rwc" URL
+            → sqlx PoolOptions::new()
+                .max_connections(...)
+                .after_connect(|conn| { run PRAGMAs on THIS connection })
+            → sqlx::SqlitePool
+            → SqlxSqliteConnector::from_sqlx_sqlite_pool(pool)
+            → DbPool
+          Postgres path:
+            → SeaORM ConnectOptions (unchanged)
+            → Database::connect(opts)
+            → DbPool
 ```
 
 The `after_connect` closure captures `SqliteConfig` and applies PRAGMAs on every new connection. Enum types are rendered to their SQLite string values via `Display` impls:
@@ -178,11 +192,11 @@ Gated behind the existing `sqlite` feature flag.
 
 | File                     | Change                                                                                                 |
 | ------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `modo-db/src/config.rs`  | Add `SqliteConfig` struct with enums for `JournalMode`, `SynchronousMode`, `TempStore`; `Default` impl |
-| `modo-db/src/connect.rs` | Build sqlx pool manually for SQLite with `after_connect`, keep SeaORM path for Postgres                |
+| `modo-db/src/config.rs`  | Rename `url` to `path`; add `SqliteConfig` struct with enums; auto-detect backend from path |
+| `modo-db/src/connect.rs` | Build sqlx pool manually for SQLite with `after_connect`, keep SeaORM path for Postgres; resolve path → URL for SQLite |
 | `modo-db/Cargo.toml`     | Add direct `sqlx` dependency behind `sqlite` feature                                                   |
 
-3 files. No API changes — `connect()` signature, `DbPool`, and everything downstream remain identical.
+3 files. One API change: `DatabaseConfig.url` renamed to `DatabaseConfig.path`. `connect()` signature, `DbPool`, and everything downstream remain identical.
 
 Note: `modo-sqlite` (separate crate) will have its own independent PRAGMA configuration with the same enum types. The duplication is intentional — the crates have no dependency on each other.
 
