@@ -393,7 +393,7 @@ migrations/
 ### Migration Table Schema
 
 ```sql
-CREATE TABLE IF NOT EXISTS _modo_migrations (
+CREATE TABLE IF NOT EXISTS _modo_sqlite_migrations (
     version     BIGINT NOT NULL,
     grp         TEXT NOT NULL DEFAULT 'default',
     description TEXT NOT NULL,
