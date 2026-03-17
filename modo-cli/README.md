@@ -75,7 +75,7 @@ The CLI prints the recommended next steps. For a `web` project:
 ```
 cd my-app
 just assets-download     # download HTMX, Alpine.js, Tailwind Elements (first time only)
-just dev                 # start Docker services, build CSS, run dev server
+just dev                 # start dev server
 ```
 
 For other templates (`api`, `worker`, `minimal`):
@@ -85,8 +85,8 @@ cd my-service
 just dev
 ```
 
-When Docker Compose services are configured (Postgres via `--postgres`, RustFS via `--s3`,
-or Mailpit in `web` templates), `just dev` starts them automatically.
+`just dev` starts any configured Docker Compose services (Postgres via `--postgres`, RustFS via
+`--s3`, or Mailpit in `web` templates) before launching the dev server.
 
 ## Project name rules
 
@@ -110,13 +110,17 @@ Template-specific files (vary by template):
 - `.env` and `.env.example`
 - `justfile` — development task runner
 
-The `api` and `web` templates also generate `src/handlers/` and `src/models/`. The `web` template additionally generates `src/views/`, `src/tasks/`, `assets/`, `templates/`, and `locales/`. The `worker` template generates `src/tasks/`.
+The `api` and `web` templates also generate `src/handlers/` and `src/models/`. The `web` template
+additionally generates `src/views/`, `src/tasks/`, `assets/`, `templates/`, and `locales/`. The
+`worker` template generates `src/tasks/`.
 
-The `web` and `worker` templates create a `data/` directory (with a `.gitkeep`) as the default SQLite database location.
+The `web` and `worker` templates create a `data/` directory (with a `.gitkeep`) as the default
+SQLite database location.
 
 A `docker-compose.yaml` is generated when it has content to include:
 
-- `web` template: always generated (always includes Mailpit for email); adds Postgres when `--postgres`; adds RustFS when `--s3`
+- `web` template: always generated (always includes Mailpit for email); adds Postgres when
+  `--postgres`; adds RustFS when `--s3`
 - `api` and `worker` templates: only generated when `--postgres` is passed (Postgres service only)
 - `minimal` template: never generated
 
@@ -124,7 +128,8 @@ A `git init` is run automatically in the new directory after scaffolding.
 
 ## Template variables
 
-Templates are rendered with [MiniJinja](https://docs.rs/minijinja). The scaffold-time variables available in `.jinja` files are:
+Templates are rendered with [MiniJinja](https://docs.rs/minijinja). The scaffold-time variables
+available in `.jinja` files are:
 
 | Variable       | Type    | Description                                                   |
 | -------------- | ------- | ------------------------------------------------------------- |
@@ -132,4 +137,6 @@ Templates are rendered with [MiniJinja](https://docs.rs/minijinja). The scaffold
 | `db_driver`    | string  | `"sqlite"`, `"postgres"`, or `""` for templates without a DB |
 | `s3`           | boolean | `true` when `--s3` is passed                                  |
 
-Email templates under `templates/emails/` use `{% raw %}...{% endraw %}` blocks to preserve runtime Jinja variables (such as `{{name}}` and `{{subject}}`) so they are not consumed during scaffolding.
+Email templates under `templates/emails/` use `{% raw %}...{% endraw %}` blocks to preserve
+runtime Jinja variables (such as `{{name}}` and `{{subject}}`) so they are not consumed during
+scaffolding.

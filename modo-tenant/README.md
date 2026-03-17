@@ -59,9 +59,13 @@ impl TenantResolver for DbTenantResolver {
 ```rust
 use modo_tenant::TenantResolverService;
 
+#[derive(serde::Deserialize, Default)]
+struct AppConfig {}
+
 #[modo::main]
 async fn main(
     app: modo::app::AppBuilder,
+    _config: AppConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let resolver = TenantResolverService::new(DbTenantResolver { /* ... */ });
     app.service(resolver).run().await
@@ -147,9 +151,13 @@ let svc = TenantResolverService::new(resolver);
 ```rust
 use modo_tenant::{TenantContextLayer, TenantResolverService};
 
+#[derive(serde::Deserialize, Default)]
+struct AppConfig {}
+
 #[modo::main]
 async fn main(
     app: modo::app::AppBuilder,
+    _config: AppConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let svc = TenantResolverService::new(DbTenantResolver { /* ... */ });
     let layer = TenantContextLayer::new(svc);

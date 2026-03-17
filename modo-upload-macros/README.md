@@ -113,15 +113,18 @@ async fn update_profile(
 
 ### `#[upload(...)]`
 
-Applied to file fields (`UploadedFile`, `Option<UploadedFile>`, `Vec<UploadedFile>`, `BufferedUpload`).
+Applied to `UploadedFile`, `Option<UploadedFile>`, and `Vec<UploadedFile>` fields.
 All sub-attributes are optional and can be combined.
 
-| Attribute              | Applies to               | Description                                                                                                 |
-| ---------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `max_size = "<size>"`  | all file types           | Maximum size per file. Accepts `b`, `kb`, `mb`, `gb` suffixes (case-insensitive). Plain integers are bytes. |
-| `accept = "<pattern>"` | all file types           | MIME type pattern, e.g. `"image/*"`, `"application/pdf"`                                                    |
-| `min_count = <n>`      | `Vec<UploadedFile>` only | Minimum number of uploaded files                                                                            |
-| `max_count = <n>`      | `Vec<UploadedFile>` only | Maximum number of uploaded files                                                                            |
+| Attribute              | Applies to                                              | Description                                                                                                 |
+| ---------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `max_size = "<size>"`  | `UploadedFile`, `Option<UploadedFile>`, `Vec<UploadedFile>` | Maximum size per file. Accepts `b`, `kb`, `mb`, `gb` suffixes (case-insensitive). Plain integers are bytes. |
+| `accept = "<pattern>"` | `UploadedFile`, `Option<UploadedFile>`, `Vec<UploadedFile>` | MIME type pattern, e.g. `"image/*"`, `"application/pdf"`                                                    |
+| `min_count = <n>`      | `Vec<UploadedFile>` only                                | Minimum number of uploaded files                                                                            |
+| `max_count = <n>`      | `Vec<UploadedFile>` only                                | Maximum number of uploaded files                                                                            |
+
+`max_size` and `accept` are not enforced for `BufferedUpload` fields. Use the global
+`max_file_size` setting in `UploadConfig` to limit buffered upload size.
 
 ### `#[serde(rename = "...")]`
 
@@ -129,15 +132,15 @@ Overrides the multipart field name. By default the Rust field name is used.
 
 ## Supported field types
 
-| Rust type              | Required | Notes                                            |
-| ---------------------- | -------- | ------------------------------------------------ |
-| `UploadedFile`         | yes      | Single file; validation error if missing         |
-| `Option<UploadedFile>` | no       | Optional single file                             |
-| `Vec<UploadedFile>`    | no       | Zero or more files under the same multipart name |
+| Rust type              | Required | Notes                                              |
+| ---------------------- | -------- | -------------------------------------------------- |
+| `UploadedFile`         | yes      | Single file; validation error if missing           |
+| `Option<UploadedFile>` | no       | Optional single file                               |
+| `Vec<UploadedFile>`    | no       | Zero or more files under the same multipart name   |
 | `BufferedUpload`       | yes      | Buffered upload; only one field allowed per struct |
-| `String`               | yes      | Required text field                              |
-| `Option<String>`       | no       | Optional text field                              |
-| `T: FromStr`           | yes      | Required text field parsed via `FromStr`         |
+| `String`               | yes      | Required text field                                |
+| `Option<String>`       | no       | Optional text field                                |
+| `T: FromStr`           | yes      | Required text field parsed via `FromStr`           |
 
 ## Constraints
 

@@ -10,6 +10,13 @@ Session-based authentication and Argon2id password hashing for modo applications
 | ----------- | ----------------------------------------------------------------------------------------- |
 | `templates` | `UserContextLayer` — injects the authenticated user into the minijinja template context |
 
+Enable the `templates` feature in `Cargo.toml`:
+
+```toml
+[dependencies]
+modo-auth = { version = "0.3", features = ["templates"] }
+```
+
 ## Key Types
 
 | Type                     | Purpose                                                                    |
@@ -28,9 +35,8 @@ Session-based authentication and Argon2id password hashing for modo applications
 
 ```rust
 use modo_auth::{UserProvider, UserProviderService};
-use serde::Serialize;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
 struct MyUser {
     id: String,
     name: String,
@@ -123,7 +129,7 @@ fn build_hasher() -> Result<PasswordHasher, modo::Error> {
 }
 ```
 
-`PasswordConfig` implements `serde::Deserialize` with `#[serde(default)]`, so you can load it from YAML with partial overrides:
+`PasswordConfig` implements `serde::Deserialize` with `#[serde(default)]`, so it can be loaded from YAML with partial overrides:
 
 ```yaml
 password:
@@ -153,7 +159,7 @@ async fn main(
 }
 ```
 
-The layer inserts the authenticated user as `"user"` into the minijinja `TemplateContext`, available in every template without explicit handler code. If no session exists or the user is not found, nothing is injected.
+The layer inserts the authenticated user as `"user"` into the minijinja `TemplateContext`, available in every template without explicit handler code. If no session exists or the user is not found, nothing is injected and the request continues normally.
 
 ## Error Behaviour
 

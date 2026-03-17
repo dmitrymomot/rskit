@@ -132,7 +132,7 @@ Add the `cleanup-job` feature to remove expired sessions automatically every 15 
 Requires `modo-jobs` and a running job runner.
 
 ```toml
-modo-session = { version = "0.2", features = ["cleanup-job"] }
+modo-session = { version = "0.3", features = ["cleanup-job"] }
 ```
 
 The job is registered automatically by the `modo-jobs` macro — no explicit startup

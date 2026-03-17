@@ -9,9 +9,10 @@ All macros are re-exported from `modo` — import them as `modo::handler`,
 
 ## Features
 
-| Feature        | What it enables                                                         |
-| -------------- | ----------------------------------------------------------------------- |
-| `static-embed` | `#[main(static_assets = "...")]` static file embedding via `rust-embed` |
+| Feature        | What it enables                                                                       |
+| -------------- | ------------------------------------------------------------------------------------- |
+| `static-embed` | `#[main(static_assets = "...")]` static file embedding via `rust-embed`               |
+| `sentry`       | `#[main]` delegates tracing initialisation to `modo::__internal::init_tracing` with Sentry support instead of using `tracing_subscriber` directly |
 
 Template and i18n macros (`#[view]`, `#[template_function]`, `#[template_filter]`, `t!`)
 are only active when the corresponding `templates` or `i18n` feature is enabled
@@ -23,10 +24,7 @@ on the `modo` crate.
 
 ```rust
 #[modo::main]
-async fn main(
-    app: modo::app::AppBuilder,
-    config: modo::AppConfig,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn main(app: modo::app::AppBuilder, config: modo::AppConfig) {
     app.config(config).run().await
 }
 ```
@@ -35,21 +33,21 @@ The function must be named `main`, be `async`, and accept exactly two
 parameters: an `AppBuilder` and a config type that implements
 `serde::de::DeserializeOwned + Default`. The macro replaces the function with a
 sync `fn main()` that bootstraps a multi-threaded Tokio runtime, configures
-`tracing_subscriber` (using `RUST_LOG` or falling back to
-`"info,sqlx::query=warn"`), loads config via `modo::config::load_or_default`,
+tracing (using `RUST_LOG` or falling back to `"info,sqlx::query=warn"` when the
+`sentry` feature is not enabled), loads config via `modo::config::load_or_default`,
 and exits with code 1 on error.
 
-The return type annotation on the `async fn main` is not enforced by the macro;
-write it for readability but the body is wrapped internally.
+The `app` parameter name is reused as the binding for the freshly constructed
+`AppBuilder`. Do not import `AppBuilder` separately; always reference it as
+`modo::app::AppBuilder` in the function signature.
+
+The return type annotation on the `async fn main` is not enforced by the macro.
 
 ### Embedding static files
 
 ```rust
 #[modo::main(static_assets = "static/")]
-async fn main(
-    app: modo::app::AppBuilder,
-    config: modo::AppConfig,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn main(app: modo::app::AppBuilder, config: modo::AppConfig) {
     app.config(config).run().await
 }
 ```

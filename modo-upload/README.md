@@ -81,8 +81,10 @@ async fn update_profile(
 
 ### Register the storage backend
 
-Build the storage backend from `UploadConfig` and register it as a service so
-extractors can resolve it via `Service<Arc<dyn FileStorageDyn>>`.
+Build the storage backend from `UploadConfig` and register **both** the backend
+and the config as services. `MultipartForm<T>` reads `UploadConfig` from the
+service registry to enforce the global `max_file_size` limit — omitting it
+returns a runtime 500 error.
 
 ```rust
 use modo_upload::{UploadConfig, storage};
@@ -102,7 +104,11 @@ async fn main(
     config: AppConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file_storage = storage(&config.upload)?;
-    app.config(config.core).service(file_storage).run().await
+    app.config(config.core)
+        .service(file_storage)
+        .service(config.upload)
+        .run()
+        .await
 }
 ```
 
@@ -163,7 +169,7 @@ upload:
 | `FileStorage`                    | Async trait for storing, deleting, and querying files                    |
 | `FileStorageDyn`                 | Object-safe companion; use `Arc<dyn FileStorageDyn>` in handlers         |
 | `StoredFile`                     | Result of a store operation: `path` and `size`                           |
-| `UploadConfig`                   | Deserialized upload configuration                                        |
+| `UploadConfig`                   | Deserialized upload configuration; must be registered as a service       |
 | `StorageBackend`                 | Enum: `Local` or `S3`                                                    |
 | `storage()`                      | Factory function: `&UploadConfig` → `Arc<dyn FileStorageDyn>`            |
 | `kb` / `mb` / `gb`               | Size helper functions (return `usize` bytes)                             |

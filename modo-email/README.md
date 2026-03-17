@@ -24,13 +24,13 @@ Both features can be enabled simultaneously. The active transport is selected by
 
 ```toml
 # SMTP only (default):
-modo-email = "0.2"
+modo-email = "0.3"
 
 # Resend only:
-modo-email = { version = "0.2", default-features = false, features = ["resend"] }
+modo-email = { version = "0.3", default-features = false, features = ["resend"] }
 
 # Both available:
-modo-email = { version = "0.2", features = ["resend"] }
+modo-email = { version = "0.3", features = ["resend"] }
 ```
 
 ## Usage

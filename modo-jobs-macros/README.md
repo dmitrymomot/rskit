@@ -12,7 +12,7 @@ Add `modo-jobs` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-modo-jobs = { version = "0.2" }
+modo-jobs = { version = "0.3" }
 ```
 
 ## `#[job]`
