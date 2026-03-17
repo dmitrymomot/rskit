@@ -14,9 +14,11 @@ Two issues in `modo-db`'s SQLite connection setup:
 
 ## Approach
 
-Use sqlx's `after_connect` hook to apply PRAGMAs on every new pool connection. Build the sqlx pool manually, then wrap it via `sea_orm::SqlxSqliteConnector::from_sqlx_sqlite_pool()` for SeaORM. This follows the [SeaORM cookbook pattern](https://www.sea-ql.org/sea-orm-cookbook/017-auto-execution-of-command-after-connection.html).
+Use sqlx's `after_connect` hook to apply PRAGMAs on every new pool connection. Build the sqlx pool manually, then wrap it via `sea_orm::SqlxSqliteConnector::from_sqlx_sqlite_pool()` for SeaORM v2. This follows the [SeaORM cookbook pattern](https://www.sea-ql.org/sea-orm-cookbook/017-auto-execution-of-command-after-connection.html).
 
-**Verified:** `SqlxSqliteConnector::from_sqlx_sqlite_pool()` exists in SeaORM v2 RC ([docs.rs](https://docs.rs/sea-orm/latest/sea_orm/struct.SqlxSqliteConnector.html)). SeaORM v2 preserved this API for backward compatibility.
+**Constraint:** SeaORM v2 only. Do not use any v1.x APIs or patterns.
+
+**Verified:** `SqlxSqliteConnector::from_sqlx_sqlite_pool()` exists in SeaORM v2 ([docs.rs](https://docs.rs/sea-orm/latest/sea_orm/struct.SqlxSqliteConnector.html)). This implementation targets SeaORM v2 only — no v1.x compatibility.
 
 Add a nested `SqliteConfig` struct for user-configurable PRAGMAs with sensible general-purpose defaults.
 
@@ -100,11 +102,11 @@ All defaults match current behavior or SQLite defaults. `max_connections` stays 
 
 ```yaml
 database:
-  url: "sqlite://data.db?mode=rwc"
-  sqlite:
-    busy_timeout: 5000
-    cache_size: -64000
-    mmap_size: 268435456
+    url: "sqlite://data.db?mode=rwc"
+    sqlite:
+        busy_timeout: 5000
+        cache_size: -64000
+        mmap_size: 268435456
 ```
 
 Note: `journal_mode` is a database-level setting that persists across connections and restarts. Running it in `after_connect` is technically redundant but harmless — it ensures correctness if the database was previously opened with a different journal mode.
@@ -174,11 +176,11 @@ Gated behind the existing `sqlite` feature flag.
 
 ## Files Changed
 
-| File | Change |
-|---|---|
-| `modo-db/src/config.rs` | Add `SqliteConfig` struct with enums for `JournalMode`, `SynchronousMode`, `TempStore`; `Default` impl |
-| `modo-db/src/connect.rs` | Build sqlx pool manually for SQLite with `after_connect`, keep SeaORM path for Postgres |
-| `modo-db/Cargo.toml` | Add direct `sqlx` dependency behind `sqlite` feature |
+| File                     | Change                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `modo-db/src/config.rs`  | Add `SqliteConfig` struct with enums for `JournalMode`, `SynchronousMode`, `TempStore`; `Default` impl |
+| `modo-db/src/connect.rs` | Build sqlx pool manually for SQLite with `after_connect`, keep SeaORM path for Postgres                |
+| `modo-db/Cargo.toml`     | Add direct `sqlx` dependency behind `sqlite` feature                                                   |
 
 3 files. No API changes — `connect()` signature, `DbPool`, and everything downstream remain identical.
 
