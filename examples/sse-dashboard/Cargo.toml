@@ -12,4 +12,4 @@ serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("templates", "sse", "static-embed"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("sentry", "sse", "static-embed", "templates"))'] }

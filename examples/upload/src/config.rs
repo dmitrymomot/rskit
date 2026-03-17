@@ -10,6 +10,7 @@ pub(crate) struct Config {
     pub(crate) upload: UploadConfig,
 }
 
+#[cfg(feature = "sentry")]
 impl modo::SentryConfigProvider for Config {
     fn sentry_config(&self) -> Option<&modo::SentryConfig> {
         self.core.sentry_config()

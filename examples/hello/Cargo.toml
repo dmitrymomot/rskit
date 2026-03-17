@@ -7,3 +7,6 @@ publish = false
 [dependencies]
 modo.workspace = true
 serde = { version = "1", features = ["derive"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("sentry"))'] }
