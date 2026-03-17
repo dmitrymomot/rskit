@@ -14,7 +14,9 @@ Two issues in `modo-db`'s SQLite connection setup:
 
 ## Approach
 
-Use sqlx's `after_connect` hook to apply PRAGMAs on every new pool connection. Build the sqlx pool manually, then wrap it via `SqlxSqliteConnector::from_sqlx_sqlite_pool()` for SeaORM. This follows the [SeaORM cookbook pattern](https://www.sea-ql.org/sea-orm-cookbook/017-auto-execution-of-command-after-connection.html).
+Use sqlx's `after_connect` hook to apply PRAGMAs on every new pool connection. Build the sqlx pool manually, then wrap it via `sea_orm::SqlxSqliteConnector::from_sqlx_sqlite_pool()` for SeaORM. This follows the [SeaORM cookbook pattern](https://www.sea-ql.org/sea-orm-cookbook/017-auto-execution-of-command-after-connection.html).
+
+**Verified:** `SqlxSqliteConnector::from_sqlx_sqlite_pool()` exists in SeaORM v2 RC ([docs.rs](https://docs.rs/sea-orm/latest/sea_orm/struct.SqlxSqliteConnector.html)). SeaORM v2 preserved this API for backward compatibility.
 
 Add a nested `SqliteConfig` struct for user-configurable PRAGMAs with sensible general-purpose defaults.
 
@@ -22,14 +24,14 @@ Add a nested `SqliteConfig` struct for user-configurable PRAGMAs with sensible g
 
 ### Changes to `config.rs`
 
-Add `SqliteConfig` nested inside `DatabaseConfig`:
+Add `SqliteConfig` nested inside `DatabaseConfig`. Use enums for string-valued PRAGMAs to prevent invalid values and config typos:
 
 ```rust
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct DatabaseConfig {
     pub url: String,
-    pub max_connections: u32,       // 10 (bumped from 5)
+    pub max_connections: u32,       // 5 (unchanged)
     pub min_connections: u32,       // 1
     pub acquire_timeout_secs: u64,  // 30
     pub idle_timeout_secs: u64,     // 600
@@ -37,31 +39,75 @@ pub struct DatabaseConfig {
     pub sqlite: SqliteConfig,       // NEW
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum JournalMode {
+    #[default]
+    Wal,
+    Delete,
+    Truncate,
+    Persist,
+    Off,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum SynchronousMode {
+    Full,
+    #[default]
+    Normal,
+    Off,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum TempStore {
+    Default,
+    File,
+    Memory,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SqliteConfig {
-    pub journal_mode: String,            // "WAL"
+    pub journal_mode: JournalMode,       // WAL
     pub busy_timeout: u32,               // 5000
-    pub synchronous: String,             // "NORMAL"
+    pub synchronous: SynchronousMode,    // NORMAL
     pub foreign_keys: bool,              // true
     pub cache_size: i32,                 // -2000 (2MB, SQLite default)
     pub mmap_size: Option<i64>,          // None (opt-in)
-    pub temp_store: Option<String>,      // None (opt-in)
+    pub temp_store: Option<TempStore>,   // None (opt-in)
     pub wal_autocheckpoint: Option<u32>, // None (SQLite default 1000)
+}
+
+impl Default for SqliteConfig {
+    fn default() -> Self {
+        Self {
+            journal_mode: JournalMode::Wal,
+            busy_timeout: 5000,
+            synchronous: SynchronousMode::Normal,
+            foreign_keys: true,
+            cache_size: -2000,
+            mmap_size: None,
+            temp_store: None,
+            wal_autocheckpoint: None,
+        }
+    }
 }
 ```
 
-All defaults match current behavior or SQLite defaults. No surprise changes for existing code. Users opt into performance tuning explicitly via YAML:
+All defaults match current behavior or SQLite defaults. `max_connections` stays at 5 — no behavioral changes beyond the bug fix. Users opt into performance tuning explicitly via YAML:
 
 ```yaml
 database:
   url: "sqlite://data.db?mode=rwc"
-  max_connections: 10
   sqlite:
     busy_timeout: 5000
     cache_size: -64000
     mmap_size: 268435456
 ```
+
+Note: `journal_mode` is a database-level setting that persists across connections and restarts. Running it in `after_connect` is technically redundant but harmless — it ensures correctness if the database was previously opened with a different journal mode.
 
 ### Changes to `connect.rs`
 
@@ -78,11 +124,10 @@ New:      sqlx PoolOptions::new()
             .after_connect(|conn| { run PRAGMAs on THIS connection })
           → sqlx::SqlitePool
           → SqlxSqliteConnector::from_sqlx_sqlite_pool(pool)
-          → wrap pool options from ConnectOptions for SeaORM compatibility
           → DbPool
 ```
 
-The `after_connect` closure captures `SqliteConfig` and applies PRAGMAs on every new connection:
+The `after_connect` closure captures `SqliteConfig` and applies PRAGMAs on every new connection. Enum types are rendered to their SQLite string values via `Display` impls:
 
 ```rust
 async fn apply_sqlite_pragmas(
@@ -103,7 +148,7 @@ async fn apply_sqlite_pragmas(
         sqlx::query(&format!("PRAGMA mmap_size={mmap}"))
             .execute(&mut *conn).await?;
     }
-    if let Some(ref temp) = config.temp_store {
+    if let Some(temp) = config.temp_store {
         sqlx::query(&format!("PRAGMA temp_store={temp}"))
             .execute(&mut *conn).await?;
     }
@@ -131,15 +176,19 @@ Gated behind the existing `sqlite` feature flag.
 
 | File | Change |
 |---|---|
-| `modo-db/src/config.rs` | Add `SqliteConfig` struct, bump `max_connections` default to 10 |
+| `modo-db/src/config.rs` | Add `SqliteConfig` struct with enums for `JournalMode`, `SynchronousMode`, `TempStore`; `Default` impl |
 | `modo-db/src/connect.rs` | Build sqlx pool manually for SQLite with `after_connect`, keep SeaORM path for Postgres |
 | `modo-db/Cargo.toml` | Add direct `sqlx` dependency behind `sqlite` feature |
 
 3 files. No API changes — `connect()` signature, `DbPool`, and everything downstream remain identical.
 
+Note: `modo-sqlite` (separate crate) will have its own independent PRAGMA configuration with the same enum types. The duplication is intentional — the crates have no dependency on each other.
+
 ## Testing
 
-- Verify PRAGMAs are applied on all pool connections (not just the first)
-- Verify custom `SqliteConfig` values are respected
-- Verify Postgres path is unaffected
-- Verify default config produces same behavior as current code (except the bug fix)
+- Acquire multiple connections from the pool, query `PRAGMA busy_timeout` and `PRAGMA foreign_keys` on each — verify all return configured values (not SQLite defaults)
+- Set custom `SqliteConfig` values via YAML, verify they are applied
+- Set invalid enum variant in YAML — verify deserialization error
+- Verify Postgres connection path is unaffected (no `after_connect` for Postgres)
+- Verify default `SqliteConfig` produces same PRAGMA values as current hardcoded code
+- Verify `after_connect` closure correctly captures cloned `SqliteConfig` (not a reference)

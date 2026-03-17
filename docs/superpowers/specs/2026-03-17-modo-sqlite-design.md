@@ -21,9 +21,9 @@ Future `modo-pg` crate will follow the same pattern for Postgres. No dialect abs
 modo-sqlite/
   src/
     lib.rs            — mod declarations, pub use re-exports (no logic)
-    config.rs         — DatabaseConfig, SqliteConfig
+    config.rs         — DatabaseConfig, SqliteConfig, PRAGMA enums
     connect.rs        — connect(), connect_rw(), PRAGMA application via after_connect
-    pool.rs           — Pool, ReadPool, WritePool
+    pool.rs           — Pool, ReadPool, WritePool, AsPool trait
     extractor.rs      — Db, DbReader, DbWriter
     migration.rs      — MigrationRegistration, run_migrations(), run_migrations_group(), run_migrations_except()
     id.rs             — generate_ulid(), generate_short_id()
@@ -60,17 +60,33 @@ pub struct DatabaseConfig {
     pub max_lifetime_secs: u64,              // 1800
     pub sqlite: SqliteConfig,
 }
+```
+
+PRAGMA config uses enums for validated values (same approach as modo-db PRAGMA fix):
+
+```rust
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum JournalMode { #[default] Wal, Delete, Truncate, Persist, Off }
+
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum SynchronousMode { Full, #[default] Normal, Off }
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum TempStore { Default, File, Memory }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SqliteConfig {
-    pub journal_mode: String,                // "WAL"
-    pub busy_timeout: Option<u32>,           // None → connect()=5000, rw_writer=2000, rw_reader=100
-    pub synchronous: String,                 // "NORMAL"
+    pub journal_mode: JournalMode,           // WAL
+    pub busy_timeout: Option<u32>,           // None → connect()=5000, rw_writer=2000, rw_reader=1000
+    pub synchronous: SynchronousMode,        // NORMAL
     pub foreign_keys: bool,                  // true
     pub cache_size: Option<i32>,             // None → connect()=-2000, connect_rw()=-16000
     pub mmap_size: Option<i64>,              // None → connect()=None, connect_rw()=268435456
-    pub temp_store: Option<String>,          // None
+    pub temp_store: Option<TempStore>,       // None
     pub wal_autocheckpoint: Option<u32>,     // None
 }
 ```
@@ -80,16 +96,20 @@ pub struct SqliteConfig {
 Users provide a plain file path (e.g. `data/app.db`). The crate internally:
 - Creates parent directories if they don't exist
 - Builds the sqlx URL: `sqlite://data/app.db?mode=rwc`
-- Special case: `:memory:` or empty string → in-memory SQLite
+- Special case: `:memory:` → in-memory SQLite (only valid with `connect()`, see Gotchas)
 
 ### Smart Defaults per Connection Mode
 
 `Option` fields resolve differently depending on which connect function is called. If a user sets a value explicitly, both functions respect it.
 
+Resolution logic:
+- If `max_connections` is `Some(n)`: `connect()` uses `n`, `connect_rw()` readers get `n`, writer gets `writer_max_connections`
+- If `max_connections` is `None`: `connect()` uses 10, `connect_rw()` readers get 20, writer gets `writer_max_connections`
+
 | Setting | `connect()` (simple) | `connect_rw()` readers | `connect_rw()` writer |
 |---|---|---|---|
-| `max_connections` | 10 | 20 | 1 |
-| `busy_timeout` | 5000ms | 100ms | 2000ms |
+| `max_connections` | 10 | 20 | `writer_max_connections` (default 1) |
+| `busy_timeout` | 5000ms | 1000ms | 2000ms |
 | `cache_size` | -2000 (2MB) | -16000 (16MB) | -16000 (16MB) |
 | `mmap_size` | None | 268435456 (256MB) | 268435456 (256MB) |
 
@@ -124,6 +144,18 @@ All three implement:
 - `pool(&self) -> &sqlx::SqlitePool` — access for sqlx queries
 - `modo::GracefulShutdown` — calls `pool.close().await`
 
+`AsPool` trait for migration runner — implemented only by `Pool` and `WritePool` (not `ReadPool`, since migrations execute DDL/writes):
+
+```rust
+pub trait AsPool {
+    fn pool(&self) -> &sqlx::SqlitePool;
+}
+
+impl AsPool for Pool { ... }
+impl AsPool for WritePool { ... }
+// ReadPool intentionally excluded — migrations must run through a writable pool
+```
+
 Intentionally distinct types — compiler enforces read/write separation.
 
 ### Pool Lifecycle (automatic via sqlx)
@@ -147,6 +179,7 @@ pub async fn connect(config: &DatabaseConfig) -> Result<Pool, modo::Error>;
 
 /// Read/write split — for high-load apps.
 /// Returns (reader_pool, writer_pool) with separate PRAGMA configs.
+/// Errors if path is `:memory:` (in-memory databases are per-connection, split would create independent DBs).
 pub async fn connect_rw(config: &DatabaseConfig) -> Result<(ReadPool, WritePool), modo::Error>;
 ```
 
@@ -155,6 +188,8 @@ Both functions:
 2. Build `sqlx::sqlite::SqlitePoolOptions` with pool sizing
 3. Set `after_connect` closure applying PRAGMAs (with per-pool values for rw mode)
 4. Return wrapped pool(s)
+
+`connect_rw()` additionally validates that the path is not `:memory:`.
 
 ## Extractors
 
@@ -170,6 +205,8 @@ pub struct DbWriter(pub WritePool);
 ```
 
 Each implements `FromRequestParts<AppState>` — pulls its pool type from modo's `ServiceRegistry`. Same pattern as modo-db: one `HashMap` lookup + one `Arc` clone per request.
+
+Note: inner pool is `pub` for ergonomic access. The pool types are part of the public API.
 
 ### App Wiring — Simple Mode
 
@@ -206,6 +243,8 @@ async fn create_todo(db: DbWriter, input: JsonReq<CreateTodo>) -> JsonResult<Tod
 ```
 
 Rule: `DbWriter` for any SQL that modifies data (INSERT, UPDATE, DELETE — even with RETURNING). `DbReader` for pure SELECTs only.
+
+Note: `id: String` in handler params works via modo's `#[handler]` macro which generates path extraction automatically. No explicit `PathReq` needed for params declared in the route pattern.
 
 ## Error Handling
 
@@ -287,10 +326,17 @@ No manual error mapping needed anywhere.
 
 Lives in `modo-sqlite-macros`. At compile time:
 
-1. Reads `CARGO_MANIFEST_DIR/migrations/*.sql`
+1. Reads `CARGO_MANIFEST_DIR/migrations/*.sql` (non-`.sql` files are ignored)
 2. Parses filename: `V{version}__{description}.sql`
 3. Embeds SQL content as `&'static str`
 4. Emits `inventory::submit!` per file
+
+**Filename parsing rules:**
+- Leading zeros are stripped: `V001` → version 1
+- Single underscore separator (e.g. `V1_create.sql`) → compile error with clear message
+- Missing `V` prefix → compile error
+- Non-numeric version → compile error
+- Duplicate versions in the same directory → compile error at compile time
 
 Generated code for `migrations/V001__create_todos.sql`:
 
@@ -338,11 +384,30 @@ migrations/
 ```
 
 - `V` prefix required
-- Version is a positive integer (not timestamp)
-- `__` double underscore separator
+- Version is a positive integer (not timestamp), leading zeros ignored
+- `__` double underscore separator (single underscore is a compile error)
 - Description in snake_case
-- `.sql` extension
+- `.sql` extension required
 - Versions must be unique within a group
+
+### Migration Table Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS _modo_migrations (
+    version     BIGINT NOT NULL,
+    grp         TEXT NOT NULL DEFAULT 'default',
+    description TEXT NOT NULL,
+    executed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (grp, version)
+)
+```
+
+The `group` column (`grp` to avoid SQL keyword conflict) is part of the composite primary key. This means:
+- Version 1 in group "default" and version 1 in group "jobs" can coexist in the same database
+- Each group's migrations are tracked independently
+- `run_migrations_group()` and `run_migrations_except()` can query the table to see exactly what has been executed per group
+
+modo-sqlite has no dependency on or compatibility requirement with modo-db. They are fully independent crates.
 
 ### Migration Runner
 
@@ -357,22 +422,16 @@ pub async fn run_migrations_group(pool: &impl AsPool, group: &str) -> Result<(),
 pub async fn run_migrations_except(pool: &impl AsPool, exclude: &[&str]) -> Result<(), modo::Error>;
 ```
 
-Where `AsPool` is a trait implemented by `Pool`, `ReadPool`, and `WritePool`:
-
-```rust
-pub trait AsPool {
-    fn pool(&self) -> &sqlx::SqlitePool;
-}
-```
+`AsPool` is only implemented by `Pool` and `WritePool` — the type system prevents passing a `ReadPool` to migration functions.
 
 The runner:
-1. Creates `_modo_migrations` table if not exists (same schema as modo-db)
+1. Creates `_modo_sqlite_migrations` table if not exists
 2. Collects `MigrationRegistration` from `inventory`
 3. Filters by group (or excludes groups), sorts by version
 4. Checks for duplicate versions within a group — error if found
-5. Queries `_modo_migrations` for already-executed versions
+5. Queries `_modo_sqlite_migrations` for already-executed versions (filtered by group)
 6. Runs each pending migration's SQL in a transaction
-7. Inserts record into `_modo_migrations`
+7. Inserts record into `_modo_sqlite_migrations` with group
 
 ### Group Usage
 
@@ -390,10 +449,6 @@ let jobs_db = modo_sqlite::connect(&config.jobs_database).await?;
 modo_sqlite::run_migrations_group(&jobs_db, "jobs").await?;
 ```
 
-### Compatibility with modo-db
-
-Same `_modo_migrations` table schema: `version BIGINT PK, description TEXT, executed_at TEXT`. An app can share a database between `modo-db` entities (e.g. modo-session) and `modo-sqlite` migrations — they don't collide because groups are different.
-
 ## ID Generation
 
 Same functions as modo-db (copied, not shared — no dependency between crates):
@@ -403,12 +458,21 @@ pub fn generate_ulid() -> String;      // 26-char Crockford Base32
 pub fn generate_short_id() -> String;  // 13-char Base36, time-sortable
 ```
 
+## Gotchas
+
+- **`WritePool` single-connection deadlock:** With `max_connections: 1`, if a handler acquires the writer and then calls a function that internally tries to acquire the writer again (nested acquire), the pool will deadlock until `acquire_timeout_secs` expires. Never nest writer pool acquisitions — acquire once per handler and pass the connection through.
+- **`:memory:` with `connect_rw()`:** In-memory SQLite databases are per-connection. Two pools would create independent databases. `connect_rw()` returns an error if path is `:memory:`. Use `connect()` for in-memory databases.
+- **`writer_max_connections` > 1:** SQLite allows only one concurrent writer regardless of pool size. Setting `writer_max_connections` above 1 wastes connections and increases `SQLITE_BUSY` risk. The default of 1 is correct for virtually all cases.
+
 ## Complete Public API
 
 ```rust
 // Config
 modo_sqlite::DatabaseConfig
 modo_sqlite::SqliteConfig
+modo_sqlite::JournalMode
+modo_sqlite::SynchronousMode
+modo_sqlite::TempStore
 
 // Connect
 modo_sqlite::connect(&config) -> Result<Pool>
@@ -418,7 +482,7 @@ modo_sqlite::connect_rw(&config) -> Result<(ReadPool, WritePool)>
 modo_sqlite::Pool
 modo_sqlite::ReadPool
 modo_sqlite::WritePool
-modo_sqlite::AsPool  // trait
+modo_sqlite::AsPool  // trait (Pool + WritePool only)
 
 // Extractors
 modo_sqlite::Db
@@ -611,18 +675,24 @@ A separate `modo-pg` crate will follow the same patterns (pool wrappers, extract
 
 ## Testing
 
-- `connect()` applies correct default PRAGMAs to all pool connections
+- `connect()` applies correct default PRAGMAs to all pool connections (acquire multiple, verify each)
 - `connect_rw()` applies different PRAGMA values to reader vs writer pools
-- Writer pool has exactly 1 connection
-- Reader pool respects `max_connections` config
+- `connect_rw()` writer pool enforces `max_connections: 1` even if `writer_max_connections` set higher
+- `connect_rw()` with `:memory:` path returns an error
+- Reader pool respects explicit `max_connections` config value
 - `embed_migrations!()` discovers and embeds SQL files at compile time
+- `embed_migrations!()` produces compile error for malformed filenames (single underscore, missing V prefix, non-numeric version)
+- `embed_migrations!()` produces compile error for duplicate versions in same directory
+- Non-`.sql` files in migrations directory are ignored
 - `run_migrations()` runs all groups
 - `run_migrations_group()` runs only specified group
 - `run_migrations_except()` excludes specified groups
-- Duplicate migration versions within a group produce an error
-- `_modo_migrations` table is compatible with modo-db's schema
+- Duplicate migration versions within a group produce a runtime error
+- `_modo_sqlite_migrations` table tracks group per migration
 - `modo_sqlite::Error` variants map correctly from sqlx errors
 - `From<modo_sqlite::Error> for modo::Error` produces correct HTTP status codes
+- `ReadPool` cannot be passed to `run_migrations()` (compile-time check)
 - Extractors return 500 when pool is not registered
 - Parent directories are created for database path
-- `:memory:` path works for in-memory databases
+- `:memory:` path works with `connect()` for in-memory databases
+- Concurrent writes through `WritePool` are serialized (no SQLITE_BUSY)
