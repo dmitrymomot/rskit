@@ -343,6 +343,7 @@ impl AppBuilder {
 
         server_config.environment = crate::config::detect_env();
 
+        #[cfg(feature = "sentry")]
         let sentry_active = app_config
             .sentry
             .as_ref()
@@ -720,6 +721,7 @@ impl AppBuilder {
         }
 
         // --- Sentry request context (if active) ---
+        #[cfg(feature = "sentry")]
         if sentry_active {
             router = router.layer(sentry::integrations::tower::SentryHttpLayer::with_transaction());
             router = router.layer(axum::middleware::from_fn(

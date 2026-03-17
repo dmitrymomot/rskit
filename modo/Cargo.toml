@@ -35,7 +35,7 @@ anyhow = "1"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
-sentry = { version = "0.37", features = ["tracing", "tower", "tower-http"] }
+sentry = { version = "0.37", features = ["tracing", "tower", "tower-http"], optional = true }
 
 # Config
 dotenvy = "0.15"
@@ -73,6 +73,7 @@ csrf = ["dep:rand", "dep:hmac", "dep:sha2", "dep:subtle", "dep:form_urlencoded",
 i18n = ["dep:futures-util", "dep:http"]
 sse = ["dep:futures-util"]
 static-fs = ["tower-http/fs"]
+sentry = ["dep:sentry"]
 static-embed = ["dep:rust-embed", "dep:mime_guess", "modo-macros/static-embed"]
 
 [dev-dependencies]

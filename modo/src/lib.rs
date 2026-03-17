@@ -28,6 +28,7 @@ pub mod middleware;
 pub mod request_id;
 pub mod router;
 pub mod sanitize;
+#[cfg(feature = "sentry")]
 pub mod sentry;
 pub mod shutdown;
 #[cfg(feature = "sse")]
@@ -61,6 +62,7 @@ pub use middleware::{ClientIp, OptionalRateLimitInfo, RateLimitInfo};
 pub use request_id::RequestId;
 pub use router::Method;
 pub use sanitize::Sanitize;
+#[cfg(feature = "sentry")]
 pub use sentry::{SentryConfig, SentryConfigProvider};
 pub use shutdown::{GracefulShutdown, ShutdownPhase};
 #[cfg(feature = "templates")]
@@ -111,6 +113,7 @@ pub mod __internal {
     // -- main macro --
     pub use crate::app::AppBuilder;
     pub use crate::config::load_or_default;
+    #[cfg(feature = "sentry")]
     pub use crate::sentry::{SentryConfigProvider, init_tracing};
 
     // -- view macro (template-gated) --
