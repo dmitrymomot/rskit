@@ -48,7 +48,7 @@ No SeaORM dependency anywhere.
 
 ## Configuration
 
-Flat struct — no nesting. Pool settings and PRAGMAs at the same level:
+Flat config with optional `reader`/`writer` overrides for `connect_rw()`:
 
 ```rust
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
@@ -63,26 +63,45 @@ pub enum SynchronousMode { Full, #[default] Normal, Off }
 #[serde(rename_all = "UPPERCASE")]
 pub enum TempStore { Default, File, Memory }
 
+/// Per-pool overrides for connect_rw(). All fields optional — falls back to top-level values.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct PoolOverrides {
+    pub max_connections: Option<u32>,
+    pub min_connections: Option<u32>,
+    pub acquire_timeout_secs: Option<u64>,
+    pub idle_timeout_secs: Option<u64>,
+    pub max_lifetime_secs: Option<u64>,
+    pub busy_timeout: Option<u32>,
+    pub cache_size: Option<i32>,
+    pub mmap_size: Option<i64>,
+    pub temp_store: Option<TempStore>,
+    pub wal_autocheckpoint: Option<u32>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SqliteConfig {
     // Connection
-    pub path: String,                        // "data/app.db" — crate builds sqlite:// URL internally
-    pub max_connections: Option<u32>,        // None → connect()=10, connect_rw()=20
+    pub path: String,                        // "data/app.db"
+    // Pool defaults (used by connect(), and as fallback for connect_rw())
+    pub max_connections: u32,                // 10
     pub min_connections: u32,                // 1
-    pub writer_max_connections: u32,         // 1 (only used by connect_rw)
     pub acquire_timeout_secs: u64,           // 30
     pub idle_timeout_secs: u64,              // 600
     pub max_lifetime_secs: u64,              // 1800
-    // PRAGMAs
+    // PRAGMA defaults (used by connect(), and as fallback for connect_rw())
     pub journal_mode: JournalMode,           // WAL
-    pub busy_timeout: Option<u32>,           // None → connect()=5000, rw_writer=2000, rw_reader=1000
+    pub busy_timeout: u32,                   // 5000
     pub synchronous: SynchronousMode,        // NORMAL
     pub foreign_keys: bool,                  // true
-    pub cache_size: Option<i32>,             // None → connect()=-2000, connect_rw()=-16000
-    pub mmap_size: Option<i64>,              // None → connect()=None, connect_rw()=268435456
-    pub temp_store: Option<TempStore>,       // None
+    pub cache_size: i32,                     // -2000 (2MB)
+    pub mmap_size: Option<i64>,              // None (opt-in)
+    pub temp_store: Option<TempStore>,       // None (opt-in)
     pub wal_autocheckpoint: Option<u32>,     // None
+    // Per-pool overrides (only used by connect_rw())
+    pub reader: PoolOverrides,               // overrides for reader pool
+    pub writer: PoolOverrides,               // overrides for writer pool
 }
 ```
 
@@ -105,30 +124,48 @@ Users provide a plain file path (e.g. `data/app.db`). The crate internally:
 - Builds the sqlx URL: `sqlite://data/app.db?mode=rwc`
 - Special case: `:memory:` → in-memory SQLite (only valid with `connect()`, see Gotchas)
 
-### Smart Defaults per Connection Mode
+### Config Resolution
 
-`Option` fields resolve differently depending on which connect function is called. If a user sets a value explicitly, both functions respect it.
+**`connect()` (simple mode):** Uses top-level values directly. `reader`/`writer` sections are ignored.
 
-Resolution logic:
+**`connect_rw()` (read/write split):** For each pool, uses the per-pool override if set, otherwise falls back to the top-level value.
 
-- If `max_connections` is `Some(n)`: `connect()` uses `n`, `connect_rw()` readers get `n`, writer gets `writer_max_connections`
-- If `max_connections` is `None`: `connect()` uses 10, `connect_rw()` readers get 20, writer gets `writer_max_connections`
+| Setting | `connect()` | `connect_rw()` reader | `connect_rw()` writer |
+|---|---|---|---|
+| Resolution | top-level only | `reader.X` ?? top-level `X` | `writer.X` ?? top-level `X` |
 
-| Setting           | `connect()` (simple) | `connect_rw()` readers | `connect_rw()` writer                |
-| ----------------- | -------------------- | ---------------------- | ------------------------------------ |
-| `max_connections` | 10                   | 20                     | `writer_max_connections` (default 1) |
-| `busy_timeout`    | 5000ms               | 1000ms                 | 2000ms                               |
-| `cache_size`      | -2000 (2MB)          | -16000 (16MB)          | -16000 (16MB)                        |
-| `mmap_size`       | None                 | 268435456 (256MB)      | 268435456 (256MB)                    |
+**Default `SqliteConfig`** (what you get with zero config):
 
-YAML example:
+| Setting | Top-level default | `reader` override | `writer` override |
+|---|---|---|---|
+| `max_connections` | 10 | None (uses 10) | 1 |
+| `busy_timeout` | 5000 | 1000 | 2000 |
+| `cache_size` | -2000 | -16000 | -16000 |
+| `mmap_size` | None | 268435456 (256MB) | 268435456 (256MB) |
 
+These defaults mean: `connect()` gets general-purpose settings, `connect_rw()` gets optimized settings out of the box — no config needed.
+
+### YAML Examples
+
+Simple app (uses `connect()`):
 ```yaml
 sqlite:
     path: "data/app.db"
-    max_connections: 20
-    busy_timeout: 5000
-    cache_size: -64000
+```
+
+High-load app with custom reader/writer tuning (uses `connect_rw()`):
+```yaml
+sqlite:
+    path: "data/app.db"
+    max_connections: 30
+    busy_timeout: 3000
+    cache_size: -32000
+    reader:
+        busy_timeout: 500
+        max_connections: 50
+    writer:
+        busy_timeout: 5000
+        max_connections: 1
 ```
 
 ## Pool Types
