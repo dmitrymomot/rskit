@@ -80,10 +80,12 @@ async fn main(
 }
 ```
 
-`sync_and_migrate` runs in two phases:
+`sync_and_migrate` runs in four phases:
 
-1. Schema sync — creates or adds columns for all registered entities (addition-only).
-2. Migration runner — executes pending versioned migrations tracked in `_modo_migrations`.
+1. Bootstrap — creates the `_modo_migrations` tracking table if it does not yet exist.
+2. Schema sync — creates or adds columns for all registered entities (addition-only).
+3. Extra SQL — executes any composite index DDL registered with each entity.
+4. Migration runner — executes pending versioned migrations tracked in `_modo_migrations`.
 
 #### Group-scoped sync
 
@@ -397,7 +399,7 @@ pub struct User {
     #[entity(unique)]
     pub email: String,
     // Relation field — excluded from DB columns
-    #[entity(has_many)]
+    #[entity(has_many, target = "Post")]
     pub posts: (),
 }
 ```

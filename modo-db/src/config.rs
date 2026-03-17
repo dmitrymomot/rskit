@@ -86,16 +86,31 @@ pub struct PostgresDbConfig {
 }
 
 /// SQLite PRAGMA configuration applied to every connection in the pool.
+///
+/// All fields are optional in YAML and fall back to the defaults shown in
+/// [`SqliteConfig::default`]. UPPERCASE values are expected in YAML (e.g.
+/// `journal_mode: WAL`).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SqliteConfig {
+    /// SQLite journal mode (default: `WAL`).
     pub journal_mode: JournalMode,
+    /// Milliseconds to wait when the database is locked before returning SQLITE_BUSY
+    /// (default: `5000`).
     pub busy_timeout: u32,
+    /// Synchronous write mode (default: `NORMAL`).
     pub synchronous: SynchronousMode,
+    /// Whether to enforce foreign key constraints (default: `true`).
     pub foreign_keys: bool,
+    /// Page cache size. Negative values are interpreted as kibibytes; positive as pages
+    /// (default: `-2000`, i.e. 2 MiB).
     pub cache_size: i32,
+    /// Memory-mapped I/O size in bytes (default: `None`, i.e. disabled).
     pub mmap_size: Option<i64>,
+    /// Where SQLite stores temporary files (default: `None`, uses SQLite's own default).
     pub temp_store: Option<TempStore>,
+    /// Number of WAL frames before an automatic checkpoint is triggered. Only relevant
+    /// when `journal_mode` is `WAL` (default: `None`, uses SQLite's default of 1000).
     pub wal_autocheckpoint: Option<u32>,
 }
 
@@ -114,15 +129,25 @@ impl Default for SqliteConfig {
     }
 }
 
+/// SQLite `PRAGMA journal_mode` values.
+///
+/// Serialized as UPPERCASE strings in YAML (e.g. `journal_mode: WAL`).
+/// Default is `WAL`.
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum JournalMode {
+    /// Write-ahead logging — recommended for concurrent reads with writes.
     #[default]
     Wal,
+    /// Default rollback journal.
     Delete,
+    /// Rollback journal that truncates on commit.
     Truncate,
+    /// Rollback journal that persists between transactions.
     Persist,
+    /// Rollback journal stored in memory only.
     Memory,
+    /// No journaling (unsafe — data loss on crash).
     Off,
 }
 
@@ -139,12 +164,19 @@ impl fmt::Display for JournalMode {
     }
 }
 
+/// SQLite `PRAGMA synchronous` values.
+///
+/// Serialized as UPPERCASE strings in YAML (e.g. `synchronous: NORMAL`).
+/// Default is `NORMAL`.
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum SynchronousMode {
+    /// Flush to disk at every write — safest, slowest.
     Full,
+    /// Flush at critical moments only — good balance of safety and speed.
     #[default]
     Normal,
+    /// Never flush — fastest, unsafe on power loss.
     Off,
 }
 
@@ -158,11 +190,17 @@ impl fmt::Display for SynchronousMode {
     }
 }
 
+/// SQLite `PRAGMA temp_store` values.
+///
+/// Serialized as UPPERCASE strings in YAML (e.g. `temp_store: MEMORY`).
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum TempStore {
+    /// Use SQLite's compiled-in default.
     Default,
+    /// Store temporary tables and indices on disk.
     File,
+    /// Store temporary tables and indices in memory.
     Memory,
 }
 

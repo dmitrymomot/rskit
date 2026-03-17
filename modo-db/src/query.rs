@@ -350,6 +350,8 @@ where
 /// `rows_affected` on execution.
 ///
 /// Typically obtained via `Record::update_many()` on an entity struct.
+/// For soft-delete entities the inherent `delete_many()` method also returns
+/// this type (it performs an UPDATE SET `deleted_at = now()` rather than a DELETE).
 ///
 /// # Example
 ///
@@ -404,12 +406,12 @@ impl<E: EntityTrait> EntityUpdateMany<E> {
 
 // ── EntityDeleteMany ─────────────────────────────────────────────────────────
 
-/// A chainable wrapper around SeaORM's `DeleteMany<E>` that returns
-/// `rows_affected` on execution.
+/// A chainable wrapper around SeaORM's `DeleteMany<E>` that permanently removes
+/// rows and returns `rows_affected` on execution.
 ///
-/// Typically obtained via `Record::delete_many()` on an entity struct.
-/// For soft-delete entities, `delete_many()` performs a soft delete (UPDATE SET
-/// `deleted_at`). Use `force_delete_many()` to permanently remove rows.
+/// For non-soft-delete entities, obtained via `Record::delete_many()`.
+/// For soft-delete entities, obtained via the inherent `force_delete_many()`
+/// method — use that to hard-delete rows, bypassing soft-delete semantics.
 ///
 /// # Example
 ///
