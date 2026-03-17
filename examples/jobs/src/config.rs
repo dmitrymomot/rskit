@@ -10,3 +10,9 @@ pub(crate) struct Config {
     #[serde(default)]
     pub(crate) jobs: modo_jobs::JobsConfig,
 }
+
+impl modo::SentryConfigProvider for Config {
+    fn sentry_config(&self) -> Option<&modo::SentryConfig> {
+        self.core.sentry_config()
+    }
+}
