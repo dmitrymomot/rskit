@@ -127,9 +127,19 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
                         async move {
                             let #config_ident: #config_ty = modo::__internal::load_or_default()?;
 
+                            #[cfg(feature = "sentry")]
                             let _sentry_guard = modo::__internal::init_tracing(
                                 modo::__internal::SentryConfigProvider::sentry_config(&#config_ident)
                             );
+
+                            #[cfg(not(feature = "sentry"))]
+                            {
+                                let __env_filter = modo::__internal::tracing_subscriber::EnvFilter::try_from_default_env()
+                                    .unwrap_or_else(|_| modo::__internal::tracing_subscriber::EnvFilter::new("info,sqlx::query=warn"));
+                                modo::__internal::tracing_subscriber::fmt()
+                                    .with_env_filter(__env_filter)
+                                    .init();
+                            }
 
                             let #app_ident = modo::__internal::AppBuilder::new();
 
