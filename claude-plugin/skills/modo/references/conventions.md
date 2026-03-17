@@ -165,22 +165,26 @@ CORS
   Maintenance
     Catch Panic
       Request ID
-        Sensitive Headers
-          Tracing
-            Client IP
-              Timeout
-                Trailing Slash
-                  Compression
-                    Body Limit
-                      Security Headers
-                        Error Handler
-                          Rate Limiter
-                            i18n
-                              Template Context
-                                User Global Layers  ← AppBuilder::layer()
-                                  Render Layer
-                                    Module Middleware
-                                      Handler Middleware (innermost)
+        Sentry Hub              ← (sentry feature only)
+          Sentry Request ID Tag ← (sentry feature only)
+            Sentry HTTP         ← (sentry feature only)
+              Sensitive Headers
+                Tracing
+                  Client IP
+                    Timeout
+                      Trailing Slash
+                        Compression
+                          Body Limit
+                            Security Headers
+                              Error Handler
+                                Rate Limiter
+                                  i18n
+                                    Template Context
+                                      Request ID Injector
+                                        User Global Layers  ← AppBuilder::layer()
+                                          Render Layer
+                                            Module Middleware
+                                              Handler Middleware (innermost)
 ```
 
 See `AppBuilder::run()` in `modo/src/app.rs` for the exact assembly order.
@@ -239,7 +243,7 @@ async fn get_user(id: String, /* ... */) -> JsonResult<UserResponse> { /* ... */
 
 - Multiple middleware on the same scope are applied **last-declared = innermost**. Note: this is the inverse of axum's raw `.layer()` where the last call wraps outermost. The macro achieves this by reversing the declaration order before applying layers.
 - `AppBuilder::layer()` inserts global layers between the framework infrastructure stack and the template/module layers. Multiple calls to `.layer()` stack the same way: last call = outermost of the user layers.
-- Template layers (`RenderLayer`, `ContextLayer`) are auto-registered when `TemplateEngine` is present as a service — no manual `.layer()` call needed.
+- Template layers (`RenderLayer`, `TemplateContextLayer`) are auto-registered when `TemplateEngine` is present as a service — no manual `.layer()` call needed.
 
 ---
 
@@ -370,10 +374,11 @@ Current public re-exports (from `lib.rs`):
 - `ViewResult` (behind `#[cfg(feature = "templates")]`)
 - `Service`
 - `I18n`, `I18nConfig` (behind `#[cfg(feature = "i18n")]`)
-- `ClientIp`, `RateLimitInfo`
+- `ClientIp`, `OptionalRateLimitInfo`, `RateLimitInfo`
 - `RequestId`
 - `Method`
 - `Sanitize`, `Validate`
+- `SentryConfig`, `SentryConfigProvider` (behind `#[cfg(feature = "sentry")]`)
 - `GracefulShutdown`, `ShutdownPhase`
 - `TemplateConfig`, `TemplateContext`, `TemplateEngine`, `ViewRender`, `ViewRenderer`, `ViewResponse` (behind `#[cfg(feature = "templates")]`)
 

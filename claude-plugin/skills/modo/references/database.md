@@ -62,6 +62,19 @@ pub struct Config {
 | `path` | `String` | `"data/main.db"` |
 | `pragmas` | `SqliteConfig` | WAL, busy_timeout=5000, synchronous=NORMAL, foreign_keys=true, cache_size=-2000 |
 
+`SqliteConfig` fields:
+
+| Field | Type | Default |
+|-------|------|---------|
+| `journal_mode` | `JournalMode` | `Wal` |
+| `busy_timeout` | `u32` | `5000` (ms) |
+| `synchronous` | `SynchronousMode` | `Normal` |
+| `foreign_keys` | `bool` | `true` |
+| `cache_size` | `i32` | `-2000` |
+| `mmap_size` | `Option<i64>` | `None` |
+| `temp_store` | `Option<TempStore>` | `None` |
+| `wal_autocheckpoint` | `Option<u32>` | `None` |
+
 `PostgresDbConfig` fields:
 
 | Field | Type | Default |
@@ -192,10 +205,10 @@ Applied as `#[entity(...)]` on individual struct fields:
 | `to_column = "<Column>"` | Overrides target column for `belongs_to` FK (default: `"Id"`) |
 | `on_delete = "<action>"` | FK action on delete: `Cascade`, `SetNull`, `Restrict`, `NoAction`, `SetDefault` |
 | `on_update = "<action>"` | FK action on update: same values as `on_delete` |
-| `has_many` | Declares a `HasMany` relation (field excluded from model) |
+| `has_many` | Declares a `HasMany` relation (field excluded from model). **Requires `target = "<Entity>"`**. |
 | `has_one` | Declares a `HasOne` relation (field excluded from model) |
 | `via = "<JoinEntity>"` | Used with `has_many`/`has_one` for many-to-many through a join entity |
-| `target = "<Entity>"` | Overrides inferred target entity name for `has_many`/`has_one` |
+| `target = "<Entity>"` | Required for `has_many`; overrides the inferred target entity name for `has_one` when the field name does not match the entity name |
 | `renamed_from = "<old_name>"` | Records a rename hint as a column comment |
 
 ### ID generation
@@ -235,16 +248,12 @@ pub struct Todo {
 }
 ```
 
-The macro generates these methods directly on `Todo`:
+The macro generates **inherent methods** directly on `Todo` (no trait import needed):
 
 ```rust
 impl Todo {
     // --- Find ---
     pub async fn find_by_id(id: &str, db: &impl ConnectionTrait) -> Result<Self, modo::Error>;
-    pub async fn find_all(db: &impl ConnectionTrait) -> Result<Vec<Self>, modo::Error>;
-
-    // --- Query builder ---
-    pub fn query() -> EntityQuery<Self, todo::Entity>;
 
     // --- Insert ---
     pub async fn insert(self, db: &impl ConnectionTrait) -> Result<Self, modo::Error>;
@@ -255,12 +264,23 @@ impl Todo {
     // --- Delete ---
     pub async fn delete(self, db: &impl ConnectionTrait) -> Result<(), modo::Error>;
     pub async fn delete_by_id(id: &str, db: &impl ConnectionTrait) -> Result<(), modo::Error>;
-
-    // --- Bulk operations ---
-    pub fn update_many() -> EntityUpdateMany<todo::Entity>;
-    pub fn delete_many() -> EntityDeleteMany<todo::Entity>;
 }
 ```
+
+The **`Record` trait** provides additional default methods (require `use modo_db::Record`):
+
+```rust
+// Available via Record trait — add `use modo_db::Record;` to call these
+pub async fn find_all(db: &impl ConnectionTrait) -> Result<Vec<Self>, modo::Error>;
+pub fn query() -> EntityQuery<Self, todo::Entity>;
+pub fn update_many() -> EntityUpdateMany<todo::Entity>;
+pub fn delete_many() -> EntityDeleteMany<todo::Entity>;
+```
+
+For **soft-delete entities**, the macro also generates these inherent methods (see Soft Delete section):
+`with_deleted()`, `only_deleted()`, `restore()`, `force_delete()`, `force_delete_by_id()`,
+`force_delete_many()`. Additionally, `delete_many()` is overridden as an inherent method that
+performs a soft-delete UPDATE (returns `EntityUpdateMany<E>`) instead of a hard DELETE.
 
 Key differences from raw SeaORM:
 - Methods live on the domain struct, not the entity module
@@ -895,13 +915,17 @@ async fn list_todos(
 
 `CursorParams<V = String>` query-string fields:
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `per_page` | `20` | Clamped to `[1, 100]` |
-| `after` | `None` | Cursor value -- fetch records after this position (forward) |
-| `before` | `None` | Cursor value -- fetch records before this position (backward) |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `per_page` | `Option<u64>` | `None` (uses 20) | Omit for default of 20; clamped to `[1, 100]` |
+| `after` | `Option<V>` | `None` | Cursor value -- fetch records after this position (forward) |
+| `before` | `Option<V>` | `None` | Cursor value -- fetch records before this position (backward) |
 
 When both `after` and `before` are set, `after` takes precedence.
+
+> **Note:** The `cursor_fn` closure in `paginate_cursor` receives `&E::Model` (the raw SeaORM
+> model), not the domain type `T`. For macro-generated entities, field names are identical, so
+> `|m| m.id.clone()` works as expected.
 
 For string-keyed entities (ULID/NanoID), use `CursorParams` (default `String`). For integer
 primary keys, use `CursorParams<i64>`.
@@ -928,9 +952,15 @@ The `paginate` and `paginate_cursor` free functions accept a raw `Select<E>` ins
 use modo_db::{paginate, paginate_cursor};
 use modo_db::sea_orm::EntityTrait;
 
+// Returns PageResult<Model> — convert to domain type with .map()
 let page = paginate(todo::Entity::find(), &*db, &params).await
-    .map_err(modo_db::db_err_to_error)?;
+    .map_err(modo_db::db_err_to_error)?
+    .map(Todo::from);
 ```
+
+> **Note:** The standalone functions return `Result<PageResult<M>, DbErr>` where `M` is the
+> SeaORM model type. Use `.map_err(modo_db::db_err_to_error)?` to convert the error and
+> `.map(Todo::from)` to convert `PageResult<Model>` to `PageResult<Todo>`.
 
 ---
 
@@ -1285,6 +1315,9 @@ am.update(&*db).await.map_err(modo_db::db_err_to_error)?;
 | `SqliteDbConfig` | `modo_db::SqliteDbConfig` |
 | `PostgresDbConfig` | `modo_db::PostgresDbConfig` |
 | `SqliteConfig` | `modo_db::SqliteConfig` |
+| `JournalMode` | `modo_db::JournalMode` |
+| `SynchronousMode` | `modo_db::SynchronousMode` |
+| `TempStore` | `modo_db::TempStore` |
 | `DbPool` | `modo_db::DbPool` |
 | `Db` | `modo_db::Db` |
 | `Record` | `modo_db::Record` |

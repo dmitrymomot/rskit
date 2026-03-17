@@ -137,7 +137,7 @@ Type: `HttpConfig`
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `timeout` | `Option<u64>` | `None` | Request timeout in seconds. `None` disables the timeout |
-| `body_limit` | `Option<String>` | `None` | Max request body size: `"2mb"`, `"512kb"`, `"1gb"`, or bare bytes. `None` = unlimited |
+| `body_limit` | `Option<String>` | `Some("2mb")` | Max request body size: `"2mb"`, `"512kb"`, `"1gb"`, or bare bytes. `None` = unlimited |
 | `compression` | `bool` | `false` | Enable response compression (`CompressionLayer`) |
 | `catch_panic` | `bool` | `true` | Convert handler panics into HTTP 500 responses |
 | `trailing_slash` | `TrailingSlash` | `none` | Trailing slash policy: `none`, `strip`, `add` |
@@ -348,7 +348,7 @@ The `#[modo::main]` macro loads config automatically and passes it to `AppBuilde
 
 ```rust
 #[modo::main]
-async fn main(app: AppBuilder, config: AppConfig) {
+async fn main(app: modo::app::AppBuilder, config: AppConfig) {
     app.config(config).run().await.unwrap();
 }
 ```
@@ -359,7 +359,7 @@ Inside `AppBuilder::run()`, config sections are consumed as follows:
 |---|---|
 | `server` | Used to configure binding address, log level, cookie key, and all middleware layers |
 | `cookies` | Auto-registered as `CookieConfig` service — accessible via `Service<CookieConfig>` extractor |
-| `templates` | Auto-wires `TemplateEngine` service, applies `RenderLayer` and `ContextLayer` (feature `templates`) |
+| `templates` | Auto-wires `TemplateEngine` service, applies `RenderLayer` and `TemplateContextLayer` (feature `templates`) |
 | `i18n` | Auto-wires `TranslationStore` service and `i18n` middleware (feature `i18n`) |
 | `csrf` | Auto-registers `CsrfConfig` as a service (feature `csrf`) |
 | `sse` | Auto-registers `SseConfig` as a service (feature `sse`) |
@@ -469,5 +469,5 @@ server:
 | `CsrfConfig` | `modo::csrf::CsrfConfig` | https://docs.rs/modo |
 | `SentryConfig` | `modo::sentry::SentryConfig` | https://docs.rs/modo |
 | `SseConfig` | `modo::sse::SseConfig` | https://docs.rs/modo |
-| `StaticConfig` | `modo::static_files::StaticConfig` | https://docs.rs/modo |
+| `StaticConfig` | `modo::static_files::StaticConfig` (`pub(crate)` — access via `AppConfig.server.static_files`) | https://docs.rs/modo |
 | `parse_size` | `modo::config::parse_size` | https://docs.rs/modo |

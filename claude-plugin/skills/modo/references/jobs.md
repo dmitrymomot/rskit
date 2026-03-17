@@ -68,7 +68,7 @@ async fn send_welcome(payload: WelcomePayload) -> HandlerResult<()> {
 ```rust
 use modo_jobs::job;
 use modo::HandlerResult;
-use modo::Service;
+use modo::extractor::Service;
 
 #[job(queue = "mailer", timeout = "1m")]
 async fn send_report(
@@ -85,7 +85,7 @@ async fn send_report(
 ```rust
 use modo_jobs::job;
 use modo::HandlerResult;
-use modo_db::Db;
+use modo_db::extractor::Db;
 
 #[job(queue = "default")]
 async fn sync_user(payload: SyncPayload, Db(db): Db) -> HandlerResult<()> {
@@ -473,10 +473,12 @@ time. In test binaries, the linker may not include the library object file unles
 direct reference to it. Force inclusion with:
 
 ```rust
-use crate::jobs::send_welcome as _;
+use crate::jobs::SendWelcomeJob as _;
 ```
 
-This applies whenever `cargo test` fails to discover jobs that work in normal builds.
+The force-include must reference the generated struct name (`<FnName>Job` in PascalCase), not
+the original function name. This applies whenever `cargo test` fails to discover jobs that
+work in normal builds.
 
 **Payload size limit.** If `max_payload_bytes` is set in `JobsConfig`, `enqueue` returns an
 error when the serialized payload exceeds that limit. The default is `None` (unlimited).
@@ -488,8 +490,10 @@ error when the serialized payload exceeds that limit. The default is `None` (unl
 reset to `Pending` and their attempt counter is decremented. This handles crashed workers.
 The reaper runs every `stale_reaper_interval_secs` seconds (default 60).
 
-**Cron timeout panics on invalid expressions.** A malformed cron expression causes a `panic!`
-at startup rather than returning an error. Verify expressions before deploying.
+**Cron expressions are validated at compile time.** A malformed cron expression in
+`#[job(cron = "...")]` is a **compile error** — the macro validates the expression during
+expansion. The runtime panic path in `start_cron_jobs` is a defensive fallback only reachable
+if a `JobRegistration` is constructed manually with an invalid `cron` field.
 
 **`JobQueue` requires `JobsHandle` to be registered.** If `JobsHandle` is not in the service
 registry, the `JobQueue` extractor returns a 500 error with the message:

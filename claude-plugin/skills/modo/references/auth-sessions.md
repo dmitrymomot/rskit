@@ -112,8 +112,10 @@ async fn home(OptionalAuth(user): OptionalAuth<User>) -> modo::HandlerResult<Jso
 ### Resolution caching
 
 Both extractors cache the resolved user in request extensions the first time a lookup is
-performed. Subsequent calls within the same request — including from `UserContextLayer` — reuse
-the cached value without triggering another database query.
+performed. Subsequent `Auth<U>` or `OptionalAuth<U>` calls within the same request reuse
+the cached value without triggering another database query. If `UserContextLayer` runs first
+(as the outermost auth middleware), it populates the cache so extractors never need to re-fetch
+the user.
 
 ---
 
@@ -200,7 +202,9 @@ let session_store = SessionStore::new(
     config.core.cookies.clone(),
 );
 
-app.service(session_store.clone())
+app.config(config.core)
+   .managed_service(db)
+   .service(session_store.clone())
    .layer(layer(session_store))
    .run()
    .await?;
@@ -343,7 +347,13 @@ Session identifiers are ULIDs, not UUIDs. `SessionId::new()` generates a new ULI
 
 ### Auth user in templates (`UserContextLayer`)
 
-The `templates` feature of `modo-auth` provides `UserContextLayer`, a Tower middleware that
+The `templates` feature of `modo-auth` provides `UserContextLayer`. Enable it in `Cargo.toml`:
+
+```toml
+modo-auth = { version = "0.3", features = ["templates"] }
+```
+
+`UserContextLayer` is a Tower middleware that
 injects the authenticated user into the minijinja template context under the key `"user"`. It
 also caches the user in request extensions so that subsequent `Auth<U>` or `OptionalAuth<U>`
 extractors skip a second DB lookup.
@@ -407,7 +417,7 @@ job runner.
 
 In `Cargo.toml`:
 ```toml
-modo-session = { version = "0.2", features = ["cleanup-job"] }
+modo-session = { version = "0.3", features = ["cleanup-job"] }
 ```
 
 The job is named `cleanup_expired_sessions`, runs on the cron expression `0 */15 * * * *`,

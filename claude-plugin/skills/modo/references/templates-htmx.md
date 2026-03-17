@@ -35,7 +35,7 @@ automatically — no manual `.layer()` calls are needed:
 5. If `csrf` feature is also enabled: registers `csrf_field()` and `csrf_token()` functions.
 6. Runs the user-supplied `templates(|engine| { ... })` callback (for advanced setup).
 7. Registers `TemplateEngine` as a service in the `ServiceRegistry`.
-8. Installs `RenderLayer` (renders `View` responses) and `ContextLayer` (creates `TemplateContext`) as global middleware layers.
+8. Installs `RenderLayer` (renders `View` responses) and `TemplateContextLayer` (creates `TemplateContext`) as global middleware layers.
 9. Installs `i18n` middleware layer if `TranslationStore` is registered.
 
 ### Configuration
@@ -122,6 +122,10 @@ fn render(&self, views: impl ViewRender) -> Result<ViewResponse, Error>
 // Smart redirect: 302 for normal requests, HX-Redirect header + 200 for HTMX
 fn redirect(&self, url: &str) -> Result<ViewResponse, Error>
 
+// Smart redirect with custom status code: normal requests use the given status;
+// HTMX requests always get HX-Redirect + 200
+fn redirect_with_status(&self, url: &str, status: StatusCode) -> Result<ViewResponse, Error>
+
 // Render to string — always uses main template (not HTMX partial)
 fn render_to_string(&self, view: impl ViewRender) -> Result<String, Error>
 
@@ -157,9 +161,9 @@ pub struct TemplateContext {
 }
 ```
 
-Built-in values injected by `ContextLayer` and framework middleware:
-- `current_url` — the full request URI string (injected by `ContextLayer`).
-- `request_id` — the per-request ULID string (injected by a framework middleware layer after `ContextLayer`).
+Built-in values injected by `TemplateContextLayer` and framework middleware:
+- `current_url` — the full request URI string (injected by `TemplateContextLayer`).
+- `request_id` — the per-request ULID string (injected by a framework middleware layer after `TemplateContextLayer`).
 
 Additional values injected automatically by other middleware (when features are enabled):
 - `locale` — resolved language tag (i18n middleware).
@@ -779,7 +783,7 @@ In the HTMX template, listen for the named SSE event:
 
 ### Auto-Layer — No Manual `.layer()` Needed
 
-`RenderLayer`, `ContextLayer`, and the i18n middleware layer are all installed automatically
+`RenderLayer`, `TemplateContextLayer`, and the i18n middleware layer are all installed automatically
 by `AppBuilder::run()` when the relevant features are enabled. Do NOT add them manually —
 doing so results in duplicate layers.
 
@@ -835,7 +839,7 @@ use my_templates::functions as _;
 - `ViewRender` — `modo::ViewRender`
 - `ViewRenderer` — `modo::ViewRenderer`
 - `RenderLayer` — `modo::templates::RenderLayer`
-- `ContextLayer` — `modo::templates::ContextLayer`
+- `TemplateContextLayer` — `modo::templates::TemplateContextLayer`
 - `TemplateFunctionEntry` — `modo::templates::TemplateFunctionEntry`
 - `TemplateFilterEntry` — `modo::templates::TemplateFilterEntry`
 - `SseBroadcastManager` — `modo::sse::SseBroadcastManager`

@@ -21,8 +21,6 @@ modo-sqlite = { path = "../modo-sqlite" }  # or version = "0.3"
 ### Single pool
 
 ```rust
-use modo_sqlite::{SqliteConfig, connect, run_migrations};
-
 #[modo::main]
 async fn main(
     app: modo::app::AppBuilder,
@@ -108,7 +106,8 @@ Place SQL files in `migrations/` (relative to the crate root) named:
 {YYYYMMDDHHmmss}_{description}.sql
 ```
 
-Call `embed_migrations!()` once anywhere that is linked into the binary:
+Call `embed_migrations!()` once anywhere that is linked into the binary. If the migrations
+directory does not exist, the macro silently expands to nothing (no registrations, no error):
 
 ```rust
 // Default directory ("migrations/"), default group ("default")

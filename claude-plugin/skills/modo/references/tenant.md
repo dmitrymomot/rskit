@@ -105,8 +105,9 @@ receives the extracted identifier string and returns the tenant asynchronously.
 #### `SubdomainResolver`
 
 Extracts the tenant slug from the subdomain of the `Host` header. Given `base_domain = "myapp.com"`,
-a request to `acme.myapp.com` passes `"acme"` to the lookup closure. The bare domain and the
-`www` subdomain always return `Ok(None)`. Port suffixes are stripped before matching.
+a request to `acme.myapp.com` passes `"acme"` to the lookup closure. The bare domain and
+the default reserved subdomains (`www`, `api`, `admin`, `mail`) always return `Ok(None)`.
+Port suffixes are stripped before matching.
 
 ```rust
 use modo_tenant::SubdomainResolver;
@@ -500,9 +501,9 @@ block is inexpensive and safe across threads.
   every first path segment including `"assets"`, `"favicon.ico"`, `"api"`, etc. Return `Ok(None)`
   immediately for non-tenant slugs to avoid spurious database queries.
 
-- **Subdomain resolver skips `www`.** `SubdomainResolver` explicitly returns `Ok(None)` for the
-  `www` subdomain and the bare domain. If you need custom handling for `www.myapp.com`, implement
-  `TenantResolver` directly.
+- **Subdomain resolver skips reserved subdomains.** `SubdomainResolver` returns `Ok(None)` for
+  the bare domain and the default reserved subdomains: `www`, `api`, `admin`, `mail`. If you
+  need custom handling for any of these, implement `TenantResolver` directly.
 
 - **Header value is trimmed, not validated.** `HeaderResolver` trims whitespace but performs no
   further sanitization. If the header value is user-controlled (e.g. forwarded from a proxy), the

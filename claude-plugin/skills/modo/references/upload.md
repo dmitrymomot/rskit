@@ -47,7 +47,7 @@ struct ProfileForm {
 |------------------------|-----------------------------------------------------|
 | `UploadedFile`         | Required file field; errors if absent               |
 | `Option<UploadedFile>` | Optional file field                                 |
-| `Vec<UploadedFile>`    | Multiple files under the same field name            |
+| `Vec<UploadedFile>`    | Zero or more files under the same field name (count constraints via `min_count`/`max_count`) |
 | `BufferedUpload`       | Required streaming upload; at most one per struct   |
 | `String`               | Required text field                                 |
 | `Option<String>`       | Optional text field                                 |
@@ -140,7 +140,7 @@ failure returns a structured error with per-field messages.
 | Attribute              | Applies to                    | Description                                   |
 |------------------------|-------------------------------|-----------------------------------------------|
 | `max_size = "<size>"`  | `UploadedFile`, `Option<UploadedFile>`, `Vec<UploadedFile>` | Maximum file size. Accepts `"5mb"`, `"100kb"`, `"2gb"`, or plain bytes. Case-insensitive. |
-| `accept = "<pattern>"` | `UploadedFile`, `Option<UploadedFile>`, `Vec<UploadedFile>` | MIME type pattern. Supports exact types (`"application/pdf"`) and wildcards (`"image/*"`, `"*/*"`). |
+| `accept = "<pattern>"` | `UploadedFile`, `Option<UploadedFile>`, `Vec<UploadedFile>` | MIME type header pattern check only. Supports exact types (`"application/pdf"`) and wildcards (`"image/*"`, `"*/*"`). Does NOT perform magic-bytes detection — use the manual `file.validate().accept("...").check()` chain for that. |
 | `min_count = <n>`      | `Vec<UploadedFile>`           | Minimum number of files.                      |
 | `max_count = <n>`      | `Vec<UploadedFile>`           | Maximum number of files.                      |
 
@@ -551,6 +551,7 @@ if storage.exists(&old_path).await? {
 | `BufferedUpload`         | https://docs.rs/modo-upload/latest/modo_upload/struct.BufferedUpload.html |
 | `FileStorage` trait      | https://docs.rs/modo-upload/latest/modo_upload/trait.FileStorage.html |
 | `FileStorageDyn` trait   | https://docs.rs/modo-upload/latest/modo_upload/trait.FileStorageDyn.html |
+| `FileStorageSend` trait  | https://docs.rs/modo-upload/latest/modo_upload/trait.FileStorageSend.html |
 | `StoredFile`             | https://docs.rs/modo-upload/latest/modo_upload/struct.StoredFile.html |
 | `StorageBackend`         | https://docs.rs/modo-upload/latest/modo_upload/enum.StorageBackend.html |
 | `UploadConfig`           | https://docs.rs/modo-upload/latest/modo_upload/struct.UploadConfig.html |

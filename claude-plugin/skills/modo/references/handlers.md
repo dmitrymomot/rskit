@@ -449,7 +449,7 @@ server:
 ```
 
 Default: 100 requests per 60-second window. The middleware automatically sets
-`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, and `Retry-After` headers.
+`x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`, and `retry-after` headers.
 
 ### Security Headers — `SecurityHeadersConfig`
 
@@ -676,8 +676,9 @@ mod api_v1 {
   redirect. Prefer consistent URL shapes in your API rather than relying on redirect normalization.
 
 - **`RateLimitInfo` extractor requires the middleware**: Extracting `RateLimitInfo` in a
-  handler fails with a 500 if the rate limit middleware is not configured. Guard with
-  `Option<RateLimitInfo>` if the middleware is optional.
+  handler fails with a 500 if the rate limit middleware is not configured. Use
+  `OptionalRateLimitInfo` (from `modo::middleware`) when the middleware may not be present —
+  `Option<RateLimitInfo>` does NOT work because `RateLimitInfo`'s rejection type is not `Infallible`.
 
 ---
 
@@ -692,6 +693,7 @@ mod api_v1 {
 | `CorsOrigins` | `modo::cors::CorsOrigins` |
 | `RateLimitConfig` | `modo::config::RateLimitConfig` |
 | `RateLimitInfo` | `modo::middleware::RateLimitInfo` |
+| `OptionalRateLimitInfo` | `modo::middleware::OptionalRateLimitInfo` |
 | `SecurityHeadersConfig` | `modo::config::SecurityHeadersConfig` |
 | `TrailingSlash` | `modo::config::TrailingSlash` |
 | `HttpConfig` | `modo::config::HttpConfig` |
@@ -705,4 +707,5 @@ mod api_v1 {
 | `QueryReq<T>` (request) | `modo::extractor::QueryReq` |
 | `PathReq<T>` (request) | `modo::extractor::PathReq` |
 | `HandlerResult<T>` | `modo::HandlerResult` |
+| `ViewResult` | `modo::ViewResult` (requires `templates` feature) |
 | `JsonResult<T>` | `modo::JsonResult` |
