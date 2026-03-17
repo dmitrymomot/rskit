@@ -73,7 +73,7 @@ csrf = ["dep:rand", "dep:hmac", "dep:sha2", "dep:subtle", "dep:form_urlencoded",
 i18n = ["dep:futures-util", "dep:http"]
 sse = ["dep:futures-util"]
 static-fs = ["tower-http/fs"]
-sentry = ["dep:sentry"]
+sentry = ["dep:sentry", "modo-macros/sentry"]
 static-embed = ["dep:rust-embed", "dep:mime_guess", "modo-macros/static-embed"]
 
 [dev-dependencies]
