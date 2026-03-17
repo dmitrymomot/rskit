@@ -18,7 +18,7 @@ pub async fn connect(config: &DatabaseConfig) -> Result<DbPool, modo::Error> {
         (Some(sqlite), None) => connect_sqlite(sqlite, config).await,
         (None, Some(pg)) => connect_postgres(pg, config).await,
         (None, None) => {
-            // Default to SQLite when neither is configured
+            tracing::debug!("no sqlite or postgres config set, defaulting to SQLite");
             let sqlite = crate::config::SqliteDbConfig::default();
             connect_sqlite(&sqlite, config).await
         }
@@ -33,7 +33,9 @@ async fn connect_sqlite(
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
     use std::str::FromStr;
 
-    // Build the connection URL
+    // Build the connection URL.
+    // Note: for :memory: databases, SQLite silently ignores journal_mode=WAL
+    // (reverts to "memory" mode). The PRAGMA executes without error but has no effect.
     let url = if sqlite.path == ":memory:" {
         "sqlite::memory:".to_string()
     } else {
@@ -84,6 +86,7 @@ async fn connect_sqlite(
     ))
 }
 
+#[cfg(feature = "postgres")]
 async fn connect_postgres(
     pg: &crate::config::PostgresDbConfig,
     config: &DatabaseConfig,
@@ -103,6 +106,16 @@ async fn connect_postgres(
 
     info!(url = %redact_url(&pg.url), "Postgres database connected");
     Ok(DbPool(conn))
+}
+
+#[cfg(not(feature = "postgres"))]
+async fn connect_postgres(
+    _pg: &crate::config::PostgresDbConfig,
+    _config: &DatabaseConfig,
+) -> Result<DbPool, modo::Error> {
+    Err(modo::Error::internal(
+        "Postgres config provided but `postgres` feature is not enabled",
+    ))
 }
 
 #[cfg(feature = "sqlite")]
@@ -146,6 +159,7 @@ async fn apply_sqlite_pragmas(
 }
 
 /// Redact credentials from database URL for logging.
+#[cfg(feature = "postgres")]
 fn redact_url(url: &str) -> String {
     if let Some(scheme_end) = url.find("://") {
         let authority_start = scheme_end + 3;

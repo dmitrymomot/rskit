@@ -7,6 +7,7 @@ use std::fmt;
 /// If neither is set, defaults to SQLite with `path: "data/main.db"`.
 /// Setting both is an error (detected at connect time).
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DatabaseConfig {
     /// Maximum number of connections in the pool.
     #[serde(default = "default_max_connections")]
@@ -121,6 +122,7 @@ pub enum JournalMode {
     Delete,
     Truncate,
     Persist,
+    Memory,
     Off,
 }
 
@@ -131,6 +133,7 @@ impl fmt::Display for JournalMode {
             JournalMode::Delete => write!(f, "DELETE"),
             JournalMode::Truncate => write!(f, "TRUNCATE"),
             JournalMode::Persist => write!(f, "PERSIST"),
+            JournalMode::Memory => write!(f, "MEMORY"),
             JournalMode::Off => write!(f, "OFF"),
         }
     }
