@@ -47,7 +47,11 @@ pub trait SentryConfigProvider {
 pub fn init_tracing(sentry_cfg: Option<&SentryConfig>) -> Option<sentry::ClientInitGuard> {
     let guard = sentry_cfg.filter(|s| !s.dsn.is_empty()).map(|cfg| {
         sentry::init(sentry::ClientOptions {
-            dsn: cfg.dsn.parse().ok(),
+            dsn: cfg
+                .dsn
+                .parse()
+                .map_err(|e| tracing::warn!("Invalid Sentry DSN {:?}: {e}", cfg.dsn))
+                .ok(),
             release: sentry::release_name!(),
             environment: Some(cfg.environment.clone().into()),
             traces_sample_rate: cfg.traces_sample_rate,

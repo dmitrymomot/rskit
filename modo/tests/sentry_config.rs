@@ -1,3 +1,5 @@
+#![cfg(feature = "sentry")]
+
 use modo::sentry::SentryConfig;
 
 #[test]
@@ -36,4 +38,11 @@ fn sentry_empty_dsn() {
     let cfg: modo::AppConfig = serde_yaml_ng::from_str(yaml).unwrap();
     let sentry = cfg.sentry.unwrap();
     assert!(sentry.dsn.is_empty());
+}
+
+#[test]
+fn sentry_invalid_dsn_does_not_panic() {
+    let yaml = "sentry:\n  dsn: \"not-a-valid-dsn\"\n";
+    let cfg: modo::AppConfig = serde_yaml_ng::from_str(yaml).unwrap();
+    assert_eq!(cfg.sentry.unwrap().dsn, "not-a-valid-dsn");
 }
