@@ -12,6 +12,10 @@ pub fn generate_ulid() -> String {
 ///
 /// Layout: 42-bit ms timestamp (high) | 22-bit random (low) → u64 → Base36,
 /// zero-padded to 13 characters.
+///
+/// With 22 bits of randomness there are ~4M unique values per millisecond.
+/// For high-throughput bulk inserts, prefer [`generate_ulid()`] which has
+/// 80 bits of randomness.
 pub fn generate_short_id() -> String {
     let ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)

@@ -144,10 +144,13 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
             .into();
         }
 
-        // Read SQL content
-        let sql_path = entry.path();
-        let sql = std::fs::read_to_string(&sql_path)
-            .unwrap_or_else(|e| panic!("failed to read {}: {e}", sql_path.display()));
+        // Use include_str!() so rustc tracks the file as a dependency
+        let sql_path_str = entry
+            .path()
+            .canonicalize()
+            .unwrap_or_else(|e| panic!("failed to canonicalize {}: {e}", entry.path().display()))
+            .to_string_lossy()
+            .to_string();
 
         submissions.push(quote! {
             ::modo_sqlite::inventory::submit! {
@@ -155,7 +158,7 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
                     version: #version,
                     description: #description,
                     group: #group,
-                    sql: #sql,
+                    sql: include_str!(#sql_path_str),
                 }
             }
         });

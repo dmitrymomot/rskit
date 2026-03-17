@@ -44,7 +44,23 @@ async fn run_migrations_filtered(
     .execute(pool.pool())
     .await?;
 
-    // Collect from inventory
+    // Check for duplicate versions across ALL groups (versions must be globally unique)
+    {
+        let mut all: Vec<&MigrationRegistration> = inventory::iter::<MigrationRegistration>
+            .into_iter()
+            .collect();
+        all.sort_by_key(|m| m.version);
+        for window in all.windows(2) {
+            if window[0].version == window[1].version {
+                return Err(crate::Error::Query(sqlx::Error::Protocol(format!(
+                    "duplicate migration version {} (groups '{}' and '{}')",
+                    window[0].version, window[0].group, window[1].group
+                ))));
+            }
+        }
+    }
+
+    // Collect from inventory, filtered by group
     let mut migrations: Vec<&MigrationRegistration> = inventory::iter::<MigrationRegistration>
         .into_iter()
         .filter(|m| filter_fn(m))
@@ -52,16 +68,6 @@ async fn run_migrations_filtered(
 
     // Sort by version
     migrations.sort_by_key(|m| m.version);
-
-    // Check for duplicate versions
-    for window in migrations.windows(2) {
-        if window[0].version == window[1].version {
-            return Err(crate::Error::Query(sqlx::Error::Protocol(format!(
-                "duplicate migration version: {}",
-                window[0].version
-            ))));
-        }
-    }
 
     // Query already-executed versions
     let executed: Vec<(i64,)> = sqlx::query_as("SELECT version FROM _modo_sqlite_migrations")
