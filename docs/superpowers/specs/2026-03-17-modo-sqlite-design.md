@@ -327,23 +327,22 @@ No manual error mapping needed anywhere.
 Lives in `modo-sqlite-macros`. At compile time:
 
 1. Reads `CARGO_MANIFEST_DIR/migrations/*.sql` (non-`.sql` files are ignored)
-2. Parses filename: `V{version}__{description}.sql`
+2. Parses filename: `{timestamp}_{description}.sql`
 3. Embeds SQL content as `&'static str`
 4. Emits `inventory::submit!` per file
 
 **Filename parsing rules:**
-- Leading zeros are stripped: `V001` → version 1
-- Single underscore separator (e.g. `V1_create.sql`) → compile error with clear message
-- Missing `V` prefix → compile error
-- Non-numeric version → compile error
-- Duplicate versions in the same directory → compile error at compile time
+- Timestamp must be exactly 14 digits (`YYYYMMDDHHmmss`) — compile error otherwise
+- Non-numeric timestamp → compile error
+- Missing `_` separator after timestamp → compile error
+- Duplicate timestamps in the same directory → compile error at compile time
 
-Generated code for `migrations/V001__create_todos.sql`:
+Generated code for `migrations/20260317120000_create_todos.sql`:
 
 ```rust
 inventory::submit! {
     modo_sqlite::MigrationRegistration {
-        version: 1,
+        version: 20260317120000,
         description: "create_todos",
         group: "default",
         sql: "CREATE TABLE IF NOT EXISTS todos (...)",
@@ -378,17 +377,17 @@ inventory::collect!(MigrationRegistration);
 
 ```
 migrations/
-  V001__create_todos.sql
-  V002__add_priority_column.sql
-  V003__create_tags_table.sql
+  20260317120000_create_todos.sql
+  20260317120100_add_priority_column.sql
+  20260318090000_create_tags_table.sql
 ```
 
-- `V` prefix required
-- Version is a positive integer (not timestamp), leading zeros ignored
-- `__` double underscore separator (single underscore is a compile error)
+- Filename format: `{timestamp}_{description}.sql`
+- Timestamp is `YYYYMMDDHHmmss` (14 digits) — used as the migration version
+- Single `_` underscore separator between timestamp and description
 - Description in snake_case
 - `.sql` extension required
-- Versions must be unique within a group
+- Timestamps must be unique within a group
 
 ### Migration Table Schema
 
@@ -511,7 +510,7 @@ modo_sqlite::Error
 ```
 todo-api/
   migrations/
-    V001__create_todos.sql
+    20260317120000_create_todos.sql
   src/
     main.rs
     config.rs
@@ -521,7 +520,7 @@ todo-api/
     types.rs
 ```
 
-### migrations/V001__create_todos.sql
+### migrations/20260317120000_create_todos.sql
 
 ```sql
 CREATE TABLE IF NOT EXISTS todos (
@@ -681,7 +680,7 @@ A separate `modo-pg` crate will follow the same patterns (pool wrappers, extract
 - `connect_rw()` with `:memory:` path returns an error
 - Reader pool respects explicit `max_connections` config value
 - `embed_migrations!()` discovers and embeds SQL files at compile time
-- `embed_migrations!()` produces compile error for malformed filenames (single underscore, missing V prefix, non-numeric version)
+- `embed_migrations!()` produces compile error for malformed filenames (non-14-digit timestamp, missing separator, non-numeric timestamp)
 - `embed_migrations!()` produces compile error for duplicate versions in same directory
 - Non-`.sql` files in migrations directory are ignored
 - `run_migrations()` runs all groups
