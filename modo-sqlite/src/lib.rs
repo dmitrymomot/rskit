@@ -19,4 +19,7 @@ pub use id::{generate_short_id, generate_ulid};
 pub use migration::{
     MigrationRegistration, run_migrations, run_migrations_except, run_migrations_group,
 };
+pub use modo_sqlite_macros::embed_migrations;
 pub use pool::{AsPool, Pool, ReadPool, WritePool};
+
+pub use inventory;
