@@ -440,19 +440,13 @@ migrations/
 
 ```sql
 CREATE TABLE IF NOT EXISTS _modo_sqlite_migrations (
-    version     BIGINT NOT NULL,
-    grp         TEXT NOT NULL DEFAULT 'default',
+    version     BIGINT PRIMARY KEY,
     description TEXT NOT NULL,
-    executed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (grp, version)
+    executed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 ```
 
-The `group` column (`grp` to avoid SQL keyword conflict) is part of the composite primary key. This means:
-
-- Version 1 in group "default" and version 1 in group "jobs" can coexist in the same database
-- Each group's migrations are tracked independently
-- `run_migrations_group()` and `run_migrations_except()` can query the table to see exactly what has been executed per group
+No group column — group filtering happens in memory from the `inventory` collection. The table only tracks which versions have been executed. Timestamps are globally unique across groups, so no collisions.
 
 modo-sqlite has no dependency on or compatibility requirement with modo-db. They are fully independent crates.
 
@@ -475,11 +469,11 @@ The runner:
 
 1. Creates `_modo_sqlite_migrations` table if not exists
 2. Collects `MigrationRegistration` from `inventory`
-3. Filters by group (or excludes groups), sorts by version
-4. Checks for duplicate versions within a group — error if found
-5. Queries `_modo_sqlite_migrations` for already-executed versions (filtered by group)
+3. Filters by group in memory (or excludes groups), sorts by version
+4. Checks for duplicate versions — error if found
+5. Queries `_modo_sqlite_migrations` for already-executed versions
 6. Runs each pending migration's SQL in a transaction
-7. Inserts record into `_modo_sqlite_migrations` with group
+7. Inserts record into `_modo_sqlite_migrations`
 
 ### Group Usage
 
@@ -735,7 +729,7 @@ A separate `modo-pg` crate will follow the same patterns (pool wrappers, extract
 - `run_migrations_group()` runs only specified group
 - `run_migrations_except()` excludes specified groups
 - Duplicate migration versions within a group produce a runtime error
-- `_modo_sqlite_migrations` table tracks group per migration
+- `_modo_sqlite_migrations` table has no group column — group filtering is in-memory only
 - `modo_sqlite::Error` variants map correctly from sqlx errors
 - `From<modo_sqlite::Error> for modo::Error` produces correct HTTP status codes
 - `ReadPool` cannot be passed to `run_migrations()` (compile-time check)
