@@ -100,16 +100,23 @@ Read the corresponding reference file from `claude-plugin/skills/modo/references
 For each claim in the reference doc, verify against source:
 
 - [ ] Struct fields and their types match
-- [ ] Default values match
+- [ ] Default values verified against the `Default` impl or `#[serde(default)]` — not just the struct field type
 - [ ] Method signatures match (parameter types, return types)
+- [ ] Method signatures include correct `async` keyword (sync vs async matters)
+- [ ] Parameter ownership is correct (`T` vs `&T` vs `&mut T`)
 - [ ] Enum variants are complete and correctly named
+- [ ] Constant arrays and default lists (e.g. reserved subdomains, default cleanup statuses) match source values exactly
 - [ ] Import paths are correct
 - [ ] Feature gates are correctly documented
 - [ ] Code examples use current API (not deprecated patterns)
+- [ ] Version numbers in `Cargo.toml` snippets match `version.workspace` in root `Cargo.toml`
+- [ ] Setup/main examples include all required calls (`.config()`, `.managed_service()`, `.service()`) — compare against the crate README's quick-start block
 - [ ] Generated code descriptions match what macros actually produce
 - [ ] Gotchas are still accurate
+- [ ] Gotchas correctly classify errors as compile-time (macro rejection) vs runtime (panic/`Result::Err`) — check whether the macro validates the input at expansion time
 - [ ] Macro attribute syntax matches the parser, not just doc comments
 - [ ] `lib.rs` re-export lists in references are complete
+- [ ] Key Types / docs.rs tables list every type re-exported from `lib.rs` — diff table entries against `grep 'pub use' src/lib.rs` output
 - [ ] Macro-generated code compiles for each parameter kind (payload, `Service<T>`, `Db`, no-args) — trace the types through the generated setup statements
 - [ ] Prose that enumerates enum variants or states is exhaustive — prefer "not in X state" over listing every other variant
 
@@ -123,6 +130,16 @@ Apply fixes. Common issues to watch for:
 - **Missing new APIs** — new methods, traits, or types added to crates but not documented.
 - **Wrong macro attribute syntax** — verify against the macro's parser code, not doc comments.
   E.g. `#[template_function]` only accepts `name = "alias"`, not `("alias")`.
+- **Wrong import paths in job/macro examples** — macro codegen uses internal paths
+  (e.g. `modo_jobs::__internal::modo_db::extractor::Db`). Verify user-facing imports
+  match: `modo_db::extractor::Db` (not `modo_db::Db`), `modo::extractor::Service`
+  (not `modo::Service`). Check the macro source `use` statements, not the README.
+- **Inventory force-include uses the wrong symbol** — force-include patterns must
+  reference the generated struct name (`SendWelcomeJob as _`), not the original
+  function name (`send_welcome as _`). Check what the macro actually exports.
+- **Cross-file type name consistency** — after renaming a type in one reference file,
+  grep all reference files for the old name: `grep -r "OldName" claude-plugin/skills/modo/`.
+  Type names like `ContextLayer`, `SessionStore`, etc. appear across multiple docs.
 - **Stale line number references** — remove them entirely.
 - **Incomplete type/export lists** — verify against `lib.rs` re-exports.
 - **Abstraction layer drift** — the crate may have added a higher-level API (like `Record`
