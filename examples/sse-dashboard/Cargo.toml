@@ -11,5 +11,8 @@ rand = "0.9"
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 
+[features]
+sentry = ["modo/sentry"]
+
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("sentry", "sse", "static-embed", "templates"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("sse", "static-embed", "templates"))'] }
