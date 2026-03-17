@@ -18,7 +18,7 @@ versioned migrations, pagination helpers, and group-scoped sync for multi-databa
 
 | Feature | Effect |
 |---------|--------|
-| `sqlite` *(default)* | Enables SQLite via `sqlx-sqlite`. Applies WAL mode, busy_timeout, synchronous=NORMAL, and foreign key pragmas on connect. |
+| `sqlite` *(default)* | Enables SQLite via `sqlx-sqlite`. Configurable PRAGMAs (WAL mode, busy_timeout, synchronous, foreign_keys, cache_size, mmap_size, etc.) applied per-connection. |
 | `postgres` | Enables PostgreSQL via `sqlx-postgres`. |
 
 ---
@@ -28,7 +28,8 @@ versioned migrations, pagination helpers, and group-scoped sync for multi-databa
 ### Configuration
 
 `DatabaseConfig` is deserialized from YAML (via `modo::config::load()`). The backend is
-auto-detected from the URL scheme.
+selected by setting either the `sqlite` or `postgres` sub-config. If neither is set,
+defaults to SQLite with `path: "data/main.db"`.
 
 ```rust
 use modo_db::DatabaseConfig;
@@ -46,33 +47,62 @@ pub struct Config {
 
 | Field | Type | Default |
 |-------|------|---------|
-| `url` | `String` | `"sqlite://data/main.db?mode=rwc"` |
+| `sqlite` | `Option<SqliteDbConfig>` | `Some(SqliteDbConfig::default())` |
+| `postgres` | `Option<PostgresDbConfig>` | `None` |
 | `max_connections` | `u32` | `5` |
 | `min_connections` | `u32` | `1` |
 | `acquire_timeout_secs` | `u64` | `30` |
 | `idle_timeout_secs` | `u64` | `600` |
 | `max_lifetime_secs` | `u64` | `1800` |
 
-Example YAML:
+`SqliteDbConfig` fields:
+
+| Field | Type | Default |
+|-------|------|---------|
+| `path` | `String` | `"data/main.db"` |
+| `pragmas` | `SqliteConfig` | WAL, busy_timeout=5000, synchronous=NORMAL, foreign_keys=true, cache_size=-2000 |
+
+`PostgresDbConfig` fields:
+
+| Field | Type | Default |
+|-------|------|---------|
+| `url` | `String` | (required) |
+
+Example YAML (SQLite):
 
 ```yaml
 database:
-  url: "sqlite://data/main.db?mode=rwc"
+  sqlite:
+    path: "data/main.db"
   max_connections: 5
   min_connections: 1
-  acquire_timeout_secs: 30
-  idle_timeout_secs: 600
-  max_lifetime_secs: 1800
+```
+
+Example YAML (SQLite with custom PRAGMAs):
+
+```yaml
+database:
+  sqlite:
+    path: "data/main.db"
+    pragmas:
+      journal_mode: WAL
+      busy_timeout: 10000
+      synchronous: FULL
+      foreign_keys: true
+      cache_size: -4000
+      mmap_size: 268435456
+  max_connections: 5
+  min_connections: 1
 ```
 
 For PostgreSQL:
 
 ```yaml
 database:
-  url: "postgres://user:pass@localhost/myapp"
+  postgres:
+    url: "postgres://user:pass@localhost/myapp"
   max_connections: 10
   min_connections: 2
-  acquire_timeout_secs: 30
 ```
 
 ### Connecting and registering
@@ -1244,6 +1274,9 @@ am.update(&*db).await.map_err(modo_db::db_err_to_error)?;
 | Type | Path |
 |------|------|
 | `DatabaseConfig` | `modo_db::DatabaseConfig` |
+| `SqliteDbConfig` | `modo_db::SqliteDbConfig` |
+| `PostgresDbConfig` | `modo_db::PostgresDbConfig` |
+| `SqliteConfig` | `modo_db::SqliteConfig` |
 | `DbPool` | `modo_db::DbPool` |
 | `Db` | `modo_db::Db` |
 | `Record` | `modo_db::Record` |

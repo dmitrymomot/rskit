@@ -6,14 +6,14 @@ Database integration for the modo framework. Provides SeaORM-backed connection p
 
 ## Features
 
-- `sqlite` _(default)_ — enables SQLite via `sqlx-sqlite`. WAL mode, busy-timeout, and foreign keys are applied automatically.
+- `sqlite` _(default)_ — enables SQLite via `sqlx-sqlite`. WAL mode, busy-timeout, foreign keys, and other PRAGMAs are configurable per-connection.
 - `postgres` — enables PostgreSQL via `sqlx-postgres`.
 
 ## Usage
 
 ### Configuration
 
-`DatabaseConfig` is deserialized from your app's YAML config. The backend is auto-detected from the URL scheme.
+`DatabaseConfig` is deserialized from your app's YAML config. The backend is selected by setting either `sqlite` or `postgres` sub-config. If neither is set, defaults to SQLite with `path: "data/main.db"`.
 
 ```rust,ignore
 use modo::AppConfig;
@@ -28,16 +28,43 @@ struct Config {
 }
 ```
 
-Example `config.yaml`:
+Example `config.yaml` (SQLite):
 
 ```yaml
 database:
-    url: "sqlite://data/main.db?mode=rwc"
+    sqlite:
+        path: "data/main.db"
     max_connections: 5
     min_connections: 1
 ```
 
-Defaults: `sqlite://data/main.db?mode=rwc`, `max_connections: 5`, `min_connections: 1`.
+Example `config.yaml` (Postgres):
+
+```yaml
+database:
+    postgres:
+        url: "postgres://user:pass@localhost/myapp"
+    max_connections: 10
+    min_connections: 2
+```
+
+SQLite PRAGMAs (WAL mode, busy_timeout, synchronous, foreign_keys, cache_size, etc.) are applied per-connection and can be overridden via the `sqlite.pragmas` section:
+
+```yaml
+database:
+    sqlite:
+        path: "data/main.db"
+        pragmas:
+            journal_mode: WAL
+            busy_timeout: 5000
+            synchronous: NORMAL
+            foreign_keys: true
+            cache_size: -2000
+    max_connections: 5
+    min_connections: 1
+```
+
+Defaults: SQLite with `path: "data/main.db"`, `max_connections: 5`, `min_connections: 1`.
 
 ### Connecting and migrating
 
@@ -530,7 +557,7 @@ let short_id = modo_db::generate_short_id(); // 13-char Base36, time-sortable
 
 | Type                                  | Purpose                                                                           |
 | ------------------------------------- | --------------------------------------------------------------------------------- |
-| `DatabaseConfig`                      | Connection URL + pool size, deserialised from YAML                                |
+| `DatabaseConfig`                      | Backend selection (`sqlite`/`postgres`) + pool size, deserialised from YAML       |
 | `DbPool`                              | Newtype over `sea_orm::DatabaseConnection`; implements `GracefulShutdown`         |
 | `Db`                                  | Axum extractor that pulls `DbPool` from app state                                 |
 | `Record`                              | Trait providing `find_all`, `query`, `update_many`, `delete_many`; implemented for every entity struct |
