@@ -281,6 +281,7 @@ impl ServerConfig {
 pub struct AppConfig {
     pub server: ServerConfig,
     pub cookies: crate::cookies::CookieConfig,
+    pub sentry: Option<crate::sentry::SentryConfig>,
     #[cfg(feature = "templates")]
     pub templates: crate::templates::TemplateConfig,
     #[cfg(feature = "i18n")]
@@ -290,6 +291,12 @@ pub struct AppConfig {
     #[cfg(feature = "sse")]
     #[serde(default)]
     pub sse: crate::sse::SseConfig,
+}
+
+impl crate::sentry::SentryConfigProvider for AppConfig {
+    fn sentry_config(&self) -> Option<&crate::sentry::SentryConfig> {
+        self.sentry.as_ref()
+    }
 }
 
 // ---------------------------------------------------------------------------
