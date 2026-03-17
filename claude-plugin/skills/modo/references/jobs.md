@@ -116,14 +116,15 @@ both is a compile error.
 the `JobsHandle` registered as a managed service. Add it as a parameter to any handler.
 
 ```rust
+use modo::extractor::JsonReq;
+use modo::{Json, JsonResult};
 use modo_jobs::JobQueue;
 use crate::jobs::SayHelloJob;
 use crate::payloads::GreetingPayload;
-use modo::{Json, JsonResult};
 use serde_json::{Value, json};
 
 #[modo::handler(POST, "/jobs/greet")]
-async fn enqueue_greet(queue: JobQueue, input: Json<GreetingPayload>) -> JsonResult<Value> {
+async fn enqueue_greet(queue: JobQueue, input: JsonReq<GreetingPayload>) -> JsonResult<Value> {
     let job_id = SayHelloJob::enqueue(&queue, &input).await?;
     Ok(Json(json!({ "job_id": job_id.to_string() })))
 }
@@ -135,7 +136,7 @@ Use `enqueue_at` to schedule a job to run no earlier than a specific UTC timesta
 
 ```rust
 #[modo::handler(POST, "/jobs/remind")]
-async fn enqueue_remind(queue: JobQueue, input: Json<ReminderPayload>) -> JsonResult<Value> {
+async fn enqueue_remind(queue: JobQueue, input: JsonReq<ReminderPayload>) -> JsonResult<Value> {
     let run_at = chrono::Utc::now() + chrono::Duration::seconds(10);
     let job_id = RemindJob::enqueue_at(&queue, &input, run_at).await?;
     Ok(Json(json!({ "job_id": job_id.to_string(), "run_at": run_at.to_rfc3339() })))
@@ -492,7 +493,7 @@ at startup rather than returning an error. Verify expressions before deploying.
 
 **`JobQueue` requires `JobsHandle` to be registered.** If `JobsHandle` is not in the service
 registry, the `JobQueue` extractor returns a 500 error with the message:
-`"JobQueue not configured. Start the job runner and register JobsHandle as a service."`
+`"job queue not configured — start the job runner and register JobsHandle as a service"`
 
 ---
 

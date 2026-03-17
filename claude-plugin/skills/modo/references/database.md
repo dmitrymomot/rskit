@@ -1009,9 +1009,10 @@ use `#[modo_db::migration]`:
 async fn seed_roles(db: &sea_orm::DatabaseConnection)
     -> Result<(), modo::Error>
 {
+    // execute_unprepared returns Result<_, DbErr>; use map_err to convert
     db.execute_unprepared(
         "INSERT INTO roles (id, name) VALUES ('admin', 'Administrator')"
-    ).await?;
+    ).await.map_err(|e| modo::Error::internal(e.to_string()))?;
     Ok(())
 }
 ```
@@ -1268,6 +1269,11 @@ am.update(&*db).await.map_err(modo_db::db_err_to_error)?;
 - **`db_err_to_error` maps constraint violations to 409**: Unique and FK violations become
   `409 Conflict`. The orphan rule prevents `impl From<DbErr> for modo::Error` in modo-db, so
   use the helper function explicitly when calling raw SeaORM APIs.
+
+- **Raw SQL in migrations requires explicit error conversion**: `execute_unprepared` returns
+  `Result<_, sea_orm::DbErr>`. Use `.map_err(|e| modo::Error::internal(e.to_string()))?` --
+  the `?` operator alone will not compile because `DbErr` has no `From` conversion to
+  `modo::Error`.
 
 ---
 

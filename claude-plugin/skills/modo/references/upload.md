@@ -263,7 +263,10 @@ Serializes/deserializes as lowercase strings (`"local"`, `"s3"`).
 
 ### `storage()` factory function
 
-Construct an `Arc<dyn FileStorageDyn>` from config, then register it as a service:
+Construct an `Arc<dyn FileStorageDyn>` from config. Both the storage backend **and** the
+`UploadConfig` must be registered as services. `MultipartForm<T>` reads `UploadConfig` from
+the service registry to enforce the global `max_file_size` limit — omitting it returns a
+runtime 500 error.
 
 ```rust
 #[modo::main]
@@ -272,11 +275,15 @@ async fn main(
     config: Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let storage = modo_upload::storage(&config.upload)?;
-    app.config(config.core).service(storage).run().await
+    app.config(config.core)
+        .service(storage)
+        .service(config.upload)
+        .run()
+        .await
 }
 ```
 
-After registration, inject it into handlers via `Service<Arc<dyn FileStorageDyn>>`.
+After registration, inject the storage backend into handlers via `Service<Arc<dyn FileStorageDyn>>`.
 
 ### `FileStorage` trait
 
@@ -487,6 +494,11 @@ if storage.exists(&old_path).await? {
 
 ## Gotchas
 
+- **`UploadConfig` must be registered as a service.** Call `.service(config.upload)` on the
+  app builder in addition to `.service(storage)`. `MultipartForm<T>` reads `UploadConfig`
+  from the service registry to enforce the global `max_file_size` limit. Omitting it causes a
+  500 Internal Server Error on the first upload request.
+
 - **`MultipartForm` consumes the request body.** It must appear only once as an extractor. Do not
   also use `axum::extract::Multipart` in the same handler.
 
@@ -545,6 +557,5 @@ if storage.exists(&old_path).await? {
 | `S3Config`               | https://docs.rs/modo-upload/latest/modo_upload/struct.S3Config.html |
 | `LocalStorage`           | https://docs.rs/modo-upload/latest/modo_upload/storage/local/struct.LocalStorage.html |
 | `OpendalStorage`         | https://docs.rs/modo-upload/latest/modo_upload/storage/opendal/struct.OpendalStorage.html |
-| `UploadValidator`        | https://docs.rs/modo-upload/latest/modo_upload/struct.UploadValidator.html |
 | `storage()` function     | https://docs.rs/modo-upload/latest/modo_upload/storage/fn.storage.html |
 | `kb()`, `mb()`, `gb()`   | https://docs.rs/modo-upload/latest/modo_upload/fn.mb.html |
