@@ -193,7 +193,9 @@ fn main() -> anyhow::Result<()> {
             println!("Next steps:");
             println!("  cd {}", name);
             if matches!(template, Template::Web) {
-                println!("  just assets-download     # download HTMX, Alpine.js (first time only)");
+                println!(
+                    "  just assets-download     # download HTMX, Alpine.js, Tailwind Elements (first time only)"
+                );
             }
             println!("  just dev                 # start dev server");
         }
