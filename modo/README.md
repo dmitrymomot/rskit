@@ -13,6 +13,7 @@ Ergonomic Rust web framework for small monolithic apps. Single binary, compile-t
 | `i18n`         | Translation store, `I18n` extractor, `#[t]` macro                                                                     |
 | `sse`          | Server-Sent Events (`SseEvent`, `SseBroadcastManager`, `Sse` extractor)                                               |
 | `static-fs`    | Filesystem static file serving (development)                                                                           |
+| `sentry`       | Sentry error tracking (`SentryConfig`, `SentryConfigProvider`, request_id tagging)                                     |
 | `static-embed` | Embedded static files via `rust-embed` (production)                                                                    |
 
 ## Usage
@@ -228,3 +229,5 @@ cookies:
 | `SseBroadcastManager` | `sse`       | Keyed fan-out broadcast channels                           |
 | `SseResponse`         | `sse`       | Handler return type wrapping an SSE stream                 |
 | `Sse`                 | `sse`       | Extractor that applies keep-alive config to SSE responses  |
+| `SentryConfig`        | `sentry`    | Sentry DSN, environment, and traces_sample_rate config     |
+| `SentryConfigProvider` | `sentry`   | Trait for extracting Sentry config from custom configs     |
