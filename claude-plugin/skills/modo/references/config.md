@@ -283,6 +283,26 @@ Type: `SseConfig` — requires feature `sse`
 
 ---
 
+### sentry
+
+Type: `SentryConfig` — requires feature `sentry`. Wrapped in `Option` — absent section means Sentry is disabled.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `dsn` | `String` | `""` | Sentry DSN. Empty string disables Sentry |
+| `environment` | `String` | `"development"` | Environment tag sent to Sentry |
+| `traces_sample_rate` | `f32` | `0.0` | Fraction of transactions to send (0.0–1.0) |
+
+Example YAML:
+```yaml
+sentry:
+  dsn: ${SENTRY_DSN}
+  environment: production
+  traces_sample_rate: 0.2
+```
+
+---
+
 ## Feature-Gated Fields
 
 Several sections in `AppConfig` and `ServerConfig` are guarded by feature flags. Fields that do not exist when the feature is disabled are simply absent from the struct.
@@ -297,6 +317,9 @@ pub i18n: crate::i18n::I18nConfig,
 
 #[cfg(feature = "csrf")]
 pub csrf: crate::csrf::CsrfConfig,
+
+#[cfg(feature = "sentry")]
+pub sentry: Option<crate::sentry::SentryConfig>,
 
 #[cfg(feature = "sse")]
 pub sse: crate::sse::SseConfig,
@@ -443,6 +466,7 @@ server:
 | `TemplateConfig` | `modo::templates::TemplateConfig` | https://docs.rs/modo |
 | `I18nConfig` | `modo::i18n::I18nConfig` | https://docs.rs/modo |
 | `CsrfConfig` | `modo::csrf::CsrfConfig` | https://docs.rs/modo |
+| `SentryConfig` | `modo::sentry::SentryConfig` | https://docs.rs/modo |
 | `SseConfig` | `modo::sse::SseConfig` | https://docs.rs/modo |
 | `StaticConfig` | `modo::static_files::StaticConfig` | https://docs.rs/modo |
 | `parse_size` | `modo::config::parse_size` | https://docs.rs/modo |
