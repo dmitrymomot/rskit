@@ -9,6 +9,7 @@
 `modo-db` wraps SeaORM for ORM-style CRUD with auto-sync schema management. `modo-sqlite` is the alternative for developers who prefer writing raw SQL with full control — compile-time checked queries, repository pattern, no ORM abstraction layer.
 
 Key features that justify the crate:
+
 - **Read/write connection split** — 1 writer (serializes writes, no SQLITE_BUSY) + N readers (concurrent in WAL mode)
 - **`embed_migrations!()`** — SQL file migrations with inventory-based auto-discovery across crates
 - **Optimized per-pool PRAGMA config** — different defaults for simple vs high-load usage
@@ -47,22 +48,7 @@ No SeaORM dependency anywhere.
 
 ## Configuration
 
-```rust
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-pub struct DatabaseConfig {
-    pub path: String,                        // "data/app.db" — crate builds sqlite:// URL internally
-    pub max_connections: Option<u32>,        // None → connect()=10, connect_rw()=20
-    pub min_connections: u32,                // 1
-    pub writer_max_connections: u32,         // 1 (only used by connect_rw)
-    pub acquire_timeout_secs: u64,           // 30
-    pub idle_timeout_secs: u64,              // 600
-    pub max_lifetime_secs: u64,              // 1800
-    pub sqlite: SqliteConfig,
-}
-```
-
-PRAGMA config uses enums for validated values (same approach as modo-db PRAGMA fix):
+Flat struct — no nesting. Pool settings and PRAGMAs at the same level:
 
 ```rust
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
@@ -80,6 +66,15 @@ pub enum TempStore { Default, File, Memory }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SqliteConfig {
+    // Connection
+    pub path: String,                        // "data/app.db" — crate builds sqlite:// URL internally
+    pub max_connections: Option<u32>,        // None → connect()=10, connect_rw()=20
+    pub min_connections: u32,                // 1
+    pub writer_max_connections: u32,         // 1 (only used by connect_rw)
+    pub acquire_timeout_secs: u64,           // 30
+    pub idle_timeout_secs: u64,              // 600
+    pub max_lifetime_secs: u64,              // 1800
+    // PRAGMAs
     pub journal_mode: JournalMode,           // WAL
     pub busy_timeout: Option<u32>,           // None → connect()=5000, rw_writer=2000, rw_reader=1000
     pub synchronous: SynchronousMode,        // NORMAL
@@ -91,9 +86,21 @@ pub struct SqliteConfig {
 }
 ```
 
+The app config uses `sqlite` as the key, leaving room for `postgres` via future modo-pg:
+
+```rust
+// App's config.rs
+pub struct Config {
+    pub core: AppConfig,
+    pub sqlite: modo_sqlite::SqliteConfig,
+    // Future: pub postgres: modo_pg::PostgresConfig,
+}
+```
+
 ### Path vs URL
 
 Users provide a plain file path (e.g. `data/app.db`). The crate internally:
+
 - Creates parent directories if they don't exist
 - Builds the sqlx URL: `sqlite://data/app.db?mode=rwc`
 - Special case: `:memory:` → in-memory SQLite (only valid with `connect()`, see Gotchas)
@@ -103,23 +110,23 @@ Users provide a plain file path (e.g. `data/app.db`). The crate internally:
 `Option` fields resolve differently depending on which connect function is called. If a user sets a value explicitly, both functions respect it.
 
 Resolution logic:
+
 - If `max_connections` is `Some(n)`: `connect()` uses `n`, `connect_rw()` readers get `n`, writer gets `writer_max_connections`
 - If `max_connections` is `None`: `connect()` uses 10, `connect_rw()` readers get 20, writer gets `writer_max_connections`
 
-| Setting | `connect()` (simple) | `connect_rw()` readers | `connect_rw()` writer |
-|---|---|---|---|
-| `max_connections` | 10 | 20 | `writer_max_connections` (default 1) |
-| `busy_timeout` | 5000ms | 1000ms | 2000ms |
-| `cache_size` | -2000 (2MB) | -16000 (16MB) | -16000 (16MB) |
-| `mmap_size` | None | 268435456 (256MB) | 268435456 (256MB) |
+| Setting           | `connect()` (simple) | `connect_rw()` readers | `connect_rw()` writer                |
+| ----------------- | -------------------- | ---------------------- | ------------------------------------ |
+| `max_connections` | 10                   | 20                     | `writer_max_connections` (default 1) |
+| `busy_timeout`    | 5000ms               | 1000ms                 | 2000ms                               |
+| `cache_size`      | -2000 (2MB)          | -16000 (16MB)          | -16000 (16MB)                        |
+| `mmap_size`       | None                 | 268435456 (256MB)      | 268435456 (256MB)                    |
 
 YAML example:
 
 ```yaml
-database:
-  path: "data/app.db"
-  max_connections: 20
-  sqlite:
+sqlite:
+    path: "data/app.db"
+    max_connections: 20
     busy_timeout: 5000
     cache_size: -64000
 ```
@@ -140,6 +147,7 @@ pub struct WritePool(sqlx::SqlitePool);
 ```
 
 All three implement:
+
 - `Clone` — cheap, inner pool is Arc'd by sqlx
 - `pool(&self) -> &sqlx::SqlitePool` — access for sqlx queries
 - `modo::GracefulShutdown` — calls `pool.close().await`
@@ -160,14 +168,14 @@ Intentionally distinct types — compiler enforces read/write separation.
 
 ### Pool Lifecycle (automatic via sqlx)
 
-| Behavior | Managed by | Configured via |
-|---|---|---|
-| Open new connections on demand | sqlx pool | `min_connections` (eager), lazy up to `max_connections` |
-| Close idle connections | sqlx pool | `idle_timeout_secs` (default 600s) |
-| Replace expired connections | sqlx pool | `max_lifetime_secs` (default 1800s) |
-| Wait for available connection | sqlx pool | `acquire_timeout_secs` (default 30s) |
-| Apply PRAGMAs to new connections | `after_connect` hook | `SqliteConfig` fields |
-| Graceful shutdown | `GracefulShutdown` impl | automatic on app shutdown |
+| Behavior                         | Managed by              | Configured via                                          |
+| -------------------------------- | ----------------------- | ------------------------------------------------------- |
+| Open new connections on demand   | sqlx pool               | `min_connections` (eager), lazy up to `max_connections` |
+| Close idle connections           | sqlx pool               | `idle_timeout_secs` (default 600s)                      |
+| Replace expired connections      | sqlx pool               | `max_lifetime_secs` (default 1800s)                     |
+| Wait for available connection    | sqlx pool               | `acquire_timeout_secs` (default 30s)                    |
+| Apply PRAGMAs to new connections | `after_connect` hook    | `SqliteConfig` fields                                   |
+| Graceful shutdown                | `GracefulShutdown` impl | automatic on app shutdown                               |
 
 The `after_connect` hook fires once per connection creation (not per query). With `max_lifetime_secs: 1800` and `max_connections: 20`, that's ~20 PRAGMA executions per 30 minutes — effectively zero overhead.
 
@@ -175,15 +183,16 @@ The `after_connect` hook fires once per connection creation (not per query). Wit
 
 ```rust
 /// Single pool — for simple apps.
-pub async fn connect(config: &DatabaseConfig) -> Result<Pool, modo::Error>;
+pub async fn connect(config: &SqliteConfig) -> Result<Pool, modo::Error>;
 
 /// Read/write split — for high-load apps.
 /// Returns (reader_pool, writer_pool) with separate PRAGMA configs.
 /// Errors if path is `:memory:` (in-memory databases are per-connection, split would create independent DBs).
-pub async fn connect_rw(config: &DatabaseConfig) -> Result<(ReadPool, WritePool), modo::Error>;
+pub async fn connect_rw(config: &SqliteConfig) -> Result<(ReadPool, WritePool), modo::Error>;
 ```
 
 Both functions:
+
 1. Resolve `config.path` → create parent dirs → build `sqlite://` URL
 2. Build `sqlx::sqlite::SqlitePoolOptions` with pool sizing
 3. Set `after_connect` closure applying PRAGMAs (with per-pool values for rw mode)
@@ -211,7 +220,7 @@ Note: inner pool is `pub` for ergonomic access. The pool types are part of the p
 ### App Wiring — Simple Mode
 
 ```rust
-let db = modo_sqlite::connect(&config.database).await?;
+let db = modo_sqlite::connect(&config.sqlite).await?;
 modo_sqlite::run_migrations(&db).await?;
 app.config(config.core).managed_service(db).run().await
 ```
@@ -219,7 +228,7 @@ app.config(config.core).managed_service(db).run().await
 ### App Wiring — Read/Write Split
 
 ```rust
-let (reader, writer) = modo_sqlite::connect_rw(&config.database).await?;
+let (reader, writer) = modo_sqlite::connect_rw(&config.sqlite).await?;
 modo_sqlite::run_migrations(&writer).await?;
 app.config(config.core)
     .managed_service(reader)
@@ -332,6 +341,7 @@ Lives in `modo-sqlite-macros`. At compile time:
 4. Emits `inventory::submit!` per file
 
 **Filename parsing rules:**
+
 - Timestamp must be exactly 14 digits (`YYYYMMDDHHmmss`) — compile error otherwise
 - Non-numeric timestamp → compile error
 - Missing `_` separator after timestamp → compile error
@@ -402,6 +412,7 @@ CREATE TABLE IF NOT EXISTS _modo_sqlite_migrations (
 ```
 
 The `group` column (`grp` to avoid SQL keyword conflict) is part of the composite primary key. This means:
+
 - Version 1 in group "default" and version 1 in group "jobs" can coexist in the same database
 - Each group's migrations are tracked independently
 - `run_migrations_group()` and `run_migrations_except()` can query the table to see exactly what has been executed per group
@@ -424,6 +435,7 @@ pub async fn run_migrations_except(pool: &impl AsPool, exclude: &[&str]) -> Resu
 `AsPool` is only implemented by `Pool` and `WritePool` — the type system prevents passing a `ReadPool` to migration functions.
 
 The runner:
+
 1. Creates `_modo_sqlite_migrations` table if not exists
 2. Collects `MigrationRegistration` from `inventory`
 3. Filters by group (or excludes groups), sorts by version
@@ -444,7 +456,7 @@ let db = modo_sqlite::connect(&config.database).await?;
 modo_sqlite::run_migrations_except(&db, &["jobs"]).await?;
 
 // Jobs database — only jobs group
-let jobs_db = modo_sqlite::connect(&config.jobs_database).await?;
+let jobs_db = modo_sqlite::connect(&config.jobs_sqlite).await?;
 modo_sqlite::run_migrations_group(&jobs_db, "jobs").await?;
 ```
 
@@ -467,15 +479,14 @@ pub fn generate_short_id() -> String;  // 13-char Base36, time-sortable
 
 ```rust
 // Config
-modo_sqlite::DatabaseConfig
 modo_sqlite::SqliteConfig
 modo_sqlite::JournalMode
 modo_sqlite::SynchronousMode
 modo_sqlite::TempStore
 
 // Connect
-modo_sqlite::connect(&config) -> Result<Pool>
-modo_sqlite::connect_rw(&config) -> Result<(ReadPool, WritePool)>
+modo_sqlite::connect(&sqlite_config) -> Result<Pool>
+modo_sqlite::connect_rw(&sqlite_config) -> Result<(ReadPool, WritePool)>
 
 // Pools
 modo_sqlite::Pool
@@ -658,7 +669,7 @@ async fn main(
     app: modo::app::AppBuilder,
     config: config::Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (reader, writer) = modo_sqlite::connect_rw(&config.database).await?;
+    let (reader, writer) = modo_sqlite::connect_rw(&config.sqlite).await?;
     modo_sqlite::run_migrations(&writer).await?;
     app.config(config.core)
         .managed_service(reader)
