@@ -10,7 +10,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "0.2", features = ["sse"] }
+//! modo = { version = "0.3", features = ["sse"] }
 //! ```
 //!
 //! ## Stream from a broadcast channel

@@ -60,8 +60,10 @@ impl JobQueue {
     ///
     /// The job will not be picked up by any worker before `run_at`.
     ///
-    /// Returns an error if the job name is not registered or the serialized
-    /// payload exceeds `max_payload_bytes`.
+    /// Returns an error if:
+    /// - The job name is not registered.
+    /// - The serialized payload exceeds `max_payload_bytes`.
+    /// - The queue has reached `max_queue_depth` pending jobs (returns 503).
     pub async fn enqueue_at<T: serde::Serialize>(
         &self,
         name: &str,
@@ -108,8 +110,10 @@ impl JobQueue {
 
     /// Cancel a pending job by ID.
     ///
-    /// Only jobs in the `Pending` state can be cancelled.  Returns an error if
-    /// the job is not found or is already running, completed, or dead.
+    /// Only jobs in the `Pending` state can be cancelled.  Any other state
+    /// (`Running`, `Completed`, `Dead`, or already `Cancelled`) results in a
+    /// 409 Conflict error.  The same 409 is returned when the job ID is not
+    /// found, to avoid disclosing whether an ID exists.
     pub async fn cancel(&self, id: &JobId) -> Result<(), modo::Error> {
         let result = modo_db::sea_orm::UpdateMany::exec(
             job::Entity::update_many()

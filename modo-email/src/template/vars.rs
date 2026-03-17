@@ -1,3 +1,8 @@
+//! `{{key}}` variable substitution for email templates.
+//!
+//! [`substitute`] replaces placeholders without HTML-escaping (for subject lines).
+//! [`substitute_html`] HTML-escapes each substituted value (for Markdown bodies).
+
 use std::collections::HashMap;
 
 /// Escape HTML special characters for safe embedding in HTML email output.

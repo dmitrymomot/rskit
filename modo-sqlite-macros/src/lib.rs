@@ -1,3 +1,16 @@
+//! Proc-macro crate for `modo-sqlite`.
+//!
+//! Exports the [`embed_migrations!`] macro, which scans a directory of `.sql`
+//! migration files at compile time and registers them with `modo-sqlite`'s
+//! `inventory`-based migration system.
+//!
+//! This crate is not meant to be used directly. Import the macro through
+//! `modo-sqlite`:
+//!
+//! ```ignore
+//! modo_sqlite::embed_migrations!();
+//! ```
+
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
@@ -43,12 +56,41 @@ impl Parse for EmbedMigrationsInput {
 
 /// Embed SQL migration files from a directory at compile time.
 ///
-/// Scans `CARGO_MANIFEST_DIR/migrations/*.sql` by default.
-/// Each file must be named `{YYYYMMDDHHmmss}_{description}.sql`.
+/// Scans `$CARGO_MANIFEST_DIR/<path>/*.sql` (default path: `migrations`) and
+/// registers each file as a `modo_sqlite::MigrationRegistration` via
+/// `inventory`. The registrations are then picked up at runtime by
+/// `modo_sqlite::run_migrations` and its variants.
 ///
-/// # Usage
+/// Each `.sql` filename must follow the pattern
+/// `{YYYYMMDDHHmmss}_{description}.sql`, where the 14-digit prefix is the
+/// migration version. Files are embedded with `include_str!`, so the compiler
+/// tracks them as dependencies and recompiles when they change.
+///
+/// If the migration directory does not exist the macro expands to nothing —
+/// no registrations are emitted and no compile error is raised.
+///
+/// # Arguments
+///
+/// Both arguments are optional and use `key = "value"` syntax:
+///
+/// - `path` — directory relative to `$CARGO_MANIFEST_DIR` (default: `"migrations"`).
+/// - `group` — logical group name used with `run_migrations_group` and
+///   `run_migrations_except` (default: `"default"`).
+///
+/// # Compile errors
+///
+/// The macro aborts compilation when:
+/// - A filename does not contain an `_` separator after exactly 14 digits.
+/// - The 14-character prefix contains non-numeric characters.
+/// - Two `.sql` files in the same invocation share the same version number.
+///
+/// # Examples
+///
 /// ```ignore
+/// // Scan `migrations/` and register under the "default" group.
 /// modo_sqlite::embed_migrations!();
+///
+/// // Scan a custom directory and register under a named group.
 /// modo_sqlite::embed_migrations!(path = "db/migrations", group = "jobs");
 /// ```
 #[proc_macro]

@@ -159,6 +159,15 @@ fn classify_inner_type(
     FieldKind::FromStr
 }
 
+/// Expand the `FromMultipart` derive macro.
+///
+/// Generates a `FromMultipart` impl that:
+/// - Iterates multipart fields and populates per-field variables.
+/// - Applies the global `max_file_size` limit during streaming for all file fields.
+/// - Performs post-collection validation (required checks, per-field `max_size` and
+///   `accept` for `UploadedFile`/`Option<UploadedFile>`/`Vec<UploadedFile>`, and count
+///   constraints for `Vec<UploadedFile>`).
+/// - Constructs and returns `Self`.
 pub fn expand(input: TokenStream) -> Result<TokenStream> {
     let input: DeriveInput = parse2(input)?;
     let struct_name = &input.ident;
@@ -255,15 +264,15 @@ pub fn expand(input: TokenStream) -> Result<TokenStream> {
         })
         .collect();
 
-    // Generate match arms for field processing
+    // Generate match arms for field processing.
+    // All file fields pass the global __max_file_size limit to from_field for streaming
+    // enforcement. Per-field max_size and accept constraints are applied post-collection
+    // for UploadedFile, Option<UploadedFile>, and Vec<UploadedFile> fields only.
     let match_arms: Vec<TokenStream> = multipart_fields
         .iter()
         .map(|f| {
             let var = quote::format_ident!("__{}", f.field_name);
             let name = &f.multipart_name;
-            // For file fields: use per-field max_size if set, otherwise fall back to __max_file_size
-            // Always pass the global limit to from_field for streaming enforcement.
-            // Per-field limits are checked post-collection with proper validation errors.
             let file_size_limit = quote! { __max_file_size };
             match &f.kind {
                 FieldKind::UploadedFile | FieldKind::OptionUploadedFile => quote! {

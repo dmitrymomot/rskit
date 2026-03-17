@@ -13,9 +13,10 @@
 ///
 /// The inherent-method shadowing relies on exact signature matching.
 /// If you define a hook with a different return type (e.g.,
-/// `Result<(), String>` instead of `Result<(), modo::Error>`), it will
-/// NOT shadow the trait method — both will coexist and the no-op default
-/// will fire. Always match the exact signatures shown above.
+/// `Result<(), String>` instead of `Result<(), modo::Error>`), the name
+/// still resolves to your inherent method, but the macro-generated code
+/// expects `Result<(), modo::Error>` and will not compile.
+/// Always match the exact signatures shown above.
 pub trait DefaultHooks {
     /// Called before the entity is inserted or updated.
     fn before_save(&mut self) -> Result<(), modo::Error> {

@@ -1358,12 +1358,13 @@ fn gen_string_pk_methods(
 
     (
         quote! {
+            /// Look up a record by its string primary key. Returns `NotFound` if no record exists.
             pub async fn find_by_id(id: &str, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<Self, modo_db::__internal::modo::Error> {
                 #find_body
             }
         },
         quote! {
-            /// Delete a record by ID. Loads the record first to invoke `before_delete`.
+            /// Delete a record by its string primary key. Loads the record first to invoke `before_delete`.
             pub async fn delete_by_id(id: &str, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
                 #delete_body
             }
@@ -1411,11 +1412,13 @@ fn gen_typed_pk_methods(
 
     (
         quote! {
+            /// Look up a record by its primary key. Returns `NotFound` if no record exists.
             pub async fn find_by_id(id: #pk_ty, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<Self, modo_db::__internal::modo::Error> {
                 #find_body
             }
         },
         quote! {
+            /// Delete a record by its primary key. Loads the record first to invoke `before_delete`.
             pub async fn delete_by_id(id: #pk_ty, db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
                 #delete_body
             }
@@ -1464,11 +1467,13 @@ fn gen_composite_pk_methods(
 
     (
         quote! {
+            /// Look up a record by its composite primary key. Returns `NotFound` if no record exists.
             pub async fn find_by_id(id: (#(#pk_types),*), db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<Self, modo_db::__internal::modo::Error> {
                 #find_body
             }
         },
         quote! {
+            /// Delete a record by its composite primary key. Loads the record first to invoke `before_delete`.
             pub async fn delete_by_id(id: (#(#pk_types),*), db: &impl modo_db::__internal::sea_orm::ConnectionTrait) -> Result<(), modo_db::__internal::modo::Error> {
                 #delete_body
             }

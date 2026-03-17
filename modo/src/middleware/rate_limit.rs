@@ -68,6 +68,11 @@ enum ConsumeResult {
 // Rate limiter state
 // ---------------------------------------------------------------------------
 
+/// Shared token-bucket state for the global rate limiter.
+///
+/// Keyed by an arbitrary string (IP address, header value, or path).
+/// Use `AppBuilder::rate_limit` to configure the global rate limiter,
+/// or construct directly for custom middleware.
 pub struct RateLimiterState {
     buckets: DashMap<String, TokenBucket>,
     max_tokens: u32,
@@ -75,6 +80,7 @@ pub struct RateLimiterState {
 }
 
 impl RateLimiterState {
+    /// Create a new rate limiter with `max_tokens` per `window_secs` window.
     pub fn new(max_tokens: u32, window_secs: u64) -> Self {
         Self {
             buckets: DashMap::new(),
@@ -153,8 +159,10 @@ impl FromRequestParts<AppState> for OptionalRateLimitInfo {
 // Key functions
 // ---------------------------------------------------------------------------
 
+/// Function type that extracts a rate-limit key from request parts.
 pub type KeyFn = Arc<dyn Fn(&Parts) -> String + Send + Sync>;
 
+/// Key function that uses the resolved client IP address.
 pub fn by_ip() -> KeyFn {
     Arc::new(|parts: &Parts| {
         parts
@@ -165,6 +173,11 @@ pub fn by_ip() -> KeyFn {
     })
 }
 
+/// Key function that uses the value of a named request header.
+///
+/// # Panics
+///
+/// Panics at construction time if `name` is not a valid HTTP header name.
 pub fn by_header(name: &str) -> KeyFn {
     let name = HeaderName::from_bytes(name.as_bytes())
         .unwrap_or_else(|_| panic!("by_header: invalid HTTP header name {:?}", name));
@@ -178,6 +191,7 @@ pub fn by_header(name: &str) -> KeyFn {
     })
 }
 
+/// Key function that uses the request path.
 pub fn by_path() -> KeyFn {
     Arc::new(|parts: &Parts| parts.uri.path().to_string())
 }

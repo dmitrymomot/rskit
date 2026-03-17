@@ -15,7 +15,7 @@
 //! # Quick start
 //!
 //! ```rust,ignore
-//! use modo_auth::{UserProvider, UserProviderService, Auth, PasswordHasher, PasswordConfig};
+//! use modo_auth::{UserProvider, UserProviderService, PasswordHasher};
 //!
 //! struct UserRepo { /* db pool */ }
 //!

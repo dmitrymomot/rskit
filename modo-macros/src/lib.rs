@@ -53,8 +53,10 @@ pub fn handler(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The macro replaces the function with a sync `fn main()` that:
 /// - builds a multi-threaded Tokio runtime,
-/// - initialises `tracing_subscriber` using `RUST_LOG`, falling back to
-///   `"info,sqlx::query=warn"` when the environment variable is unset,
+/// - initialises tracing: without the `sentry` feature, configures
+///   `tracing_subscriber` using `RUST_LOG`, falling back to
+///   `"info,sqlx::query=warn"`; with the `sentry` feature enabled on
+///   `modo-macros`, delegates to `modo::__internal::init_tracing` instead,
 /// - loads the config via `modo::config::load_or_default`,
 /// - runs the async body, and
 /// - exits with code 1 if an error is returned.
@@ -62,7 +64,7 @@ pub fn handler(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// The return type annotation on the `async fn main` is not enforced by the
 /// macro; the body is wrapped in an internal `Result<(), Box<dyn std::error::Error>>`.
 ///
-/// # Optional attribute
+/// # Optional attributes
 ///
 /// `static_assets = "path/"` — embeds the given folder as static files using
 /// `rust_embed`. Requires the `static-embed` feature on `modo-macros`.

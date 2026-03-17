@@ -23,14 +23,19 @@ mod from_multipart;
 ///
 /// ## `#[upload(...)]`
 ///
-/// Controls validation applied to file fields. All sub-attributes are optional.
+/// Controls per-field validation. All sub-attributes are optional.
 ///
-/// - `max_size = "<size>"` — maximum file size, e.g. `"5mb"`, `"100kb"`, `"2gb"`.
+/// - `max_size = "<size>"` — maximum file size for `UploadedFile`, `Option<UploadedFile>`,
+///   or `Vec<UploadedFile>` fields, e.g. `"5mb"`, `"100kb"`, `"2gb"`.
 ///   Size strings are case-insensitive and accept the suffixes `b`, `kb`, `mb`, `gb`.
 ///   A plain integer is treated as bytes.
-/// - `accept = "<pattern>"` — MIME type pattern, e.g. `"image/*"`, `"application/pdf"`.
+/// - `accept = "<pattern>"` — MIME type pattern for `UploadedFile`, `Option<UploadedFile>`,
+///   or `Vec<UploadedFile>` fields, e.g. `"image/*"`, `"application/pdf"`.
 /// - `min_count = <n>` — minimum number of files for `Vec<UploadedFile>` fields.
 /// - `max_count = <n>` — maximum number of files for `Vec<UploadedFile>` fields.
+///
+/// `max_size` and `accept` are not applied to `BufferedUpload` fields; use the
+/// global `max_file_size` from `UploadConfig` to limit buffered upload size.
 ///
 /// ## `#[serde(rename = "...")]`
 ///

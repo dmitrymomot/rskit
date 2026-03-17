@@ -4,6 +4,10 @@ use axum::response::IntoResponse;
 use std::any::Any;
 use tower_http::catch_panic::ResponseForPanic;
 
+/// Custom panic handler for the `CatchPanicLayer`.
+///
+/// Converts handler panics into structured `500 Internal Server Error`
+/// JSON responses instead of aborting the connection.
 #[derive(Clone)]
 pub struct PanicHandler;
 

@@ -1,6 +1,14 @@
+//! Markdown rendering for email bodies.
+//!
+//! Converts Markdown to HTML and plain text in a single pass. The custom
+//! `[button|Label](url)` link syntax is converted to email-safe table-based
+//! CTA buttons in HTML and to `Label (url)` in plain text.
+
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 
 const BUTTON_PREFIX: &str = "button|";
+
+/// Default button background color used when no `brand_color` is set (`#4F46E5`, indigo).
 pub const DEFAULT_BUTTON_COLOR: &str = "#4F46E5";
 
 /// Render Markdown to both HTML and plain text in a single pass.

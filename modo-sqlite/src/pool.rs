@@ -9,12 +9,14 @@ use std::pin::Pin;
 ///
 /// # Compile-time enforcement
 ///
-/// The following snippet must fail to compile because `ReadPool` does not implement `AsPool`:
+/// The following snippet must fail to compile because `ReadPool` does not satisfy
+/// the `AsPool` bound:
 ///
 /// ```compile_fail
-/// # use modo_sqlite::pool::{AsPool, ReadPool};
-/// fn _assert(_: &impl AsPool) {}
-/// _assert(&ReadPool(todo!()));
+/// use modo_sqlite::pool::{AsPool, ReadPool};
+/// fn _assert<T: AsPool>(_: &T) {}
+/// let pool: ReadPool = todo!();
+/// _assert(&pool);
 /// ```
 pub trait AsPool {
     /// Returns a reference to the underlying [`sqlx::SqlitePool`].
@@ -32,6 +34,7 @@ pub struct Pool(pub(crate) sqlx::SqlitePool);
 ///
 /// Does **not** implement [`AsPool`] — write-path operations (e.g. migrations)
 /// are intentionally unavailable through this type.
+/// Implements [`modo::GracefulShutdown`].
 /// Obtained from [`crate::connect_rw`].
 #[derive(Debug, Clone)]
 pub struct ReadPool(pub(crate) sqlx::SqlitePool);

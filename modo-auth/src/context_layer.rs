@@ -18,6 +18,9 @@ use tower::{Layer, Service};
 /// If there is no session or the user is not found, the layer passes the request through
 /// unchanged (graceful — no rejection).
 ///
+/// The user type `U` must implement `serde::Serialize` so the value can be injected
+/// into the minijinja context.
+///
 /// Requires feature `"templates"`.
 pub struct UserContextLayer<U>
 where
