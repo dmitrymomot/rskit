@@ -9,6 +9,7 @@ modo v2 is a clean rewrite — a collection of small, testable modules inside a 
 **Target audience:** Rust developers building small monolithic web apps — primarily B2B SaaS, occasionally B2C. Optimized for solo developer productivity with enough ergonomics that developers from Rails/Django/Express don't bounce off Rust's complexity.
 
 **Key design decisions:**
+
 - Handlers are plain `async fn` — no `#[handler]` macro, no signature rewriting
 - Routes use axum's `Router` directly — no auto-registration, no `inventory`
 - Services are wired explicitly in `main()` — no global discovery
@@ -50,6 +51,7 @@ dmitrymomot/modo/
 ```
 
 **Feature flags** (all on by default via `full`):
+
 - `sqlite` (default) / `postgres` — mutually exclusive DB backend (enforced via `compile_error!` if both enabled)
 - `templates` — MiniJinja + i18n + static files
 - `sse` — broadcast SSE
@@ -58,6 +60,7 @@ dmitrymomot/modo/
 Everything else is always-on.
 
 **Companion crate:**
+
 - `modo-cli` — project scaffolding CLI (`modo new my-app`). Separate binary crate, no runtime dependency on the framework. Generates project structure, config files, example module, migrations for sessions/jobs. Design TBD — will be specified separately.
 
 ## App Bootstrap
@@ -108,13 +111,13 @@ async fn main() -> anyhow::Result<()> {
 
     let server = modo::server::http(router, &config.modo.server).await;
 
-    modo::runtime::run(vec![
+    modo::runtime::run!(
         server,
         worker,
         scheduler,
         db::managed(writer),
         db::managed(reader),
-    ]).await
+    ).await
 }
 ```
 
@@ -124,21 +127,21 @@ Handlers are plain axum async functions. modo provides extractors and a result t
 
 ### Request Body Extractors (one per handler)
 
-| Extractor | Content-Type | Does |
-|---|---|---|
-| `JsonRequest<T>` | `application/json` | Deserialize + sanitize |
-| `FormRequest<T>` | `application/x-www-form-urlencoded` | Deserialize + sanitize |
-| `MultipartRequest<T>` | `multipart/form-data` | Deserialize text fields + sanitize + file access |
+| Extractor             | Content-Type                        | Does                                             |
+| --------------------- | ----------------------------------- | ------------------------------------------------ |
+| `JsonRequest<T>`      | `application/json`                  | Deserialize + sanitize                           |
+| `FormRequest<T>`      | `application/x-www-form-urlencoded` | Deserialize + sanitize                           |
+| `MultipartRequest<T>` | `multipart/form-data`               | Deserialize text fields + sanitize + file access |
 
 ### Non-Body Extractors (any number per handler)
 
-| Extractor | Purpose |
-|---|---|
-| `Service<T>` | Read from service registry |
-| `Path<T>` | Path parameters |
-| `Query<T>` | Query string (+ sanitize) |
-| `Session` | Current session |
-| `Tenant<T>` | Resolved tenant |
+| Extractor               | Purpose                       |
+| ----------------------- | ----------------------------- |
+| `Service<T>`            | Read from service registry    |
+| `Path<T>`               | Path parameters               |
+| `Query<T>`              | Query string (+ sanitize)     |
+| `Session`               | Current session               |
+| `Tenant<T>`             | Resolved tenant               |
 | `Option<Auth>` / `Auth` | Via middleware, not extractor |
 
 ### Response Types
@@ -224,19 +227,19 @@ let (reader, writer) = modo::db::connect_rw(&config.database).await?;
 
 ```yaml
 database:
-  path: data/app.db
-  max_connections: 10
-  journal_mode: WAL
-  synchronous: NORMAL
-  busy_timeout: 5000
-  reader:
-    max_connections: 8
-    busy_timeout: 1000
-    cache_size: -16000
-    mmap_size: 268435456
-  writer:
-    max_connections: 1
-    busy_timeout: 2000
+    path: data/app.db
+    max_connections: 10
+    journal_mode: WAL
+    synchronous: NORMAL
+    busy_timeout: 5000
+    reader:
+        max_connections: 8
+        busy_timeout: 1000
+        cache_size: -16000
+        mmap_size: 268435456
+    writer:
+        max_connections: 1
+        busy_timeout: 2000
 ```
 
 Per-pool overrides for pool sizing, timing, and PRAGMA values. This is the SQLite config; Postgres config uses a different structure:
@@ -244,17 +247,17 @@ Per-pool overrides for pool sizing, timing, and PRAGMA values. This is the SQLit
 ```yaml
 # Postgres config (when feature = "postgres")
 database:
-  url: ${DATABASE_URL}
-  max_connections: 10
-  min_connections: 1
-  acquire_timeout_secs: 30
-  idle_timeout_secs: 600
-  max_lifetime_secs: 1800
-  reader:
-    url: ${DATABASE_READER_URL}     # read replica
-    max_connections: 8
-  writer:
-    max_connections: 2
+    url: ${DATABASE_URL}
+    max_connections: 10
+    min_connections: 1
+    acquire_timeout_secs: 30
+    idle_timeout_secs: 600
+    max_lifetime_secs: 1800
+    reader:
+        url: ${DATABASE_READER_URL} # read replica
+        max_connections: 8
+    writer:
+        max_connections: 2
 ```
 
 Config structs are feature-gated — `modo::db::Config` resolves to `SqliteConfig` or `PostgresConfig` depending on the enabled feature.
@@ -297,18 +300,18 @@ DB-backed sessions. SHA-256 hashed tokens. Fingerprinting. Token rotation. LRU e
 
 ```yaml
 session:
-  anonymous: false               # true = create session before auth (shopping cart, etc.)
-  cookie_name: _session
-  session_ttl_secs: 2592000      # 30 days
-  touch_interval_secs: 300       # 5 min between expiry refreshes
-  validate_fingerprint: true
-  max_sessions_per_user: 10
-  trusted_proxies: []
-  cookie:
-    secure: true
-    http_only: true
-    same_site: lax
-    path: /
+    anonymous: false # true = create session before auth (shopping cart, etc.)
+    cookie_name: _session
+    session_ttl_secs: 2592000 # 30 days
+    touch_interval_secs: 300 # 5 min between expiry refreshes
+    validate_fingerprint: true
+    max_sessions_per_user: 10
+    trusted_proxies: []
+    cookie:
+        secure: true
+        http_only: true
+        same_site: lax
+        path: /
 ```
 
 ### Handler API
@@ -354,6 +357,7 @@ Auth/logout do DB writes inline (create/destroy rows, rotate tokens).
 ### Session Internals
 
 `Session` is a `FromRequestParts` extractor that holds `Arc<SessionState>`. `SessionState` contains:
+
 - `store: session::Store` (holds a DB pool clone)
 - `current: Mutex<Option<SessionData>>` — in-memory session data
 - `dirty: AtomicBool` — tracks whether data was modified
@@ -483,14 +487,14 @@ Config:
 
 ```yaml
 oauth:
-  google:
-    client_id: ...
-    client_secret: ...
-    redirect_url: https://myapp.com/auth/google/callback
-  github:
-    client_id: ...
-    client_secret: ...
-    redirect_url: https://myapp.com/auth/github/callback
+    google:
+        client_id: ...
+        client_secret: ...
+        redirect_url: https://myapp.com/auth/google/callback
+    github:
+        client_id: ...
+        client_secret: ...
+        redirect_url: https://myapp.com/auth/github/callback
 ```
 
 ## Multi-tenancy
@@ -591,7 +595,7 @@ Translation files in `locales/`:
 ```yaml
 # en.yaml
 hello:
-  greeting: "Hello, {{ name }}!"
+    greeting: "Hello, {{ name }}!"
 ```
 
 In templates: `{{ t("hello.greeting", name="Dmytro") }}`
@@ -606,13 +610,13 @@ In templates: `{{ t("hello.greeting", name="Dmytro") }}`
 
 ### Static Files
 
-| | Dev | Release |
-|---|---|---|
-| Source | Disk (every request) | Embedded in binary |
-| `static_url()` version | Unix timestamp | Content hash |
-| Cache-Control | `no-cache` | `max-age=31536000, immutable` |
-| ETag | None | SHA-256 content hash |
-| 304 support | No | Yes |
+|                        | Dev                  | Release                       |
+| ---------------------- | -------------------- | ----------------------------- |
+| Source                 | Disk (every request) | Embedded in binary            |
+| `static_url()` version | Unix timestamp       | Content hash                  |
+| Cache-Control          | `no-cache`           | `max-age=31536000, immutable` |
+| ETag                   | None                 | SHA-256 content hash          |
+| 304 support            | No                   | Yes                           |
 
 In templates: `{{ static_url('css/app.css') }}` → `/assets/css/app.css?v=a3f2b1c4`
 
@@ -778,21 +782,21 @@ Backoff: `min(5 * 2^(attempt-1), 3600)` seconds.
 
 ```yaml
 job:
-  poll_interval_secs: 1
-  stale_threshold_secs: 600
-  stale_reaper_interval_secs: 60
-  drain_timeout_secs: 30
-  max_payload_bytes: null
-  max_queue_depth: null
-  queues:
-    - name: default
-      concurrency: 4
-    - name: email
-      concurrency: 2
-  cleanup:
-    interval_secs: 3600
-    retention_secs: 86400
-    statuses: [completed, dead, cancelled]
+    poll_interval_secs: 1
+    stale_threshold_secs: 600
+    stale_reaper_interval_secs: 60
+    drain_timeout_secs: 30
+    max_payload_bytes: null
+    max_queue_depth: null
+    queues:
+        - name: default
+          concurrency: 4
+        - name: email
+          concurrency: 2
+    cleanup:
+        interval_secs: 3600
+        retention_secs: 86400
+        statuses: [completed, dead, cancelled]
 ```
 
 ### Unregistered Jobs
@@ -816,11 +820,11 @@ async fn main() -> anyhow::Result<()> {
         .register("send_welcome_email", send_welcome_email)
         .start().await;
 
-    modo::runtime::run(vec![
+    modo::runtime::run!(
         worker,
         db::managed(writer),
         db::managed(reader),
-    ]).await
+    ).await
 }
 ```
 
@@ -841,15 +845,15 @@ let scheduler = modo::cron::Scheduler::new(&registry)
 
 ### Fluent Schedules
 
-| Alias | Description |
-|---|---|
-| `@yearly` / `@annually` | Midnight Jan 1 |
-| `@monthly` | Midnight 1st of month |
-| `@weekly` | Midnight Sunday |
-| `@daily` / `@midnight` | Midnight |
-| `@hourly` | Top of every hour |
-| `@every <duration>` | Fixed interval (`1h`, `30m`, `15s`) |
-| Standard cron | `0 0 9 * * MON-FRI` |
+| Alias                   | Description                         |
+| ----------------------- | ----------------------------------- |
+| `@yearly` / `@annually` | Midnight Jan 1                      |
+| `@monthly`              | Midnight 1st of month               |
+| `@weekly`               | Midnight Sunday                     |
+| `@daily` / `@midnight`  | Midnight                            |
+| `@hourly`               | Top of every hour                   |
+| `@every <duration>`     | Fixed interval (`1h`, `30m`, `15s`) |
+| Standard cron           | `0 0 9 * * MON-FRI`                 |
 
 Validated at startup — invalid schedule panics. Sequential execution — if a run exceeds the interval, next tick is skipped.
 
@@ -880,18 +884,18 @@ registry.add(mailer);
 
 ```yaml
 email:
-  templates_path: emails
-  default_from_name: MyApp
-  default_from_email: noreply@myapp.com
-  default_reply_to: support@myapp.com
-  cache_templates: true
-  template_cache_size: 100
-  smtp:
-    host: smtp.mailgun.com
-    port: 587
-    username: postmaster@myapp.com
-    password: ${SMTP_PASSWORD}
-    security: starttls
+    templates_path: emails
+    default_from_name: MyApp
+    default_from_email: noreply@myapp.com
+    default_reply_to: support@myapp.com
+    cache_templates: true
+    template_cache_size: 100
+    smtp:
+        host: smtp.mailgun.com
+        port: 587
+        username: postmaster@myapp.com
+        password: ${SMTP_PASSWORD}
+        security: starttls
 ```
 
 ### Templates
@@ -912,6 +916,7 @@ Thanks for signing up!
 ```
 
 Features:
+
 - `{{var}}` substitution (HTML-escaped in body, raw in subject)
 - Markdown → HTML + plain text in single pass
 - `[button|Label](url)` — email-safe table-based buttons (Outlook compatible)
@@ -961,13 +966,13 @@ registry.add(storage);
 
 ```yaml
 upload:
-  bucket: my-app-uploads
-  region: us-east-1
-  endpoint: https://s3.amazonaws.com
-  access_key: xxx
-  secret_key: xxx
-  max_file_size: 10485760
-  allowed_types: [image/jpeg, image/png, image/webp, application/pdf]
+    bucket: my-app-uploads
+    region: us-east-1
+    endpoint: https://s3.amazonaws.com
+    access_key: xxx
+    secret_key: xxx
+    max_file_size: 10485760
+    allowed_types: [image/jpeg, image/png, image/webp, application/pdf]
 ```
 
 ### Storage Methods
@@ -1008,12 +1013,12 @@ pub struct UploadedFile {
 
 ### Network Calls
 
-| Method | Hits S3? |
-|---|---|
-| `put()` / `put_with()` | Yes |
-| `delete()` / `delete_prefix()` | Yes |
-| `url()` | No |
-| `presigned_url()` | No |
+| Method                         | Hits S3? |
+| ------------------------------ | -------- |
+| `put()` / `put_with()`         | Yes      |
+| `delete()` / `delete_prefix()` | Yes      |
+| `url()`                        | No       |
+| `presigned_url()`              | No       |
 
 ## Middleware
 
@@ -1078,9 +1083,9 @@ Reads `APP_ENV` env var (default: `development`), loads `config/{APP_ENV}.yaml`.
 
 ```yaml
 email:
-  smtp:
-    host: ${SMTP_HOST}
-    password: ${SMTP_PASSWORD}
+    smtp:
+        host: ${SMTP_HOST}
+        password: ${SMTP_PASSWORD}
 env: ${APP_ENV:development}
 ```
 
@@ -1187,13 +1192,13 @@ let app = modo::test::app("config/")
 
 ```yaml
 tracing:
-  level: info
-  format: pretty               # pretty (dev) | json (production)
-  sentry:
-    dsn: ${SENTRY_DSN:}        # empty = disabled
-    environment: ${APP_ENV:development}
-    sample_rate: 1.0
-    traces_sample_rate: 0.1
+    level: info
+    format: pretty # pretty (dev) | json (production)
+    sentry:
+        dsn: ${SENTRY_DSN:} # empty = disabled
+        environment: ${APP_ENV:development}
+        sample_rate: 1.0
+        traces_sample_rate: 0.1
 ```
 
 ### Setup
@@ -1215,37 +1220,37 @@ Manages application lifecycle: waits for shutdown signal, stops tasks sequential
 
 ```rust
 pub trait Task: Send + 'static {
-    fn shutdown(self: Box<Self>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
+    async fn shutdown(self) -> Result<()>;
 }
 ```
 
-Object-safe — uses `self: Box<Self>` and returns a boxed future so different task types can coexist in a `Vec<Box<dyn Task>>`. A blanket helper converts async functions:
+Each running service returns a handle that implements `Task`. The trait is not object-safe — instead, `runtime::run!` is a `macro_rules!` that generates sequential shutdown calls with concrete types (no `Box`, no `dyn`, zero overhead):
 
 ```rust
-// Convenience: implement with a simple async block
+// Implementation example
 impl Task for ManagedPool {
-    fn shutdown(self: Box<Self>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
-        Box::pin(async move {
-            self.pool.close().await;
-            Ok(())
-        })
+    async fn shutdown(self) -> Result<()> {
+        self.pool.close().await;
+        Ok(())
     }
 }
 ```
 
 ### Usage
 
-All tasks are already running when passed to `runtime::run()`. On SIGTERM/SIGINT, each task's `shutdown()` is called sequentially in order:
+All tasks are already running when passed to `runtime::run!`. On SIGTERM/SIGINT, each task's `shutdown()` is called sequentially in order:
 
 ```rust
-modo::runtime::run(vec![
-    Box::new(server),              // stops first: drain HTTP connections
-    Box::new(worker),              // stops second: finish in-flight jobs
-    Box::new(scheduler),           // stops third: cancel pending cron
-    db::managed(writer),           // stops fourth: close write pool (returns Box<dyn Task>)
-    db::managed(reader),           // stops last: close read pool
-]).await
+modo::runtime::run!(
+    server,              // stops first: drain HTTP connections
+    worker,              // stops second: finish in-flight jobs
+    scheduler,           // stops third: cancel pending cron
+    db::managed(writer), // stops fourth: close write pool
+    db::managed(reader), // stops last: close read pool
+).await
 ```
+
+`run!` is a `macro_rules!` (declarative macro, not a proc macro) — it expands to sequential `.shutdown().await` calls. No boxing, no dynamic dispatch, each type stays concrete.
 
 Global timeout — if any task hangs, log warning and exit.
 
@@ -1304,7 +1309,7 @@ Session cookies are signed using a `Key` derived from a configurable secret in t
 
 ```yaml
 session:
-  cookie_secret: ${SESSION_SECRET}  # 64+ character hex string
+    cookie_secret: ${SESSION_SECRET} # 64+ character hex string
 ```
 
 ### Test Session Helper
