@@ -140,7 +140,7 @@ Handlers are plain axum async functions. modo provides extractors and a result t
 
 ### Response Types
 
-`Json<T>`, `Html`, `View`, `Redirect`, `Response` (axum's `Response` for mixed return types).
+`Json<T>`, `Html<String>`, `Redirect`, `Response` (axum's `Response` for mixed return types).
 
 ### Error Handling
 
