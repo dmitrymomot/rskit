@@ -15,7 +15,7 @@ postgres = ["sea-orm/sqlx-postgres"]
 modo.workspace = true
 modo-db-macros.workspace = true
 
-sea-orm = { version = "2.0.0-rc", features = [
+sea-orm = { version = "2.0.0-rc.37", features = [
     "runtime-tokio-native-tls",
     "macros",
     "schema-sync",
