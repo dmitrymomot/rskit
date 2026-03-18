@@ -6,7 +6,7 @@ One crate. Zero proc macros. Plain functions. Explicit wiring. Moderate magic th
 
 modo v2 is a clean rewrite — a collection of small, testable modules inside a single crate that help build Rust web applications. Each module is independent, explicitly wired by the user in `main()`. No global state, no auto-registration, no hidden orchestration.
 
-**Target audience:** Rust developers building B2B micro-SaaS (occasionally B2C). Primarily optimized for solo developer productivity with enough ergonomics that developers from Rails/Django/Express don't bounce off Rust's complexity.
+**Target audience:** Rust developers building small monolithic web apps — primarily B2B SaaS, occasionally B2C. Optimized for solo developer productivity with enough ergonomics that developers from Rails/Django/Express don't bounce off Rust's complexity.
 
 **Key design decisions:**
 - Handlers are plain `async fn` — no `#[handler]` macro, no signature rewriting
@@ -50,7 +50,7 @@ dmitrymomot/modo/
 ```
 
 **Feature flags** (all on by default via `full`):
-- `sqlite` (default) / `postgres` — mutually exclusive DB backend
+- `sqlite` (default) / `postgres` — mutually exclusive DB backend (enforced via `compile_error!` if both enabled)
 - `templates` — MiniJinja + i18n + static files
 - `sse` — broadcast SSE
 - `oauth` — Google/GitHub OAuth (pulls reqwest)
@@ -150,8 +150,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct Error {
     status: StatusCode,
     message: String,
+    source: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 ```
+
+Built-in `From` conversions: `sqlx::Error` → 500 (unique → 409, not found → 404), `ValidationError` → 422, `lettre::Error` → 500, `std::io::Error` → 500. User adds their own via `impl From<MyError> for modo::Error`.
+
+Panics are caught by `CatchPanicLayer` (included in the middleware stack) and converted to 500 errors before reaching the global error handler.
 
 Global error handler middleware — one function handles all errors:
 
@@ -231,7 +236,25 @@ database:
     busy_timeout: 2000
 ```
 
-Per-pool overrides for pool sizing, timing, and PRAGMA values.
+Per-pool overrides for pool sizing, timing, and PRAGMA values. This is the SQLite config; Postgres config uses a different structure:
+
+```yaml
+# Postgres config (when feature = "postgres")
+database:
+  url: ${DATABASE_URL}
+  max_connections: 10
+  min_connections: 1
+  acquire_timeout_secs: 30
+  idle_timeout_secs: 600
+  max_lifetime_secs: 1800
+  reader:
+    url: ${DATABASE_READER_URL}     # read replica
+    max_connections: 8
+  writer:
+    max_connections: 2
+```
+
+Config structs are feature-gated — `modo::db::Config` resolves to `SqliteConfig` or `PostgresConfig` depending on the enabled feature.
 
 ### Migrations
 
@@ -324,6 +347,16 @@ async fn dashboard(session: Session) -> Result<Response> {
 3. **Response out** → if data changed OR touch interval passed → single DB write. Apply cookie action.
 
 Auth/logout do DB writes inline (create/destroy rows, rotate tokens).
+
+### Session Internals
+
+`Session` is a `FromRequestParts` extractor that holds `Arc<SessionState>`. `SessionState` contains:
+- `store: session::Store` (holds a DB pool clone)
+- `current: Mutex<Option<SessionData>>` — in-memory session data
+- `dirty: AtomicBool` — tracks whether data was modified
+- `action: Mutex<SessionAction>` — pending cookie action (Set/Remove/None)
+
+Created per-request by the session middleware and injected into request extensions. The middleware's post-handler step reads `dirty` and `action` to decide what to flush.
 
 ### Session Cleanup
 
@@ -473,7 +506,8 @@ modo::tenant::path_prefix("/t")
 
 ```rust
 let resolver = modo::tenant::subdomain(&config.tenant)
-    .resolve(|slug: &str, db: &SqlitePool| async move {
+    .resolve(|slug: &str, registry: &service::Registry| async move {
+        let db = registry.get::<ReadPool>();
         sqlx::query_as!(Org,
             "SELECT id, name, plan FROM organizations WHERE slug = ?", slug
         ).fetch_optional(db).await?
@@ -1178,7 +1212,21 @@ Manages application lifecycle: waits for shutdown signal, stops tasks sequential
 
 ```rust
 pub trait Task: Send + 'static {
-    async fn shutdown(self) -> Result<()>;
+    fn shutdown(self: Box<Self>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
+}
+```
+
+Object-safe — uses `self: Box<Self>` and returns a boxed future so different task types can coexist in a `Vec<Box<dyn Task>>`. A blanket helper converts async functions:
+
+```rust
+// Convenience: implement with a simple async block
+impl Task for ManagedPool {
+    fn shutdown(self: Box<Self>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+        Box::pin(async move {
+            self.pool.close().await;
+            Ok(())
+        })
+    }
 }
 ```
 
@@ -1188,12 +1236,82 @@ All tasks are already running when passed to `runtime::run()`. On SIGTERM/SIGINT
 
 ```rust
 modo::runtime::run(vec![
-    server,        // stops first: drain HTTP connections
-    worker,        // stops second: finish in-flight jobs
-    scheduler,     // stops third: cancel pending cron
-    db::managed(writer),   // stops fourth: close write pool
-    db::managed(reader),   // stops last: close read pool
+    Box::new(server),              // stops first: drain HTTP connections
+    Box::new(worker),              // stops second: finish in-flight jobs
+    Box::new(scheduler),           // stops third: cancel pending cron
+    db::managed(writer),           // stops fourth: close write pool (returns Box<dyn Task>)
+    db::managed(reader),           // stops last: close read pool
 ]).await
 ```
 
 Global timeout — if any task hangs, log warning and exit.
+
+## Implementation Notes
+
+### Service Registry
+
+`service::Registry` is a `HashMap<TypeId, Arc<dyn Any + Send + Sync>>`. Each `.add(value)` inserts by `TypeId::of::<T>()`. `Pool`, `ReadPool`, `WritePool` are distinct newtypes with distinct `TypeId`s — no collision. `registry.into_state()` wraps the registry in an `Arc` and returns an axum-compatible `AppState`. The `Service<T>` extractor reads from `State<AppState>` via `FromRequestParts`.
+
+### Job/Cron Handler Extractors
+
+Job and cron handlers use a separate `FromJobContext` trait (not axum's `FromRequestParts`). `modo::job::Payload<T>`, `Service<T>`, and `modo::job::Meta` implement `FromJobContext`. The worker builds a synthetic `JobContext` from the registry + payload JSON + job metadata, then resolves extractors against it. Same pattern as axum extractors, different trait.
+
+### Database Transactions
+
+sqlx's native transaction API works directly:
+
+```rust
+let txn = db.begin().await?;
+sqlx::query!("INSERT INTO orders ...").execute(&mut *txn).await?;
+sqlx::query!("UPDATE inventory ...").execute(&mut *txn).await?;
+txn.commit().await?;
+```
+
+modo does not wrap or abstract transactions — use sqlx directly.
+
+### Middleware Ordering
+
+Tower middleware ordering: last `.layer()` call = outermost (runs first on request, last on response). Recommended order (outermost → innermost):
+
+```rust
+.layer(modo::middleware::error_handler(handler))     // catches all errors
+.layer(modo::middleware::compression())               // compress responses
+.layer(modo::middleware::security_headers(&config))   // add security headers
+.layer(modo::middleware::cors(&config, strategy))     // handle CORS preflight
+.layer(modo::middleware::request_id())                // generate request ID
+.layer(modo::middleware::tracing())                   // log request/response
+.layer(modo::middleware::rate_limit(&config, key_fn)) // rate limit
+.layer(modo::middleware::csrf(&config))               // CSRF protection
+.layer(modo::session::layer(&registry))               // session (innermost)
+```
+
+### Static File Serving
+
+Static files are served via a nested axum service on the engine's configured prefix. When `template::Engine` is added to the registry and the session layer is applied, the engine auto-registers a static file route on the router. Alternatively, user can mount manually:
+
+```rust
+let router = Router::new()
+    .nest_service("/assets", engine.static_service())
+    // ...
+```
+
+### Cookie Key Management
+
+Session cookies are signed using a `Key` derived from a configurable secret in the session config. If no secret is provided, a random key is generated at startup (sessions won't survive restarts). For production, users should set an explicit secret:
+
+```yaml
+session:
+  cookie_secret: ${SESSION_SECRET}  # 64+ character hex string
+```
+
+### Test Session Helper
+
+`app.post("/path").session("user_id", "user-123")` creates a real session row in the test DB, sets the cookie on the request. Full session middleware runs — test fidelity is high.
+
+### Compile Time Tradeoffs
+
+Collapsing all modules into one crate means changing any module triggers a full crate recompile. Mitigations: aggressive feature gating (unused features don't compile), Rust incremental compilation (only changed code recompiles within the crate), and the removal of heavy dependencies (SeaORM, proc macros) significantly reduces baseline compile time compared to v1.
+
+### Presigned URLs
+
+`storage.presigned_url()` computes the signature locally using the configured credentials and AWS Signature V4 algorithm. No network call. Works with any S3-compatible service that supports V4 signing.
