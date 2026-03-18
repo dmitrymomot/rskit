@@ -57,6 +57,9 @@ dmitrymomot/modo/
 
 Everything else is always-on.
 
+**Companion crate:**
+- `modo-cli` — project scaffolding CLI (`modo new my-app`). Separate binary crate, no runtime dependency on the framework. Generates project structure, config files, example module, migrations for sessions/jobs. Design TBD — will be specified separately.
+
 ## App Bootstrap
 
 ```rust
