@@ -1,43 +1,50 @@
-[workspace]
-resolver = "2"
-members = [
-  "modo",
-  "modo-macros",
-  "modo-db",
-  "modo-db-macros",
-  "modo-email",
-  "modo-jobs",
-  "modo-jobs-macros",
-  "modo-session",
-  "modo-auth",
-  "modo-tenant",
-  "modo-upload",
-  "modo-upload-macros",
-  "modo-cli",
-  "modo-sqlite",
-  "modo-sqlite-macros",
-  "examples/*",
-]
-
-[workspace.package]
-version = "0.3.3"
-license = "Apache-2.0"
+[package]
+name = "modo"
+version = "0.1.0"
+edition = "2024"
+description = "Rust web framework for small monolithic apps"
+license = "MIT"
 repository = "https://github.com/dmitrymomot/modo"
 
-[workspace.dependencies]
-modo = { path = "modo", version = "0.3" }
-modo-macros = { path = "modo-macros", version = "0.3" }
-modo-db = { path = "modo-db", version = "0.3" }
-modo-db-macros = { path = "modo-db-macros", version = "0.3" }
-modo-email = { path = "modo-email", version = "0.3" }
-modo-jobs = { path = "modo-jobs", version = "0.3" }
-modo-jobs-macros = { path = "modo-jobs-macros", version = "0.3" }
-modo-session = { path = "modo-session", version = "0.3" }
-modo-auth = { path = "modo-auth", version = "0.3" }
-modo-tenant = { path = "modo-tenant", version = "0.3" }
-modo-upload = { path = "modo-upload", version = "0.3" }
-modo-upload-macros = { path = "modo-upload-macros", version = "0.3" }
-modo-sqlite = { path = "modo-sqlite", version = "0.3" }
-modo-sqlite-macros = { path = "modo-sqlite-macros", version = "0.3" }
-inventory = "0.3"
+[features]
+default = ["sqlite"]
+full = ["sqlite", "templates", "sse", "oauth"]
+sqlite = ["sqlx/sqlite"]
+postgres = ["sqlx/postgres"]
+templates = []
+sse = []
+oauth = []
+
+[dependencies]
+# Web
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["compression-full", "catch-panic", "trace"] }
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio", "chrono", "migrate"], default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 serde_yaml_ng = "0.10"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Utilities
+ulid = "1"
+rand = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+http = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+tempfile = "3"
+serial_test = "3"
