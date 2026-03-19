@@ -17,6 +17,7 @@ async fn test_full_bootstrap() {
     // Setup
     unsafe { env::set_var("APP_ENV", "test") };
     let config: TestConfig = config::load("tests/config/").unwrap();
+    unsafe { env::remove_var("APP_ENV") };
 
     // Database
     let pool = db::connect(&config.modo.database).await.unwrap();
@@ -48,6 +49,4 @@ async fn test_full_bootstrap() {
     use modo::runtime::Task;
     handle.shutdown().await.unwrap();
     pool.close().await;
-
-    unsafe { env::remove_var("APP_ENV") };
 }

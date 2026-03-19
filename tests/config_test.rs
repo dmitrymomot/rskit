@@ -55,20 +55,24 @@ fn test_load_config() {
 
     unsafe { env::set_var("APP_ENV", "test") };
     let config: TestConfig = modo::config::load(config_dir.to_str().unwrap()).unwrap();
+    unsafe { env::remove_var("APP_ENV") };
     assert_eq!(config.app_name, "my-app");
     assert_eq!(config.port, 3000);
-    unsafe { env::remove_var("APP_ENV") };
 }
 
 #[test]
 #[serial]
 fn test_env_helpers() {
     unsafe { env::set_var("APP_ENV", "production") };
-    assert_eq!(modo::config::env(), "production");
-    assert!(modo::config::is_prod());
-    assert!(!modo::config::is_dev());
-    assert!(!modo::config::is_test());
+    let env_val = modo::config::env();
+    let is_prod = modo::config::is_prod();
+    let is_dev = modo::config::is_dev();
+    let is_test = modo::config::is_test();
     unsafe { env::remove_var("APP_ENV") };
+    assert_eq!(env_val, "production");
+    assert!(is_prod);
+    assert!(!is_dev);
+    assert!(!is_test);
 }
 
 #[test]

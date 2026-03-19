@@ -15,7 +15,7 @@ impl Task for MockTask {
 }
 
 #[test]
-fn test_task_trait_is_implementable() {
+fn test_mock_task_constructs() {
     let flag = Arc::new(AtomicBool::new(false));
     let _task = MockTask {
         shutdown_called: flag,

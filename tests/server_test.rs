@@ -1,8 +1,8 @@
 #[test]
 fn test_server_config_defaults() {
     let config = modo::server::Config::default();
-    assert_eq!(config.host, "0.0.0.0");
-    assert_eq!(config.port, 3000);
+    assert_eq!(config.host, "localhost");
+    assert_eq!(config.port, 8080);
     assert_eq!(config.shutdown_timeout_secs, 30);
 }
 

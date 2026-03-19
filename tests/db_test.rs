@@ -74,6 +74,23 @@ async fn test_migrate_from_directory() {
 
 #[cfg(feature = "sqlite")]
 #[tokio::test]
+async fn test_connect_rw_rejects_memory() {
+    let config = modo::db::SqliteConfig {
+        path: ":memory:".to_string(),
+        ..Default::default()
+    };
+    let result = modo::db::connect_rw(&config).await;
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    assert!(
+        err.message().contains("in-memory"),
+        "expected in-memory rejection error, got: {}",
+        err.message()
+    );
+}
+
+#[cfg(feature = "sqlite")]
+#[tokio::test]
 async fn test_managed_pool_shutdown() {
     let config = modo::db::SqliteConfig {
         path: ":memory:".to_string(),
