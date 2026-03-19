@@ -62,7 +62,8 @@ src/
     init.rs                       -- MODIFY: return TracingGuard, compose with sentry layer
     sentry.rs                     -- SentryConfig, TracingGuard (feature-gated)
   lib.rs                          -- MODIFY: add new modules and re-exports
-  modo_config.rs                  -- MODIFY: add new config sections
+  config/
+    modo.rs                       -- MODIFY: add new config sections (NOT src/modo_config.rs)
 tests/
   sanitize_test.rs
   validate_test.rs
@@ -93,6 +94,7 @@ nanohtml2text = "0.2"
 bytes = "1"
 sentry = { version = "0.38", optional = true, default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
 sentry-tracing = { version = "0.38", optional = true }
+serde_urlencoded = "0.7"
 ```
 
 Update `tower-http` features:
@@ -181,24 +183,41 @@ pub fn with_details(mut self, details: serde_json::Value) -> Self {
 
 Update `Debug` impl to include `details` field.
 
-Update `IntoResponse`:
+Update `IntoResponse` — CRITICAL: also store the Error in response extensions so the `error_handler` middleware can intercept handler errors:
 
 ```rust
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
+        let status = self.status;
+        let message = self.message.clone();
+        let details = self.details.clone();
+
         let mut body = serde_json::json!({
             "error": {
-                "status": self.status.as_u16(),
-                "message": self.message
+                "status": status.as_u16(),
+                "message": &message
             }
         });
-        if let Some(details) = &self.details {
-            body["error"]["details"] = details.clone();
+        if let Some(ref d) = details {
+            body["error"]["details"] = d.clone();
         }
-        (self.status, axum::Json(body)).into_response()
+
+        // Store a copy in extensions so error_handler middleware can read it
+        let ext_error = Error {
+            status,
+            message,
+            source: None, // source can't be cloned
+            details,
+        };
+
+        let mut response = (status, axum::Json(body)).into_response();
+        response.extensions_mut().insert(ext_error);
+        response
     }
 }
 ```
+
+This is essential for the error_handler middleware (Task 14). When a handler returns `Err(modo::Error)`, axum calls `IntoResponse` which produces the response AND stores the Error in extensions. The error_handler then reads the Error from extensions and rewrites the response through the user's handler function.
 
 - [ ] **Step 6: Run tests**
 
@@ -601,7 +620,7 @@ use modo::validate::Validator;
 #[test]
 fn test_validator_required_passes() {
     let result = Validator::new()
-        .field("name", &"Alice".to_string()).required()
+        .field("name", &"Alice".to_string(), |f| f.required())
         .check();
     assert!(result.is_ok());
 }
@@ -609,7 +628,7 @@ fn test_validator_required_passes() {
 #[test]
 fn test_validator_required_fails_empty() {
     let result = Validator::new()
-        .field("name", &"".to_string()).required()
+        .field("name", &"".to_string(), |f| f.required())
         .check();
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -619,7 +638,7 @@ fn test_validator_required_fails_empty() {
 #[test]
 fn test_validator_min_max_length() {
     let result = Validator::new()
-        .field("title", &"ab".to_string()).min_length(3).max_length(100)
+        .field("title", &"ab".to_string(), |f| f.min_length(3).max_length(100))
         .check();
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -629,12 +648,12 @@ fn test_validator_min_max_length() {
 #[test]
 fn test_validator_email() {
     let valid = Validator::new()
-        .field("email", &"user@example.com".to_string()).email()
+        .field("email", &"user@example.com".to_string(), |f| f.email())
         .check();
     assert!(valid.is_ok());
 
     let invalid = Validator::new()
-        .field("email", &"not-an-email".to_string()).email()
+        .field("email", &"not-an-email".to_string(), |f| f.email())
         .check();
     assert!(invalid.is_err());
 }
@@ -642,12 +661,12 @@ fn test_validator_email() {
 #[test]
 fn test_validator_url() {
     let valid = Validator::new()
-        .field("website", &"https://example.com".to_string()).url()
+        .field("website", &"https://example.com".to_string(), |f| f.url())
         .check();
     assert!(valid.is_ok());
 
     let invalid = Validator::new()
-        .field("website", &"not a url".to_string()).url()
+        .field("website", &"not a url".to_string(), |f| f.url())
         .check();
     assert!(invalid.is_err());
 }
@@ -655,12 +674,12 @@ fn test_validator_url() {
 #[test]
 fn test_validator_range() {
     let valid = Validator::new()
-        .field("age", &25i32).range(18..=120)
+        .field("age", &25i32, |f| f.range(18..=120))
         .check();
     assert!(valid.is_ok());
 
     let invalid = Validator::new()
-        .field("age", &15i32).range(18..=120)
+        .field("age", &15i32, |f| f.range(18..=120))
         .check();
     assert!(invalid.is_err());
 }
@@ -668,12 +687,12 @@ fn test_validator_range() {
 #[test]
 fn test_validator_one_of() {
     let valid = Validator::new()
-        .field("role", &"admin".to_string()).one_of(&["admin", "user", "guest"])
+        .field("role", &"admin".to_string(), |f| f.one_of(&["admin", "user", "guest"]))
         .check();
     assert!(valid.is_ok());
 
     let invalid = Validator::new()
-        .field("role", &"superadmin".to_string()).one_of(&["admin", "user", "guest"])
+        .field("role", &"superadmin".to_string(), |f| f.one_of(&["admin", "user", "guest"]))
         .check();
     assert!(invalid.is_err());
 }
@@ -681,12 +700,12 @@ fn test_validator_one_of() {
 #[test]
 fn test_validator_matches_regex() {
     let valid = Validator::new()
-        .field("code", &"ABC-123".to_string()).matches_regex(r"^[A-Z]{3}-\d{3}$")
+        .field("code", &"ABC-123".to_string(), |f| f.matches_regex(r"^[A-Z]{3}-\d{3}$"))
         .check();
     assert!(valid.is_ok());
 
     let invalid = Validator::new()
-        .field("code", &"abc-123".to_string()).matches_regex(r"^[A-Z]{3}-\d{3}$")
+        .field("code", &"abc-123".to_string(), |f| f.matches_regex(r"^[A-Z]{3}-\d{3}$"))
         .check();
     assert!(invalid.is_err());
 }
@@ -694,8 +713,9 @@ fn test_validator_matches_regex() {
 #[test]
 fn test_validator_custom() {
     let result = Validator::new()
-        .field("password", &"short".to_string())
-        .custom(|s: &&String| s.len() >= 8, "must be at least 8 characters")
+        .field("password", &"short".to_string(), |f| {
+            f.custom(|s| s.len() >= 8, "must be at least 8 characters")
+        })
         .check();
     assert!(result.is_err());
 }
@@ -703,8 +723,8 @@ fn test_validator_custom() {
 #[test]
 fn test_validator_collects_all_errors() {
     let result = Validator::new()
-        .field("title", &"".to_string()).required().min_length(3)
-        .field("email", &"bad".to_string()).email()
+        .field("title", &"".to_string(), |f| f.required().min_length(3))
+        .field("email", &"bad".to_string(), |f| f.email())
         .check();
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -715,9 +735,9 @@ fn test_validator_collects_all_errors() {
 #[test]
 fn test_validator_all_pass() {
     let result = Validator::new()
-        .field("name", &"Alice".to_string()).required().min_length(1).max_length(50)
-        .field("email", &"alice@example.com".to_string()).required().email()
-        .field("age", &30i32).range(18..=120)
+        .field("name", &"Alice".to_string(), |f| f.required().min_length(1).max_length(50))
+        .field("email", &"alice@example.com".to_string(), |f| f.required().email())
+        .field("age", &30i32, |f| f.range(18..=120))
         .check();
     assert!(result.is_ok());
 }
@@ -846,12 +866,11 @@ impl<'a> FieldValidator<'a> {
 
 - [ ] **Step 4: Implement Validator builder**
 
-The Validator builder provides ergonomic chaining. It creates typed `FieldChain` wrappers that call the appropriate `FieldValidator` methods. This is the key design challenge — making `.field("name", &value).required().min_length(3)` work with type inference.
+The Validator uses a **closure-based API** to avoid borrow checker conflicts. Each `.field()` call takes a closure that receives a `FieldValidator` and returns it after applying rules. This avoids the problem of chaining `.field()` calls on the same Validator while a `FieldChain` still borrows `&mut errors`.
 
 ```rust
 // src/validate/validator.rs
 use std::collections::HashMap;
-use std::ops::RangeInclusive;
 
 use super::error::ValidationError;
 use super::rules::FieldValidator;
@@ -867,15 +886,25 @@ impl Validator {
         }
     }
 
-    pub fn field<'a, T>(&'a mut self, name: &'a str, value: &'a T) -> FieldChain<'a, T> {
-        FieldChain {
-            name,
-            value,
-            validator: FieldValidator {
-                name,
-                errors: &mut self.errors,
-            },
-        }
+    /// Validate a string field with a closure that applies rules.
+    pub fn field(mut self, name: &str, value: &str, f: impl FnOnce(FieldValidator<'_>) -> FieldValidator<'_>) -> Self {
+        let fv = FieldValidator::new(name, value);
+        let fv = f(fv);
+        self.errors.extend(fv.into_errors());
+        self
+    }
+
+    /// Validate a numeric field with a closure that applies rules.
+    pub fn field_num<T: PartialOrd + std::fmt::Display>(
+        mut self,
+        name: &str,
+        value: &T,
+        f: impl FnOnce(NumericFieldValidator<'_, T>) -> NumericFieldValidator<'_, T>,
+    ) -> Self {
+        let fv = NumericFieldValidator::new(name, value);
+        let fv = f(fv);
+        self.errors.extend(fv.into_errors());
+        self
     }
 
     pub fn check(self) -> Result<(), ValidationError> {
@@ -892,81 +921,13 @@ impl Default for Validator {
         Self::new()
     }
 }
-
-pub struct FieldChain<'a, T> {
-    name: &'a str,
-    value: &'a T,
-    validator: FieldValidator<'a>,
-}
-
-// String-like field chains
-impl<'a> FieldChain<'a, String> {
-    pub fn required(mut self) -> Self {
-        self.validator = self.validator.required_str(self.value);
-        self
-    }
-    pub fn min_length(mut self, min: usize) -> Self {
-        self.validator = self.validator.min_length(self.value, min);
-        self
-    }
-    pub fn max_length(mut self, max: usize) -> Self {
-        self.validator = self.validator.max_length(self.value, max);
-        self
-    }
-    pub fn email(mut self) -> Self {
-        self.validator = self.validator.email(self.value);
-        self
-    }
-    pub fn url(mut self) -> Self {
-        self.validator = self.validator.url(self.value);
-        self
-    }
-    pub fn matches_regex(mut self, pattern: &str) -> Self {
-        self.validator = self.validator.matches_regex(self.value, pattern);
-        self
-    }
-    pub fn one_of(mut self, options: &[&str]) -> Self {
-        self.validator = self.validator.one_of_str(self.value, options);
-        self
-    }
-    pub fn custom<F>(mut self, predicate: F, message: &str) -> Self
-    where
-        F: FnOnce(&&String) -> bool,
-    {
-        self.validator = self.validator.custom_check(&self.value, predicate, message);
-        self
-    }
-}
-
-// Implement FieldChain to return Validator for chaining between fields.
-// When the user calls .field() on the Validator after a FieldChain,
-// the FieldChain is dropped (which is fine — errors are already collected via &mut).
-
-// Numeric field chains — implement for common numeric types via macro
-macro_rules! impl_numeric_field_chain {
-    ($($t:ty),+) => {
-        $(
-            impl<'a> FieldChain<'a, $t> {
-                pub fn range(mut self, range: RangeInclusive<$t>) -> Self {
-                    self.validator = self.validator.range_check(self.value, &range);
-                    self
-                }
-                pub fn custom<F>(mut self, predicate: F, message: &str) -> Self
-                where
-                    F: FnOnce(&& $t) -> bool,
-                {
-                    self.validator = self.validator.custom_check(&self.value, predicate, message);
-                    self
-                }
-            }
-        )+
-    };
-}
-
-impl_numeric_field_chain!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64);
 ```
 
-**Important:** The ergonomic chaining (`validator.field("a", &x).required().field("b", &y)`) requires that `FieldChain` borrows `&mut Validator.errors`. When the user calls `.field()` on `Validator` again, the previous `FieldChain` must be dropped. Rust's borrow checker handles this naturally because `FieldChain` holds a `&'a mut` to the errors map — a new `.field()` call can only happen after the previous chain is dropped (which happens at the `;` or when the next `.field()` starts). This is why the intermediate `FieldChain` doesn't need an explicit "finish" method — dropping it is enough.
+**Note:** The spec showed `.field("age", &30i32, |f| f.range(18..=120))`. To make this work with a single `.field()` method, the implementer has two options:
+- **Option A (shown above):** Separate `field()` (for strings) and `field_num()` (for numerics). Slightly less elegant but type-safe and borrow-checker friendly.
+- **Option B:** Use a single generic `field<T>()` with trait bounds. This requires more complex generics but matches the spec's API exactly.
+
+The implementer should choose whichever compiles cleanly. The test expectations above use the closure pattern `|f| f.required().min_length(3)` which works with either option.
 
 - [ ] **Step 5: Update validate/mod.rs**
 
@@ -1914,31 +1875,17 @@ impl MakeRequestId for ModoRequestId {
     }
 }
 
-pub fn request_id() -> (SetRequestIdLayer<ModoRequestId>, PropagateRequestIdLayer) {
-    (
-        SetRequestIdLayer::new(X_REQUEST_ID.clone(), ModoRequestId),
+pub fn request_id() -> tower_layer::Stack<PropagateRequestIdLayer, SetRequestIdLayer<ModoRequestId>> {
+    tower_layer::Stack::new(
         PropagateRequestIdLayer::new(X_REQUEST_ID.clone()),
+        SetRequestIdLayer::new(X_REQUEST_ID.clone(), ModoRequestId),
     )
 }
 ```
 
-**Note:** Returning a tuple of two layers means the user must apply both. Alternatively, wrap in a `ServiceBuilder`. For now, the tuple approach works — the user applies it as `.layer(modo::middleware::request_id())` which will error because you can't `.layer()` a tuple. Instead, use `tower::ServiceBuilder`:
+`tower_layer::Stack` implements `Layer<S>` and composes two layers. This is what `ServiceBuilder` uses internally. It works directly with axum's `.layer()`.
 
-```rust
-use tower::ServiceBuilder;
-use tower_http::ServiceBuilderExt;
-
-pub fn request_id() -> impl tower::Layer<...> {
-```
-
-Actually, the simplest approach: return a `tower::layer::util::Stack` or use `ServiceBuilder`. Research the exact tower-http API at implementation time. An alternative is two separate functions:
-
-```rust
-pub fn set_request_id() -> SetRequestIdLayer<ModoRequestId> { ... }
-pub fn propagate_request_id() -> PropagateRequestIdLayer { ... }
-```
-
-The implementer should choose the cleanest approach that composes with axum's `.layer()`.
+**Note:** `tower_layer` is a transitive dependency of `tower`. If `Stack` is not re-exported, the implementer can use `tower::layer::util::Stack` or `tower::ServiceBuilder::new().layer(set).layer(propagate).into_inner()`.
 
 - [ ] **Step 3: Implement tracing**
 
@@ -2095,10 +2042,40 @@ impl Default for SecurityHeadersConfig {
     }
 }
 
-// Implementation note: tower-http's SetResponseHeaderLayer can be stacked.
-// The exact return type will be a nested Stack of SetResponseHeaderLayer types.
-// Use `tower::ServiceBuilder` to compose them and return `impl Layer<S>`.
-// The implementer should determine the exact composition approach.
+pub fn security_headers(config: &SecurityHeadersConfig) -> tower::ServiceBuilder<...> {
+    // Use tower::ServiceBuilder to stack SetResponseHeaderLayer instances.
+    // Example implementation pattern:
+    let mut builder = tower::ServiceBuilder::new();
+    if config.x_content_type_options {
+        builder = builder.layer(
+            tower_http::set_header::SetResponseHeaderLayer::if_not_present(
+                http::header::X_CONTENT_TYPE_OPTIONS,
+                HeaderValue::from_static("nosniff"),
+            )
+        );
+    }
+    builder = builder.layer(
+        tower_http::set_header::SetResponseHeaderLayer::if_not_present(
+            http::HeaderName::from_static("x-frame-options"),
+            HeaderValue::from_str(&config.x_frame_options).unwrap(),
+        )
+    );
+    builder = builder.layer(
+        tower_http::set_header::SetResponseHeaderLayer::if_not_present(
+            http::HeaderName::from_static("referrer-policy"),
+            HeaderValue::from_str(&config.referrer_policy).unwrap(),
+        )
+    );
+    // Add HSTS, CSP, permissions-policy similarly when Some(...)
+    builder
+}
+
+// NOTE: The exact return type of ServiceBuilder is complex (nested generics).
+// The implementer should either:
+// 1. Return `impl Layer<S>` (requires exact trait bounds)
+// 2. Use a custom wrapper struct that implements Layer<S> by applying headers manually
+// 3. Use `tower::ServiceBuilder` and let type inference handle it
+// Option 2 (custom struct) is likely simplest for a clean public API.
 ```
 
 - [ ] **Step 3: Run tests, clippy, commit**
@@ -2213,7 +2190,9 @@ pub fn cors(config: &CorsConfig) -> CorsLayer {
     }
 
     if origins.is_empty() {
-        layer = layer.allow_origin(tower_http::cors::Any);
+        // CORS spec forbids Access-Control-Allow-Origin: * with credentials
+        // When using Any, skip credentials regardless of config
+        layer = layer.allow_origin(tower_http::cors::Any).allow_credentials(false);
     } else {
         layer = layer.allow_origin(origins);
     }
@@ -2288,27 +2267,126 @@ This is the largest custom middleware. Double-submit cookie pattern with signed 
 - [ ] **Step 1: Write failing tests**
 
 ```rust
+use modo::middleware::CsrfConfig;
+
+fn test_csrf_config() -> CsrfConfig {
+    CsrfConfig::default()
+}
+
+fn test_cookie_key() -> modo::cookie::Key {
+    // Generate a deterministic key for testing
+    modo::cookie::Key::from(&[0u8; 64])
+}
+
 #[tokio::test]
-async fn test_csrf_safe_method_sets_cookie_and_extension() {
-    // GET should set CSRF cookie and inject token into extensions
-    // Implementation test TBD based on exact CSRF middleware API
+async fn test_csrf_get_sets_cookie() {
+    async fn handler() -> &'static str { "ok" }
+
+    let config = test_csrf_config();
+    let key = test_cookie_key();
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::csrf(&config, &key))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    // Should have a Set-Cookie header for the CSRF cookie
+    let set_cookie = response.headers().get("set-cookie");
+    assert!(set_cookie.is_some(), "GET should set CSRF cookie");
+    let cookie_str = set_cookie.unwrap().to_str().unwrap();
+    assert!(cookie_str.contains("_csrf"), "cookie name should be _csrf");
 }
 
 #[tokio::test]
 async fn test_csrf_rejects_post_without_token() {
-    // POST without CSRF token should return 403
+    async fn handler() -> &'static str { "ok" }
+
+    let config = test_csrf_config();
+    let key = test_cookie_key();
+    let app = Router::new()
+        .route("/", axum::routing::post(handler))
+        .layer(modo::middleware::csrf(&config, &key))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
-async fn test_csrf_accepts_post_with_header_token() {
-    // POST with matching X-CSRF-Token header should pass
+async fn test_csrf_accepts_post_with_valid_header_token() {
+    async fn handler() -> &'static str { "ok" }
+
+    let config = test_csrf_config();
+    let key = test_cookie_key();
+
+    // Step 1: GET to obtain the CSRF cookie
+    let app = Router::new()
+        .route("/", get(handler))
+        .route("/submit", axum::routing::post(handler))
+        .layer(modo::middleware::csrf(&config, &key))
+        .with_state(Registry::new().into_state());
+
+    let get_response = app
+        .clone()
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    let set_cookie = get_response.headers().get("set-cookie").unwrap().to_str().unwrap();
+    // Extract the cookie value and the CSRF token from response extensions
+    // The exact extraction depends on the CSRF middleware implementation.
+    // The implementer should:
+    // 1. Parse the Set-Cookie header to get the cookie name=value
+    // 2. Read the CSRF token from the GET response body or a custom header
+    // 3. Send the POST with both the cookie and the X-CSRF-Token header
+
+    // This test pattern validates the full round-trip.
+    // The implementer must complete this based on the actual token delivery mechanism.
 }
 
 #[tokio::test]
-async fn test_csrf_accepts_post_with_form_field_token() {
-    // POST with matching _csrf_token form field should pass
+async fn test_csrf_skips_exempt_methods() {
+    async fn handler() -> &'static str { "ok" }
+
+    let config = test_csrf_config();
+    let key = test_cookie_key();
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::csrf(&config, &key))
+        .with_state(Registry::new().into_state());
+
+    // HEAD should be exempt
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("HEAD")
+                .uri("/")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_ne!(response.status(), StatusCode::FORBIDDEN);
 }
 ```
+
+**Note:** The full round-trip test (GET cookie → POST with token) depends on implementation details of how the signed cookie is structured. The implementer should write the complete round-trip test after implementing the CSRF middleware, using the actual token format.
 
 **Note:** CSRF testing requires extracting the token from the Set-Cookie header on a GET, then passing it back on a POST. Tests should be written as request/response pairs. The exact implementation will depend on how the signed cookie works with axum-extra's `SignedCookieJar`.
 
@@ -2441,30 +2519,56 @@ impl Default for RateLimitConfig {
 // 3. Wire error_handler to store modo::Error in response extensions
 // 4. Return a layer that can be used with .layer()
 
-pub fn rate_limit(config: &RateLimitConfig) -> GovernorLayer<...> {
-    // Build governor config with PeerIpKeyExtractor (default)
+pub fn rate_limit(config: &RateLimitConfig) -> GovernorLayer<PeerIpKeyExtractor, NoOpMiddleware> {
+    rate_limit_inner(config, PeerIpKeyExtractor)
+}
+
+pub fn rate_limit_with<K: KeyExtractor>(config: &RateLimitConfig, key: K) -> GovernorLayer<K, NoOpMiddleware> {
+    rate_limit_inner(config, key)
+}
+
+fn rate_limit_inner<K: KeyExtractor>(config: &RateLimitConfig, key: K) -> GovernorLayer<K, NoOpMiddleware> {
+    let governor_conf = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(config.per_second)
+            .burst_size(config.burst_size)
+            .key_extractor(key)
+            .finish()
+            .expect("invalid rate limit config: burst_size and per_second must be > 0"),
+    );
+
     // Spawn cleanup task
-    // Return layer
+    let limiter = governor_conf.limiter().clone();
+    let interval = config.cleanup_interval_secs;
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(interval));
+        loop {
+            ticker.tick().await;
+            limiter.retain_recent();
+        }
+    });
+
+    // Wire error handler to store modo::Error in response extensions
+    GovernorLayer::new(&governor_conf).error_handler(|e| {
+        let error = match e {
+            tower_governor::GovernorError::TooManyRequests { .. } => {
+                crate::error::Error::too_many_requests("rate limit exceeded")
+            }
+            _ => crate::error::Error::internal("rate limiter error"),
+        };
+        let mut response = error.status().into_response();
+        response.extensions_mut().insert(error);
+        response
+    })
 }
 
-pub fn rate_limit_with<K: tower_governor::key_extractor::KeyExtractor>(
-    config: &RateLimitConfig,
-    key: K,
-) -> GovernorLayer<...> {
-    // Same but with custom key extractor
-}
-
-// Built-in key extractor helpers
-pub fn by_ip() -> tower_governor::key_extractor::PeerIpKeyExtractor {
-    tower_governor::key_extractor::PeerIpKeyExtractor
-}
-
-pub fn by_smart_ip() -> tower_governor::key_extractor::SmartIpKeyExtractor {
-    tower_governor::key_extractor::SmartIpKeyExtractor
-}
+pub fn by_ip() -> PeerIpKeyExtractor { PeerIpKeyExtractor }
+pub fn by_smart_ip() -> SmartIpKeyExtractor { SmartIpKeyExtractor }
 ```
 
-**Note:** The exact generic types depend on tower_governor's API. The implementer should check docs.rs for the correct type parameters. The `RateLimitBundle` wrapper mentioned in the spec may or may not be needed depending on how layer composition works.
+**Note:** The exact generic types (`NoOpMiddleware` vs `StateInformationMiddleware`) depend on whether `use_headers` is true. If `config.use_headers` is true, call `.use_headers()` on the builder which changes the middleware type parameter. The implementer should check tower_governor docs for the exact types. The code above shows the non-headers variant; add `.use_headers()` conditionally.
+
+**Note:** `tokio::spawn` for the cleanup task means it runs in the background indefinitely. This is intentional — the task is lightweight (just evicts expired entries) and runs every 60 seconds by default.
 
 - [ ] **Step 3: Run tests, clippy, commit**
 
@@ -2759,9 +2863,9 @@ pub use ::tracing::{debug, error, info, trace, warn};
 
 - [ ] **Step 5: Update all existing callers of `tracing::init()`**
 
-The return type changes from `Result<()>` to `Result<TracingGuard>`. Update:
-- `tests/integration_test.rs` — store the guard
-- Any other tests that call `tracing::init()`
+The return type changes from `Result<()>` to `Result<TracingGuard>`. Update these existing files:
+- `tests/integration_test.rs` — store the guard: `let _tracing = modo::tracing::init(&config).unwrap();`
+- `tests/tracing_test.rs` — ALREADY EXISTS from Plan 1. Update all calls: `init(&config)` now returns `Result<TracingGuard>` not `Result<()>`. Change `let result = modo::tracing::init(&config);` to `let result = modo::tracing::init(&config);` (same, but add `result.unwrap()` to get `TracingGuard` where needed, or just check `result.is_ok()` as before)
 
 - [ ] **Step 6: Run tests**
 
@@ -2782,54 +2886,33 @@ git commit -m "feat: add Sentry integration and TracingGuard with Task impl"
 
 **Files:**
 - Modify: `src/lib.rs`
-- Modify: `src/modo_config.rs`
+- Modify: `src/config/modo.rs` (NOT `src/modo_config.rs` — the actual file is in the config module)
 - Modify: `tests/integration_test.rs`
 
 - [ ] **Step 1: Update lib.rs with all new modules and re-exports**
 
+Add the new module declarations and re-exports. The existing `lib.rs` already has `pub mod config;` through `pub mod tracing;` and `pub use config::Config;`. Add the new modules:
+
 ```rust
-// src/lib.rs
-
-#[cfg(all(feature = "sqlite", feature = "postgres"))]
-compile_error!("features 'sqlite' and 'postgres' are mutually exclusive — enable only one");
-
-#[cfg(not(any(feature = "sqlite", feature = "postgres")))]
-compile_error!("either 'sqlite' or 'postgres' feature must be enabled");
-
-pub mod config;
+// Add these modules (some may already exist from earlier tasks):
 pub mod cookie;
-pub mod db;
-pub mod error;
 pub mod extractor;
-pub mod id;
 pub mod middleware;
-pub mod runtime;
 pub mod sanitize;
-pub mod server;
-pub mod service;
-pub mod tracing;
 pub mod validate;
 
-mod modo_config;
-
-pub use error::{Error, Result};
-pub use modo_config::Config;
+// Add these re-exports:
 pub use extractor::Service;
 pub use sanitize::Sanitize;
 pub use validate::{Validate, ValidationError};
-
-// Re-exports for user convenience
-pub use axum;
-pub use serde;
-pub use serde_json;
-pub use sqlx;
-pub use tokio;
 ```
 
-- [ ] **Step 2: Update modo_config.rs**
+- [ ] **Step 2: Update `src/config/modo.rs`**
+
+The aggregate Config struct lives at `src/config/modo.rs` (re-exported via `src/config/mod.rs` as `pub use modo::Config;`). Add the new config sections:
 
 ```rust
-// src/modo_config.rs
+// src/config/modo.rs
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize, Default)]
