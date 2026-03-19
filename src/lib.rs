@@ -1,5 +1,3 @@
-// src/lib.rs
-
 // Enforce mutually exclusive DB backends
 #[cfg(all(feature = "sqlite", feature = "postgres"))]
 compile_error!("features 'sqlite' and 'postgres' are mutually exclusive — enable only one");
@@ -16,10 +14,8 @@ pub mod server;
 pub mod service;
 pub mod tracing;
 
-mod modo_config;
-
+pub use config::Config;
 pub use error::{Error, Result};
-pub use modo_config::Config;
 
 // Re-exports for user convenience
 pub use axum;
