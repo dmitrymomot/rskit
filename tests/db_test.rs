@@ -106,3 +106,216 @@ async fn test_managed_pool_shutdown() {
     managed.shutdown().await.unwrap();
     assert!(pool.is_closed());
 }
+
+// --- New tests: config enums and overrides ---
+
+#[cfg(feature = "sqlite")]
+#[test]
+fn test_config_enum_display() {
+    use modo::db::{JournalMode, SynchronousMode, TempStore};
+
+    assert_eq!(format!("{}", JournalMode::Delete), "DELETE");
+    assert_eq!(format!("{}", JournalMode::Truncate), "TRUNCATE");
+    assert_eq!(format!("{}", JournalMode::Persist), "PERSIST");
+    assert_eq!(format!("{}", JournalMode::Memory), "MEMORY");
+    assert_eq!(format!("{}", JournalMode::Wal), "WAL");
+    assert_eq!(format!("{}", JournalMode::Off), "OFF");
+
+    assert_eq!(format!("{}", SynchronousMode::Off), "OFF");
+    assert_eq!(format!("{}", SynchronousMode::Normal), "NORMAL");
+    assert_eq!(format!("{}", SynchronousMode::Full), "FULL");
+    assert_eq!(format!("{}", SynchronousMode::Extra), "EXTRA");
+
+    assert_eq!(format!("{}", TempStore::Default), "DEFAULT");
+    assert_eq!(format!("{}", TempStore::File), "FILE");
+    assert_eq!(format!("{}", TempStore::Memory), "MEMORY");
+}
+
+#[cfg(feature = "sqlite")]
+#[test]
+fn test_pool_overrides_defaults() {
+    use modo::db::PoolOverrides;
+
+    let reader = PoolOverrides::default_reader();
+    assert_eq!(reader.busy_timeout, Some(1000));
+    assert_eq!(reader.cache_size, Some(-16000));
+    assert_eq!(reader.mmap_size, Some(268_435_456));
+    assert_eq!(reader.max_connections, None);
+
+    let writer = PoolOverrides::default_writer();
+    assert_eq!(writer.max_connections, Some(1));
+    assert_eq!(writer.busy_timeout, Some(2000));
+    assert_eq!(writer.cache_size, Some(-16000));
+    assert_eq!(writer.mmap_size, Some(268_435_456));
+}
+
+// --- New tests: pool traits ---
+
+#[cfg(feature = "sqlite")]
+#[tokio::test]
+async fn test_pool_as_pool_trait() {
+    use modo::db::AsPool;
+
+    let config = modo::db::SqliteConfig {
+        path: ":memory:".to_string(),
+        ..Default::default()
+    };
+    let pool = modo::db::connect(&config).await.unwrap();
+
+    // Pool implements AsPool
+    let inner = pool.pool();
+    let row: (i64,) = sqlx::query_as("SELECT 1").fetch_one(inner).await.unwrap();
+    assert_eq!(row.0, 1);
+}
+
+#[cfg(feature = "sqlite")]
+#[tokio::test]
+async fn test_managed_from_read_and_write_pools() {
+    use modo::runtime::Task;
+
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("managed_rw.db");
+    let config = modo::db::SqliteConfig {
+        path: db_path.to_str().unwrap().to_string(),
+        ..Default::default()
+    };
+    let (reader, writer) = modo::db::connect_rw(&config).await.unwrap();
+
+    // WritePool → ManagedPool
+    let managed_writer = modo::db::managed(writer);
+    managed_writer.shutdown().await.unwrap();
+
+    // ReadPool → ManagedPool
+    let managed_reader = modo::db::managed(reader);
+    managed_reader.shutdown().await.unwrap();
+}
+
+// --- New tests: PRAGMA verification ---
+
+#[cfg(feature = "sqlite")]
+#[tokio::test]
+async fn test_pragma_settings_applied() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("pragma_test.db");
+    let config = modo::db::SqliteConfig {
+        path: db_path.to_str().unwrap().to_string(),
+        ..Default::default()
+    };
+    let pool = modo::db::connect(&config).await.unwrap();
+
+    let (journal_mode,): (String,) = sqlx::query_as("PRAGMA journal_mode")
+        .fetch_one(&*pool)
+        .await
+        .unwrap();
+    assert_eq!(journal_mode, "wal");
+
+    let (foreign_keys,): (i64,) = sqlx::query_as("PRAGMA foreign_keys")
+        .fetch_one(&*pool)
+        .await
+        .unwrap();
+    assert_eq!(foreign_keys, 1);
+
+    let (busy_timeout,): (i64,) = sqlx::query_as("PRAGMA busy_timeout")
+        .fetch_one(&*pool)
+        .await
+        .unwrap();
+    assert_eq!(busy_timeout, 5000);
+
+    let (synchronous,): (i64,) = sqlx::query_as("PRAGMA synchronous")
+        .fetch_one(&*pool)
+        .await
+        .unwrap();
+    assert_eq!(synchronous, 1); // NORMAL = 1
+
+    let (cache_size,): (i64,) = sqlx::query_as("PRAGMA cache_size")
+        .fetch_one(&*pool)
+        .await
+        .unwrap();
+    assert_eq!(cache_size, -2000);
+}
+
+// --- New tests: sqlx error conversions ---
+
+#[cfg(feature = "sqlite")]
+#[tokio::test]
+async fn test_sqlx_row_not_found_maps_to_404() {
+    let config = modo::db::SqliteConfig {
+        path: ":memory:".to_string(),
+        ..Default::default()
+    };
+    let pool = modo::db::connect(&config).await.unwrap();
+
+    sqlx::query("CREATE TABLE test_empty (id INTEGER PRIMARY KEY)")
+        .execute(&*pool)
+        .await
+        .unwrap();
+
+    let sqlx_err = sqlx::query_as::<_, (i64,)>("SELECT id FROM test_empty")
+        .fetch_one(&*pool)
+        .await
+        .expect_err("should fail with RowNotFound");
+
+    let err: modo::Error = sqlx_err.into();
+    assert_eq!(err.status().as_u16(), 404);
+    assert_eq!(err.message(), "record not found");
+}
+
+#[cfg(feature = "sqlite")]
+#[tokio::test]
+async fn test_sqlx_unique_violation_maps_to_409() {
+    let config = modo::db::SqliteConfig {
+        path: ":memory:".to_string(),
+        ..Default::default()
+    };
+    let pool = modo::db::connect(&config).await.unwrap();
+
+    sqlx::query("CREATE TABLE test_unique (id INTEGER PRIMARY KEY, name TEXT UNIQUE)")
+        .execute(&*pool)
+        .await
+        .unwrap();
+
+    sqlx::query("INSERT INTO test_unique (id, name) VALUES (1, 'alice')")
+        .execute(&*pool)
+        .await
+        .unwrap();
+
+    let sqlx_err = sqlx::query("INSERT INTO test_unique (id, name) VALUES (2, 'alice')")
+        .execute(&*pool)
+        .await
+        .expect_err("should fail with unique violation");
+
+    let err: modo::Error = sqlx_err.into();
+    assert_eq!(err.status().as_u16(), 409);
+    assert_eq!(err.message(), "record already exists");
+}
+
+#[cfg(feature = "sqlite")]
+#[tokio::test]
+async fn test_sqlx_fk_violation_maps_to_400() {
+    let config = modo::db::SqliteConfig {
+        path: ":memory:".to_string(),
+        ..Default::default()
+    };
+    let pool = modo::db::connect(&config).await.unwrap();
+
+    sqlx::query("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+        .execute(&*pool)
+        .await
+        .unwrap();
+
+    sqlx::query(
+        "CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES parent(id))",
+    )
+    .execute(&*pool)
+    .await
+    .unwrap();
+
+    let sqlx_err = sqlx::query("INSERT INTO child (id, parent_id) VALUES (1, 999)")
+        .execute(&*pool)
+        .await
+        .expect_err("should fail with FK violation");
+
+    let err: modo::Error = sqlx_err.into();
+    assert_eq!(err.status().as_u16(), 400);
+    assert_eq!(err.message(), "foreign key violation");
+}
