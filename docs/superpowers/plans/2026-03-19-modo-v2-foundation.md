@@ -4,7 +4,7 @@
 
 **Goal:** Build the foundation layer of modo v2 — a compilable crate with error types, config loading, service registry, database connection, runtime orchestrator, and HTTP server. The result is a working `modo` crate that can boot a web server.
 
-**Architecture:** Single crate (`modo`), no proc macros. Eight modules built bottom-up by dependency: error → config → service → runtime → db → tracing → server → modo_config. Each module is independently testable. File organization follows CLAUDE.md: `mod.rs`/`lib.rs` are only for `mod` + `pub use` — all code lives in separate files.
+**Architecture:** Single crate (`modo`), no proc macros. Nine modules built bottom-up by dependency: error → id → config → service → runtime → db → tracing → server → modo_config. Each module is independently testable. File organization follows CLAUDE.md: `mod.rs`/`lib.rs` are only for `mod` + `pub use` — all code lives in separate files.
 
 **Important notes:**
 - Rust 2024 edition: `std::env::set_var`/`remove_var` are `unsafe` — all tests wrap these in `unsafe {}` blocks
@@ -41,6 +41,10 @@ src/
     mod.rs                          -- mod + pub use
     registry.rs                     -- Registry struct (HashMap<TypeId, Arc<dyn Any>>)
     state.rs                        -- AppState, into_state(), Service<T> extractor
+  id/
+    mod.rs                          -- mod + pub use
+    ulid.rs                         -- ulid() — full ULID generation (26 chars, Crockford Base32)
+    short.rs                        -- short() — short time-sortable ID (13 chars, Base36)
   db/
     mod.rs                          -- mod + pub use
     config.rs                       -- SqliteConfig, PoolOverrides (+ PostgresConfig behind cfg)
@@ -48,7 +52,6 @@ src/
     connect.rs                      -- connect(), connect_rw(), PRAGMA application
     migrate.rs                      -- migrate() — runtime filesystem migration runner
     managed.rs                      -- managed() — wrap pool as Task for shutdown
-    id.rs                           -- new_id() — ULID generation
     error.rs                        -- sqlx::Error → modo::Error conversion
   runtime/
     mod.rs                          -- mod + pub use
@@ -127,6 +130,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # Utilities
 ulid = "1"
+rand = "0.10"
 chrono = { version = "0.4", features = ["serde"] }
 http = "1"
 
@@ -142,6 +146,7 @@ serial_test = "3"
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod id;
 pub mod runtime;
 pub mod server;
 pub mod service;
@@ -155,7 +160,7 @@ pub use modo_config::Config;
 
 - [ ] **Step 3: Create placeholder mod.rs for each module**
 
-Create empty `mod.rs` in each directory (`src/error/mod.rs`, `src/config/mod.rs`, `src/service/mod.rs`, `src/db/mod.rs`, `src/runtime/mod.rs`, `src/server/mod.rs`) so the crate compiles.
+Create empty `mod.rs` in each directory (`src/error/mod.rs`, `src/id/mod.rs`, `src/config/mod.rs`, `src/service/mod.rs`, `src/db/mod.rs`, `src/runtime/mod.rs`, `src/server/mod.rs`) so the crate compiles.
 
 Each `mod.rs` should be empty for now (just a comment `// TODO: add modules`).
 
@@ -495,7 +500,147 @@ git commit -m "feat: add error module with Error, HttpError, and conversions"
 
 ---
 
-### Task 3: Config module
+### Task 3: ID module
+
+**Files:**
+- Create: `src/id/ulid.rs`
+- Create: `src/id/short.rs`
+- Modify: `src/id/mod.rs`
+- Create: `tests/id_test.rs`
+
+Zero dependencies on other modo modules. Ported from v1 `modo-db/src/id.rs`.
+
+- [ ] **Step 1: Write failing tests**
+
+```rust
+// tests/id_test.rs
+
+#[test]
+fn test_ulid_length() {
+    let id = modo::id::ulid();
+    assert_eq!(id.len(), 26); // ULID is 26 chars Crockford Base32
+}
+
+#[test]
+fn test_ulid_uniqueness() {
+    let id1 = modo::id::ulid();
+    let id2 = modo::id::ulid();
+    assert_ne!(id1, id2);
+}
+
+#[test]
+fn test_ulid_is_alphanumeric() {
+    let id = modo::id::ulid();
+    assert!(id.chars().all(|c| c.is_ascii_alphanumeric()));
+}
+
+#[test]
+fn test_short_id_length() {
+    let id = modo::id::short();
+    assert_eq!(id.len(), 13); // 13 chars Base36
+}
+
+#[test]
+fn test_short_id_uniqueness() {
+    let id1 = modo::id::short();
+    let id2 = modo::id::short();
+    assert_ne!(id1, id2);
+}
+
+#[test]
+fn test_short_id_is_lowercase_alphanumeric() {
+    let id = modo::id::short();
+    assert!(id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()));
+}
+
+#[test]
+fn test_short_id_is_sortable() {
+    let id1 = modo::id::short();
+    std::thread::sleep(std::time::Duration::from_millis(2));
+    let id2 = modo::id::short();
+    assert!(id1 < id2, "short IDs should be time-sortable: {id1} < {id2}");
+}
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `cargo test --test id_test`
+Expected: FAIL — module not implemented.
+
+- [ ] **Step 3: Implement ULID generation**
+
+```rust
+// src/id/ulid.rs
+pub fn ulid() -> String {
+    ulid::Ulid::new().to_string()
+}
+```
+
+- [ ] **Step 4: Implement short ID generation (ported from v1)**
+
+```rust
+// src/id/short.rs
+use std::time::{SystemTime, UNIX_EPOCH};
+
+const BASE36_CHARS: &[u8; 36] = b"0123456789abcdefghijklmnopqrstuvwxyz";
+const SHORT_ID_LEN: usize = 13;
+
+/// Generate a short, time-sortable ID (13 chars, Base36 `[0-9a-z]`).
+///
+/// Layout: 42-bit ms timestamp (high) | 22-bit random (low) → u64 → Base36,
+/// zero-padded to 13 characters.
+pub fn short() -> String {
+    let ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock before Unix epoch")
+        .as_millis() as u64;
+    let ts = ms & ((1u64 << 42) - 1);
+    let rand_bits = rand::random::<u32>() & ((1u32 << 22) - 1);
+    let combined = (ts << 22) | (rand_bits as u64);
+    encode_base36(combined)
+}
+
+fn encode_base36(mut n: u64) -> String {
+    let mut buf = [b'0'; SHORT_ID_LEN];
+    for i in (0..SHORT_ID_LEN).rev() {
+        buf[i] = BASE36_CHARS[(n % 36) as usize];
+        n /= 36;
+    }
+    String::from_utf8(buf.to_vec()).expect("base36 chars are valid UTF-8")
+}
+```
+
+- [ ] **Step 5: Wire up mod.rs**
+
+```rust
+// src/id/mod.rs
+mod short;
+mod ulid;
+
+pub use short::short;
+pub use ulid::ulid;
+```
+
+- [ ] **Step 6: Run tests**
+
+Run: `cargo test --test id_test`
+Expected: all tests PASS.
+
+- [ ] **Step 7: Run clippy**
+
+Run: `cargo clippy -- -D warnings`
+Expected: no warnings.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/id/ tests/id_test.rs
+git commit -m "feat: add id module with ULID and short time-sortable ID generation"
+```
+
+---
+
+### Task 4: Config module
 
 **Files:**
 - Create: `src/config/substitute.rs`
@@ -733,7 +878,7 @@ git commit -m "feat: add config module with YAML loading, env var substitution, 
 
 ---
 
-### Task 4: Service Registry
+### Task 5: Service Registry
 
 **Files:**
 - Create: `src/service/registry.rs`
@@ -933,35 +1078,19 @@ git commit -m "feat: add service registry with type-map and AppState"
 
 ---
 
-### Task 5: Database module — Config and Pool types
+### Task 6: Database module — Config and Pool types
 
 **Files:**
 - Create: `src/db/config.rs`
 - Create: `src/db/pool.rs`
-- Create: `src/db/id.rs`
 - Create: `src/db/error.rs`
 - Modify: `src/db/mod.rs`
 - Create: `tests/db_test.rs`
 
-- [ ] **Step 1: Write failing tests for pool types and ID generation**
+- [ ] **Step 1: Write failing tests for pool types**
 
 ```rust
 // tests/db_test.rs
-#[test]
-fn test_new_id_is_ulid() {
-    let id = modo::db::new_id();
-    assert_eq!(id.len(), 26); // ULID is 26 chars
-    // Verify it's valid Crockford Base32
-    assert!(id.chars().all(|c| c.is_ascii_alphanumeric()));
-}
-
-#[test]
-fn test_new_id_is_unique() {
-    let id1 = modo::db::new_id();
-    let id2 = modo::db::new_id();
-    assert_ne!(id1, id2);
-}
-
 #[test]
 fn test_sqlite_config_defaults() {
     let config = modo::db::SqliteConfig::default();
@@ -1240,16 +1369,7 @@ impl Deref for WritePool {
 }
 ```
 
-- [ ] **Step 5: Implement ID generation**
-
-```rust
-// src/db/id.rs
-pub fn new_id() -> String {
-    ulid::Ulid::new().to_string()
-}
-```
-
-- [ ] **Step 6: Implement sqlx error conversion**
+- [ ] **Step 5: Implement sqlx error conversion**
 
 ```rust
 // src/db/error.rs
@@ -1279,42 +1399,40 @@ impl From<sqlx::Error> for Error {
 }
 ```
 
-- [ ] **Step 7: Wire up mod.rs (without connect/migrate/managed — those are next tasks)**
+- [ ] **Step 6: Wire up mod.rs (without connect/migrate/managed — those are next tasks)**
 
 ```rust
 // src/db/mod.rs
 mod config;
 mod error;
-mod id;
 mod pool;
 
 pub use config::{JournalMode, PoolOverrides, SqliteConfig, SynchronousMode, TempStore};
-pub use id::new_id;
 pub use pool::{AsPool, InnerPool, Pool, ReadPool, WritePool};
 ```
 
-- [ ] **Step 8: Run tests to verify passing tests pass**
+- [ ] **Step 7: Run tests to verify passing tests pass**
 
-Run: `cargo test --test db_test -- test_new_id test_sqlite_config_defaults`
+Run: `cargo test --test db_test -- test_sqlite_config_defaults`
 Expected: these tests PASS.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/db/ tests/db_test.rs
-git commit -m "feat: add db module with config, pool types, ID generation, error conversion"
+git commit -m "feat: add db module with config, pool types, error conversion"
 ```
 
 ---
 
-### Task 6: Database module — Connection and Migration
+### Task 7: Database module — Connection and Migration
 
 **Files:**
 - Create: `src/db/connect.rs`
 - Create: `src/db/migrate.rs`
 - Modify: `src/db/mod.rs`
 
-Note: `managed.rs` depends on the `Task` trait from the runtime module, so it is created in Task 8 (after Task 7: Runtime).
+Note: `managed.rs` depends on the `Task` trait from the runtime module, so it is created in Task 9 (after Task 8: Runtime).
 
 - [ ] **Step 1: Add connect/migrate tests to db_test.rs**
 
@@ -1531,14 +1649,13 @@ impl WritePool {
 }
 ```
 
-- [ ] **Step 6: Update mod.rs with new modules (managed added in Task 8)**
+- [ ] **Step 6: Update mod.rs with new modules (managed added in Task 9)**
 
 ```rust
 // src/db/mod.rs
 mod config;
 mod connect;
 mod error;
-mod id;
 mod migrate;
 mod pool;
 
@@ -1547,7 +1664,6 @@ pub use config::SqliteConfig;
 pub use config::{JournalMode, PoolOverrides, SynchronousMode, TempStore};
 #[cfg(feature = "sqlite")]
 pub use connect::{connect, connect_rw};
-pub use id::new_id;
 pub use migrate::migrate;
 pub use pool::{AsPool, InnerPool, Pool, ReadPool, WritePool};
 
@@ -1575,7 +1691,7 @@ git commit -m "feat: add db connect, migrate, and managed pool shutdown"
 
 ---
 
-### Task 7: Runtime module
+### Task 8: Runtime module
 
 **Files:**
 - Create: `src/runtime/task.rs`
@@ -1726,14 +1842,14 @@ git commit -m "feat: add runtime module with Task trait, signal handling, and ru
 
 ---
 
-### Task 8: Database module — Managed pool shutdown
+### Task 9: Database module — Managed pool shutdown
 
 **Files:**
 - Create: `src/db/managed.rs`
 - Modify: `src/db/mod.rs`
 - Modify: `tests/db_test.rs`
 
-Now that the `Task` trait exists (Task 7), we can implement the managed pool wrapper.
+Now that the `Task` trait exists (Task 8), we can implement the managed pool wrapper.
 
 - [ ] **Step 1: Add managed pool test to db_test.rs**
 
@@ -1827,7 +1943,7 @@ git commit -m "feat: add managed pool wrapper for runtime shutdown"
 
 ---
 
-### Task 9: Tracing module
+### Task 10: Tracing module
 
 **Files:**
 - Create: `src/tracing/init.rs`
@@ -1903,7 +2019,7 @@ git commit -m "feat: add tracing module with init and config"
 
 ---
 
-### Task 10: modo::Config aggregate type
+### Task 11: modo::Config aggregate type
 
 **Files:**
 - Create: `src/modo_config.rs`
@@ -1948,7 +2064,7 @@ git commit -m "feat: add modo::Config aggregate type"
 
 ---
 
-### Task 11: Server module
+### Task 12: Server module
 
 **Files:**
 - Create: `src/server/config.rs`
@@ -2104,7 +2220,7 @@ git commit -m "feat: add server module with HTTP server and graceful shutdown"
 
 ---
 
-### Task 12: Update lib.rs re-exports and compile_error for feature flags
+### Task 13: Update lib.rs re-exports and compile_error for feature flags
 
 **Files:**
 - Modify: `src/lib.rs`
@@ -2124,6 +2240,7 @@ compile_error!("either 'sqlite' or 'postgres' feature must be enabled");
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod id;
 pub mod runtime;
 pub mod server;
 pub mod service;
@@ -2166,7 +2283,7 @@ git commit -m "feat: add feature flag enforcement and re-exports to lib.rs"
 
 ---
 
-### Task 13: Integration test — full bootstrap
+### Task 14: Integration test — full bootstrap
 
 **Files:**
 - Create: `tests/integration_test.rs`
@@ -2263,13 +2380,14 @@ git commit -m "feat: add integration test for full bootstrap flow"
 
 ## Summary
 
-After completing all 13 tasks, the modo v2 crate will have:
+After completing all 14 tasks, the modo v2 crate will have:
 
 - **Error module** — `Error`, `HttpError`, `Result`, `From` conversions, `IntoResponse`
+- **ID module** — `id::ulid()` (26-char ULID), `id::short()` (13-char time-sortable base36), ported from v1
 - **Config module** — YAML loading, `${VAR}` substitution, `APP_ENV` support
 - **Service module** — `Registry` type-map, `AppState` for axum
 - **Runtime module** — `Task` trait, `run!` macro, signal handling
-- **DB module** — `Pool`/`ReadPool`/`WritePool`, `connect`/`connect_rw`, `migrate`, `managed`, `new_id`, SQLite config with PRAGMAs, `db::Config` type alias
+- **DB module** — `Pool`/`ReadPool`/`WritePool`, `connect`/`connect_rw`, `migrate`, `managed`, SQLite config with PRAGMAs, `db::Config` type alias
 - **Tracing module** — `init()`, stdout (pretty/JSON), config
 - **Server module** — HTTP server with graceful shutdown
 - **modo::Config** — aggregate config struct with all framework sections

@@ -1,75 +1,75 @@
-# modo
+# modo v2
 
-Rust web framework for small monolithic apps. Single binary, compile-time magic, SQLite + Postgres support.
+Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plain functions, explicit wiring, raw sqlx.
+
+## Worktree Rules
+
+- This is a git worktree on branch `worktree-modo-v2` — all work MUST happen here
+- NEVER switch to `main` — main has v1 code and must not be touched
+- All v1 crates, examples, and workspace config will be removed — we're building from scratch
+- Do NOT reference v1 patterns (SeaORM, inventory, proc macros, multi-crate workspace)
+
+## Design Philosophy
+
+- One crate (`modo`), zero proc macros
+- Handlers are plain `async fn` — no `#[handler]` macro, no signature rewriting
+- Routes use axum's `Router` directly — no auto-registration
+- Services wired explicitly in `main()` — no global discovery
+- Database uses raw sqlx — no ORM, no `Record` trait, no `ActiveModel`
+- All config structs have sensible `Default` implementations
+- Feature flags only for truly optional pieces (templates, SSE, OAuth)
 
 ## Stack
 
-- SeaORM v2 RC — use v2 only, not v1.x
-- inventory for auto-discovery — not linkme
+- Rust 2024 edition
+- axum 0.8, tower 0.5, tower-http 0.6
+- sqlx 0.8 (runtime-tokio, chrono, migrate)
+- tokio 1 (full)
+- serde 1, serde_json 1, serde_yaml_ng 0.10
+- tracing 0.1, tracing-subscriber 0.3
+- thiserror 2, anyhow 1
+- ulid 1, chrono 0.4
+- rand 0.10
+- Feature flags: `sqlite` (default) / `postgres` (mutually exclusive)
+- Future deps (not in foundation): axum-extra 0.12, opendal 0.55 (`services-s3`)
 
 ## Commands
 
-- `just fmt` — format all code
-- `just lint` — clippy with `-D warnings` (all workspace targets/features)
-- `just test` — run all workspace tests
-- `just check` — fmt-check + lint + test (CI/pre-push)
 - `cargo check` — type check
-- `cargo build -p <example>` — build example (hello, jobs, sse-chat, sse-dashboard, templates, todo-api, upload)
-- `cargo run -p <example>` — run example server
+- `cargo test` — run all tests
+- `cargo clippy -- -D warnings` — lint
+- `cargo fmt --check` — format check
+- `cargo fmt` — format code
 
 ## Conventions
 
-- Path params: partial extraction supported — declare only the params you need, others ignored via `..`
-- Path param syntax: use `{param}` (axum 0.7+), not `:param`
-- Errors: prefer `HandlerResult<T>` alias; for JSON: `JsonResult<T>` (both accept optional custom error type as 2nd param)
-- JSON response: use `modo::Json` (re-export of `axum::Json`) for responses, not `modo::axum::Json`
-- Middleware stacking order: Global (outermost) → Module → Handler (innermost)
-- HTMX views: htmx template rendered on HX-Request, always HTTP 200, non-200 skips render
-- Template layers: auto-registered when `TemplateEngine` is a service — no manual `.layer()` needed
-- File organization: `mod.rs` is ONLY for `mod` imports and re-exports — all code (handlers, views, tasks) goes in separate files
-- File organization applies to ALL crates: struct/trait definitions, impl blocks, functions, and tests must be in separate files — not in `mod.rs`
-- File organization applies to `lib.rs` too — no trait defs, impl blocks, or functions; only `mod`, `pub use`, and `#[doc(hidden)]` re-export modules
-- Extractors: import with `use modo::extractor::{JsonReq, FormReq, QueryReq};` and use short form in handler signatures — `JsonReq<T>` for request extraction (with sanitization), `Json<T>` for response wrapping
-- Extractors: NEVER use `modo::axum::extract::Query`/`Path`/`Form` directly — always use `QueryReq`, `PathReq`, `FormReq` from `modo::extractor`
-- Versioning: all crates use `version.workspace = true` — bump version only in root `Cargo.toml`
-- Pluggable backends: wrap with `Arc<dyn Trait>` (not `Box`) for consistency across storage, transport, etc.
-- Middleware layer naming: use "ContextLayer" suffix for layers that inject template context (e.g. `TemplateContextLayer`, `SessionContextLayer`, `UserContextLayer`, `TenantContextLayer`)
-- modo-db CRUD: use Record trait methods on domain structs — `Todo::find_by_id(&id, &*db)`, `todo.insert(&*db)`, `todo.update(&*db)`, `todo.delete(&*db)` — NOT raw SeaORM `ActiveModel`/`Entity::find()`
-- modo-db queries: use `Todo::query().filter(...).all(&*db)` (returns domain types) — fall back to raw SeaORM via `.into_select()` only when needed
-- modo-db `find_by_id` returns `Result<T, Error>` with auto-404 — no `.ok_or(NotFound)?` needed
-- modo-db `update(&mut self)` refreshes all fields from DB after write — no re-fetch needed
-- Tracing fields: always snake_case (`user_id`, `session_id`, `job_id`) — never dotted names (`panic.message`) which require string literal syntax and can break subscribers
-- Sentry integration: opt-in via `sentry` feature flag — add `features = ["sentry"]` to modo dependency; custom configs must impl `SentryConfigProvider` (delegate to `self.core.sentry_config()`)
+- File organization: `mod.rs` is ONLY for `mod` imports and re-exports — all code goes in separate files
+- File organization applies to `lib.rs` too — no trait defs, impl blocks, or functions; only `mod`, `pub use`, and re-exports
+- Handlers are plain async functions — no macros
+- Extractors: `Service<T>` reads from registry, `JsonRequest<T>` / `FormRequest<T>` for request bodies, `Path<T>` / `Query<T>` for params
+- Error handling: `modo::Error` with status + message + optional source; `modo::Result<T>` alias; `?` everywhere
+- Error constructors: `Error::not_found()`, `Error::bad_request()`, `Error::internal()`, etc.
+- Response types: `Json<T>`, `Html<String>`, `Redirect`, `Response`
+- Service registry: `Registry` is `HashMap<TypeId, Arc<dyn Any>>` — `.add(value)` inserts, `Service<T>` extracts
+- Config: YAML with `${VAR}` / `${VAR:default}` env var substitution, loaded per `APP_ENV`
+- Database: `Pool`, `ReadPool`, `WritePool` newtypes; `connect()` / `connect_rw()` for pools
+- IDs: `src/id/` module — `id::ulid()` for full ULID (26 chars), `id::short()` for short time-sortable ID (13 chars, base36) — no UUID anywhere. Short ID ported from v1 (`modo-db/src/id.rs`): 42-bit ms timestamp | 22-bit random → base36
+- Runtime: `Task` trait + `run!` macro for sequential shutdown
+- Tracing fields: always snake_case (`user_id`, `session_id`, `job_id`)
+- Pluggable backends: wrap with `Arc<dyn Trait>` (not `Box`)
+
+## Key References
+
+- Design spec: `docs/superpowers/specs/2026-03-19-modo-v2-design.md`
+- Foundation plan: `docs/superpowers/plans/2026-03-19-modo-v2-foundation.md`
 
 ## Gotchas
 
-- modo-db transactions: supported via `db.begin().await?` — `DatabaseTransaction` implements `ConnectionTrait`, so `insert(&txn)`, `update(&txn)` etc. all work — documented in modo-db README
-- SessionManagerState is created per-request (not shared) — each request gets its own `Arc<SessionManagerState>` with its own mutexes; cross-request mutex contention is impossible
-- CSRF double-submit: cookie holds signed token (HttpOnly=true is correct), raw token injected server-side via template context `csrf_token` — JS never reads the cookie
-- Review docs in `docs/review-*.md` — re-reviewed 2026-03-15 with false positive annotations; check `[FALSE POSITIVE]` / `[PARTIALLY ACCURATE]` tags before acting on findings
-- Feature flags: optional deps use `dep:name` syntax; gate fields with `#[cfg(feature = "...")]` in struct, Default, and from_env()
-- Proc macros can't check `cfg` flags — emit both `#[cfg(feature = "x")]` / `#[cfg(not(feature = "x"))]` branches in generated code
-- Re-exports in `modo/src/lib.rs` must be alphabetically sorted (`cargo fmt` enforces this)
-- `inventory` registration from library crates may not link in tests — force with `use crate::entity::foo as _;`
-- SeaORM's `ExprTrait` conflicts with `Ord::max`/`Ord::min` — disambiguate with `Ord::max(a, b)` syntax
+- Rust 2024 edition: `std::env::set_var` / `remove_var` are `unsafe` — all tests must wrap in `unsafe {}` blocks
+- Config tests that modify env vars must use `serial_test` crate to avoid races
+- `run!` macro uses `$crate::tracing::info!` paths (not bare `tracing::`) for correct hygiene
+- `server::http()` accepts `Router` (i.e., `Router<()>`, after `.with_state()` has been called)
+- `sqlite` and `postgres` features are mutually exclusive — enforced via `compile_error!`
+- Postgres support is stubbed (config struct only) — full implementation deferred
+- `ReadPool` intentionally does NOT implement `AsPool` — prevents passing it to migration functions
 - Use official documentation only when researching dependencies
-- Session IDs: ULID (no UUID anywhere)
-- Cron jobs (`modo_jobs`) are in-memory only — not persisted to DB
-- `just test` does NOT use `--all-features` (unlike `just lint`) — feature-gated code needs targeted `cargo test -p crate --features feat`
-- Testing Tower middleware: use `Router::new().route(...).layer(mw).oneshot(request)` pattern — no AppState needed, handler reads `Extension<T>` from extensions
-- Testing cookie attributes: create `AppState` with custom `CookieConfig` (e.g. `domain`), fire request, assert `Set-Cookie` header contains expected attributes
-- Type-erased services: use object-safe bridge trait (`XxxDyn`) + `Arc<dyn XxxDyn<T>>` wrapper — see `TenantResolverService` pattern
-- Session user ID access: use `modo_session::user_id_from_extensions(&parts.extensions)` — returns `Option<String>`
-- modo-cli templates: scaffold-time Jinja vars (`{{ project_name }}`) and runtime email vars (`{{name}}`) share syntax — use raw blocks if both appear in one file
-- modo-email in web template: mailer is registered as a jobs service (`.service(email)` on the jobs builder), NOT on the app — app enqueues `SendEmailPayload`, job worker sends
-- `#[modo::main]` macro: the `app: modo::app::AppBuilder` parameter is rewritten by the macro — do NOT import `AppBuilder` separately, always use the full path `modo::app::AppBuilder` in the function signature
-- `#[modo::main]` config type: must implement `DeserializeOwned + Default` — there is no `FromEnv` trait
-- Migrations: prefer typed SeaORM API (`ActiveModelTrait`, `EntityTrait`) over raw SQL (`execute_unprepared`) — raw SQL only for DDL that SeaORM can't express
-- `claude-plugin/skills/modo/references/` docs must stay in sync with crate READMEs — update both when changing API examples
-- SeaORM `DbErr`: `UniqueConstraintViolation` is NOT a direct variant — access via `db_err.sql_err()` which returns `Option<SqlErr>`
-- SeaORM error conversion: can't `impl From<DbErr> for modo::Error` in `modo-db` (orphan rule) — use `db_err_to_error()` helper function instead
-- SeaORM `UpdateMany`: no `.set(col, val)` method — use `.col_expr(col, Expr::value(val))` instead
-- `just test` may fail in sandboxed environments (missing `/tmp` dir) — run with `TMPDIR` set or outside sandbox
-- `#[template_function]` / `#[template_filter]` name override: use `name = "alias"` syntax — bare string `("alias")` does NOT work
-- Sentry is behind `sentry` feature flag — `SentryConfig`, `SentryConfigProvider`, and `modo::sentry` module all require `#[cfg(feature = "sentry")]`; without the feature, tracing init falls back to stdout-only in the macro
-- Publish workflow (`.github/workflows/publish.yml`) uses single workspace version — compares root `Cargo.toml` version against crates.io, publishes all or none
