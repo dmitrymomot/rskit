@@ -737,3 +737,96 @@ async fn test_rate_limit_rejects_over_burst() {
     assert!(error.is_some(), "expected modo::Error in extensions");
     assert_eq!(error.unwrap().status(), StatusCode::TOO_MANY_REQUESTS);
 }
+
+// ---------------------------------------------------------------------------
+// Error Handler
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_error_handler_rewrites_handler_errors() {
+    async fn failing_handler() -> modo::Result<String> {
+        Err(modo::Error::not_found("not here"))
+    }
+
+    async fn my_error_handler(
+        err: modo::Error,
+        _parts: http::request::Parts,
+    ) -> axum::response::Response {
+        use axum::response::IntoResponse;
+        (err.status(), format!("custom: {}", err.message())).into_response()
+    }
+
+    let app = Router::new()
+        .route("/", get(failing_handler))
+        .layer(modo::middleware::error_handler(my_error_handler))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(String::from_utf8_lossy(&body).contains("custom: not here"));
+}
+
+#[tokio::test]
+async fn test_error_handler_passes_through_success() {
+    async fn ok_handler() -> &'static str {
+        "ok"
+    }
+
+    async fn my_error_handler(
+        _err: modo::Error,
+        _parts: http::request::Parts,
+    ) -> axum::response::Response {
+        unreachable!("should not be called for 200");
+    }
+
+    let app = Router::new()
+        .route("/", get(ok_handler))
+        .layer(modo::middleware::error_handler(my_error_handler))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_error_handler_catches_panic_errors() {
+    async fn panicking() -> &'static str {
+        panic!("boom")
+    }
+
+    async fn my_error_handler(
+        err: modo::Error,
+        _parts: http::request::Parts,
+    ) -> axum::response::Response {
+        use axum::response::IntoResponse;
+        (err.status(), format!("caught: {}", err.message())).into_response()
+    }
+
+    let app = Router::new()
+        .route("/", get(panicking))
+        .layer(modo::middleware::catch_panic())
+        .layer(modo::middleware::error_handler(my_error_handler))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(String::from_utf8_lossy(&body).contains("caught:"));
+}
