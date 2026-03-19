@@ -23,17 +23,29 @@ impl Pool {
     pub fn new(pool: InnerPool) -> Self {
         Self(pool)
     }
+
+    pub fn into_inner(self) -> InnerPool {
+        self.0
+    }
 }
 
 impl ReadPool {
     pub fn new(pool: InnerPool) -> Self {
         Self(pool)
     }
+
+    pub fn into_inner(self) -> InnerPool {
+        self.0
+    }
 }
 
 impl WritePool {
     pub fn new(pool: InnerPool) -> Self {
         Self(pool)
+    }
+
+    pub fn into_inner(self) -> InnerPool {
+        self.0
     }
 }
 
