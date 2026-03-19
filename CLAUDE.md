@@ -4,7 +4,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 
 ## Worktree Rules
 
-- This is a git worktree on branch `worktree-modo-v2` — all work MUST happen here
+- This is a git worktree on branch `modo-v2` — all work MUST happen here
 - NEVER switch to `main` — main has v1 code and must not be touched
 - All v1 crates, examples, and workspace config will be removed — we're building from scratch
 - Do NOT reference v1 patterns (SeaORM, inventory, proc macros, multi-crate workspace)
@@ -18,6 +18,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Database uses raw sqlx — no ORM, no `Record` trait, no `ActiveModel`
 - All config structs have sensible `Default` implementations
 - Feature flags only for truly optional pieces (templates, SSE, OAuth)
+- No TODOs, no workarounds, no tech debt — every declared config field and API must be fully implemented
 
 ## Stack
 
