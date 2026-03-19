@@ -17,6 +17,10 @@ regex = "1"
 nanohtml2text = "0.2"
 bytes = "1"
 
+# Sentry (feature-gated — heavy dependency, pulls reqwest)
+sentry = { version = "0.38", optional = true, default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
+sentry-tracing = { version = "0.38", optional = true }
+
 # Update tower-http features
 tower-http = { version = "0.6", features = [
     "compression-full", "catch-panic", "trace",
@@ -27,6 +31,8 @@ tower-http = { version = "0.6", features = [
 **Note on `bytes`:** Already a transitive dependency via axum/hyper, but listed explicitly because `bytes::Bytes` appears in the public API (`UploadedFile.data`).
 
 **Note on `tower_governor` version:** Verify exact version compatibility with axum 0.8 at implementation time. Pin to the latest 0.x that supports axum 0.8 + tower 0.5.
+
+**Note on `sentry` version:** Verify latest version at implementation time. Feature-gated behind `sentry` feature flag. Add `sentry = ["dep:sentry", "dep:sentry-tracing"]` to `[features]` in Cargo.toml, and add to the `full` feature list.
 
 ## File Structure
 
@@ -64,12 +70,15 @@ src/
     csrf.rs                   -- custom double-submit cookie
     rate_limit.rs             -- tower_governor wrapper + key extractors
     error_handler.rs          -- outermost response-rewriting middleware
+  tracing/                          -- (existing module, extended)
+    sentry.rs                 -- SentryConfig, Sentry init, TracingGuard (feature-gated)
 tests/
   sanitize_test.rs
   validate_test.rs
   extractor_test.rs
   cookie_test.rs
   middleware_test.rs
+  tracing_test.rs
 ```
 
 ## Build Order
@@ -81,6 +90,7 @@ Bottom-up by dependency:
 3. extractor (depends on service, sanitize)
 4. cookie (depends on config, error)
 5. middleware — simple wrappers first (request_id, tracing, compression, catch_panic, security_headers), then complex (cors, csrf, rate_limit, error_handler)
+6. tracing/sentry — extend existing tracing module (feature-gated, depends on tracing config)
 
 ---
 
@@ -641,6 +651,118 @@ async fn my_error_handler(err: modo::Error, parts: &http::request::Parts) -> Res
 
 ---
 
+## Module 6: Tracing / Sentry Extension
+
+Extends the existing `tracing` module from Plan 1. Feature-gated behind `sentry` feature flag.
+
+### SentryConfig
+
+```rust
+#[cfg(feature = "sentry")]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct SentryConfig {
+    pub dsn: String,                       // required — empty string disables Sentry
+    pub environment: String,               // default: from APP_ENV
+    pub sample_rate: f32,                  // default: 1.0 (100% of errors)
+    pub traces_sample_rate: f32,           // default: 0.1 (10% of transactions)
+}
+```
+
+### Extended tracing::Config
+
+```rust
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct Config {
+    pub level: String,                     // existing
+    pub format: String,                    // existing
+    #[cfg(feature = "sentry")]
+    pub sentry: Option<SentryConfig>,      // None or empty DSN = disabled
+}
+```
+
+### TracingGuard
+
+`tracing::init()` return type changes from `Result<()>` to `Result<TracingGuard>`:
+
+```rust
+pub fn init(config: &Config) -> Result<TracingGuard>
+
+pub struct TracingGuard {
+    #[cfg(feature = "sentry")]
+    _sentry: Option<sentry::ClientInitGuard>,
+}
+
+impl Task for TracingGuard {
+    async fn shutdown(self) -> Result<()> {
+        // Flushes pending Sentry events (if enabled), then drops the guard
+        #[cfg(feature = "sentry")]
+        if let Some(guard) = self._sentry {
+            // sentry::ClientInitGuard::close() flushes with a timeout
+            guard.close(Some(std::time::Duration::from_secs(5)));
+        }
+        Ok(())
+    }
+}
+```
+
+When Sentry is disabled (no feature, no DSN, or empty DSN), `TracingGuard` is a no-op — `shutdown()` does nothing.
+
+### init() Behavior
+
+1. Build the tracing subscriber (stdout layer — same as current Plan 1 implementation)
+2. If `sentry` feature enabled AND `config.sentry` is `Some` with non-empty DSN:
+   - Call `sentry::init()` with the DSN, environment, sample rates → returns `ClientInitGuard`
+   - Add `sentry_tracing::layer()` to the subscriber (captures `tracing::error!` as Sentry events, spans as transactions)
+3. Install the composed subscriber
+4. Return `TracingGuard` holding the Sentry guard (if any)
+
+### Automatic Integrations
+
+With `sentry-tracing` layer installed, the following work automatically:
+
+| Source | Sentry Effect |
+|---|---|
+| `tracing::error!("msg")` | Sentry error event |
+| `tracing::warn!("msg")` | Sentry breadcrumb |
+| Request spans (from tracing middleware) | Sentry performance transactions |
+| Panics (caught by catch_panic middleware) | Sentry crash report (via `sentry::integrations::panic`) |
+| `request_id` in span fields | Attached as Sentry tag |
+
+`user_id` attachment requires the session module (Plan 3) — deferred.
+
+### Usage
+
+```rust
+let tracing = modo::tracing::init(&config.modo.tracing)?;
+
+// ... build app, start server ...
+
+modo::runtime::run!(
+    server,
+    tracing,           // flushes Sentry on shutdown
+    db::managed(pool),
+).await
+```
+
+### Config
+
+```yaml
+tracing:
+    level: info
+    format: pretty
+    sentry:
+        dsn: ${SENTRY_DSN:}
+        environment: ${APP_ENV:development}
+        sample_rate: 1.0
+        traces_sample_rate: 0.1
+```
+
+Empty DSN (`${SENTRY_DSN:}` with no env var set) = Sentry disabled. No runtime cost when disabled.
+
+---
+
 ## Updated modo::Config
 
 ```rust
@@ -696,7 +818,7 @@ use modo::{config, db, server, service, middleware};
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config = config::load::<AppConfig>("config/")?;
-    modo::tracing::init(&config.modo.tracing)?;
+    let tracing = modo::tracing::init(&config.modo.tracing)?;
 
     let cookie_key = modo::cookie::key_from_config(&config.modo.cookie)?;
     let pool = db::connect(&config.modo.database).await?;
@@ -725,6 +847,7 @@ async fn main() -> anyhow::Result<()> {
 
     modo::runtime::run!(
         handle,
+        tracing,           // flushes Sentry on shutdown
         db::managed(pool),
     ).await
 }
@@ -741,3 +864,4 @@ async fn main() -> anyhow::Result<()> {
 | extractor  | `Service<T>`, `JsonRequest<T>`, `FormRequest<T>`, `Query<T>`, `MultipartRequest<T>`, `UploadedFile`, `Files`                                                 | axum-extra                          |
 | cookie     | `CookieConfig`, `key_from_config()`, re-exports                                                                                                              | axum-extra                          |
 | middleware | 9 middleware layers (request_id, tracing, compression, catch_panic, security_headers, cors, csrf, rate_limit, error_handler), 4 configs, error flow protocol | tower-http features, tower_governor |
+| tracing    | `SentryConfig`, `TracingGuard` (Task impl), extended `init()` return type                                                                                    | sentry, sentry-tracing (feature-gated) |
