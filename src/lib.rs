@@ -6,6 +6,7 @@ compile_error!("features 'sqlite' and 'postgres' are mutually exclusive — enab
 compile_error!("either 'sqlite' or 'postgres' feature must be enabled");
 
 pub mod config;
+pub mod cookie;
 pub mod db;
 pub mod error;
 pub mod extractor;
