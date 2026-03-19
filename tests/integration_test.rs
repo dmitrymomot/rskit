@@ -53,3 +53,31 @@ async fn test_full_bootstrap() {
     handle.shutdown().await.unwrap();
     pool.close().await;
 }
+
+#[tokio::test]
+#[serial]
+async fn test_web_core_bootstrap() {
+    unsafe { env::set_var("APP_ENV", "test") };
+    let config: TestConfig = config::load("tests/config/").unwrap();
+    unsafe { env::remove_var("APP_ENV") };
+
+    let _tracing = modo::tracing::init(&config.modo.tracing).unwrap();
+    let pool = db::connect(&config.modo.database).await.unwrap();
+
+    let mut registry = service::Registry::new();
+    registry.add(pool.clone());
+
+    let state = registry.into_state();
+    let router = Router::new()
+        .route("/health", get(|| async { "ok" }))
+        .layer(modo::middleware::compression())
+        .layer(modo::middleware::request_id())
+        .with_state(state);
+
+    let handle = server::http(router, &config.modo.server).await.unwrap();
+
+    use modo::runtime::Task;
+    handle.shutdown().await.unwrap();
+    _tracing.shutdown().await.unwrap();
+    pool.close().await;
+}
