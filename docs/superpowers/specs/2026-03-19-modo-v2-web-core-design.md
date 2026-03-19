@@ -15,6 +15,7 @@ axum-extra = { version = "0.12", features = ["cookie-signed", "cookie-private", 
 tower_governor = { version = "0.8", default-features = false, features = ["axum"] }
 regex = "1"
 nanohtml2text = "0.2"
+bytes = "1"
 
 # Update tower-http features
 tower-http = { version = "0.6", features = [
@@ -22,6 +23,10 @@ tower-http = { version = "0.6", features = [
     "cors", "request-id", "set-header", "sensitive-headers"
 ] }
 ```
+
+**Note on `bytes`:** Already a transitive dependency via axum/hyper, but listed explicitly because `bytes::Bytes` appears in the public API (`UploadedFile.data`).
+
+**Note on `tower_governor` version:** Verify exact version compatibility with axum 0.8 at implementation time. Pin to the latest 0.x that supports axum 0.8 + tower 0.5.
 
 ## File Structure
 
@@ -123,6 +128,49 @@ impl Sanitize for CreateTodo {
 
 Depends on: error module (for `From<ValidationError> for modo::Error`).
 
+### Required Change to modo::Error
+
+Add an optional `details` field to `modo::Error` to carry structured data (validation errors, etc.):
+
+```rust
+pub struct Error {
+    status: StatusCode,
+    message: String,
+    source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    details: Option<serde_json::Value>,  // NEW: structured error data
+}
+
+impl Error {
+    pub fn details(&self) -> Option<&serde_json::Value> {
+        self.details.as_ref()
+    }
+
+    pub fn with_details(mut self, details: serde_json::Value) -> Self {
+        self.details = Some(details);
+        self
+    }
+}
+```
+
+The `IntoResponse` implementation includes `details` in the JSON body when present:
+
+```json
+{
+  "error": {
+    "status": 422,
+    "message": "validation failed",
+    "details": {
+      "fields": {
+        "title": ["must be at least 3 characters"],
+        "email": ["invalid email format"]
+      }
+    }
+  }
+}
+```
+
+This keeps the unified error type while supporting structured data from validation, middleware, and any future error source.
+
 ### ValidationError
 
 ```rust
@@ -131,18 +179,14 @@ pub struct ValidationError {
 }
 ```
 
-Implements `Display`, `std::error::Error`, and `From<ValidationError> for modo::Error` → 422 with JSON body:
+Implements `Display`, `std::error::Error`, and `From<ValidationError> for modo::Error`:
 
-```json
-{
-  "error": {
-    "status": 422,
-    "message": "validation failed",
-    "fields": {
-      "title": ["must be at least 3 characters"],
-      "email": ["invalid email format"]
+```rust
+impl From<ValidationError> for Error {
+    fn from(ve: ValidationError) -> Self {
+        Error::unprocessable_entity("validation failed")
+            .with_details(serde_json::json!({ "fields": ve.fields }))
     }
-  }
 }
 ```
 
@@ -177,7 +221,9 @@ The builder collects all errors across all fields and returns them together in `
 
 ### Validation Rules
 
-On `FieldValidator`:
+`FieldValidator` is generic — `FieldValidator<'a, T>`. String rules (`min_length`, `max_length`, `email`, etc.) are available when `T: AsRef<str>`. Numeric rules (`range`) are available when `T: PartialOrd`. Universal rules (`required`, `custom`) are always available.
+
+Rules on `FieldValidator`:
 
 | Rule | Behavior |
 |---|---|
@@ -212,6 +258,8 @@ pub struct Service<T>(pub Arc<T>);
 ```
 
 Implements `FromRequestParts`. Extracts from `State<AppState>` → calls `state.get::<T>()`. Returns 500 if `T` not found in registry.
+
+Re-exported from both `modo::extractor::Service` and `modo::Service` for ergonomic use (matching parent spec usage patterns where handlers write `Service(db): Service<WritePool>` without module prefix).
 
 Usage: `Service(db): Service<WritePool>`
 
@@ -279,7 +327,7 @@ pub struct UploadedFile {
 
 Implements `FromRequest`:
 1. Consume multipart stream
-2. Text fields → key-value pairs → deserialize into `T` via serde
+2. Text fields → key-value pairs → deserialize into `T` via `serde_urlencoded` (same mechanism as form deserialization — flat key-value pairs to struct)
 3. File fields → collect into `Files`
 4. If `T: Sanitize`, call `sanitize()`
 5. Return `MultipartRequest(value, files)`
@@ -314,14 +362,18 @@ Depends on: config, error. Thin wrapper around `axum-extra`'s cookie jars.
 
 ```rust
 #[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
 pub struct CookieConfig {
-    pub secret: String,           // required, 64+ char hex string — app fails on start if missing
-    pub secure: bool,             // default: true
-    pub http_only: bool,          // default: true
-    pub same_site: String,        // "lax" | "strict" | "none", default: "lax"
-    pub path: String,             // default: "/"
-    pub domain: Option<String>,   // default: None
+    pub secret: String,                    // required, 64+ char hex string — app fails on start if missing
+    #[serde(default = "default_true")]
+    pub secure: bool,                      // default: true
+    #[serde(default = "default_true")]
+    pub http_only: bool,                   // default: true
+    #[serde(default = "default_lax")]
+    pub same_site: String,                 // "lax" | "strict" | "none", default: "lax"
+    #[serde(default = "default_slash")]
+    pub path: String,                      // default: "/"
+    #[serde(default)]
+    pub domain: Option<String>,            // default: None
 }
 ```
 
@@ -337,6 +389,8 @@ pub fn key_from_config(config: &CookieConfig) -> Result<Key> {
 ```
 
 No `Option<String>`, no `Key::generate()`. App will not start without an explicit secret. Users must set the secret in their config.
+
+**Note:** `CookieConfig` intentionally does NOT derive `Default` or use `#[serde(default)]` at the struct level. The `secret` field is required at the serde level — deserialization fails if it's missing from the YAML. This is the one config struct that breaks the "sensible defaults" convention because there is no sensible default for a cryptographic secret. Individual non-secret fields have per-field serde defaults.
 
 ### Re-exports
 
@@ -422,7 +476,7 @@ Wraps tower-http `CatchPanicLayer`.
 pub fn catch_panic() -> CatchPanicLayer
 ```
 
-Implements `ResponseForPanic` to produce a response with `modo::Error::internal("internal server error")` stored in response extensions. The error_handler then formats it based on request context. ~15 lines.
+Implements `ResponseForPanic` to produce a response with error status 500, an **empty body**, and `modo::Error::internal("internal server error")` stored in response extensions. The error_handler middleware (outermost) detects the 4xx/5xx status, reads the `modo::Error` from extensions, and replaces the entire response body using the user's error handler function. ~15 lines.
 
 ### security_headers
 
@@ -456,10 +510,18 @@ pub struct CorsConfig {
     pub allow_credentials: bool,           // default: true
 }
 
+/// Build CorsLayer from config with static origins from config.origins
 pub fn cors(config: &CorsConfig) -> CorsLayer
+
+/// Build CorsLayer with a custom origin predicate (for dynamic origin validation)
+pub fn cors_with<F>(config: &CorsConfig, predicate: F) -> CorsLayer
+where
+    F: Fn(&HeaderValue, &RequestParts) -> bool + Clone + Send + Sync + 'static;
 ```
 
-Origin strategies for dynamic validation:
+**Note:** This deviates from the parent spec's `cors(&config, strategy)` two-arg signature. The split into `cors()` (static origins) and `cors_with()` (custom predicate) is cleaner — most users only need static origins from config, and the custom predicate path is explicit.
+
+Built-in origin strategies:
 
 ```rust
 pub mod cors {
@@ -470,7 +532,7 @@ pub mod cors {
 }
 ```
 
-For DB-backed dynamic origins, user passes an async predicate directly to tower-http's `AllowOrigin::async_predicate()`. ~40 lines.
+For DB-backed dynamic origins, user can use `cors_with()` or call tower-http's `AllowOrigin::async_predicate()` directly. ~40 lines.
 
 ### csrf
 
@@ -488,9 +550,11 @@ pub struct CsrfConfig {
 pub fn csrf(config: &CsrfConfig, cookie_key: &Key) -> CsrfLayer
 ```
 
+**Note:** This deviates from the parent spec's `csrf(&config)` one-arg signature. The cookie key parameter is required because CSRF tokens are stored in signed cookies — the key comes from the cookie module. This is an intentional improvement over the parent spec.
+
 Flow:
 
-1. **Safe methods (GET/HEAD/OPTIONS):** Generate random token → store in signed HttpOnly cookie → inject token into request extensions (for template engine access via `{{ csrf_token() }}`)
+1. **Safe methods (GET/HEAD/OPTIONS):** Generate random token → store in signed HttpOnly cookie → inject token into request extensions as `CsrfToken(String)` (accessible via `request.extensions().get::<CsrfToken>()` — template integration for `{{ csrf_token() }}` is a future plan)
 2. **Unsafe methods (POST/PUT/DELETE):** Read token from signed cookie → compare with `X-CSRF-Token` header OR `_csrf_token` form field → reject with 403 if mismatch (store `modo::Error::forbidden(...)` in response extensions)
 3. Middleware-level enforcement — no manual `verify()` in handlers
 
@@ -515,7 +579,9 @@ pub fn rate_limit(config: &RateLimitConfig) -> RateLimitBundle
 pub fn rate_limit_with<K: KeyExtractor>(config: &RateLimitConfig, key: K) -> RateLimitBundle
 ```
 
-`RateLimitBundle` holds the `GovernorLayer` and spawns `retain_recent()` cleanup automatically. Implements `Layer<S>` so it can be used directly with `.layer()`.
+`RateLimitBundle` holds the `GovernorLayer` and spawns `retain_recent()` cleanup automatically on construction (once, not per `.layer()` call). Implements `Layer<S>` so it can be used directly with `.layer()`.
+
+**Note:** This deviates from the parent spec's `rate_limit(&config, key_fn)` two-arg signature. The split into `rate_limit()` (default IP-based) and `rate_limit_with()` (custom key) is a cleaner API — most users want IP-based limiting and shouldn't need to pass a key extractor.
 
 Built-in key extractors:
 
@@ -538,21 +604,23 @@ Custom response-rewriting middleware. Outermost layer.
 ```rust
 pub fn error_handler<F, Fut>(handler: F) -> ErrorHandlerLayer<F>
 where
-    F: Fn(Error, &Request) -> Fut + Clone + Send + Sync + 'static,
+    F: Fn(Error, &http::request::Parts) -> Fut + Clone + Send + Sync + 'static,
     Fut: Future<Output = Response> + Send;
 ```
 
+The handler receives `&http::request::Parts` (not `&Request<Body>`) because the request body has been consumed by the time the response comes back. `Parts` includes method, URI, headers, and extensions — everything needed for content negotiation.
+
 After the inner middleware stack produces a response:
 1. If status is 4xx or 5xx, read `modo::Error` from response extensions
-2. Pass the error + original request to the user's handler function
+2. Pass the error + original request parts to the user's handler function
 3. User decides response format based on request context (Accept header, HX-Request, etc.)
 
-If no `modo::Error` is in extensions (e.g., from a non-modo middleware), construct one from the response status code and body.
+If no `modo::Error` is in extensions (e.g., from a non-modo middleware), construct one from the response status code. The error_handler does NOT attempt to read the response body — it constructs a generic `modo::Error` from the status code alone (e.g., 429 → "too many requests").
 
 ```rust
-async fn my_error_handler(err: modo::Error, req: &Request) -> Response {
-    let is_htmx = req.headers().contains_key("hx-request");
-    let is_json = req.headers().get("accept")
+async fn my_error_handler(err: modo::Error, parts: &http::request::Parts) -> Response {
+    let is_htmx = parts.headers.contains_key("hx-request");
+    let is_json = parts.headers.get("accept")
         .map(|v| v.to_str().unwrap_or("").contains("application/json"))
         .unwrap_or(false);
 
@@ -606,6 +674,9 @@ pub mod validate;
 
 pub use error::{Error, Result};
 pub use config::Config;
+pub use extractor::Service;
+pub use validate::{Validate, ValidationError};
+pub use sanitize::Sanitize;
 ```
 
 ---
