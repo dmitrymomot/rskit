@@ -78,6 +78,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Design spec: `docs/superpowers/specs/2026-03-19-modo-v2-design.md`
 - Foundation plan: `docs/superpowers/plans/2026-03-19-modo-v2-foundation.md`
 - Web core plan: `docs/superpowers/plans/2026-03-19-modo-v2-web-core.md`
+- Session spec: `docs/superpowers/specs/2026-03-20-modo-v2-session-design.md`
+- Session plan: `docs/superpowers/plans/2026-03-20-modo-v2-session.md`
 
 ## Gotchas
 
