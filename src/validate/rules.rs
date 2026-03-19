@@ -29,7 +29,7 @@ impl<'a, T: AsRef<str>> FieldValidator<'a, T> {
 
     /// Value must have at least `min` characters.
     pub fn min_length(self, min: usize) -> Self {
-        if self.value.as_ref().len() < min {
+        if self.value.as_ref().chars().count() < min {
             self.errors
                 .push(format!("must be at least {min} characters"));
         }
@@ -38,7 +38,7 @@ impl<'a, T: AsRef<str>> FieldValidator<'a, T> {
 
     /// Value must have at most `max` characters.
     pub fn max_length(self, max: usize) -> Self {
-        if self.value.as_ref().len() > max {
+        if self.value.as_ref().chars().count() > max {
             self.errors
                 .push(format!("must be at most {max} characters"));
         }

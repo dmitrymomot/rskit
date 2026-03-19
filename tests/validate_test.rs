@@ -176,3 +176,32 @@ fn test_validator_all_pass() {
         .check();
     assert!(result.is_ok());
 }
+
+#[test]
+fn test_validator_min_length_multibyte() {
+    // "😀😀😀" is 3 characters but 12 bytes
+    let pass = Validator::new()
+        .field("emoji", &"😀😀😀".to_string(), |f| f.min_length(3))
+        .check();
+    assert!(pass.is_ok());
+
+    let fail = Validator::new()
+        .field("emoji", &"😀😀😀".to_string(), |f| f.min_length(4))
+        .check();
+    assert!(fail.is_err());
+}
+
+#[test]
+fn test_validator_max_length_multibyte() {
+    // "你好" is 2 characters but 6 bytes
+    let pass = Validator::new()
+        .field("cjk", &"你好".to_string(), |f| f.max_length(2))
+        .check();
+    assert!(pass.is_ok());
+
+    // "你好世" is 3 characters
+    let fail = Validator::new()
+        .field("cjk", &"你好世".to_string(), |f| f.max_length(2))
+        .check();
+    assert!(fail.is_err());
+}
