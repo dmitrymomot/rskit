@@ -8,3 +8,5 @@ pub mod service;
 pub mod tracing;
 
 mod modo_config;
+
+pub use modo_config::Config;
