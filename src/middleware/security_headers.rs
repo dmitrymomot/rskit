@@ -135,7 +135,9 @@ where
             let mut response = future.await?;
             let resp_headers = response.headers_mut();
             for (name, value) in headers {
-                resp_headers.insert(name, value);
+                if !resp_headers.contains_key(&name) {
+                    resp_headers.insert(name, value);
+                }
             }
             Ok(response)
         })

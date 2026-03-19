@@ -830,3 +830,39 @@ async fn test_error_handler_catches_panic_errors() {
         .unwrap();
     assert!(String::from_utf8_lossy(&body).contains("caught:"));
 }
+
+#[tokio::test]
+async fn test_security_headers_does_not_overwrite_handler_set() {
+    async fn handler_with_custom_frame_options() -> axum::response::Response {
+        use axum::response::IntoResponse;
+        let mut resp = "ok".into_response();
+        resp.headers_mut().insert(
+            http::HeaderName::from_static("x-frame-options"),
+            http::HeaderValue::from_static("SAMEORIGIN"),
+        );
+        resp
+    }
+
+    let config = modo::middleware::SecurityHeadersConfig::default();
+    let app = Router::new()
+        .route("/", get(handler_with_custom_frame_options))
+        .layer(modo::middleware::security_headers(&config))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    // Handler's SAMEORIGIN should be preserved, not overwritten by config's DENY
+    assert_eq!(
+        response.headers().get("x-frame-options").unwrap(),
+        "SAMEORIGIN"
+    );
+    // Other security headers should still be set
+    assert_eq!(
+        response.headers().get("x-content-type-options").unwrap(),
+        "nosniff"
+    );
+}
