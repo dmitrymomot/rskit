@@ -8,7 +8,8 @@ repository = "https://github.com/dmitrymomot/modo"
 
 [features]
 default = ["sqlite"]
-full = ["sqlite", "templates", "sse", "oauth"]
+full = ["sqlite", "templates", "sse", "oauth", "sentry"]
+sentry = ["dep:sentry", "dep:sentry-tracing"]
 sqlite = ["sqlx/sqlite"]
 postgres = ["sqlx/postgres"]
 templates = []
@@ -20,7 +21,10 @@ oauth = []
 axum = { version = "0.8", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["compression-full", "catch-panic", "trace"] }
+tower-http = { version = "0.6", features = ["compression-full", "catch-panic", "trace", "cors", "request-id", "set-header", "sensitive-headers"] }
+
+axum-extra = { version = "0.12", features = ["cookie-signed", "cookie-private", "multipart"] }
+tower_governor = { version = "0.8", default-features = false, features = ["axum"] }
 
 # Database
 sqlx = { version = "0.8", features = ["runtime-tokio", "chrono", "migrate"], default-features = false }
@@ -29,6 +33,7 @@ sqlx = { version = "0.8", features = ["runtime-tokio", "chrono", "migrate"], def
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml_ng = "0.10"
+serde_urlencoded = "0.7"
 
 # Error handling
 thiserror = "2"
@@ -43,6 +48,11 @@ ulid = "1"
 rand = "0.10"
 chrono = { version = "0.4", features = ["serde"] }
 http = "1"
+regex = "1"
+nanohtml2text = "0.2"
+bytes = "1"
+sentry = { version = "0.38", optional = true, default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
+sentry-tracing = { version = "0.38", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

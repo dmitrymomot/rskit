@@ -8,6 +8,7 @@ pub struct Error {
     status: StatusCode,
     message: String,
     source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    details: Option<serde_json::Value>,
 }
 
 impl Error {
@@ -16,6 +17,7 @@ impl Error {
             status,
             message: message.into(),
             source: None,
+            details: None,
         }
     }
 
@@ -28,6 +30,7 @@ impl Error {
             status,
             message: message.into(),
             source: Some(Box::new(source)),
+            details: None,
         }
     }
 
@@ -37,6 +40,15 @@ impl Error {
 
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    pub fn details(&self) -> Option<&serde_json::Value> {
+        self.details.as_ref()
+    }
+
+    pub fn with_details(mut self, details: serde_json::Value) -> Self {
+        self.details = Some(details);
+        self
     }
 
     pub fn bad_request(msg: impl Into<String>) -> Self {
@@ -72,6 +84,17 @@ impl Error {
     }
 }
 
+impl Clone for Error {
+    fn clone(&self) -> Self {
+        Self {
+            status: self.status,
+            message: self.message.clone(),
+            source: None, // source (Box<dyn Error>) can't be cloned
+            details: self.details.clone(),
+        }
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.message)
@@ -84,6 +107,7 @@ impl fmt::Debug for Error {
             .field("status", &self.status)
             .field("message", &self.message)
             .field("source", &self.source)
+            .field("details", &self.details)
             .finish()
     }
 }
@@ -98,12 +122,30 @@ impl std::error::Error for Error {
 
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
-        let body = serde_json::json!({
+        let status = self.status;
+        let message = self.message.clone();
+        let details = self.details.clone();
+
+        let mut body = serde_json::json!({
             "error": {
-                "status": self.status.as_u16(),
-                "message": self.message
+                "status": status.as_u16(),
+                "message": &message
             }
         });
-        (self.status, axum::Json(body)).into_response()
+        if let Some(ref d) = details {
+            body["error"]["details"] = d.clone();
+        }
+
+        // Store a copy in extensions so error_handler middleware can read it
+        let ext_error = Error {
+            status,
+            message,
+            source: None, // source can't be cloned
+            details,
+        };
+
+        let mut response = (status, axum::Json(body)).into_response();
+        response.extensions_mut().insert(ext_error);
+        response
     }
 }

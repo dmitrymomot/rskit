@@ -306,3 +306,32 @@ fn test_error_from_yaml_via_config_load() {
     assert_eq!(err.status(), StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(err.message(), "YAML error");
 }
+
+// --- New tests: Error.details ---
+
+#[test]
+fn test_error_with_details() {
+    let err =
+        modo::Error::unprocessable_entity("validation failed").with_details(serde_json::json!({
+            "title": ["must be at least 3 characters"]
+        }));
+    assert_eq!(err.status(), http::StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(err.message(), "validation failed");
+    let details = err.details().unwrap();
+    assert_eq!(details["title"][0], "must be at least 3 characters");
+}
+
+#[test]
+fn test_error_without_details() {
+    let err = modo::Error::not_found("missing");
+    assert!(err.details().is_none());
+}
+
+#[test]
+fn test_error_with_details_into_response() {
+    use axum::response::IntoResponse;
+    let err = modo::Error::unprocessable_entity("validation failed")
+        .with_details(serde_json::json!({"title": ["too short"]}));
+    let response = err.into_response();
+    assert_eq!(response.status(), http::StatusCode::UNPROCESSABLE_ENTITY);
+}
