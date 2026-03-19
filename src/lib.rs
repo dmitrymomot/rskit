@@ -10,12 +10,14 @@ pub mod db;
 pub mod error;
 pub mod id;
 pub mod runtime;
+pub mod sanitize;
 pub mod server;
 pub mod service;
 pub mod tracing;
 
 pub use config::Config;
 pub use error::{Error, Result};
+pub use sanitize::Sanitize;
 
 // Re-exports for user convenience
 pub use axum;
