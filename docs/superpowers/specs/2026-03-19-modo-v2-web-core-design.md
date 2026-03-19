@@ -321,9 +321,9 @@ pub struct UploadedFile {
 
 `Files` methods:
 
-- `get(name) -> Option<&UploadedFile>` — first file for field name
-- `get_all(name) -> &[UploadedFile]` — all files for field name
-- `remove(name) -> Option<UploadedFile>` — take ownership of first file
+- `get(name) -> Option<&UploadedFile>` — borrow first file for field name (peek without consuming)
+- `file(name) -> Option<UploadedFile>` — take ownership of first file
+- `files(name) -> Vec<UploadedFile>` — take ownership of all files for field name (multi-upload)
 
 Implements `FromRequest`:
 
@@ -347,7 +347,7 @@ async fn create_profile(
     MultipartRequest(mut data, mut files): MultipartRequest<CreateProfile>,
 ) -> Result<Json<Profile>> {
     data.validate()?;
-    let avatar = files.remove("avatar")
+    let avatar = files.file("avatar")
         .ok_or(Error::bad_request("avatar required"))?;
     // use data.name and avatar
 }
