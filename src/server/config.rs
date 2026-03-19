@@ -11,8 +11,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            host: "0.0.0.0".to_string(),
-            port: 3000,
+            host: "localhost".to_string(),
+            port: 8080,
             shutdown_timeout_secs: 30,
         }
     }
