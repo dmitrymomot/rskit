@@ -19,6 +19,9 @@ async fn test_full_bootstrap() {
     let config: TestConfig = config::load("tests/config/").unwrap();
     unsafe { env::remove_var("APP_ENV") };
 
+    // Tracing
+    let _tracing = modo::tracing::init(&config.modo.tracing).unwrap();
+
     // Database
     let pool = db::connect(&config.modo.database).await.unwrap();
 

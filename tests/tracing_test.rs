@@ -47,3 +47,14 @@ fn test_tracing_init_unknown_format_fallback() {
     let result = modo::tracing::init(&config);
     assert!(result.is_ok());
 }
+
+#[tokio::test]
+#[serial]
+async fn test_tracing_init_returns_guard() {
+    let config = modo::tracing::Config::default();
+    let guard = modo::tracing::init(&config);
+    assert!(guard.is_ok());
+
+    use modo::runtime::Task;
+    guard.unwrap().shutdown().await.unwrap();
+}
