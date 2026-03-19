@@ -61,6 +61,18 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Tracing fields: always snake_case (`user_id`, `session_id`, `job_id`)
 - Pluggable backends: wrap with `Arc<dyn Trait>` (not `Box`)
 
+## Implementation Roadmap
+
+- **Plan 1 (Foundation):** error, id, config, service, runtime, db, tracing, server — DONE
+- **Plan 2 (Web Core):** sanitize, validate, extractors, cookie, middleware (9 layers), Sentry — DONE
+- **Plan 3 (Session):** DB-backed sessions with token hashing, fingerprinting, middleware lifecycle
+- **Plan 4 (Auth + OAuth):** guards, password hashing, TOTP, OTP, backup codes, Google/GitHub OAuth
+- **Plan 5 (Job + Cron):** DB-backed job queue, worker, enqueuer, in-memory cron scheduler
+- **Plan 6 (Email):** SMTP transport, markdown templates with YAML frontmatter, layout engine
+- **Plan 7 (Template + SSE + Tenant):** MiniJinja engine, i18n, static files, broadcast SSE, tenant resolution
+- **Plan 8 (Upload):** S3-compatible storage via OpenDAL, presigned URLs
+- **Plan 9 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
+
 ## Key References
 
 - Design spec: `docs/superpowers/specs/2026-03-19-modo-v2-design.md`
