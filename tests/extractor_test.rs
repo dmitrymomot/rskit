@@ -159,3 +159,90 @@ async fn test_query_extractor_sanitizes() {
         .unwrap();
     assert_eq!(&body[..], b"hello");
 }
+
+#[tokio::test]
+async fn test_multipart_request_text_fields() {
+    #[derive(Deserialize)]
+    struct ProfileData {
+        name: String,
+    }
+    impl Sanitize for ProfileData {
+        fn sanitize(&mut self) {
+            modo::sanitize::trim(&mut self.name);
+        }
+    }
+
+    async fn handler(
+        modo::extractor::MultipartRequest(data, _files): modo::extractor::MultipartRequest<
+            ProfileData,
+        >,
+    ) -> String {
+        data.name
+    }
+
+    let registry = Registry::new();
+    let app = Router::new()
+        .route("/", axum::routing::post(handler))
+        .with_state(registry.into_state());
+
+    let boundary = "----TestBoundary";
+    let body = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"name\"\r\n\r\n  Alice  \r\n--{boundary}--\r\n"
+    );
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/")
+                .header(
+                    "content-type",
+                    format!("multipart/form-data; boundary={boundary}"),
+                )
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(&body[..], b"Alice");
+}
+
+#[test]
+fn test_uploaded_file_struct() {
+    let file = modo::extractor::UploadedFile {
+        name: "photo.jpg".to_string(),
+        content_type: "image/jpeg".to_string(),
+        size: 1024,
+        data: bytes::Bytes::from_static(b"fake image data"),
+    };
+    assert_eq!(file.name, "photo.jpg");
+    assert_eq!(file.size, 1024);
+}
+
+#[test]
+fn test_files_get_and_file() {
+    use std::collections::HashMap;
+
+    let file = modo::extractor::UploadedFile {
+        name: "doc.pdf".to_string(),
+        content_type: "application/pdf".to_string(),
+        size: 512,
+        data: bytes::Bytes::from_static(b"pdf data"),
+    };
+
+    let mut map = HashMap::new();
+    map.insert("document".to_string(), vec![file]);
+    let mut files = modo::extractor::Files::from_map(map);
+
+    assert!(files.get("document").is_some());
+    assert!(files.get("missing").is_none());
+
+    let taken = files.file("document").unwrap();
+    assert_eq!(taken.name, "doc.pdf");
+    assert!(files.get("document").is_none()); // removed after file()
+}
