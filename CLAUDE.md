@@ -71,6 +71,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `run!` macro uses `$crate::tracing::info!` paths (not bare `tracing::`) for correct hygiene
 - `server::http()` accepts `Router` (i.e., `Router<()>`, after `.with_state()` has been called)
 - `sqlite` and `postgres` features are mutually exclusive — enforced via `compile_error!`
+- To lint test code, run `cargo clippy --tests` — plain `cargo clippy` only checks lib code
 - Postgres support is stubbed (config struct only) — full implementation deferred
 - `ReadPool` intentionally does NOT implement `AsPool` — prevents passing it to migration functions
 - Use official documentation only when researching dependencies

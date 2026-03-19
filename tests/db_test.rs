@@ -10,8 +10,10 @@ fn test_sqlite_config_defaults() {
 #[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_connect_in_memory() {
-    let mut config = modo::db::SqliteConfig::default();
-    config.path = ":memory:".to_string();
+    let config = modo::db::SqliteConfig {
+        path: ":memory:".to_string(),
+        ..Default::default()
+    };
     let pool = modo::db::connect(&config).await.unwrap();
     let row: (i64,) = sqlx::query_as("SELECT 1").fetch_one(&*pool).await.unwrap();
     assert_eq!(row.0, 1);
@@ -22,8 +24,10 @@ async fn test_connect_in_memory() {
 async fn test_connect_rw() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("test.db");
-    let mut config = modo::db::SqliteConfig::default();
-    config.path = db_path.to_str().unwrap().to_string();
+    let config = modo::db::SqliteConfig {
+        path: db_path.to_str().unwrap().to_string(),
+        ..Default::default()
+    };
     let (reader, writer) = modo::db::connect_rw(&config).await.unwrap();
 
     sqlx::query("CREATE TABLE test (id INTEGER PRIMARY KEY)")
@@ -52,8 +56,10 @@ async fn test_migrate_from_directory() {
     )
     .unwrap();
 
-    let mut config = modo::db::SqliteConfig::default();
-    config.path = db_path.to_str().unwrap().to_string();
+    let config = modo::db::SqliteConfig {
+        path: db_path.to_str().unwrap().to_string(),
+        ..Default::default()
+    };
     let pool = modo::db::connect(&config).await.unwrap();
     modo::db::migrate(migrations_dir.to_str().unwrap(), &pool)
         .await
@@ -69,8 +75,10 @@ async fn test_migrate_from_directory() {
 #[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_managed_pool_shutdown() {
-    let mut config = modo::db::SqliteConfig::default();
-    config.path = ":memory:".to_string();
+    let config = modo::db::SqliteConfig {
+        path: ":memory:".to_string(),
+        ..Default::default()
+    };
     let pool = modo::db::connect(&config).await.unwrap();
 
     let managed = modo::db::managed(pool.clone());
