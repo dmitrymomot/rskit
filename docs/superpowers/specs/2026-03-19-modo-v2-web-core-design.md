@@ -44,7 +44,7 @@ src/
     rules.rs                  -- rule implementations
   extractor/
     mod.rs                    -- mod + pub use
-    service.rs                -- Service<T> (FromRequestParts)
+    service.rs                -- Service<T> (Fromhttp::request::Parts)
     json.rs                   -- JsonRequest<T>
     form.rs                   -- FormRequest<T>
     query.rs                  -- Query<T> (with sanitize)
@@ -257,7 +257,7 @@ Reads `Arc<T>` from the registry via `State<AppState>`:
 pub struct Service<T>(pub Arc<T>);
 ```
 
-Implements `FromRequestParts`. Extracts from `State<AppState>` → calls `state.get::<T>()`. Returns 500 if `T` not found in registry.
+Implements `Fromhttp::request::Parts`. Extracts from `State<AppState>` → calls `state.get::<T>()`. Returns 500 if `T` not found in registry.
 
 Re-exported from both `modo::extractor::Service` and `modo::Service` for ergonomic use (matching parent spec usage patterns where handlers write `Service(db): Service<WritePool>` without module prefix).
 
@@ -516,7 +516,7 @@ pub fn cors(config: &CorsConfig) -> CorsLayer
 /// Build CorsLayer with a custom origin predicate (for dynamic origin validation)
 pub fn cors_with<F>(config: &CorsConfig, predicate: F) -> CorsLayer
 where
-    F: Fn(&HeaderValue, &RequestParts) -> bool + Clone + Send + Sync + 'static;
+    F: Fn(&HeaderValue, &http::request::Parts) -> bool + Clone + Send + Sync + 'static;
 ```
 
 **Note:** This deviates from the parent spec's `cors(&config, strategy)` two-arg signature. The split into `cors()` (static origins) and `cors_with()` (custom predicate) is cleaner — most users only need static origins from config, and the custom predicate path is explicit.
@@ -526,9 +526,9 @@ Built-in origin strategies:
 ```rust
 pub mod cors {
     /// Static origin list check
-    pub fn urls(origins: &[String]) -> impl Fn(&HeaderValue, &RequestParts) -> bool;
+    pub fn urls(origins: &[String]) -> impl Fn(&HeaderValue, &http::request::Parts) -> bool;
     /// Subdomain wildcard matching
-    pub fn subdomains(domain: &str) -> impl Fn(&HeaderValue, &RequestParts) -> bool;
+    pub fn subdomains(domain: &str) -> impl Fn(&HeaderValue, &http::request::Parts) -> bool;
 }
 ```
 
@@ -590,6 +590,7 @@ pub mod rate_limit {
     pub fn by_ip() -> PeerIpKeyExtractor;
     pub fn by_smart_ip() -> SmartIpKeyExtractor;
     pub fn by_header(name: &str) -> HeaderKeyExtractor;
+    // by_user() deferred to Plan 3 (session module) — requires session extractor
 }
 ```
 
@@ -641,17 +642,21 @@ async fn my_error_handler(err: modo::Error, parts: &http::request::Parts) -> Res
 ## Updated modo::Config
 
 ```rust
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
 pub struct Config {
     pub server: server::Config,
     pub database: db::Config,
     pub tracing: tracing::Config,
-    pub cookie: cookie::CookieConfig,
+    pub cookie: Option<cookie::CookieConfig>,  // required only if csrf/session middleware is used
     pub security_headers: middleware::SecurityHeadersConfig,
     pub cors: middleware::CorsConfig,
     pub csrf: middleware::CsrfConfig,
     pub rate_limit: middleware::RateLimitConfig,
 }
 ```
+
+**Note:** `cookie` is `Option<CookieConfig>` to preserve `Config`'s `Default` derive. API-only apps that don't use CSRF or sessions can omit the `cookie` section entirely. If CSRF middleware is configured without a cookie config, `csrf()` returns an error at startup. This keeps the "fail on start" guarantee while not forcing every app to configure cookies.
 
 ---
 
@@ -702,7 +707,7 @@ async fn main() -> anyhow::Result<()> {
     let router = axum::Router::new()
         .nest("/api/todos", todo::routes())
         .nest("/auth", auth::routes()
-            .layer(middleware::rate_limit(&strict_rate_limit).into_layer()))
+            .layer(middleware::rate_limit(&strict_rate_limit)))
         .layer(middleware::csrf(&config.modo.csrf, &cookie_key))
         .layer(middleware::rate_limit(&config.modo.rate_limit))
         .layer(middleware::tracing())
