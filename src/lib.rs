@@ -11,6 +11,7 @@ pub mod db;
 pub mod error;
 pub mod extractor;
 pub mod id;
+pub mod middleware;
 pub mod runtime;
 pub mod sanitize;
 pub mod server;
