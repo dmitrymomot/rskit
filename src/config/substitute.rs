@@ -17,9 +17,10 @@ pub fn substitute_env_vars(input: &str) -> Result<String> {
                 var_expr.push(ch);
             }
             if !found_close {
-                result.push_str("${");
-                result.push_str(&var_expr);
-                continue;
+                return Err(Error::internal(format!(
+                    "unclosed variable expression '${{{}' in config",
+                    var_expr
+                )));
             }
 
             let (var_name, default_val) = match var_expr.split_once(':') {
