@@ -7,8 +7,22 @@ use super::pool::{Pool, ReadPool, WritePool};
 
 #[cfg(feature = "sqlite")]
 pub async fn connect(config: &SqliteConfig) -> Result<Pool> {
-    let url = build_url(&config.path)?;
-    let pool = build_sqlite_pool(&url, config, None).await?;
+    let url = build_url(&config.path, false)?;
+
+    let overrides = if config.path == ":memory:" && config.max_connections > 1 {
+        tracing::warn!(
+            "in-memory database: forcing max_connections=1 (each connection gets a separate database)"
+        );
+        Some(super::config::PoolOverrides {
+            max_connections: Some(1),
+            min_connections: Some(1),
+            ..Default::default()
+        })
+    } else {
+        None
+    };
+
+    let pool = build_sqlite_pool(&url, config, overrides.as_ref()).await?;
     Ok(Pool::new(pool))
 }
 
@@ -20,15 +34,16 @@ pub async fn connect_rw(config: &SqliteConfig) -> Result<(ReadPool, WritePool)> 
         ));
     }
 
-    let url = build_url(&config.path)?;
-    let reader_pool = build_sqlite_pool(&url, config, Some(&config.reader)).await?;
-    let writer_pool = build_sqlite_pool(&url, config, Some(&config.writer)).await?;
+    let writer_url = build_url(&config.path, false)?;
+    let reader_url = build_url(&config.path, true)?;
+    let writer_pool = build_sqlite_pool(&writer_url, config, Some(&config.writer)).await?;
+    let reader_pool = build_sqlite_pool(&reader_url, config, Some(&config.reader)).await?;
 
     Ok((ReadPool::new(reader_pool), WritePool::new(writer_pool)))
 }
 
 #[cfg(feature = "sqlite")]
-fn build_url(path: &str) -> Result<String> {
+fn build_url(path: &str, read_only: bool) -> Result<String> {
     if path == ":memory:" {
         return Ok("sqlite::memory:".to_string());
     }
@@ -42,7 +57,8 @@ fn build_url(path: &str) -> Result<String> {
             .map_err(|e| Error::internal(format!("failed to create database directory: {e}")))?;
     }
 
-    Ok(format!("sqlite://{}?mode=rwc", path.display()))
+    let mode = if read_only { "ro" } else { "rwc" };
+    Ok(format!("sqlite://{}?mode={mode}", path.display()))
 }
 
 #[cfg(feature = "sqlite")]

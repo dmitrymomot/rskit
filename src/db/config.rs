@@ -141,3 +141,29 @@ impl PoolOverrides {
         }
     }
 }
+
+#[cfg(feature = "postgres")]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct PostgresConfig {
+    pub url: String,
+    pub max_connections: u32,
+    pub min_connections: u32,
+    pub acquire_timeout_secs: u64,
+    pub idle_timeout_secs: u64,
+    pub max_lifetime_secs: u64,
+}
+
+#[cfg(feature = "postgres")]
+impl Default for PostgresConfig {
+    fn default() -> Self {
+        Self {
+            url: "postgres://localhost:5432/app".to_string(),
+            max_connections: 10,
+            min_connections: 1,
+            acquire_timeout_secs: 30,
+            idle_timeout_secs: 600,
+            max_lifetime_secs: 1800,
+        }
+    }
+}

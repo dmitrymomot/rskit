@@ -24,7 +24,7 @@ impl Pool {
         Self(pool)
     }
 
-    pub fn into_inner(self) -> InnerPool {
+    pub(crate) fn into_inner(self) -> InnerPool {
         self.0
     }
 }
@@ -34,7 +34,7 @@ impl ReadPool {
         Self(pool)
     }
 
-    pub fn into_inner(self) -> InnerPool {
+    pub(crate) fn into_inner(self) -> InnerPool {
         self.0
     }
 }
@@ -44,7 +44,7 @@ impl WritePool {
         Self(pool)
     }
 
-    pub fn into_inner(self) -> InnerPool {
+    pub(crate) fn into_inner(self) -> InnerPool {
         self.0
     }
 }
