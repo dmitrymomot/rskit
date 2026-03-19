@@ -6,6 +6,7 @@ use http::StatusCode;
 use modo::middleware::CsrfConfig;
 use modo::service::Registry;
 use tower::ServiceExt;
+use tower_governor::key_extractor::GlobalKeyExtractor;
 
 // ---------------------------------------------------------------------------
 // CORS
@@ -584,4 +585,155 @@ async fn test_csrf_skips_exempt_methods() {
         .unwrap();
 
     assert_ne!(response.status(), StatusCode::FORBIDDEN);
+}
+
+// ---------------------------------------------------------------------------
+// Rate Limiting
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_rate_limit_config_defaults() {
+    let config = modo::middleware::RateLimitConfig::default();
+    assert_eq!(config.per_second, 1);
+    assert_eq!(config.burst_size, 10);
+    assert!(config.use_headers);
+    assert_eq!(config.cleanup_interval_secs, 60);
+}
+
+#[tokio::test]
+async fn test_rate_limit_config_deserialize() {
+    let yaml = r#"
+per_second: 5
+burst_size: 20
+use_headers: false
+cleanup_interval_secs: 120
+"#;
+    let config: modo::middleware::RateLimitConfig = serde_yaml_ng::from_str(yaml).unwrap();
+    assert_eq!(config.per_second, 5);
+    assert_eq!(config.burst_size, 20);
+    assert!(!config.use_headers);
+    assert_eq!(config.cleanup_interval_secs, 120);
+}
+
+#[tokio::test]
+async fn test_rate_limit_config_deserialize_partial() {
+    let yaml = r#"
+per_second: 3
+"#;
+    let config: modo::middleware::RateLimitConfig = serde_yaml_ng::from_str(yaml).unwrap();
+    assert_eq!(config.per_second, 3);
+    // Remaining fields should use defaults
+    assert_eq!(config.burst_size, 10);
+    assert!(config.use_headers);
+    assert_eq!(config.cleanup_interval_secs, 60);
+}
+
+#[tokio::test]
+async fn test_rate_limit_allows_within_burst() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = modo::middleware::RateLimitConfig {
+        per_second: 1,
+        burst_size: 5,
+        use_headers: true,
+        cleanup_interval_secs: 60,
+    };
+    // Use GlobalKeyExtractor because oneshot tests lack ConnectInfo<SocketAddr>
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::rate_limit_with(
+            &config,
+            GlobalKeyExtractor,
+        ))
+        .with_state(Registry::new().into_state());
+
+    // First request should succeed (within burst of 5)
+    let response = app
+        .clone()
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_rate_limit_includes_headers() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = modo::middleware::RateLimitConfig {
+        per_second: 1,
+        burst_size: 5,
+        use_headers: true,
+        cleanup_interval_secs: 60,
+    };
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::rate_limit_with(
+            &config,
+            GlobalKeyExtractor,
+        ))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    // When use_headers is true, rate limit headers should be present
+    assert!(
+        response.headers().get("x-ratelimit-limit").is_some(),
+        "expected x-ratelimit-limit header"
+    );
+    assert!(
+        response.headers().get("x-ratelimit-remaining").is_some(),
+        "expected x-ratelimit-remaining header"
+    );
+}
+
+#[tokio::test]
+async fn test_rate_limit_rejects_over_burst() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = modo::middleware::RateLimitConfig {
+        per_second: 1,
+        burst_size: 2,
+        use_headers: true,
+        cleanup_interval_secs: 60,
+    };
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::rate_limit_with(
+            &config,
+            GlobalKeyExtractor,
+        ))
+        .with_state(Registry::new().into_state());
+
+    // Exhaust the burst (2 requests)
+    for _ in 0..2 {
+        let resp = app
+            .clone()
+            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    // Third request should be rate-limited
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    // modo::Error should be in extensions
+    let error = response.extensions().get::<modo::Error>();
+    assert!(error.is_some(), "expected modo::Error in extensions");
+    assert_eq!(error.unwrap().status(), StatusCode::TOO_MANY_REQUESTS);
 }
