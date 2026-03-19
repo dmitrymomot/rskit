@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use super::Config;
 use crate::error::Result;
 use crate::runtime::Task;
@@ -5,17 +7,22 @@ use crate::runtime::Task;
 pub struct HttpServer {
     shutdown_tx: tokio::sync::oneshot::Sender<()>,
     handle: tokio::task::JoinHandle<()>,
+    shutdown_timeout: Duration,
 }
 
 impl Task for HttpServer {
     async fn shutdown(self) -> Result<()> {
         let _ = self.shutdown_tx.send(());
-        let _ = self.handle.await;
+        if tokio::time::timeout(self.shutdown_timeout, self.handle)
+            .await
+            .is_err()
+        {
+            tracing::warn!("server shutdown timed out, forcing exit");
+        }
         Ok(())
     }
 }
 
-// TODO: use config.shutdown_timeout_secs to enforce a shutdown deadline
 pub async fn http(router: axum::Router, config: &Config) -> Result<HttpServer> {
     let addr = format!("{}:{}", config.host, config.port);
     let listener = tokio::net::TcpListener::bind(&addr)
@@ -42,5 +49,6 @@ pub async fn http(router: axum::Router, config: &Config) -> Result<HttpServer> {
     Ok(HttpServer {
         shutdown_tx,
         handle,
+        shutdown_timeout: Duration::from_secs(config.shutdown_timeout_secs),
     })
 }
