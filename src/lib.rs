@@ -8,6 +8,7 @@ compile_error!("either 'sqlite' or 'postgres' feature must be enabled");
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod extractor;
 pub mod id;
 pub mod runtime;
 pub mod sanitize;
@@ -18,6 +19,7 @@ pub mod validate;
 
 pub use config::Config;
 pub use error::{Error, Result};
+pub use extractor::Service;
 pub use sanitize::Sanitize;
 pub use validate::{Validate, ValidationError, Validator};
 
