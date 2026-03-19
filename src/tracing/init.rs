@@ -16,7 +16,7 @@ impl Default for Config {
     }
 }
 
-pub fn init(config: &Config) {
+pub fn init(config: &Config) -> crate::error::Result<()> {
     use tracing_subscriber::{EnvFilter, fmt};
 
     let filter =
@@ -24,10 +24,14 @@ pub fn init(config: &Config) {
 
     match config.format.as_str() {
         "json" => {
-            fmt().json().with_env_filter(filter).init();
+            fmt().json().with_env_filter(filter).try_init().ok();
+        }
+        "pretty" => {
+            fmt().pretty().with_env_filter(filter).try_init().ok();
         }
         _ => {
-            fmt().with_env_filter(filter).init();
+            fmt().with_env_filter(filter).try_init().ok();
         }
     }
+    Ok(())
 }
