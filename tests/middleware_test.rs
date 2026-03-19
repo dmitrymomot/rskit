@@ -3,6 +3,7 @@ use axum::body::Body;
 use axum::http::Request;
 use axum::routing::get;
 use http::StatusCode;
+use modo::middleware::CsrfConfig;
 use modo::service::Registry;
 use tower::ServiceExt;
 
@@ -429,4 +430,158 @@ async fn test_security_headers_disabled_x_content_type_options() {
         .unwrap();
 
     assert!(response.headers().get("x-content-type-options").is_none());
+}
+
+// ---------------------------------------------------------------------------
+// CSRF
+// ---------------------------------------------------------------------------
+
+fn test_csrf_config() -> CsrfConfig {
+    CsrfConfig::default()
+}
+
+fn test_cookie_key() -> modo::cookie::Key {
+    modo::cookie::Key::from(&[0u8; 64])
+}
+
+#[tokio::test]
+async fn test_csrf_get_sets_cookie() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = test_csrf_config();
+    let key = test_cookie_key();
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::csrf(&config, &key))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let set_cookie = response.headers().get("set-cookie");
+    assert!(set_cookie.is_some(), "GET should set CSRF cookie");
+    let cookie_str = set_cookie.unwrap().to_str().unwrap();
+    assert!(cookie_str.contains("_csrf"), "cookie name should be _csrf");
+}
+
+#[tokio::test]
+async fn test_csrf_rejects_post_without_token() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = test_csrf_config();
+    let key = test_cookie_key();
+    let app = Router::new()
+        .route("/", axum::routing::post(handler))
+        .layer(modo::middleware::csrf(&config, &key))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn test_csrf_accepts_post_with_valid_header_token() {
+    // Full round-trip test:
+    // 1. GET to obtain CSRF cookie
+    // 2. POST with cookie + X-CSRF-Token header
+
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = test_csrf_config();
+    let key = test_cookie_key();
+
+    let app = Router::new()
+        .route("/", get(handler))
+        .route("/submit", axum::routing::post(handler))
+        .layer(modo::middleware::csrf(&config, &key))
+        .with_state(Registry::new().into_state());
+
+    // Step 1: GET to obtain the CSRF cookie
+    let get_response = app
+        .clone()
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    let set_cookie = get_response
+        .headers()
+        .get("set-cookie")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    // Extract the cookie name=value pair (before the first ';')
+    let cookie_value = set_cookie.split(';').next().unwrap(); // e.g., "_csrf=SIGNED_TOKEN"
+
+    // The CsrfToken should be in response extensions
+    let csrf_token = get_response
+        .extensions()
+        .get::<modo::middleware::CsrfToken>();
+    assert!(
+        csrf_token.is_some(),
+        "CsrfToken should be in response extensions"
+    );
+    let token_value = csrf_token.unwrap().0.clone();
+
+    // Step 2: POST with cookie and header
+    let post_response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/submit")
+                .header("cookie", cookie_value)
+                .header("x-csrf-token", &token_value)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(post_response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_csrf_skips_exempt_methods() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = test_csrf_config();
+    let key = test_cookie_key();
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::csrf(&config, &key))
+        .with_state(Registry::new().into_state());
+
+    // HEAD should be exempt
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("HEAD")
+                .uri("/")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_ne!(response.status(), StatusCode::FORBIDDEN);
 }
