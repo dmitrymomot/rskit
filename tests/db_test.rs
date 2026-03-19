@@ -65,3 +65,19 @@ async fn test_migrate_from_directory() {
         .unwrap();
     assert_eq!(row.0, 0);
 }
+
+#[cfg(feature = "sqlite")]
+#[tokio::test]
+async fn test_managed_pool_shutdown() {
+    let mut config = modo::db::SqliteConfig::default();
+    config.path = ":memory:".to_string();
+    let pool = modo::db::connect(&config).await.unwrap();
+
+    let managed = modo::db::managed(pool.clone());
+    let row: (i64,) = sqlx::query_as("SELECT 1").fetch_one(&*pool).await.unwrap();
+    assert_eq!(row.0, 1);
+
+    use modo::runtime::Task;
+    managed.shutdown().await.unwrap();
+    assert!(pool.is_closed());
+}
