@@ -14,10 +14,12 @@ pub mod sanitize;
 pub mod server;
 pub mod service;
 pub mod tracing;
+pub mod validate;
 
 pub use config::Config;
 pub use error::{Error, Result};
 pub use sanitize::Sanitize;
+pub use validate::{Validate, ValidationError};
 
 // Re-exports for user convenience
 pub use axum;
