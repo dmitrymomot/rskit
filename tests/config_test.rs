@@ -4,6 +4,7 @@ use std::env;
 use std::io::Write;
 
 #[test]
+#[serial]
 fn test_env_var_substitution() {
     use modo::config::substitute::substitute_env_vars;
 
@@ -15,6 +16,7 @@ fn test_env_var_substitution() {
 }
 
 #[test]
+#[serial]
 fn test_env_var_substitution_with_default() {
     use modo::config::substitute::substitute_env_vars;
 
@@ -25,6 +27,7 @@ fn test_env_var_substitution_with_default() {
 }
 
 #[test]
+#[serial]
 fn test_env_var_substitution_missing_required() {
     use modo::config::substitute::substitute_env_vars;
 

@@ -15,6 +15,7 @@ impl Task for HttpServer {
     }
 }
 
+// TODO: use config.shutdown_timeout_secs to enforce a shutdown deadline
 pub async fn http(router: axum::Router, config: &Config) -> Result<HttpServer> {
     let addr = format!("{}:{}", config.host, config.port);
     let listener = tokio::net::TcpListener::bind(&addr)

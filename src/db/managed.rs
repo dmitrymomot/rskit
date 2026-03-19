@@ -13,6 +13,12 @@ impl Task for ManagedPool {
     }
 }
 
+/// Wrap a pool for graceful shutdown via the `Task` trait.
+///
+/// This consumes the pool. Clone it first if you need continued access:
+/// ```ignore
+/// let managed = db::managed(pool.clone());
+/// ```
 pub fn managed<P: Into<ManagedPool>>(pool: P) -> ManagedPool {
     pool.into()
 }
