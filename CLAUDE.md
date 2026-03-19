@@ -32,7 +32,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - ulid 1, chrono 0.4
 - rand 0.10
 - Feature flags: `sqlite` (default) / `postgres` (mutually exclusive)
-- Future deps (not in foundation): axum-extra 0.12, opendal 0.55 (`services-s3`)
+- axum-extra 0.12 (cookie-signed, cookie-private, multipart), tower_governor 0.8, regex 1, nanohtml2text 0.2
+- Future deps: opendal 0.55 (`services-s3`)
 
 ## Commands
 
@@ -64,6 +65,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 
 - Design spec: `docs/superpowers/specs/2026-03-19-modo-v2-design.md`
 - Foundation plan: `docs/superpowers/plans/2026-03-19-modo-v2-foundation.md`
+- Web core plan: `docs/superpowers/plans/2026-03-19-modo-v2-web-core.md`
 
 ## Gotchas
 
@@ -78,6 +80,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `connect_rw()` connects writer pool before reader — SQLite `?mode=ro` requires the file to already exist
 - Pool newtypes (`Pool`, `ReadPool`, `WritePool`) don't derive `Debug` — tests on `Result<(ReadPool, WritePool)>` must use `.err().unwrap()` not `.unwrap_err()`
 - `into_inner()` on pool newtypes is `pub(crate)` — not available to downstream users
-- `tracing::init()` returns `Result<()>` and uses `try_init()` — safe to call multiple times (idempotent)
+- `tracing::init()` returns `Result<TracingGuard>` and uses `try_init()` — safe to call multiple times (idempotent); callers must hold the guard
 - Tests that modify env vars must clean up BEFORE assertions — if an assert panics, `remove_var` after it never runs
+- String length checks must use `.chars().count()`, not `.len()` — `.len()` counts bytes, not characters (breaks on emoji, CJK, etc.)
+- Middleware adding response headers must check `!headers.contains_key()` before inserting — handler-set headers take precedence
 - Use official documentation only when researching dependencies
