@@ -64,3 +64,17 @@ fn test_key_from_config_too_short() {
     let key = modo::cookie::key_from_config(&config);
     assert!(key.is_err());
 }
+
+#[test]
+fn test_cookie_config_with_domain() {
+    let yaml = r#"
+secret: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+domain: "example.com"
+"#;
+    let config: modo::cookie::CookieConfig = serde_yaml_ng::from_str(yaml).unwrap();
+    assert_eq!(config.domain, Some("example.com".to_string()));
+    assert!(config.secure);
+    assert!(config.http_only);
+    assert_eq!(config.same_site, "lax");
+    assert_eq!(config.path, "/");
+}

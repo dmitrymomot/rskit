@@ -246,3 +246,93 @@ fn test_files_get_and_file() {
     assert_eq!(taken.name, "doc.pdf");
     assert!(files.get("document").is_none()); // removed after file()
 }
+
+#[tokio::test]
+async fn test_json_request_rejects_invalid_json() {
+    async fn handler(
+        modo::extractor::JsonRequest(_item): modo::extractor::JsonRequest<CreateItem>,
+    ) -> String {
+        "unreachable".to_string()
+    }
+
+    let registry = Registry::new();
+    let app = Router::new()
+        .route("/", axum::routing::post(handler))
+        .with_state(registry.into_state());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/")
+                .header("content-type", "application/json")
+                .body(Body::from("not json"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_multipart_request_with_file_upload() {
+    #[derive(Deserialize)]
+    struct UploadForm {
+        name: String,
+    }
+    impl Sanitize for UploadForm {
+        fn sanitize(&mut self) {
+            modo::sanitize::trim(&mut self.name);
+        }
+    }
+
+    async fn handler(
+        modo::extractor::MultipartRequest(data, mut files): modo::extractor::MultipartRequest<
+            UploadForm,
+        >,
+    ) -> String {
+        let file = files.file("avatar").unwrap();
+        format!(
+            "{}|{}|{}|{}",
+            data.name, file.name, file.content_type, file.size
+        )
+    }
+
+    let registry = Registry::new();
+    let app = Router::new()
+        .route("/", axum::routing::post(handler))
+        .with_state(registry.into_state());
+
+    let boundary = "----TestFileBoundary";
+    let file_data = b"fake image bytes";
+    let body = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"name\"\r\n\r\nAlice\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"photo.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n{}\r\n--{boundary}--\r\n",
+        String::from_utf8_lossy(file_data)
+    );
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/")
+                .header(
+                    "content-type",
+                    format!("multipart/form-data; boundary={boundary}"),
+                )
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let text = String::from_utf8_lossy(&body);
+    assert_eq!(
+        text,
+        format!("Alice|photo.jpg|image/jpeg|{}", file_data.len())
+    );
+}
