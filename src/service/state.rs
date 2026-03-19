@@ -24,9 +24,3 @@ impl From<Registry> for AppState {
         }
     }
 }
-
-impl Registry {
-    pub fn into_state(self) -> AppState {
-        AppState::from(self)
-    }
-}

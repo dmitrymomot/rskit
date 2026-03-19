@@ -23,6 +23,10 @@ impl Registry {
             .and_then(|arc| arc.clone().downcast::<T>().ok())
     }
 
+    pub fn into_state(self) -> super::AppState {
+        super::AppState::from(self)
+    }
+
     pub(crate) fn into_inner(self) -> HashMap<TypeId, Arc<dyn Any + Send + Sync>> {
         self.services
     }
