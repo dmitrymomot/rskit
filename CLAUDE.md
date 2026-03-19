@@ -53,7 +53,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Response types: `Json<T>`, `Html<String>`, `Redirect`, `Response`
 - Service registry: `Registry` is `HashMap<TypeId, Arc<dyn Any>>` — `.add(value)` inserts, `Service<T>` extracts
 - Config: YAML with `${VAR}` / `${VAR:default}` env var substitution, loaded per `APP_ENV`
-- Database: `Pool`, `ReadPool`, `WritePool` newtypes; `connect()` / `connect_rw()` for pools
+- Database: `Pool`, `ReadPool`, `WritePool` newtypes; `connect()` / `connect_rw()` for pools; `:memory:` auto-limits to 1 connection; reader pool opens read-only
+- Server defaults: host `localhost`, port `8080`, shutdown timeout 30s
 - IDs: `src/id/` module — `id::ulid()` for full ULID (26 chars), `id::short()` for short time-sortable ID (13 chars, base36) — no UUID anywhere. Short ID ported from v1 (`modo-db/src/id.rs`): 42-bit ms timestamp | 22-bit random → base36
 - Runtime: `Task` trait + `run!` macro for sequential shutdown
 - Tracing fields: always snake_case (`user_id`, `session_id`, `job_id`)
@@ -68,10 +69,15 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 
 - Rust 2024 edition: `std::env::set_var` / `remove_var` are `unsafe` — all tests must wrap in `unsafe {}` blocks
 - Config tests that modify env vars must use `serial_test` crate to avoid races
-- `run!` macro uses `$crate::tracing::info!` paths (not bare `tracing::`) for correct hygiene
+- `run!` macro uses `$crate::tracing::info!` paths (not bare `tracing::`) for correct hygiene — this rule applies ONLY inside macros; regular library code can use bare `tracing::` paths
 - `server::http()` accepts `Router` (i.e., `Router<()>`, after `.with_state()` has been called)
 - `sqlite` and `postgres` features are mutually exclusive — enforced via `compile_error!`
 - To lint test code, run `cargo clippy --tests` — plain `cargo clippy` only checks lib code
-- Postgres support is stubbed (config struct only) — full implementation deferred
+- Postgres support is stubbed (`PostgresConfig` struct + type alias only) — full implementation deferred
 - `ReadPool` intentionally does NOT implement `AsPool` — prevents passing it to migration functions
+- `connect_rw()` connects writer pool before reader — SQLite `?mode=ro` requires the file to already exist
+- Pool newtypes (`Pool`, `ReadPool`, `WritePool`) don't derive `Debug` — tests on `Result<(ReadPool, WritePool)>` must use `.err().unwrap()` not `.unwrap_err()`
+- `into_inner()` on pool newtypes is `pub(crate)` — not available to downstream users
+- `tracing::init()` returns `Result<()>` and uses `try_init()` — safe to call multiple times (idempotent)
+- Tests that modify env vars must clean up BEFORE assertions — if an assert panics, `remove_var` after it never runs
 - Use official documentation only when researching dependencies
