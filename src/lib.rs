@@ -19,7 +19,7 @@ pub mod validate;
 pub use config::Config;
 pub use error::{Error, Result};
 pub use sanitize::Sanitize;
-pub use validate::{Validate, ValidationError};
+pub use validate::{Validate, ValidationError, Validator};
 
 // Re-exports for user convenience
 pub use axum;
