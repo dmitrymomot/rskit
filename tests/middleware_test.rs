@@ -6,6 +6,212 @@ use http::StatusCode;
 use modo::service::Registry;
 use tower::ServiceExt;
 
+// ---------------------------------------------------------------------------
+// CORS
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_cors_allows_configured_origin() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = modo::middleware::CorsConfig {
+        origins: vec!["https://example.com".to_string()],
+        ..Default::default()
+    };
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::cors(&config))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header("origin", "https://example.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let allow_origin = response.headers().get("access-control-allow-origin");
+    assert!(allow_origin.is_some());
+    assert_eq!(
+        allow_origin.unwrap().to_str().unwrap(),
+        "https://example.com"
+    );
+}
+
+#[tokio::test]
+async fn test_cors_default_allows_any_origin_no_credentials() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = modo::middleware::CorsConfig::default();
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::cors(&config))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header("origin", "https://anything.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let allow_origin = response.headers().get("access-control-allow-origin");
+    assert!(allow_origin.is_some());
+    assert_eq!(allow_origin.unwrap().to_str().unwrap(), "*");
+}
+
+#[tokio::test]
+async fn test_cors_rejects_unlisted_origin() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = modo::middleware::CorsConfig {
+        origins: vec!["https://example.com".to_string()],
+        ..Default::default()
+    };
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::cors(&config))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header("origin", "https://evil.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // The request still succeeds, but no allow-origin header is set
+    assert_eq!(response.status(), StatusCode::OK);
+    let allow_origin = response.headers().get("access-control-allow-origin");
+    assert!(allow_origin.is_none());
+}
+
+#[tokio::test]
+async fn test_cors_with_predicate() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = modo::middleware::CorsConfig {
+        origins: vec!["https://example.com".to_string()],
+        ..Default::default()
+    };
+    let predicate = modo::middleware::urls(&config.origins);
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::cors_with(&config, predicate))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header("origin", "https://example.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let allow_origin = response.headers().get("access-control-allow-origin");
+    assert!(allow_origin.is_some());
+}
+
+#[tokio::test]
+async fn test_cors_subdomains_predicate() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = modo::middleware::CorsConfig::default();
+    let predicate = modo::middleware::subdomains("example.com");
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::cors_with(&config, predicate))
+        .with_state(Registry::new().into_state());
+
+    // Subdomain should be allowed
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header("origin", "https://api.example.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response
+            .headers()
+            .get("access-control-allow-origin")
+            .is_some()
+    );
+
+    // Exact domain should also be allowed
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header("origin", "https://example.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        response
+            .headers()
+            .get("access-control-allow-origin")
+            .is_some()
+    );
+
+    // Unrelated domain should not be allowed
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header("origin", "https://evil.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        response
+            .headers()
+            .get("access-control-allow-origin")
+            .is_none()
+    );
+}
+
 #[tokio::test]
 async fn test_request_id_sets_header() {
     async fn handler() -> &'static str {
