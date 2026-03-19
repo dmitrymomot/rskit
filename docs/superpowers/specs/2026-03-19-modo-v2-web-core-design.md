@@ -102,14 +102,14 @@ Users implement manually — no derive macro. Extractors call `sanitize()` autom
 
 All take `&mut String` and mutate in place:
 
-| Function | Behavior |
-|---|---|
-| `trim(s)` | Strip leading/trailing whitespace |
-| `trim_lowercase(s)` | Trim + lowercase |
-| `collapse_whitespace(s)` | Multiple spaces/tabs/newlines → single space |
-| `strip_html(s)` | Remove HTML tags, decode entities (via `nanohtml2text`) |
-| `truncate(s, max_len)` | Truncate to max chars (not bytes), respects char boundaries |
-| `normalize_email(s)` | Lowercase, strip plus-addressing (`user+tag@` → `user@`) |
+| Function                 | Behavior                                                    |
+| ------------------------ | ----------------------------------------------------------- |
+| `trim(s)`                | Strip leading/trailing whitespace                           |
+| `trim_lowercase(s)`      | Trim + lowercase                                            |
+| `collapse_whitespace(s)` | Multiple spaces/tabs/newlines → single space                |
+| `strip_html(s)`          | Remove HTML tags, decode entities (via `nanohtml2text`)     |
+| `truncate(s, max_len)`   | Truncate to max chars (not bytes), respects char boundaries |
+| `normalize_email(s)`     | Lowercase, strip plus-addressing (`user+tag@` → `user@`)    |
 
 ### Usage
 
@@ -156,16 +156,14 @@ The `IntoResponse` implementation includes `details` in the JSON body when prese
 
 ```json
 {
-  "error": {
-    "status": 422,
-    "message": "validation failed",
-    "details": {
-      "fields": {
-        "title": ["must be at least 3 characters"],
-        "email": ["invalid email format"]
-      }
+    "error": {
+        "status": 422,
+        "message": "validation failed",
+        "details": {
+            "title": ["must be at least 3 characters"],
+            "email": ["invalid email format"]
+        }
     }
-  }
 }
 ```
 
@@ -185,7 +183,7 @@ Implements `Display`, `std::error::Error`, and `From<ValidationError> for modo::
 impl From<ValidationError> for Error {
     fn from(ve: ValidationError) -> Self {
         Error::unprocessable_entity("validation failed")
-            .with_details(serde_json::json!({ "fields": ve.fields }))
+            .with_details(serde_json::json!(ve.fields))
     }
 }
 ```
@@ -225,17 +223,17 @@ The builder collects all errors across all fields and returns them together in `
 
 Rules on `FieldValidator`:
 
-| Rule | Behavior |
-|---|---|
-| `required()` | Non-empty string / `Some` value |
-| `min_length(n)` | String length >= n |
-| `max_length(n)` | String length <= n |
-| `email()` | Regex-based email validation |
-| `url()` | Regex-based URL validation |
-| `range(r)` | Numeric range (any `PartialOrd`) |
-| `one_of(&[values])` | Value must be in list |
-| `matches_regex(&str)` | Custom regex pattern |
-| `custom(fn(&T) -> bool, "message")` | Arbitrary check |
+| Rule                                | Behavior                         |
+| ----------------------------------- | -------------------------------- |
+| `required()`                        | Non-empty string / `Some` value  |
+| `min_length(n)`                     | String length >= n               |
+| `max_length(n)`                     | String length <= n               |
+| `email()`                           | Regex-based email validation     |
+| `url()`                             | Regex-based URL validation       |
+| `range(r)`                          | Numeric range (any `PartialOrd`) |
+| `one_of(&[values])`                 | Value must be in list            |
+| `matches_regex(&str)`               | Custom regex pattern             |
+| `custom(fn(&T) -> bool, "message")` | Arbitrary check                  |
 
 ---
 
@@ -271,6 +269,7 @@ pub struct JsonRequest<T>(pub T);
 ```
 
 Implements `FromRequest`:
+
 1. Deserialize JSON body via `axum::Json<T>`
 2. Call `value.sanitize()`
 3. Return `JsonRequest(value)`
@@ -321,11 +320,13 @@ pub struct UploadedFile {
 ```
 
 `Files` methods:
+
 - `get(name) -> Option<&UploadedFile>` — first file for field name
 - `get_all(name) -> &[UploadedFile]` — all files for field name
 - `remove(name) -> Option<UploadedFile>` — take ownership of first file
 
 Implements `FromRequest`:
+
 1. Consume multipart stream
 2. Text fields → key-value pairs → deserialize into `T` via `serde_urlencoded` (same mechanism as form deserialization — flat key-value pairs to struct)
 3. File fields → collect into `Files`
@@ -402,11 +403,11 @@ pub use axum_extra::extract::cookie::{CookieJar, SignedCookieJar, PrivateCookieJ
 
 ```yaml
 cookie:
-  secret: ${COOKIE_SECRET}
-  secure: true
-  http_only: true
-  same_site: lax
-  path: /
+    secret: ${COOKIE_SECRET}
+    secure: true
+    http_only: true
+    same_site: lax
+    path: /
 ```
 
 ---
@@ -612,6 +613,7 @@ where
 The handler receives `&http::request::Parts` (not `&Request<Body>`) because the request body has been consumed by the time the response comes back. `Parts` includes method, URI, headers, and extensions — everything needed for content negotiation.
 
 After the inner middleware stack produces a response:
+
 1. If status is 4xx or 5xx, read `modo::Error` from response extensions
 2. Pass the error + original request parts to the user's handler function
 3. User decides response format based on request context (Accept header, HX-Request, etc.)
@@ -732,10 +734,10 @@ async fn main() -> anyhow::Result<()> {
 
 ## Summary
 
-| Module | Key Types | New Dep |
-|---|---|---|
-| sanitize | `Sanitize` trait, 6 functions | nanohtml2text |
-| validate | `Validate` trait, `ValidationError`, `Validator` builder, 9 rules | regex |
-| extractor | `Service<T>`, `JsonRequest<T>`, `FormRequest<T>`, `Query<T>`, `MultipartRequest<T>`, `UploadedFile`, `Files` | axum-extra |
-| cookie | `CookieConfig`, `key_from_config()`, re-exports | axum-extra |
+| Module     | Key Types                                                                                                                                                    | New Dep                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| sanitize   | `Sanitize` trait, 6 functions                                                                                                                                | nanohtml2text                       |
+| validate   | `Validate` trait, `ValidationError`, `Validator` builder, 9 rules                                                                                            | regex                               |
+| extractor  | `Service<T>`, `JsonRequest<T>`, `FormRequest<T>`, `Query<T>`, `MultipartRequest<T>`, `UploadedFile`, `Files`                                                 | axum-extra                          |
+| cookie     | `CookieConfig`, `key_from_config()`, re-exports                                                                                                              | axum-extra                          |
 | middleware | 9 middleware layers (request_id, tracing, compression, catch_panic, security_headers, cors, csrf, rate_limit, error_handler), 4 configs, error flow protocol | tower-http features, tower_governor |
