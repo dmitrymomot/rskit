@@ -52,6 +52,8 @@ chrono = { version = "0.4", features = ["serde"] }
 http = "1"
 regex = "1"
 nanohtml2text = "0.2"
+sha2 = "0.10"
+ipnet = "2"
 bytes = "1"
 sentry = { version = "0.38", optional = true, default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
 sentry-tracing = { version = "0.38", optional = true }
