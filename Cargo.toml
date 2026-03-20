@@ -29,7 +29,7 @@ tower_governor = { version = "0.8", default-features = false, features = ["axum"
 governor = "0.10"
 
 # Database
-sqlx = { version = "0.8", features = ["runtime-tokio", "chrono", "migrate"], default-features = false }
+sqlx = { version = "0.8", features = ["runtime-tokio", "chrono", "migrate", "derive"], default-features = false }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
