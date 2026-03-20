@@ -38,13 +38,14 @@ src/template/
 **Behind `templates` feature:**
 - `minijinja` with `loader` feature — template engine
 - `minijinja-contrib` — common filters
+- `intl_pluralrules` — CLDR-compliant plural category selection
 
 **Behind `static-embed` feature (implies `templates`):**
 - `include_dir` — compile-time directory embedding
 
 **Cargo.toml feature flags:**
 ```toml
-templates = ["dep:minijinja", "dep:minijinja-contrib"]
+templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules"]
 static-embed = ["templates", "dep:include_dir"]
 ```
 
@@ -130,7 +131,7 @@ async fn home(render: Renderer) -> Result<Html<String>> {
 
 // HTMX dual template — auto-selects based on HX-Request header
 async fn dashboard(render: Renderer) -> Result<Html<String>> {
-    render.html_htmx(
+    render.html_partial(
         "pages/dashboard.html",
         "partials/dashboard.html",
         context! { todos },
@@ -158,7 +159,7 @@ async fn handler(render: Renderer) -> Result<Html<String>> {
 
 **Public API:**
 - `.html(template, context) -> Result<Html<String>>` — render with merged context, return HTML response
-- `.html_htmx(page, partial, context) -> Result<Html<String>>` — auto-select template based on HX-Request
+- `.html_partial(page, partial, context) -> Result<Html<String>>` — auto-select template based on HX-Request
 - `.string(template, context) -> Result<String>` — render to string (SSE, embedding)
 - `.is_htmx() -> bool` — check if current request is HTMX
 
@@ -202,7 +203,7 @@ async fn inject_user(
 ) -> Response {
     if let Some(user) = load_user(&session).await {
         if let Some(ctx) = req.extensions_mut().get_mut::<TemplateContext>() {
-            ctx.insert("user", minijinja::Value::from_serialize(&user));
+            ctx.set("user", minijinja::Value::from_serialize(&user));
         }
     }
     next.run(req).await
@@ -221,7 +222,7 @@ pub struct TemplateContext {
 `Clone` is required because it lives in request extensions.
 
 **TemplateContext API:**
-- `ctx.insert(key, value)` — add/overwrite a value (public, for user middleware)
+- `ctx.set(key, value)` — add/overwrite a value (public, for user middleware)
 - `ctx.get(key) -> Option<&Value>` — read a value (public, for user middleware)
 - `ctx.merge(context) -> Value` — produces a new `minijinja::Value` combining middleware context with handler context, without mutating the original (`pub(crate)`, used by Renderer)
 
@@ -250,15 +251,32 @@ login:
 
 ### Plural Support
 
-YAML maps with `zero`, `one`, `other` keys:
+Supports all six CLDR plural categories: `zero`, `one`, `two`, `few`, `many`, `other`. Only `other` is required — the rest are optional per locale. Plural category selection is locale-aware via `intl_pluralrules` crate (CLDR-compliant).
 
 ```yaml
-# locales/en/items.yaml
+# locales/en/items.yaml — English needs only one/other
 count:
-  zero: "No items"
-  one: "One item"
+  one: "{count} item"
   other: "{count} items"
+
+# locales/uk/items.yaml — Ukrainian needs one/few/many/other
+count:
+  one: "{count} елемент"
+  few: "{count} елементи"
+  many: "{count} елементів"
+  other: "{count} елементів"
+
+# locales/ar/items.yaml — Arabic uses all six forms
+count:
+  zero: "لا عناصر"
+  one: "عنصر واحد"
+  two: "عنصران"
+  few: "{count} عناصر"
+  many: "{count} عنصرًا"
+  other: "{count} عنصر"
 ```
+
+Selection: `intl_pluralrules` resolves `(locale, count) → PluralCategory`. If the resolved category isn't defined in the YAML, fall back to `other`.
 
 ### Interpolation
 
@@ -288,7 +306,7 @@ Behavior:
 1. Look up key in current locale
 2. If missing, fall back to default locale
 3. If still missing, log warning, return the key itself
-4. If `count` kwarg present and entry is plural: coerce `count` to `i64` — `0` selects `zero`, `1` selects `one`, everything else (including negatives) selects `other`. If coercion fails, use `other`.
+4. If `count` kwarg present and entry is plural: coerce `count` to `i64`, resolve plural category via `intl_pluralrules` for the current locale. If the resolved category isn't defined in the entry, fall back to `other`. If coercion fails, use `other`.
 5. Apply `{key}` interpolation with all kwargs
 
 ### TranslationStore
@@ -301,7 +319,14 @@ struct TranslationStore {
 
 enum Entry {
     Plain(String),
-    Plural { zero: String, one: String, other: String },
+    Plural {
+        zero: Option<String>,
+        one: Option<String>,
+        two: Option<String>,
+        few: Option<String>,
+        many: Option<String>,
+        other: String,  // required
+    },
 }
 ```
 
@@ -432,11 +457,11 @@ async fn api_items(hx: HxRequest) -> Result<Response> {
 }
 ```
 
-Also used internally by `Renderer` for `.html_htmx()` and `.is_htmx()`.
+Also used internally by `Renderer` for `.html_partial()` and `.is_htmx()`.
 
 ## Template Inheritance
 
-MiniJinja's built-in template inheritance (`{% extends "base.html" %}`, `{% block content %}`) is available out of the box. No special configuration needed. Works naturally with `html_htmx()` — full-page templates typically extend a layout, while HTMX partials are standalone fragments.
+MiniJinja's built-in template inheritance (`{% extends "base.html" %}`, `{% block content %}`) is available out of the box. No special configuration needed. Works naturally with `html_partial()` — full-page templates typically extend a layout, while HTMX partials are standalone fragments.
 
 ## Error Handling
 
