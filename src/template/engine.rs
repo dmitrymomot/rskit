@@ -27,7 +27,6 @@ impl Engine {
         EngineBuilder::default()
     }
 
-    #[allow(dead_code)]
     pub(crate) fn render(
         &self,
         template_name: &str,

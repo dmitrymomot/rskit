@@ -14,7 +14,6 @@ impl TemplateContext {
         self.values.get(key)
     }
 
-    #[allow(dead_code)]
     pub(crate) fn merge(&self, handler_context: minijinja::Value) -> minijinja::Value {
         let mut merged = BTreeMap::new();
 

@@ -5,6 +5,7 @@ mod htmx;
 mod i18n;
 mod locale;
 mod middleware;
+mod renderer;
 mod static_files;
 
 pub use config::TemplateConfig;
@@ -15,3 +16,4 @@ pub use locale::{
     AcceptLanguageResolver, CookieResolver, LocaleResolver, QueryParamResolver, SessionResolver,
 };
 pub use middleware::TemplateContextLayer;
+pub use renderer::Renderer;
