@@ -21,6 +21,11 @@ CREATE TABLE modo_jobs (
     updated_at    TEXT NOT NULL
 )";
 
+const CREATE_INDEX: &str = "
+CREATE UNIQUE INDEX idx_modo_jobs_payload_hash
+    ON modo_jobs(payload_hash)
+    WHERE payload_hash IS NOT NULL AND status IN ('pending', 'running')";
+
 async fn setup() -> (Enqueuer, db::Pool) {
     let config = db::SqliteConfig {
         path: ":memory:".to_string(),
@@ -28,6 +33,7 @@ async fn setup() -> (Enqueuer, db::Pool) {
     };
     let pool = db::connect(&config).await.unwrap();
     sqlx::query(CREATE_TABLE).execute(&*pool).await.unwrap();
+    sqlx::query(CREATE_INDEX).execute(&*pool).await.unwrap();
     let enqueuer = Enqueuer::new(&pool);
     (enqueuer, pool)
 }
@@ -175,6 +181,37 @@ async fn enqueue_unique_allows_different_payload() {
 
     assert!(matches!(r1, EnqueueResult::Created(_)));
     assert!(matches!(r2, EnqueueResult::Created(_)));
+}
+
+#[tokio::test]
+async fn enqueue_unique_with_custom_queue() {
+    let (enqueuer, pool) = setup().await;
+    let result = enqueuer
+        .enqueue_unique_with(
+            "send_email",
+            &TestPayload {
+                user_id: "u1".into(),
+            },
+            EnqueueOptions {
+                queue: "email".to_string(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(result, EnqueueResult::Created(_)));
+
+    let (queue,): (String,) = sqlx::query_as("SELECT queue FROM modo_jobs LIMIT 1")
+        .bind(match &result {
+            EnqueueResult::Created(id) => id,
+            _ => unreachable!(),
+        })
+        .fetch_one(&*pool)
+        .await
+        .unwrap();
+
+    assert_eq!(queue, "email");
 }
 
 #[tokio::test]

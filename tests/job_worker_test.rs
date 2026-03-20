@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
+use chrono::Utc;
 use modo::db;
 use modo::error::Result;
 use modo::job::{self, Enqueuer, JobOptions, Payload, Worker};
@@ -25,6 +26,11 @@ CREATE TABLE modo_jobs (
     updated_at    TEXT NOT NULL
 )";
 
+const CREATE_INDEX: &str = "
+CREATE UNIQUE INDEX idx_modo_jobs_payload_hash
+    ON modo_jobs(payload_hash)
+    WHERE payload_hash IS NOT NULL AND status IN ('pending', 'running')";
+
 async fn setup() -> (Registry, db::Pool) {
     let config = db::SqliteConfig {
         path: ":memory:".to_string(),
@@ -32,6 +38,7 @@ async fn setup() -> (Registry, db::Pool) {
     };
     let pool = db::connect(&config).await.unwrap();
     sqlx::query(CREATE_TABLE).execute(&*pool).await.unwrap();
+    sqlx::query(CREATE_INDEX).execute(&*pool).await.unwrap();
 
     let mut registry = Registry::new();
     let write_pool = db::WritePool::new((*pool).clone());
@@ -184,4 +191,116 @@ async fn worker_shutdown_is_clean() {
 
     assert!(result.is_ok());
     assert!(result.unwrap().is_ok());
+}
+
+#[tokio::test]
+async fn reaper_resets_stale_running_jobs() {
+    let (mut registry, pool) = setup().await;
+    let counter = Arc::new(AtomicU32::new(0));
+    registry.add(counter.clone());
+
+    // Enqueue a job and manually mark it as stale running
+    let enqueuer = Enqueuer::new(&pool);
+    let id = enqueuer
+        .enqueue("count", &serde_json::json!({}))
+        .await
+        .unwrap();
+
+    let stale_time = (Utc::now() - chrono::Duration::minutes(2)).to_rfc3339();
+    sqlx::query(
+        "UPDATE modo_jobs SET status = 'running', attempt = 1, started_at = ? WHERE id = ?",
+    )
+    .bind(&stale_time)
+    .bind(&id)
+    .execute(&*pool)
+    .await
+    .unwrap();
+
+    let config = job::JobConfig {
+        poll_interval_secs: 0,
+        stale_threshold_secs: 1,
+        stale_reaper_interval_secs: 1,
+        drain_timeout_secs: 5,
+        queues: vec![job::QueueConfig {
+            name: "default".to_string(),
+            concurrency: 2,
+        }],
+        cleanup: None,
+    };
+
+    let worker = Worker::builder(&config, &registry)
+        .register("count", counting_handler)
+        .start()
+        .await;
+
+    // Wait for reaper (1s interval) to reset the stale job,
+    // then the poll loop to re-claim and process it
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    modo::runtime::Task::shutdown(worker).await.unwrap();
+
+    // The reaper should have reset the job to pending,
+    // and the worker should have picked it up and completed it
+    assert!(counter.load(Ordering::SeqCst) >= 1);
+
+    let (status,): (String,) = sqlx::query_as("SELECT status FROM modo_jobs WHERE id = ?")
+        .bind(&id)
+        .fetch_one(&*pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "completed");
+}
+
+#[tokio::test]
+async fn cleanup_removes_old_terminal_jobs() {
+    let (registry, pool) = setup().await;
+
+    // Enqueue a job and manually mark it as completed with old timestamp
+    let enqueuer = Enqueuer::new(&pool);
+    enqueuer
+        .enqueue("test", &serde_json::json!({}))
+        .await
+        .unwrap();
+
+    let old_time = (Utc::now() - chrono::Duration::minutes(2)).to_rfc3339();
+    sqlx::query("UPDATE modo_jobs SET status = 'completed', updated_at = ?")
+        .bind(&old_time)
+        .execute(&*pool)
+        .await
+        .unwrap();
+
+    let config = job::JobConfig {
+        poll_interval_secs: 60, // high interval — we don't need the poll loop
+        stale_threshold_secs: 600,
+        stale_reaper_interval_secs: 600,
+        drain_timeout_secs: 5,
+        queues: vec![job::QueueConfig {
+            name: "default".to_string(),
+            concurrency: 2,
+        }],
+        cleanup: Some(job::CleanupConfig {
+            interval_secs: 1,
+            retention_secs: 1,
+        }),
+    };
+
+    async fn noop_handler(_payload: Payload<serde_json::Value>) -> Result<()> {
+        Ok(())
+    }
+
+    let worker = Worker::builder(&config, &registry)
+        .register("test", noop_handler)
+        .start()
+        .await;
+
+    // Wait for cleanup loop (1s interval, 1s retention) to delete the old completed job
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    modo::runtime::Task::shutdown(worker).await.unwrap();
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM modo_jobs")
+        .fetch_one(&*pool)
+        .await
+        .unwrap();
+    assert_eq!(count.0, 0);
 }
