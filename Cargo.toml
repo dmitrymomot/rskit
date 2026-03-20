@@ -10,7 +10,7 @@ repository = "https://github.com/dmitrymomot/modo"
 default = []
 full = ["templates", "sse", "auth", "sentry", "email"]
 sentry = ["dep:sentry", "dep:sentry-tracing"]
-templates = []
+templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules"]
 sse = []
 auth = ["dep:argon2", "dep:hmac", "dep:sha1", "dep:data-encoding", "dep:subtle", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
 email = ["dep:lettre", "dep:pulldown-cmark", "dep:lru"]
@@ -23,7 +23,7 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 croner = "2"
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["compression-full", "catch-panic", "trace", "cors", "request-id", "set-header", "sensitive-headers"] }
+tower-http = { version = "0.6", features = ["compression-full", "catch-panic", "trace", "cors", "request-id", "set-header", "sensitive-headers", "fs"] }
 
 axum-extra = { version = "0.12", features = ["cookie-signed", "cookie-private", "multipart"] }
 cookie = { version = "0.18", features = ["signed"] }
@@ -75,6 +75,11 @@ http-body-util = { version = "0.1", optional = true }
 lettre = { version = "0.11", optional = true, default-features = false, features = ["smtp-transport", "tokio1", "builder", "hostname", "tokio1-rustls", "ring", "webpki-roots"] }
 pulldown-cmark = { version = "0.12", optional = true }
 lru = { version = "0.16", optional = true }
+
+# Templates (optional, gated by "templates" feature)
+minijinja = { version = "2", optional = true, features = ["loader"] }
+minijinja-contrib = { version = "2", optional = true }
+intl_pluralrules = { version = "7", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
