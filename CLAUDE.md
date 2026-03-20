@@ -37,6 +37,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Auth deps (behind `auth` feature): argon2 0.5, hmac 0.12, sha1 0.10, data-encoding 2, subtle 2, hyper 1, hyper-rustls 0.27, hyper-util 0.1, http-body-util 0.1
 - tokio-util 0.7 (CancellationToken for background loop shutdown)
 - croner 2 (cron expression parsing)
+- Template deps (behind `templates` feature): minijinja 2 (with loader), minijinja-contrib 2, intl_pluralrules 7
+- tower-http `fs` feature required for `ServeDir` static file serving
 - Future deps: opendal 0.55 (`services-s3`)
 
 ## Commands
@@ -91,6 +93,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Auth + OAuth plan: `docs/superpowers/plans/2026-03-20-modo-v2-auth-oauth.md`
 - Job + Cron spec: `docs/superpowers/specs/2026-03-20-modo-v2-job-cron-design.md`
 - Job + Cron plan: `docs/superpowers/plans/2026-03-20-modo-v2-job-cron.md`
+- Template spec: `docs/superpowers/specs/2026-03-21-modo-v2-template-design.md`
+- Template plan: `docs/superpowers/plans/2026-03-21-modo-v2-template.md`
 
 ## Gotchas
 
@@ -138,3 +142,6 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - SQLite does NOT support `ON CONFLICT` with partial unique indexes — use plain `INSERT` and catch `sqlx::Error::Database` with `is_unique_violation()` instead
 - Job/cron test schemas that need a partial unique index must create it as a separate `CREATE UNIQUE INDEX ... WHERE ...` statement after the `CREATE TABLE`
 - DB-backed modules (session, job) don't ship migration files — end-apps own their migrations; framework provides schema in docs/tests
+- `Engine` wraps `Arc<EngineInner>` — never double-wrap in `Arc<Engine>`. Layers and middleware hold `Engine` directly (it's cheaply cloneable).
+- `std::sync::RwLock` (not tokio) for MiniJinja `Environment` — all MiniJinja ops are synchronous; never hold the guard across `.await`
+- In test helpers, return `tempfile::TempDir` alongside the constructed value so files persist for the test's lifetime — don't `Box::leak` or let it drop early
