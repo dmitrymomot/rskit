@@ -14,8 +14,6 @@ fn test_cookie_config() -> CookieConfig {
         secure: false,
         http_only: true,
         same_site: "lax".to_string(),
-        path: "/".to_string(),
-        domain: None,
     }
 }
 
@@ -71,7 +69,6 @@ async fn handler_set_get(session: Session) -> modo::Result<&'static str> {
     Ok("ok")
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_session_middleware_no_cookie_passes_through() {
     let (store, _pool) = setup_store().await;
@@ -91,7 +88,6 @@ async fn test_session_middleware_no_cookie_passes_through() {
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_session_authenticate_sets_cookie() {
     let (store, _pool) = setup_store().await;
@@ -119,7 +115,6 @@ async fn test_session_authenticate_sets_cookie() {
     assert!(set_cookie.is_some(), "should set session cookie");
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_session_logout_removes_cookie() {
     let (store, _pool) = setup_store().await;
@@ -145,7 +140,6 @@ async fn test_session_logout_removes_cookie() {
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_session_set_and_get_data() {
     let (store, _pool) = setup_store().await;

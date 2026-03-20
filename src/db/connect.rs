@@ -5,7 +5,6 @@ use crate::error::{Error, Result};
 use super::config::SqliteConfig;
 use super::pool::{Pool, ReadPool, WritePool};
 
-#[cfg(feature = "sqlite")]
 pub async fn connect(config: &SqliteConfig) -> Result<Pool> {
     let url = build_url(&config.path, false)?;
 
@@ -26,7 +25,6 @@ pub async fn connect(config: &SqliteConfig) -> Result<Pool> {
     Ok(Pool::new(pool))
 }
 
-#[cfg(feature = "sqlite")]
 pub async fn connect_rw(config: &SqliteConfig) -> Result<(ReadPool, WritePool)> {
     if config.path == ":memory:" {
         return Err(Error::internal(
@@ -42,7 +40,6 @@ pub async fn connect_rw(config: &SqliteConfig) -> Result<(ReadPool, WritePool)> 
     Ok((ReadPool::new(reader_pool), WritePool::new(writer_pool)))
 }
 
-#[cfg(feature = "sqlite")]
 fn build_url(path: &str, read_only: bool) -> Result<String> {
     if path == ":memory:" {
         return Ok("sqlite::memory:".to_string());
@@ -61,7 +58,6 @@ fn build_url(path: &str, read_only: bool) -> Result<String> {
     Ok(format!("sqlite://{}?mode={mode}", path.display()))
 }
 
-#[cfg(feature = "sqlite")]
 async fn build_sqlite_pool(
     url: &str,
     config: &SqliteConfig,

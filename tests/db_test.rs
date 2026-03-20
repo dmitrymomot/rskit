@@ -7,7 +7,6 @@ fn test_sqlite_config_defaults() {
     assert_eq!(config.busy_timeout, 5000);
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_connect_in_memory() {
     let config = modo::db::SqliteConfig {
@@ -19,7 +18,6 @@ async fn test_connect_in_memory() {
     assert_eq!(row.0, 1);
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_connect_rw() {
     let dir = tempfile::tempdir().unwrap();
@@ -42,7 +40,6 @@ async fn test_connect_rw() {
     assert_eq!(row.0, 0);
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_migrate_from_directory() {
     let dir = tempfile::tempdir().unwrap();
@@ -72,7 +69,6 @@ async fn test_migrate_from_directory() {
     assert_eq!(row.0, 0);
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_connect_rw_rejects_memory() {
     let config = modo::db::SqliteConfig {
@@ -89,7 +85,6 @@ async fn test_connect_rw_rejects_memory() {
     );
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_managed_pool_shutdown() {
     let config = modo::db::SqliteConfig {
@@ -109,7 +104,6 @@ async fn test_managed_pool_shutdown() {
 
 // --- New tests: config enums and overrides ---
 
-#[cfg(feature = "sqlite")]
 #[test]
 fn test_config_enum_display() {
     use modo::db::{JournalMode, SynchronousMode, TempStore};
@@ -131,7 +125,6 @@ fn test_config_enum_display() {
     assert_eq!(format!("{}", TempStore::Memory), "MEMORY");
 }
 
-#[cfg(feature = "sqlite")]
 #[test]
 fn test_pool_overrides_defaults() {
     use modo::db::PoolOverrides;
@@ -151,7 +144,6 @@ fn test_pool_overrides_defaults() {
 
 // --- New tests: pool traits ---
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_pool_reader_writer_traits() {
     use modo::db::{Reader, Writer};
@@ -178,7 +170,6 @@ async fn test_pool_reader_writer_traits() {
     assert_eq!(row.0, 1);
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_managed_from_read_and_write_pools() {
     use modo::runtime::Task;
@@ -202,7 +193,6 @@ async fn test_managed_from_read_and_write_pools() {
 
 // --- New tests: PRAGMA verification ---
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_pragma_settings_applied() {
     let dir = tempfile::tempdir().unwrap();
@@ -246,7 +236,6 @@ async fn test_pragma_settings_applied() {
 
 // --- New tests: sqlx error conversions ---
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_sqlx_row_not_found_maps_to_404() {
     let config = modo::db::SqliteConfig {
@@ -270,7 +259,6 @@ async fn test_sqlx_row_not_found_maps_to_404() {
     assert_eq!(err.message(), "record not found");
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_sqlx_unique_violation_maps_to_409() {
     let config = modo::db::SqliteConfig {
@@ -299,7 +287,6 @@ async fn test_sqlx_unique_violation_maps_to_409() {
     assert_eq!(err.message(), "record already exists");
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_sqlx_fk_violation_maps_to_400() {
     let config = modo::db::SqliteConfig {

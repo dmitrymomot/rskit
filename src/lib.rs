@@ -1,10 +1,3 @@
-// Enforce mutually exclusive DB backends
-#[cfg(all(feature = "sqlite", feature = "postgres"))]
-compile_error!("features 'sqlite' and 'postgres' are mutually exclusive — enable only one");
-
-#[cfg(not(any(feature = "sqlite", feature = "postgres")))]
-compile_error!("either 'sqlite' or 'postgres' feature must be enabled");
-
 pub mod config;
 pub mod cookie;
 pub mod db;

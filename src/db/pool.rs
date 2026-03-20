@@ -1,10 +1,6 @@
 use std::ops::Deref;
 
-#[cfg(feature = "sqlite")]
 pub type InnerPool = sqlx::SqlitePool;
-
-#[cfg(feature = "postgres")]
-pub type InnerPool = sqlx::PgPool;
 
 #[derive(Clone)]
 pub struct Pool(InnerPool);

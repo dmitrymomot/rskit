@@ -8,10 +8,6 @@ fn default_lax() -> String {
     "lax".to_string()
 }
 
-fn default_slash() -> String {
-    "/".to_string()
-}
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct CookieConfig {
     pub secret: String,
@@ -21,8 +17,4 @@ pub struct CookieConfig {
     pub http_only: bool,
     #[serde(default = "default_lax")]
     pub same_site: String,
-    #[serde(default = "default_slash")]
-    pub path: String,
-    #[serde(default)]
-    pub domain: Option<String>,
 }

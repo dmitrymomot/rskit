@@ -256,7 +256,6 @@ impl Store {
         Ok(result.rows_affected())
     }
 
-    #[cfg(feature = "sqlite")]
     async fn enforce_session_limit(
         &self,
         user_id: &str,
@@ -298,17 +297,6 @@ impl Store {
         }
 
         Ok(())
-    }
-
-    #[cfg(feature = "postgres")]
-    async fn enforce_session_limit(
-        &self,
-        user_id: &str,
-        now: &str,
-        txn: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<()> {
-        let _ = (user_id, now, txn);
-        unimplemented!("Postgres session limit enforcement not yet implemented")
     }
 }
 

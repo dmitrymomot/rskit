@@ -7,11 +7,9 @@ license = "MIT"
 repository = "https://github.com/dmitrymomot/modo"
 
 [features]
-default = ["sqlite"]
-full = ["sqlite", "templates", "sse", "oauth", "sentry"]
+default = []
+full = ["templates", "sse", "oauth", "sentry"]
 sentry = ["dep:sentry", "dep:sentry-tracing"]
-sqlite = ["sqlx/sqlite"]
-postgres = ["sqlx/postgres"]
 templates = []
 sse = []
 oauth = []
@@ -29,7 +27,7 @@ tower_governor = { version = "0.8", default-features = false, features = ["axum"
 governor = "0.10"
 
 # Database
-sqlx = { version = "0.8", features = ["runtime-tokio", "chrono", "migrate", "derive"], default-features = false }
+sqlx = { version = "0.8", features = ["runtime-tokio", "chrono", "migrate", "derive", "sqlite"], default-features = false }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

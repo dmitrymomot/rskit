@@ -286,7 +286,7 @@ fn set_signed_cookie(
         _ => SameSite::Lax,
     };
     let set_cookie_str = Cookie::build((name.to_string(), signed_value))
-        .path(config.path.clone())
+        .path("/")
         .secure(config.secure)
         .http_only(config.http_only)
         .same_site(same_site)

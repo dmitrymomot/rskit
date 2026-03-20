@@ -51,7 +51,6 @@ fn test_meta() -> SessionMeta {
     )
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_create_and_read_by_token() {
     let store = setup_store().await;
@@ -69,7 +68,6 @@ async fn test_create_and_read_by_token() {
     assert_eq!(loaded.user_id, "user-1");
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_create_with_initial_data() {
     let store = setup_store().await;
@@ -80,7 +78,6 @@ async fn test_create_with_initial_data() {
     assert_eq!(session.data["cart"][0], "item-1");
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_read_by_id() {
     let store = setup_store().await;
@@ -92,7 +89,6 @@ async fn test_read_by_id() {
     assert_eq!(loaded.unwrap().user_id, "user-1");
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_read_nonexistent_returns_none() {
     let store = setup_store().await;
@@ -100,7 +96,6 @@ async fn test_read_nonexistent_returns_none() {
     assert!(loaded.is_none());
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_destroy() {
     let store = setup_store().await;
@@ -112,7 +107,6 @@ async fn test_destroy() {
     assert!(loaded.is_none());
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_destroy_all_for_user() {
     let store = setup_store().await;
@@ -130,7 +124,6 @@ async fn test_destroy_all_for_user() {
     assert_eq!(user2_sessions.len(), 1);
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_destroy_all_except() {
     let store = setup_store().await;
@@ -146,7 +139,6 @@ async fn test_destroy_all_except() {
     assert_eq!(sessions[0].id, keep.id);
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_rotate_token() {
     let store = setup_store().await;
@@ -166,7 +158,6 @@ async fn test_rotate_token() {
     assert_eq!(new_lookup.unwrap().id, session.id);
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_flush_updates_data_and_timestamps() {
     let store = setup_store().await;
@@ -185,7 +176,6 @@ async fn test_flush_updates_data_and_timestamps() {
     assert_eq!(loaded.data["theme"], "dark");
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_touch_updates_timestamps() {
     let store = setup_store().await;
@@ -200,7 +190,6 @@ async fn test_touch_updates_timestamps() {
     assert!(loaded.expires_at > session.expires_at);
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_lru_eviction() {
     let config = SessionConfig {
@@ -239,7 +228,6 @@ async fn test_lru_eviction() {
     assert!(sessions.iter().all(|s| s.id != s1.id));
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_cleanup_expired() {
     let store = setup_store().await;
@@ -251,7 +239,6 @@ async fn test_cleanup_expired() {
     assert_eq!(count, 0);
 }
 
-#[cfg(feature = "sqlite")]
 #[tokio::test]
 async fn test_list_for_user_ordered_by_last_active() {
     let store = setup_store().await;
