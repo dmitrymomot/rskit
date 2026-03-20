@@ -19,4 +19,7 @@ pub struct Config {
     #[cfg(feature = "email")]
     #[serde(default)]
     pub email: crate::email::EmailConfig,
+    #[cfg(feature = "templates")]
+    #[serde(default)]
+    pub template: crate::template::TemplateConfig,
 }

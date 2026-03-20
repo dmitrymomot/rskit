@@ -22,6 +22,9 @@ pub mod auth;
 #[cfg(feature = "email")]
 pub mod email;
 
+#[cfg(feature = "templates")]
+pub mod template;
+
 pub use config::Config;
 pub use error::{Error, Result};
 pub use extractor::Service;
@@ -34,6 +37,9 @@ pub use auth::oauth::{
     AuthorizationRequest, CallbackParams, GitHub, Google, OAuthConfig, OAuthProvider,
     OAuthProviderConfig, OAuthState, UserProfile,
 };
+
+#[cfg(feature = "templates")]
+pub use template::TemplateConfig;
 
 // Re-exports for user convenience
 pub use axum;
