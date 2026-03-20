@@ -62,7 +62,7 @@ Add to `[dependencies]` section after the auth dependencies block:
 # Email (optional, gated by "email" feature)
 lettre = { version = "0.11", optional = true, default-features = false, features = ["smtp-transport", "tokio1", "builder", "hostname", "tokio1-rustls"] }
 pulldown-cmark = { version = "0.12", optional = true }
-lru = { version = "0.12", optional = true }
+lru = { version = "0.16", optional = true }
 ```
 
 - [ ] **Step 2: Add email and email-test feature flags**
@@ -851,68 +851,92 @@ git commit -m "feat(email): add variable substitution and frontmatter parsing"
 Create `src/email/markdown.rs`. This module walks `pulldown-cmark` events. When it encounters a link whose text matches the button syntax, it emits table-based HTML instead of `<a>`. For plain text, it does a second pass stripping markdown to text.
 
 ```rust
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CowStr, Event, Options, Parser, Tag, TagEnd};
 
 use crate::email::button;
 
+/// HTML-escape a string for use in attribute values.
+fn escape_href(url: &str) -> String {
+    url.replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
 /// Convert markdown to HTML, intercepting button syntax in links.
+///
+/// Strategy: buffer all events between `Start(Link)` and `End(Link)`,
+/// then check if the concatenated text matches button syntax.
+/// If yes, emit a table-based button. If no, flush all buffered events
+/// as a normal link through `push_html`.
 pub fn markdown_to_html(markdown: &str, brand_color: Option<&str>) -> String {
     let parser = Parser::new_ext(markdown, Options::all());
     let mut html = String::new();
-    let mut in_button_link: Option<(button::ButtonType, String)> = None; // (type, url)
-    let mut button_label = String::new();
+
+    // Link buffering state
+    let mut link_url: Option<String> = None;
+    let mut link_title: Option<CowStr> = None;
+    let mut link_events: Vec<Event> = Vec::new();
 
     for event in parser {
-        match event {
-            Event::Start(Tag::Link { dest_url, .. }) => {
-                // Buffer until we see the text to decide if it's a button
-                in_button_link = Some((button::ButtonType::Primary, dest_url.to_string()));
-                button_label.clear();
-            }
-            Event::Text(text) if in_button_link.is_some() => {
-                // Check if this text is a button pattern
-                if let Some((_current_type, url)) = &in_button_link {
-                    if let Some((btn_type, label)) = button::parse_button(&text) {
-                        in_button_link = Some((btn_type, url.clone()));
-                        button_label = label.to_string();
-                    } else {
-                        // Not a button — render as normal link
-                        let url = url.clone();
-                        in_button_link = None;
-                        html.push_str(&format!(
-                            "<a href=\"{url}\">"
-                        ));
-                        pulldown_cmark::html::push_html(
-                            &mut html,
-                            std::iter::once(Event::Text(text)),
-                        );
-                    }
-                }
-            }
-            Event::End(TagEnd::Link) => {
-                if let Some((btn_type, url)) = in_button_link.take() {
-                    if !button_label.is_empty() {
+        if link_url.is_some() {
+            match &event {
+                Event::End(TagEnd::Link) => {
+                    let url = link_url.take().unwrap();
+                    let title = link_title.take();
+
+                    // Concatenate all text events to check for button syntax
+                    let full_text: String = link_events
+                        .iter()
+                        .filter_map(|e| match e {
+                            Event::Text(t) => Some(t.as_ref()),
+                            Event::Code(t) => Some(t.as_ref()),
+                            _ => None,
+                        })
+                        .collect();
+
+                    if let Some((btn_type, label)) = button::parse_button(&full_text) {
+                        // Emit table-based button
                         html.push_str(&button::render_button_html(
-                            &button_label,
+                            label,
                             &url,
                             btn_type,
                             brand_color,
                         ));
+                    } else {
+                        // Flush as normal link: re-wrap in Start(Link) + events + End(Link)
+                        let start = Event::Start(Tag::Link {
+                            link_type: pulldown_cmark::LinkType::Inline,
+                            dest_url: CowStr::from(url),
+                            title: title.unwrap_or(CowStr::from("")),
+                            id: CowStr::from(""),
+                        });
+                        let end = Event::End(TagEnd::Link);
+                        let full_events: Vec<Event> = std::iter::once(start)
+                            .chain(link_events.drain(..))
+                            .chain(std::iter::once(end))
+                            .collect();
+                        pulldown_cmark::html::push_html(&mut html, full_events.into_iter());
                     }
-                    button_label.clear();
-                } else {
-                    html.push_str("</a>");
+
+                    link_events.clear();
+                }
+                _ => {
+                    link_events.push(event);
                 }
             }
-            _ if in_button_link.is_some() => {
-                // Inside a link that wasn't identified as a button yet — flush as normal
-                if let Some((_btn_type, url)) = in_button_link.take() {
-                    html.push_str(&format!("<a href=\"{url}\">"));
+        } else {
+            match event {
+                Event::Start(Tag::Link {
+                    dest_url, title, ..
+                }) => {
+                    link_url = Some(dest_url.to_string());
+                    link_title = Some(title);
+                    link_events.clear();
+                }
+                _ => {
                     pulldown_cmark::html::push_html(&mut html, std::iter::once(event));
                 }
-            }
-            _ => {
-                pulldown_cmark::html::push_html(&mut html, std::iter::once(event));
             }
         }
     }
@@ -1303,7 +1327,9 @@ mod tests {
     #[test]
     fn apply_layout_no_footer_when_var_absent() {
         let result = apply_layout(BASE_LAYOUT, "<p>Hello</p>", &HashMap::new());
-        assert!(!result.contains("email-footer"));
+        // The CSS rule .email-footer is always in <style>, but the actual
+        // <td class="email-footer"> element should not be rendered
+        assert!(!result.contains(r#"class="email-footer""#));
     }
 
     #[test]
@@ -1932,9 +1958,12 @@ impl Mailer {
             .and_then(|s| s.reply_to.as_deref())
             .or(self.config.default_reply_to.as_deref());
 
-        let from = format!("{from_name} <{from_email}>")
-            .parse()
-            .map_err(|e| Error::bad_request(format!("invalid from address: {e}")))?;
+        let from = if from_name.is_empty() {
+            from_email.parse()
+        } else {
+            format!("{from_name} <{from_email}>").parse()
+        }
+        .map_err(|e| Error::bad_request(format!("invalid from address: {e}")))?;
 
         let mut builder = Message::builder()
             .from(from)

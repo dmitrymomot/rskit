@@ -57,7 +57,7 @@ lettre = { version = "0.11", optional = true, default-features = false, features
     "smtp-transport", "tokio1", "builder", "hostname", "tokio1-rustls"
 ] }
 pulldown-cmark = { version = "0.12", optional = true }
-lru = { version = "0.12", optional = true }
+lru = { version = "0.16", optional = true }
 
 [features]
 email = ["dep:lettre", "dep:pulldown-cmark", "dep:lru"]
