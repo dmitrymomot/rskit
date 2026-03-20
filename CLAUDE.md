@@ -34,7 +34,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - SQLite is the only DB backend — no feature flags for DB selection
 - sha2 0.10, ipnet 2
 - axum-extra 0.12 (cookie-signed, cookie-private, multipart), tower_governor 0.8, regex 1, nanohtml2text 0.2
-- Auth deps (behind `auth` feature): argon2 0.5, hmac 0.12, sha1 0.10, data-encoding 2, subtle 2, hyper-rustls 0.27, hyper-util 0.1, http-body-util 0.1
+- Auth deps (behind `auth` feature): argon2 0.5, hmac 0.12, sha1 0.10, data-encoding 2, subtle 2, hyper 1, hyper-rustls 0.27, hyper-util 0.1, http-body-util 0.1
 - Future deps: opendal 0.55 (`services-s3`)
 
 ## Commands
@@ -119,3 +119,5 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - The `Key` must be registered in the service registry for `OAuthState` extractor to work: `registry.add(key.clone())`
 - OAuth state cookie is always named `_oauth_state` — provider name is embedded in the signed payload
 - TOTP uses HMAC-SHA1 only (not SHA256/SHA512) — SHA1 is what authenticator apps expect
+- In-crate `#[cfg(test)] mod tests` blocks run with `cargo test --lib -- module::tests`, not `cargo test --test`
+- Multi-task scaffolding: `todo!()` stubs need `#[allow(dead_code)]` to pass clippy; remove the annotations when implementing the real code
