@@ -168,6 +168,8 @@ async fn handler(render: Renderer) -> Result<Html<String>> {
 
 Handler values override middleware values on key conflict.
 
+**Renderer is `Clone + Send + Sync`** — holds `Arc<Engine>` internally and `TemplateContext` (which is `Clone`). Safe to move into closures (SSE streams) or clone for multiple uses.
+
 ## TemplateContext & Middleware
 
 `TemplateContext` lives in request extensions. Middleware layers populate it, `Renderer` consumes it.
@@ -311,14 +313,14 @@ enum Entry {
 
 ```rust
 pub trait LocaleResolver: Send + Sync {
-    fn resolve(&self, req: &RequestParts) -> Option<String>;
+    fn resolve(&self, parts: &http::request::Parts) -> Option<String>;
 }
 ```
 
 **Built-in resolvers:**
 - `QueryParamResolver` — reads `?lang=uk` (param name from config)
 - `CookieResolver` — reads language cookie (name from config)
-- `SessionResolver` — reads `session.get::<String>("locale")`; returns `None` gracefully if session middleware not present (no `SessionState` in extensions)
+- `SessionResolver` — accesses `Arc<SessionState>` from `parts.extensions` directly (same crate, `pub(crate)` access), reads `"locale"` key from session data. Returns `None` gracefully if session middleware not present (no `SessionState` in extensions)
 - `AcceptLanguageResolver` — parses `Accept-Language` header with weight-based selection
 
 **Default chain:** Query → Cookie → Session → Accept-Language → default locale
@@ -343,7 +345,7 @@ Engine::builder()
     .build()?;
 ```
 
-**Locale middleware** — runs the resolver chain, stores `ResolvedLocale(String)` in request extensions. `TemplateContextLayer` reads it and injects as `locale` into `TemplateContext`.
+**Locale resolution is built into `TemplateContextLayer`** — no separate locale middleware. `TemplateContextLayer` pulls the locale resolver chain from `Engine` (in state), runs it against the request, and injects the resolved `locale` directly into `TemplateContext`. This avoids middleware ordering issues and keeps wiring simple — one layer does everything.
 
 ## Static Files
 
@@ -365,7 +367,7 @@ Engine::builder()
 
 ### Wiring
 
-`engine.static_service()` returns a `Router` that self-mounts at the configured `static_url_prefix`. Use `.merge()`:
+`engine.static_service()` returns a `Router` that internally uses `nest_service` at the configured `static_url_prefix`. Use `.merge()` to combine it with the app router:
 
 ```rust
 let app = Router::new()
@@ -404,7 +406,7 @@ The `.embedded_static()` method is only available behind the `static-embed` feat
 cargo run --features static-embed    # test embedded mode locally
 ```
 
-Set `embed: true` in config to activate. Without the feature flag, the config field is ignored.
+Set `embed: true` in config to activate. Without the feature flag, the config field is ignored. `Engine::build()` logs `tracing::warn!` if `embed: true` but `static-embed` feature is not compiled in.
 
 ## HxRequest Extractor
 
@@ -431,6 +433,10 @@ async fn api_items(hx: HxRequest) -> Result<Response> {
 ```
 
 Also used internally by `Renderer` for `.html_htmx()` and `.is_htmx()`.
+
+## Template Inheritance
+
+MiniJinja's built-in template inheritance (`{% extends "base.html" %}`, `{% block content %}`) is available out of the box. No special configuration needed. Works naturally with `html_htmx()` — full-page templates typically extend a layout, while HTMX partials are standalone fragments.
 
 ## Error Handling
 
