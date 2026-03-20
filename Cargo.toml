@@ -8,11 +8,13 @@ repository = "https://github.com/dmitrymomot/modo"
 
 [features]
 default = []
-full = ["templates", "sse", "auth", "sentry"]
+full = ["templates", "sse", "auth", "sentry", "email"]
 sentry = ["dep:sentry", "dep:sentry-tracing"]
 templates = []
 sse = []
 auth = ["dep:argon2", "dep:hmac", "dep:sha1", "dep:data-encoding", "dep:subtle", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
+email = ["dep:lettre", "dep:pulldown-cmark", "dep:lru"]
+email-test = ["email"]
 
 [dependencies]
 # Web
@@ -68,6 +70,11 @@ hyper = { version = "1", optional = true }
 hyper-rustls = { version = "0.27", optional = true, default-features = false, features = ["ring", "http1", "tls12", "logging", "webpki-roots"] }
 hyper-util = { version = "0.1", optional = true, features = ["client-legacy", "http1", "tokio"] }
 http-body-util = { version = "0.1", optional = true }
+
+# Email (optional, gated by "email" feature)
+lettre = { version = "0.11", optional = true, default-features = false, features = ["smtp-transport", "tokio1", "builder", "hostname", "tokio1-rustls", "ring", "webpki-roots"] }
+pulldown-cmark = { version = "0.12", optional = true }
+lru = { version = "0.16", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
