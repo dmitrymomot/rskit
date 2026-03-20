@@ -181,3 +181,72 @@ fn render_template_not_found() {
     let result = mailer.render(&email);
     assert!(result.is_err());
 }
+
+#[test]
+fn render_with_cache_enabled() {
+    let dir = tempfile::tempdir().unwrap();
+    write_template(
+        dir.path(),
+        "en",
+        "cached",
+        "---\nsubject: Cached!\n---\nBody",
+    );
+
+    let config = EmailConfig {
+        templates_path: dir.path().to_str().unwrap().into(),
+        layouts_path: dir.path().join("layouts").to_str().unwrap().into(),
+        default_from_name: "TestApp".into(),
+        default_from_email: "noreply@test.com".into(),
+        default_reply_to: None,
+        default_locale: "en".into(),
+        cache_templates: true,
+        template_cache_size: 10,
+        ..EmailConfig::default()
+    };
+    let stub = lettre::transport::stub::AsyncStubTransport::new_ok();
+    let mailer = Mailer::with_stub_transport(&config, stub).unwrap();
+
+    let email = SendEmail::new("cached", "user@example.com");
+
+    // First render — cache miss
+    let r1 = mailer.render(&email).unwrap();
+    assert_eq!(r1.subject, "Cached!");
+
+    // Second render — cache hit, same result
+    let r2 = mailer.render(&email).unwrap();
+    assert_eq!(r2.subject, "Cached!");
+    assert_eq!(r1.html, r2.html);
+}
+
+#[tokio::test]
+async fn send_with_custom_sender_profile() {
+    use modo::email::SenderProfile;
+
+    let dir = tempfile::tempdir().unwrap();
+    write_template(
+        dir.path(),
+        "en",
+        "notify",
+        "---\nsubject: Notice\n---\nHello",
+    );
+
+    let config = test_config(dir.path());
+    let stub = lettre::transport::stub::AsyncStubTransport::new_ok();
+    let mailer = Mailer::with_stub_transport(&config, stub.clone()).unwrap();
+
+    mailer
+        .send(
+            SendEmail::new("notify", "user@example.com").sender(SenderProfile {
+                from_name: "Custom".into(),
+                from_email: "custom@example.com".into(),
+                reply_to: Some("reply@example.com".into()),
+            }),
+        )
+        .await
+        .unwrap();
+
+    let msgs = stub.messages().await;
+    assert_eq!(msgs.len(), 1);
+    let (_envelope, raw) = &msgs[0];
+    assert!(raw.contains("custom@example.com"));
+}
