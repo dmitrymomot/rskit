@@ -6,7 +6,7 @@
 
 **Architecture:** `Engine` is the shared core (MiniJinja env + i18n store + static hash map). `Renderer` is the request-scoped extractor bundling Engine + TemplateContext + HTMX state. `TemplateContextLayer` middleware populates context (current_url, is_htmx, request_id, locale). Locale resolution is pluggable via `LocaleResolver` trait with a default chain.
 
-**Tech Stack:** minijinja (with loader), minijinja-contrib, intl_pluralrules, sha2 (already in deps), tower-http (ServeDir, already in deps)
+**Tech Stack:** minijinja (with loader), minijinja-contrib, intl_pluralrules, sha2 (already in deps), tower-http (ServeDir — requires adding `fs` feature)
 
 **Spec:** `docs/superpowers/specs/2026-03-21-modo-v2-template-design.md`
 
@@ -44,6 +44,11 @@ Add to `[dependencies]`:
 minijinja = { version = "2", optional = true, features = ["loader"] }
 minijinja-contrib = { version = "2", optional = true }
 intl_pluralrules = { version = "7", optional = true }
+```
+
+Add `"fs"` to the existing `tower-http` features (required for `ServeDir`):
+```toml
+tower-http = { version = "0.6", features = ["compression-full", "catch-panic", "trace", "cors", "request-id", "set-header", "sensitive-headers", "fs"] }
 ```
 
 Update `[features]`:
@@ -713,6 +718,25 @@ mod tests {
         let parts = parts_from_request(req);
         assert_eq!(resolver.resolve(&parts), None);
     }
+
+    #[test]
+    fn accept_language_normalizes_region_tags() {
+        let resolver = AcceptLanguageResolver::new(&["en"]);
+        let req = Request::builder()
+            .header("accept-language", "en-US;q=0.9")
+            .body(())
+            .unwrap();
+        let parts = parts_from_request(req);
+        assert_eq!(resolver.resolve(&parts), Some("en".into()));
+    }
+
+    #[test]
+    fn session_resolver_returns_none_without_session() {
+        let resolver = SessionResolver;
+        let req = Request::builder().body(()).unwrap();
+        let parts = parts_from_request(req);
+        assert_eq!(resolver.resolve(&parts), None);
+    }
 }
 ```
 
@@ -738,7 +762,7 @@ Implement 4 resolvers:
 
 1. **`QueryParamResolver`** — parses URI query string, finds the configured param name
 2. **`CookieResolver`** — parses `Cookie` header manually (no axum extractors), finds the configured cookie name
-3. **`SessionResolver`** — reads `Arc<crate::session::SessionState>` from `parts.extensions`, accesses session data to read `"locale"` key. Returns `None` if no session middleware.
+3. **`SessionResolver`** — reads `Arc<crate::session::SessionState>` from `parts.extensions` (same crate, `pub(crate)` access). Locking protocol: acquire `Mutex` on `SessionState.current`, read `"locale"` from `SessionData.data` (a `serde_json::Value::Object`), extract value into `String`, drop the guard, return. The `resolve()` method is synchronous so holding the `MutexGuard` is safe (no `.await`). Returns `None` if no session middleware or no `"locale"` key in session.
 4. **`AcceptLanguageResolver`** — parses `Accept-Language` header, sorts by quality weight, matches against available locales (passed at construction). Normalizes language tags (strips region: `"en-US"` → `"en"`).
 
 Also implement:
@@ -883,7 +907,7 @@ In `src/template/static_files.rs`:
 3. `make_static_url_function(prefix: String, hashes: HashMap<String, String>)` — returns closure for MiniJinja `add_function`
 4. `static_service(static_path: &str, prefix: &str) -> Router` — creates `Router::new().nest_service(prefix, ServeDir::new(static_path))` with cache header middleware (no-cache in debug, immutable in release)
 
-Use `sha2::Sha256` (already in deps) for hashing. Use `walkdir` or manual `std::fs::read_dir` recursion.
+Use `sha2::Sha256` (already in deps) for hashing. Use manual `std::fs::read_dir` recursion (no `walkdir` dependency needed — the directory structure is typically shallow).
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -1112,7 +1136,8 @@ mod tests {
     use tower::ServiceExt;
     use crate::template::{TemplateContext, TemplateConfig};
 
-    fn test_engine() -> Arc<Engine> {
+    // Return TempDir alongside Engine so files persist for the test's lifetime
+    fn test_engine() -> (tempfile::TempDir, Engine) {
         let dir = tempfile::tempdir().unwrap();
         let tpl_dir = dir.path().join("templates");
         let locales_dir = dir.path().join("locales/en");
@@ -1129,25 +1154,29 @@ mod tests {
             ..TemplateConfig::default()
         };
 
-        // Need to leak the tempdir so files persist
-        let dir = Box::leak(Box::new(dir));
-        let _ = dir;
-
-        Arc::new(Engine::builder().config(config).build().unwrap())
+        let engine = Engine::builder().config(config).build().unwrap();
+        (dir, engine)
     }
 
-    async fn extract_context(req: Request<Body>) -> (StatusCode, String) {
+    // Handlers must be module-level async fn (not closures) per CLAUDE.md gotcha
+    async fn extract_url(req: Request<Body>) -> (StatusCode, String) {
         let ctx = req.extensions().get::<TemplateContext>().unwrap();
         let url = ctx.get("current_url").map(|v| v.to_string()).unwrap_or_default();
         (StatusCode::OK, url)
     }
 
+    async fn extract_is_htmx(req: Request<Body>) -> (StatusCode, String) {
+        let ctx = req.extensions().get::<TemplateContext>().unwrap();
+        let is_htmx = ctx.get("is_htmx").map(|v| v.to_string()).unwrap_or_default();
+        (StatusCode::OK, is_htmx)
+    }
+
     #[tokio::test]
     async fn injects_current_url() {
-        let engine = test_engine();
+        let (_dir, engine) = test_engine();
         let app = Router::new()
-            .route("/test", get(extract_context))
-            .layer(TemplateContextLayer::new(engine));
+            .route("/test", get(extract_url))
+            .layer(TemplateContextLayer::new(engine));  // Engine is Clone (wraps Arc), no double-Arc
 
         let req = Request::builder()
             .uri("/test")
@@ -1160,13 +1189,9 @@ mod tests {
 
     #[tokio::test]
     async fn injects_is_htmx_false() {
-        let engine = test_engine();
+        let (_dir, engine) = test_engine();
         let app = Router::new()
-            .route("/test", get(|req: Request<Body>| async move {
-                let ctx = req.extensions().get::<TemplateContext>().unwrap();
-                let is_htmx = ctx.get("is_htmx").map(|v| v.to_string()).unwrap_or_default();
-                (StatusCode::OK, is_htmx)
-            }))
+            .route("/test", get(extract_is_htmx))
             .layer(TemplateContextLayer::new(engine));
 
         let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
@@ -1176,7 +1201,7 @@ mod tests {
 }
 ```
 
-Note: middleware tests may need adjustment based on how axum handles handler extraction from `Request<Body>` vs extractors. The implementer should adapt the test approach to read extensions via an extractor or directly.
+Note: handlers are defined as module-level `async fn` (not closures inside `#[tokio::test]`) per CLAUDE.md gotcha about axum `Handler` bounds.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -1189,7 +1214,7 @@ In `src/template/middleware.rs`:
 
 Follows the tower `Layer<S>` + `Service<Request>` pattern from `src/session/middleware.rs`:
 
-1. `TemplateContextLayer` — holds `Arc<Engine>`. Implements `Layer<S>`.
+1. `TemplateContextLayer` — holds `Engine` directly (not `Arc<Engine>` — `Engine` wraps `Arc<EngineInner>` internally, so it's already cheaply cloneable). Implements `Layer<S>`.
 2. `TemplateContextMiddleware<S>` — implements `Service<Request<ReqBody>>`.
 3. On each request:
    - Create `TemplateContext::default()`
@@ -1237,7 +1262,7 @@ mod tests {
     use crate::template::{TemplateConfig, TemplateContext};
     use minijinja::context;
 
-    fn setup_engine(dir: &std::path::Path) -> Arc<Engine> {
+    fn setup_engine(dir: &std::path::Path) -> Engine {
         let tpl_dir = dir.join("templates");
         let locales_dir = dir.join("locales/en");
         let static_dir = dir.join("static");
@@ -1255,7 +1280,7 @@ mod tests {
             ..TemplateConfig::default()
         };
 
-        Arc::new(Engine::builder().config(config).build().unwrap())
+        Engine::builder().config(config).build().unwrap()
     }
 
     #[test]
@@ -1549,10 +1574,22 @@ use modo::template::{
     context, Engine, HxRequest, Renderer, TemplateConfig, TemplateContextLayer,
 };
 use modo::service::Registry;
-use std::sync::Arc;
 use tower::ServiceExt;
 
-fn setup(dir: &std::path::Path) -> (Arc<Engine>, Router) {
+// Handlers must be module-level async fn per CLAUDE.md gotcha
+async fn home_handler(render: Renderer) -> modo::Result<axum::response::Html<String>> {
+    render.html("home.html", context! { name => "World" })
+}
+
+async fn partial_handler(render: Renderer) -> modo::Result<axum::response::Html<String>> {
+    render.html_partial("home.html", "partial.html", context! { name => "World" })
+}
+
+async fn i18n_handler(render: Renderer) -> modo::Result<axum::response::Html<String>> {
+    render.html("i18n.html", context! { name => "Dmytro" })
+}
+
+fn setup(dir: &std::path::Path) -> Router {
     // Create template files
     let tpl_dir = dir.join("templates");
     std::fs::create_dir_all(&tpl_dir).unwrap();
@@ -1585,38 +1622,23 @@ fn setup(dir: &std::path::Path) -> (Arc<Engine>, Router) {
         ..TemplateConfig::default()
     };
     let engine = Engine::builder().config(config).build().unwrap();
-    let engine = Arc::new(engine);
 
-    // Build router
+    // Build router — Engine is Clone (wraps Arc internally), no double-Arc needed
     let mut registry = Registry::new();
-    registry.add((*engine).clone());
+    registry.add(engine.clone());
 
-    async fn home_handler(render: Renderer) -> modo::Result<axum::response::Html<String>> {
-        render.html("home.html", context! { name => "World" })
-    }
-
-    async fn partial_handler(render: Renderer) -> modo::Result<axum::response::Html<String>> {
-        render.html_partial("home.html", "partial.html", context! { name => "World" })
-    }
-
-    async fn i18n_handler(render: Renderer) -> modo::Result<axum::response::Html<String>> {
-        render.html("i18n.html", context! { name => "Dmytro" })
-    }
-
-    let router = Router::new()
+    Router::new()
         .route("/", get(home_handler))
         .route("/partial", get(partial_handler))
         .route("/i18n", get(i18n_handler))
-        .layer(TemplateContextLayer::new(engine.clone()))
-        .with_state(registry.into_state());
-
-    (engine, router)
+        .layer(TemplateContextLayer::new(engine))
+        .with_state(registry.into_state())
 }
 
 #[tokio::test]
 async fn renders_template() {
     let dir = tempfile::tempdir().unwrap();
-    let (_, app) = setup(dir.path());
+    let app = setup(dir.path());
 
     let resp = app
         .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
@@ -1631,7 +1653,7 @@ async fn renders_template() {
 #[tokio::test]
 async fn html_partial_returns_full_page_for_normal_request() {
     let dir = tempfile::tempdir().unwrap();
-    let (_, app) = setup(dir.path());
+    let app = setup(dir.path());
 
     let resp = app
         .oneshot(Request::builder().uri("/partial").body(Body::empty()).unwrap())
@@ -1645,7 +1667,7 @@ async fn html_partial_returns_full_page_for_normal_request() {
 #[tokio::test]
 async fn html_partial_returns_fragment_for_htmx_request() {
     let dir = tempfile::tempdir().unwrap();
-    let (_, app) = setup(dir.path());
+    let app = setup(dir.path());
 
     let resp = app
         .oneshot(
@@ -1665,7 +1687,7 @@ async fn html_partial_returns_fragment_for_htmx_request() {
 #[tokio::test]
 async fn i18n_renders_with_default_locale() {
     let dir = tempfile::tempdir().unwrap();
-    let (_, app) = setup(dir.path());
+    let app = setup(dir.path());
 
     let resp = app
         .oneshot(Request::builder().uri("/i18n").body(Body::empty()).unwrap())
@@ -1679,7 +1701,7 @@ async fn i18n_renders_with_default_locale() {
 #[tokio::test]
 async fn i18n_resolves_locale_from_query_param() {
     let dir = tempfile::tempdir().unwrap();
-    let (_, app) = setup(dir.path());
+    let app = setup(dir.path());
 
     let resp = app
         .oneshot(

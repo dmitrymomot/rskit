@@ -436,7 +436,7 @@ MiniJinja's built-in template inheritance (`{% extends "base.html" %}`, `{% bloc
 | Template not found | 500 Internal | `modo::Error::internal()` |
 | Render error (syntax, missing var in strict mode) | 500 Internal | `modo::Error::internal()` |
 | Translation file parse error | — | Panic at `Engine::build()` startup |
-| Locale directory not found | — | Panic at `Engine::build()` startup |
+| Locale directory not found | — | i18n skipped (templates work without i18n); `t()` not registered |
 | Missing translation key at runtime | — | Log warning, return key as fallback |
 | Static file not found | 404 Not Found | Handled by `ServeDir` / embedded service |
 
