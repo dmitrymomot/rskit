@@ -37,7 +37,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Auth deps (behind `auth` feature): argon2 0.5, hmac 0.12, sha1 0.10, data-encoding 2, subtle 2, hyper 1, hyper-rustls 0.27, hyper-util 0.1, http-body-util 0.1
 - tokio-util 0.7 (CancellationToken for background loop shutdown)
 - croner 2 (cron expression parsing)
-- Template deps (behind `templates` feature): minijinja 2 (with loader), minijinja-contrib 2, intl_pluralrules 7
+- Template deps (behind `templates` feature): minijinja 2 (with loader), minijinja-contrib 2, intl_pluralrules 7, unic-langid 0.9
 - tower-http `fs` feature required for `ServeDir` static file serving
 - Future deps: opendal 0.55 (`services-s3`)
 
@@ -76,7 +76,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 4 (Auth + OAuth):** password hashing, TOTP, OTP, backup codes, Google/GitHub OAuth — DONE
 - **Plan 5 (Job + Cron):** DB-backed job queue, worker, enqueuer, in-memory cron scheduler — DONE
 - **Plan 6 (Email):** SMTP transport, markdown templates with YAML frontmatter, layout engine
-- **Plan 7 (Template):** MiniJinja engine, i18n, static files
+- **Plan 7 (Template):** MiniJinja engine, i18n, static files — DONE
 - **Plan 8 (SSE):** broadcast SSE
 - **Plan 9 (Tenant):** tenant resolution
 - **Plan 10 (Upload):** S3-compatible storage via OpenDAL, presigned URLs
@@ -145,3 +145,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `Engine` wraps `Arc<EngineInner>` — never double-wrap in `Arc<Engine>`. Layers and middleware hold `Engine` directly (it's cheaply cloneable).
 - `std::sync::RwLock` (not tokio) for MiniJinja `Environment` — all MiniJinja ops are synchronous; never hold the guard across `.await`
 - In test helpers, return `tempfile::TempDir` alongside the constructed value so files persist for the test's lifetime — don't `Box::leak` or let it drop early
+- MiniJinja v2 API: `Function` trait is in `minijinja::functions::Function`; `FunctionResult` and `FunctionArgs` are in `minijinja::value`
+- MiniJinja auto-escaping: functions returning URLs/HTML must use `minijinja::Value::from_safe_string()` — bare strings get `/` escaped to `&#x2f;`
+- MiniJinja `add_function`/`add_filter` consume `F` by move — builder storing deferred registrations must use `Box<dyn FnOnce>`, not `Box<dyn Fn>`
+- `intl_pluralrules`: `select()` returns `Result<PluralCategory, &str>`, not bare `PluralCategory`; requires `unic-langid` as explicit dep for `LanguageIdentifier`
+- `SessionState` re-export from `session/mod.rs` is gated behind `#[cfg(feature = "templates")]` — only the template locale resolver needs it
