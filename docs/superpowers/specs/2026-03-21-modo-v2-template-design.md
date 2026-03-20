@@ -2,6 +2,8 @@
 
 MiniJinja template engine, i18n, and static file serving for modo v2.
 
+> **Note:** This spec supersedes the "Templates, i18n, Static Files" section (lines 539-621) of the main design spec (`2026-03-19-modo-v2-design.md`). Where APIs differ (e.g., `Renderer` extractor instead of `Service<Engine>` rendering, config-driven builder instead of per-field builder methods), this document is authoritative.
+
 ## Design Decisions
 
 - **Email stays independent** — Plan 6 email uses its own simple `{{var}}` substitution. No coupling with the template engine.
@@ -37,8 +39,16 @@ src/template/
 - `minijinja` with `loader` feature — template engine
 - `minijinja-contrib` — common filters
 
-**Behind `static-embed` feature:**
+**Behind `static-embed` feature (implies `templates`):**
 - `include_dir` — compile-time directory embedding
+
+**Cargo.toml feature flags:**
+```toml
+templates = ["dep:minijinja", "dep:minijinja-contrib"]
+static-embed = ["templates", "dep:include_dir"]
+```
+
+Note: re-exporting `context!` from `minijinja` makes `minijinja` a public dependency. Version bumps to `minijinja` are semver-relevant for modo.
 
 ## Config
 
@@ -73,7 +83,9 @@ All fields have sensible defaults. Added to `modo::Config` behind `#[cfg(feature
 
 ## Engine & Builder
 
-`Engine` is the shared core — holds MiniJinja `Environment<'static>` behind `RwLock`, i18n `TranslationStore`, and static file config. Created via builder, registered in service registry.
+`Engine` is the shared core — holds MiniJinja `Environment<'static>` behind `std::sync::RwLock`, i18n `TranslationStore`, and static file config. Created via builder, registered in service registry.
+
+**Lock protocol:** `std::sync::RwLock` (not tokio) because all MiniJinja operations are synchronous. Write lock is only held briefly for clearing the template cache in dev mode (not for re-parsing). Read locks are used for rendering. The guard is never held across `.await`.
 
 ```rust
 let engine = Engine::builder()
@@ -195,16 +207,27 @@ async fn inject_user(
 }
 ```
 
+**TemplateContext struct:**
+
+```rust
+#[derive(Debug, Clone, Default)]
+pub struct TemplateContext {
+    values: BTreeMap<String, minijinja::Value>,
+}
+```
+
+`Clone` is required because it lives in request extensions.
+
 **TemplateContext API:**
 - `ctx.insert(key, value)` — add/overwrite a value (public, for user middleware)
 - `ctx.get(key) -> Option<&Value>` — read a value (public, for user middleware)
-- `ctx.merge(context) -> Value` — combine with handler context (`pub(crate)`, used by Renderer)
+- `ctx.merge(context) -> Value` — produces a new `minijinja::Value` combining middleware context with handler context, without mutating the original (`pub(crate)`, used by Renderer)
 
 ## i18n — TranslationStore & Locale Resolution
 
 ### Translation Files
 
-YAML files, directory-per-locale, namespace derived from filename:
+YAML files, directory-per-locale, namespace derived from filename. Keys are constructed as `{filename}.{yaml.path}` — e.g., `auth.yaml` containing `login: { title: "Log In" }` produces key `auth.login.title`.
 
 ```
 locales/
@@ -214,6 +237,13 @@ locales/
   uk/
     common.yaml
     auth.yaml
+```
+
+Example `auth.yaml`:
+```yaml
+login:
+  title: "Log In"
+  submit: "Submit"
 ```
 
 ### Plural Support
@@ -256,7 +286,7 @@ Behavior:
 1. Look up key in current locale
 2. If missing, fall back to default locale
 3. If still missing, log warning, return the key itself
-4. If `count` kwarg present and entry is plural, select `zero`/`one`/`other` form
+4. If `count` kwarg present and entry is plural: coerce `count` to `i64` — `0` selects `zero`, `1` selects `one`, everything else (including negatives) selects `other`. If coercion fails, use `other`.
 5. Apply `{key}` interpolation with all kwargs
 
 ### TranslationStore
@@ -288,7 +318,7 @@ pub trait LocaleResolver: Send + Sync {
 **Built-in resolvers:**
 - `QueryParamResolver` — reads `?lang=uk` (param name from config)
 - `CookieResolver` — reads language cookie (name from config)
-- `SessionResolver` — reads from session extensions (skipped if session not configured)
+- `SessionResolver` — reads `session.get::<String>("locale")`; returns `None` gracefully if session middleware not present (no `SessionState` in extensions)
 - `AcceptLanguageResolver` — parses `Accept-Language` header with weight-based selection
 
 **Default chain:** Query → Cookie → Session → Accept-Language → default locale
@@ -306,9 +336,9 @@ Engine::builder()
 Engine::builder()
     .config(config.template)
     .locale_chain(vec![
-        Box::new(QueryParamResolver::new("lang")),
-        Box::new(MyCustomResolver),
-        Box::new(CookieResolver::new("lang")),
+        Arc::new(QueryParamResolver::new("lang")),
+        Arc::new(MyCustomResolver),
+        Arc::new(CookieResolver::new("lang")),
     ])
     .build()?;
 ```
@@ -324,12 +354,14 @@ Engine::builder()
 - `Cache-Control: no-cache`
 - No ETag
 - `static_url("css/app.css")` → `/assets/css/app.css?v=<unix_timestamp>`
+- Version is server startup timestamp (computed once at `Engine::build()`) — consistent with `no-cache` behavior, just a cache-buster
 
 **Embedded mode (`static-embed` feature + `embed: true` in config):**
 - Files compiled into binary via `include_dir!`
 - `Cache-Control: max-age=31536000, immutable`
-- ETag from content hash (SHA-256, truncated)
-- `static_url("css/app.css")` → `/assets/css/app.css?v=<content_hash>`
+- ETag from content hash (SHA-256, first 8 hex chars)
+- `static_url("css/app.css")` → `/assets/css/app.css?v=a3f2b1c4`
+- Version hashes computed once at `Engine::build()` and cached in a `HashMap<String, String>` (path → hash)
 
 ### Wiring
 
@@ -348,6 +380,23 @@ let app = Router::new()
 <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
 <script src="{{ static_url('js/app.js') }}"></script>
 ```
+
+### Embedded Mode Wiring
+
+`include_dir!` must be invoked at the user's crate (not inside the library). Users pass the embedded directory to the builder:
+
+```rust
+use include_dir::{include_dir, Dir};
+
+static STATIC_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/static");
+
+let engine = Engine::builder()
+    .config(config.template)
+    .embedded_static(&STATIC_DIR)
+    .build()?;
+```
+
+The `.embedded_static()` method is only available behind the `static-embed` feature flag. When provided and `embed: true` in config, the engine serves from the embedded directory instead of the filesystem.
 
 ### Testing Embedded Mode
 
@@ -387,6 +436,7 @@ Also used internally by `Renderer` for `.html_htmx()` and `.is_htmx()`.
 
 | Error case | Status | Behavior |
 |---|---|---|
+| TemplateContext missing (middleware not applied) | 500 Internal | `modo::Error::internal("Renderer requires TemplateContextLayer middleware")` |
 | Template not found | 500 Internal | `modo::Error::internal()` |
 | Render error (syntax, missing var in strict mode) | 500 Internal | `modo::Error::internal()` |
 | Translation file parse error | — | Panic at `Engine::build()` startup |
