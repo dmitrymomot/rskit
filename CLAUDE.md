@@ -69,7 +69,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 1 (Foundation):** error, id, config, service, runtime, db, tracing, server — DONE
 - **Plan 2 (Web Core):** sanitize, validate, extractors, cookie, middleware (9 layers), Sentry — DONE
 - **Plan 3 (Session):** DB-backed sessions with token hashing, fingerprinting, middleware lifecycle — DONE
-- **Plan 4 (Auth + OAuth):** password hashing, TOTP, OTP, backup codes, Google/GitHub OAuth — spec + plan written
+- **Plan 4 (Auth + OAuth):** password hashing, TOTP, OTP, backup codes, Google/GitHub OAuth — DONE
 - **Plan 5 (Job + Cron):** DB-backed job queue, worker, enqueuer, in-memory cron scheduler
 - **Plan 6 (Email):** SMTP transport, markdown templates with YAML frontmatter, layout engine
 - **Plan 7 (Template + SSE + Tenant):** MiniJinja engine, i18n, static files, broadcast SSE, tenant resolution
@@ -114,3 +114,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Transitive deps (e.g., `http-body-util` via axum) must still be declared in `Cargo.toml` to use them directly
 - `pub(crate)` items cannot be tested from integration tests (`tests/*.rs`) — use `#[cfg(test)] mod tests` inside the source file instead
 - OAuthProvider trait uses RPITIT (`-> impl Future + Send`) — not object-safe; providers must be concrete types (`Service<Google>`, not `Arc<dyn OAuthProvider>`)
+- `password::hash()` and `password::verify()` are `async` — they use `spawn_blocking` internally because Argon2id is CPU-intensive
+- OTP and backup code `verify()` use constant-time comparison via `subtle::ConstantTimeEq`
+- The `Key` must be registered in the service registry for `OAuthState` extractor to work: `registry.add(key.clone())`
+- OAuth state cookie is always named `_oauth_state` — provider name is embedded in the signed payload
+- TOTP uses HMAC-SHA1 only (not SHA256/SHA512) — SHA1 is what authenticator apps expect
