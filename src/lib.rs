@@ -23,6 +23,12 @@ pub use sanitize::Sanitize;
 pub use session::{Session, SessionConfig, SessionData, SessionToken};
 pub use validate::{Validate, ValidationError, Validator};
 
+#[cfg(feature = "auth")]
+pub use auth::oauth::{
+    AuthorizationRequest, CallbackParams, GitHub, Google, OAuthConfig, OAuthProvider,
+    OAuthProviderConfig, OAuthState, UserProfile,
+};
+
 // Re-exports for user convenience
 pub use axum;
 pub use serde;

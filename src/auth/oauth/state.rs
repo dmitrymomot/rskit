@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use axum::extract::{FromRef, FromRequestParts};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::Key;

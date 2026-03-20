@@ -6,7 +6,6 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use serde::de::DeserializeOwned;
 
-#[allow(dead_code)]
 pub(crate) async fn post_form<T: DeserializeOwned>(
     url: &str,
     params: &[(&str, &str)],
@@ -57,7 +56,6 @@ pub(crate) async fn post_form<T: DeserializeOwned>(
         .map_err(|e| crate::Error::internal(format!("failed to parse response JSON: {e}")))
 }
 
-#[allow(dead_code)]
 pub(crate) async fn get_json<T: DeserializeOwned>(url: &str, token: &str) -> crate::Result<T> {
     let uri: Uri = url
         .parse()
