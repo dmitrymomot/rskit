@@ -148,7 +148,6 @@ pub struct Worker {
     poll_handle: JoinHandle<()>,
     reaper_handle: JoinHandle<()>,
     cleanup_handle: Option<JoinHandle<()>>,
-    #[allow(dead_code)]
     drain_timeout: Duration,
 }
 
@@ -172,11 +171,14 @@ impl Worker {
 impl crate::runtime::Task for Worker {
     async fn shutdown(self) -> Result<()> {
         self.cancel.cancel();
-        let _ = self.poll_handle.await;
-        let _ = self.reaper_handle.await;
-        if let Some(h) = self.cleanup_handle {
-            let _ = h.await;
-        }
+        let drain = async {
+            let _ = self.poll_handle.await;
+            let _ = self.reaper_handle.await;
+            if let Some(h) = self.cleanup_handle {
+                let _ = h.await;
+            }
+        };
+        let _ = tokio::time::timeout(self.drain_timeout, drain).await;
         Ok(())
     }
 }
@@ -252,9 +254,12 @@ async fn poll_loop(
                             continue;
                         };
 
-                        let permit = match semaphore.clone().acquire_owned().await {
+                        let permit = match semaphore.clone().try_acquire_owned() {
                             Ok(p) => p,
-                            Err(_) => break, // semaphore closed
+                            Err(_) => {
+                                tracing::warn!(job_id = %job_id, "no permit available, job will be reaped");
+                                break;
+                            }
                         };
 
                         let handler = entry.handler.clone();

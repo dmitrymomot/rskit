@@ -27,7 +27,12 @@ impl Default for JobConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct QueueConfig {
     pub name: String,
+    #[serde(default = "default_concurrency")]
     pub concurrency: u32,
+}
+
+fn default_concurrency() -> u32 {
+    4
 }
 
 impl Default for QueueConfig {
