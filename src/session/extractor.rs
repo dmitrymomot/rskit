@@ -94,8 +94,8 @@ impl Session {
                 serde_json::to_value(value)
                     .map_err(|e| Error::internal(format!("serialize session value: {e}")))?,
             );
+            self.state.dirty.store(true, Ordering::SeqCst);
         }
-        self.state.dirty.store(true, Ordering::SeqCst);
         Ok(())
     }
 
@@ -151,6 +151,15 @@ impl Session {
         };
 
         let new_token = self.state.store.rotate_token(&session_id).await?;
+
+        let now = chrono::Utc::now();
+        let new_expires =
+            now + chrono::Duration::seconds(self.state.store.config().session_ttl_secs as i64);
+        self.state
+            .store
+            .touch(&session_id, now, new_expires)
+            .await?;
+
         *self.state.action.lock().expect("session mutex poisoned") = SessionAction::Set(new_token);
         Ok(())
     }

@@ -294,10 +294,16 @@ fn set_signed_cookie(
         .build()
         .to_string();
 
-    if let Ok(header_value) = HeaderValue::from_str(&set_cookie_str) {
-        response
-            .headers_mut()
-            .append(http::header::SET_COOKIE, header_value);
+    match HeaderValue::from_str(&set_cookie_str) {
+        Ok(v) => {
+            response.headers_mut().append(http::header::SET_COOKIE, v);
+        }
+        Err(e) => {
+            tracing::error!(
+                cookie_name = name,
+                "failed to set session cookie header: {e}"
+            );
+        }
     }
 }
 
