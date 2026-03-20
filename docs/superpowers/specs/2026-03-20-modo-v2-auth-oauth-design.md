@@ -12,7 +12,7 @@ All auth code lives behind a single Cargo feature flag:
 
 ```toml
 [features]
-auth = ["dep:argon2", "dep:hmac", "dep:sha1", "dep:data-encoding", "dep:hyper-rustls", "dep:hyper-util", "dep:subtle"]
+auth = ["dep:argon2", "dep:hmac", "dep:sha1", "dep:data-encoding", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util", "dep:subtle"]
 ```
 
 The existing `oauth = []` feature is removed and replaced by `auth`. The `full` feature list is updated to reference `auth` instead of `oauth`.
