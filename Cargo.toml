@@ -10,7 +10,7 @@ repository = "https://github.com/dmitrymomot/modo"
 default = []
 full = ["templates", "sse", "auth", "sentry", "email"]
 sentry = ["dep:sentry", "dep:sentry-tracing"]
-templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules"]
+templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
 sse = []
 auth = ["dep:argon2", "dep:hmac", "dep:sha1", "dep:data-encoding", "dep:subtle", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
 email = ["dep:lettre", "dep:pulldown-cmark", "dep:lru"]
@@ -80,6 +80,7 @@ lru = { version = "0.16", optional = true }
 minijinja = { version = "2", optional = true, features = ["loader"] }
 minijinja-contrib = { version = "2", optional = true }
 intl_pluralrules = { version = "7", optional = true }
+unic-langid = { version = "0.9", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
