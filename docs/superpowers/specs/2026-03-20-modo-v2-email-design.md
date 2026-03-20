@@ -45,20 +45,30 @@ Behind the `email` feature flag:
 | `pulldown-cmark` | CommonMark → HTML |
 | `lru` | Template cache |
 
-Dev-only (for tests):
-
-| Crate | Purpose |
-|---|---|
-| `lettre` (stub-transport) | `AsyncStubTransport` for in-memory SMTP assertions |
+The `email-test` feature flag enables `AsyncStubTransport` for in-memory SMTP assertions in tests. No additional dev-dependencies needed — stub transport is part of lettre's `tokio1` feature.
 
 No new dependencies for YAML frontmatter (`serde_yaml_ng` already in the project) or variable substitution (plain string replacement).
 
-### Feature Flag
+### Cargo.toml
 
 ```toml
+[dependencies]
+lettre = { version = "0.11", optional = true, default-features = false, features = [
+    "smtp-transport", "tokio1", "builder", "hostname", "tokio1-rustls"
+] }
+pulldown-cmark = { version = "0.12", optional = true }
+lru = { version = "0.12", optional = true }
+
 [features]
 email = ["dep:lettre", "dep:pulldown-cmark", "dep:lru"]
+email-test = ["email"]  # enables Stub transport variant for testing
 ```
+
+Notes:
+- `tokio1-rustls` chosen over `tokio1-native-tls` for consistency (project already uses `hyper-rustls` for auth)
+- `default-features = false` disables lettre's default connection pool — we use connection-per-send
+- `email-test` feature enables `Mailer::with_stub_transport()` and the `Stub` transport variant
+- `AsyncStubTransport` is available from the `tokio1` feature in lettre (not a separate feature)
 
 ## Configuration
 
@@ -240,7 +250,8 @@ Rules:
 - `{{var}}` — replaced with raw value if present, empty string if missing
 - No nesting, no filters, no conditionals
 - Variable names: `[a-zA-Z_][a-zA-Z0-9_]*`
-- HTML escaping is handled by pulldown-cmark during Stage 3, not during substitution
+- HTML escaping in the body is handled by pulldown-cmark during Stage 3, not during substitution
+- The subject line does not pass through pulldown-cmark — lettre handles MIME encoding for RFC 5322 compliance; no HTML escaping is needed or applied for subjects
 
 ## Rendering Pipeline
 
@@ -460,12 +471,12 @@ pub struct Mailer {
 
 enum Transport {
     Smtp(lettre::AsyncSmtpTransport<lettre::Tokio1Executor>),
-    #[cfg(test)]
+    #[cfg(feature = "email-test")]
     Stub(lettre::transport::stub::AsyncStubTransport),
 }
 ```
 
-Transport is a private enum, not a trait object. The `Stub` variant is only available in test builds. This keeps the public API clean — users interact with `Mailer::new()` and `Mailer::with_source()` only. `Mailer::with_stub_transport()` is gated behind `#[cfg(test)]`.
+Transport is a private enum, not a trait object. The `Stub` variant is available when the `email-test` feature is enabled (not `#[cfg(test)]`, since that is only true for the crate's own test builds, not integration tests or downstream crates). This keeps the public API clean — users interact with `Mailer::new()` and `Mailer::with_source()` in production. `Mailer::with_stub_transport()` is gated behind `#[cfg(feature = "email-test")]`.
 
 ### Methods
 
@@ -535,7 +546,7 @@ All email errors use `modo::Error`:
 
 ### Stub Transport
 
-The `Mailer` accepts an injectable transport. In production, it uses `AsyncSmtpTransport<Tokio1Executor>`. In tests, it uses `AsyncStubTransport` from lettre:
+The `Mailer` accepts an injectable transport via the `email-test` feature flag. In production, it uses `AsyncSmtpTransport<Tokio1Executor>`. With the `email-test` feature enabled, `Mailer::with_stub_transport()` becomes available:
 
 ```rust
 let stub = AsyncStubTransport::new_ok();
@@ -551,6 +562,8 @@ assert!(envelope.to().iter().any(|a| a.as_ref() == "user@example.com"));
 assert!(raw.contains("Subject: Welcome"));
 ```
 
+Run email tests with: `cargo test --features email-test`
+
 ### Unit Tests (inline `#[cfg(test)] mod tests`)
 
 - `render.rs` — variable substitution (present, missing, special chars, HTML escaping)
@@ -563,7 +576,7 @@ assert!(raw.contains("Subject: Welcome"));
 - `cache.rs` — LRU hit/miss/eviction
 - `message.rs` — SendEmail builder (defaults, overrides, multiple recipients)
 
-### Integration Tests (`tests/email.rs`, gated with `#![cfg(feature = "email")]`)
+### Integration Tests (`tests/email.rs`, gated with `#![cfg(feature = "email-test")]`)
 
 - End-to-end `render()`: template file → RenderedEmail with correct subject, html, text
 - End-to-end `send()` with `AsyncStubTransport`: verify email captured with correct envelope and content
