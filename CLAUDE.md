@@ -17,7 +17,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Services wired explicitly in `main()` — no global discovery
 - Database uses raw sqlx — no ORM, no `Record` trait, no `ActiveModel`
 - All config structs have sensible `Default` implementations
-- Feature flags only for truly optional pieces (templates, SSE, OAuth)
+- Feature flags only for truly optional pieces (templates, SSE, auth)
 - No TODOs, no workarounds, no tech debt — every declared config field and API must be fully implemented
 
 ## Stack
@@ -34,6 +34,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - SQLite is the only DB backend — no feature flags for DB selection
 - sha2 0.10, ipnet 2
 - axum-extra 0.12 (cookie-signed, cookie-private, multipart), tower_governor 0.8, regex 1, nanohtml2text 0.2
+- Auth deps (behind `auth` feature): argon2 0.5, hmac 0.12, sha1 0.10, data-encoding 2, subtle 2, hyper-rustls 0.27, hyper-util 0.1, http-body-util 0.1
 - Future deps: opendal 0.55 (`services-s3`)
 
 ## Commands
@@ -68,7 +69,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 1 (Foundation):** error, id, config, service, runtime, db, tracing, server — DONE
 - **Plan 2 (Web Core):** sanitize, validate, extractors, cookie, middleware (9 layers), Sentry — DONE
 - **Plan 3 (Session):** DB-backed sessions with token hashing, fingerprinting, middleware lifecycle — DONE
-- **Plan 4 (Auth + OAuth):** guards, password hashing, TOTP, OTP, backup codes, Google/GitHub OAuth
+- **Plan 4 (Auth + OAuth):** password hashing, TOTP, OTP, backup codes, Google/GitHub OAuth — spec + plan written
 - **Plan 5 (Job + Cron):** DB-backed job queue, worker, enqueuer, in-memory cron scheduler
 - **Plan 6 (Email):** SMTP transport, markdown templates with YAML frontmatter, layout engine
 - **Plan 7 (Template + SSE + Tenant):** MiniJinja engine, i18n, static files, broadcast SSE, tenant resolution
@@ -82,6 +83,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Web core plan: `docs/superpowers/plans/2026-03-19-modo-v2-web-core.md`
 - Session spec: `docs/superpowers/specs/2026-03-20-modo-v2-session-design.md`
 - Session plan: `docs/superpowers/plans/2026-03-20-modo-v2-session.md`
+- Auth + OAuth spec: `docs/superpowers/specs/2026-03-20-modo-v2-auth-oauth-design.md`
+- Auth + OAuth plan: `docs/superpowers/plans/2026-03-20-modo-v2-auth-oauth.md`
 
 ## Gotchas
 
@@ -104,3 +107,10 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `std::sync::MutexGuard` is not `Send` — never hold it across `.await` or axum handler futures become non-Send (breaks `Handler` trait). Extract values into locals, drop the guard, then await.
 - axum handler functions defined inside `#[tokio::test]` closures don't satisfy `Handler` bounds — define them as module-level `async fn` instead
 - Session middleware uses raw `cookie::CookieJar` with `.signed()`/`.signed_mut()` for cookie signing — NOT `axum_extra::extract::cookie::SignedCookieJar` (which is an axum extractor, not suitable for manual middleware use)
+- Feature-gated modules: integration test files must start with `#![cfg(feature = "X")]` or they break `cargo test` without the feature
+- Feature-gated modules: use `cargo clippy --features auth --tests` to lint auth code
+- CPU-intensive crypto (Argon2id) must use `tokio::task::spawn_blocking` in async functions — never block the runtime
+- `hyper-rustls` needs `webpki-roots` feature for `.with_webpki_roots()` builder method
+- Transitive deps (e.g., `http-body-util` via axum) must still be declared in `Cargo.toml` to use them directly
+- `pub(crate)` items cannot be tested from integration tests (`tests/*.rs`) — use `#[cfg(test)] mod tests` inside the source file instead
+- OAuthProvider trait uses RPITIT (`-> impl Future + Send`) — not object-safe; providers must be concrete types (`Service<Google>`, not `Arc<dyn OAuthProvider>`)
