@@ -8,11 +8,11 @@ repository = "https://github.com/dmitrymomot/modo"
 
 [features]
 default = []
-full = ["templates", "sse", "oauth", "sentry"]
+full = ["templates", "sse", "auth", "sentry"]
 sentry = ["dep:sentry", "dep:sentry-tracing"]
 templates = []
 sse = []
-oauth = []
+auth = ["dep:argon2", "dep:hmac", "dep:sha1", "dep:data-encoding", "dep:subtle", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
 
 [dependencies]
 # Web
@@ -55,6 +55,16 @@ ipnet = "2"
 bytes = "1"
 sentry = { version = "0.38", optional = true, default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
 sentry-tracing = { version = "0.38", optional = true }
+
+# Auth (optional, gated by "auth" feature)
+argon2 = { version = "0.5", optional = true }
+hmac = { version = "0.12", optional = true }
+sha1 = { version = "0.10", optional = true }
+data-encoding = { version = "2", optional = true }
+subtle = { version = "2", optional = true }
+hyper-rustls = { version = "0.27", optional = true, default-features = false, features = ["ring", "http1", "tls12", "logging", "webpki-roots"] }
+hyper-util = { version = "0.1", optional = true, features = ["client-legacy", "http1", "tokio"] }
+http-body-util = { version = "0.1", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
