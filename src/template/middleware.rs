@@ -1,0 +1,193 @@
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+use axum::body::Body;
+use http::{Request, Response};
+use tower::{Layer, Service};
+
+use super::context::TemplateContext;
+use super::engine::Engine;
+use super::locale;
+
+// --- Layer ---
+
+#[derive(Clone)]
+pub struct TemplateContextLayer {
+    engine: Engine,
+}
+
+impl TemplateContextLayer {
+    pub fn new(engine: Engine) -> Self {
+        Self { engine }
+    }
+}
+
+impl<S> Layer<S> for TemplateContextLayer {
+    type Service = TemplateContextMiddleware<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        TemplateContextMiddleware {
+            inner,
+            engine: self.engine.clone(),
+        }
+    }
+}
+
+// --- Service ---
+
+#[derive(Clone)]
+pub struct TemplateContextMiddleware<S> {
+    inner: S,
+    engine: Engine,
+}
+
+impl<S, ReqBody> Service<Request<ReqBody>> for TemplateContextMiddleware<S>
+where
+    S: Service<Request<ReqBody>, Response = Response<Body>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send + 'static,
+    ReqBody: Send + 'static,
+{
+    type Response = Response<Body>;
+    type Error = S::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, mut request: Request<ReqBody>) -> Self::Future {
+        let engine = self.engine.clone();
+        let mut inner = self.inner.clone();
+        std::mem::swap(&mut self.inner, &mut inner);
+
+        Box::pin(async move {
+            // Build TemplateContext with request-scoped data
+            let mut ctx = TemplateContext::default();
+
+            // current_url
+            ctx.set(
+                "current_url",
+                minijinja::Value::from(request.uri().to_string()),
+            );
+
+            // is_htmx
+            let is_htmx = request
+                .headers()
+                .get("hx-request")
+                .and_then(|v| v.to_str().ok())
+                .is_some_and(|v| v == "true");
+            ctx.set("is_htmx", minijinja::Value::from(is_htmx));
+
+            // request_id (if present)
+            if let Some(req_id) = request
+                .headers()
+                .get("x-request-id")
+                .and_then(|v| v.to_str().ok())
+            {
+                ctx.set("request_id", minijinja::Value::from(req_id.to_string()));
+            }
+
+            // locale resolution
+            {
+                // We need to extract Parts temporarily for locale resolution
+                // Since we can't split the request here, read the values we need from headers
+                let (mut parts, body) = request.into_parts();
+
+                let resolved_locale = locale::resolve_locale(engine.locale_chain(), &parts);
+                let locale_value =
+                    resolved_locale.unwrap_or_else(|| engine.default_locale().to_string());
+                ctx.set("locale", minijinja::Value::from(locale_value));
+
+                // csrf_token (if present in extensions)
+                if let Some(csrf) = parts.extensions.get::<crate::middleware::CsrfToken>() {
+                    ctx.set("csrf_token", minijinja::Value::from(csrf.0.clone()));
+                }
+
+                // Insert TemplateContext into extensions
+                parts.extensions.insert(ctx);
+
+                request = Request::from_parts(parts, body);
+            }
+
+            inner.call(request).await
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{Router, routing::get};
+    use http::{Request, StatusCode};
+    use tower::ServiceExt;
+
+    use crate::template::{TemplateConfig, TemplateContext};
+
+    // Return TempDir alongside Engine so files persist for the test's lifetime
+    fn test_engine() -> (tempfile::TempDir, Engine) {
+        let dir = tempfile::tempdir().unwrap();
+        let tpl_dir = dir.path().join("templates");
+        let locales_dir = dir.path().join("locales/en");
+        let static_dir = dir.path().join("static");
+        std::fs::create_dir_all(&tpl_dir).unwrap();
+        std::fs::create_dir_all(&locales_dir).unwrap();
+        std::fs::create_dir_all(&static_dir).unwrap();
+        std::fs::write(locales_dir.join("common.yaml"), "greeting: Hello").unwrap();
+
+        let config = TemplateConfig {
+            templates_path: tpl_dir.to_str().unwrap().into(),
+            locales_path: dir.path().join("locales").to_str().unwrap().into(),
+            static_path: static_dir.to_str().unwrap().into(),
+            ..TemplateConfig::default()
+        };
+
+        let engine = Engine::builder().config(config).build().unwrap();
+        (dir, engine)
+    }
+
+    // Handlers must be module-level async fn per CLAUDE.md gotcha
+    async fn extract_url(req: Request<Body>) -> (StatusCode, String) {
+        let ctx = req.extensions().get::<TemplateContext>().unwrap();
+        let url = ctx
+            .get("current_url")
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        (StatusCode::OK, url)
+    }
+
+    async fn extract_is_htmx(req: Request<Body>) -> (StatusCode, String) {
+        let ctx = req.extensions().get::<TemplateContext>().unwrap();
+        let is_htmx = ctx
+            .get("is_htmx")
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        (StatusCode::OK, is_htmx)
+    }
+
+    #[tokio::test]
+    async fn injects_current_url() {
+        let (_dir, engine) = test_engine();
+        let app = Router::new()
+            .route("/test", get(extract_url))
+            .layer(TemplateContextLayer::new(engine));
+
+        let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn injects_is_htmx_false() {
+        let (_dir, engine) = test_engine();
+        let app = Router::new()
+            .route("/test", get(extract_is_htmx))
+            .layer(TemplateContextLayer::new(engine));
+
+        let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+}

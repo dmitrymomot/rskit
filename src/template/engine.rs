@@ -61,12 +61,10 @@ impl Engine {
         )
     }
 
-    #[allow(dead_code)]
     pub(crate) fn locale_chain(&self) -> &[Arc<dyn LocaleResolver>] {
         &self.inner.locale_chain
     }
 
-    #[allow(dead_code)]
     pub(crate) fn default_locale(&self) -> &str {
         &self.inner.config.default_locale
     }

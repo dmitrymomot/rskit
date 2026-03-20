@@ -134,7 +134,6 @@ impl LocaleResolver for AcceptLanguageResolver {
 
 // --- Chain helpers ---
 
-#[allow(dead_code)]
 pub(crate) fn default_chain(
     config: &TemplateConfig,
     available_locales: &[String],
@@ -152,7 +151,6 @@ pub(crate) fn default_chain(
     ]
 }
 
-#[allow(dead_code)]
 pub(crate) fn resolve_locale(chain: &[Arc<dyn LocaleResolver>], parts: &Parts) -> Option<String> {
     chain.iter().find_map(|r| r.resolve(parts))
 }
