@@ -8,6 +8,4 @@ pub use context::CronContext;
 pub use context::FromCronContext;
 pub use handler::CronHandler;
 pub use meta::Meta;
-#[allow(unused_imports)]
-pub(crate) use schedule::Schedule;
 pub use scheduler::{CronOptions, Scheduler, SchedulerBuilder};

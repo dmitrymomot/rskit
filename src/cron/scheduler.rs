@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use chrono::Utc;
-use tokio::task::JoinHandle;
+use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::Result;
@@ -146,8 +146,15 @@ async fn cron_job_loop(
 ) {
     let running = Arc::new(AtomicBool::new(false));
     let timeout_dur = Duration::from_secs(timeout_secs);
+    let mut handler_tasks = JoinSet::new();
 
-    let mut next_tick = schedule.next_tick(Utc::now());
+    let mut next_tick = match schedule.next_tick(Utc::now()) {
+        Some(t) => t,
+        None => {
+            tracing::error!(cron_job = %name, "cron expression has no future occurrence; stopping");
+            return;
+        }
+    };
 
     loop {
         let sleep_duration = (next_tick - Utc::now()).to_std().unwrap_or(Duration::ZERO);
@@ -155,10 +162,19 @@ async fn cron_job_loop(
         tokio::select! {
             _ = cancel.cancelled() => break,
             _ = tokio::time::sleep(sleep_duration) => {
+                // Reap finished handler tasks
+                while handler_tasks.try_join_next().is_some() {}
+
                 // Skip if previous run still going
                 if running.load(Ordering::SeqCst) {
                     tracing::warn!(cron_job = %name, "skipping tick, previous run still active");
-                    next_tick = schedule.next_tick(Utc::now());
+                    next_tick = match schedule.next_tick(Utc::now()) {
+                        Some(t) => t,
+                        None => {
+                            tracing::error!(cron_job = %name, "cron expression has no future occurrence; stopping");
+                            break;
+                        }
+                    };
                     continue;
                 }
 
@@ -178,7 +194,7 @@ async fn cron_job_loop(
                 let running_flag = running.clone();
                 let handler_clone = handler.clone();
                 let job_name = name.clone();
-                tokio::spawn(async move {
+                handler_tasks.spawn(async move {
                     let result =
                         tokio::time::timeout(timeout_dur, (handler_clone)(ctx)).await;
 
@@ -197,8 +213,17 @@ async fn cron_job_loop(
                     running_flag.store(false, Ordering::SeqCst);
                 });
 
-                next_tick = schedule.next_tick(Utc::now());
+                next_tick = match schedule.next_tick(Utc::now()) {
+                    Some(t) => t,
+                    None => {
+                        tracing::error!(cron_job = %name, "cron expression has no future occurrence; stopping");
+                        break;
+                    }
+                };
             }
         }
     }
+
+    // Drain in-flight handler tasks before returning
+    while handler_tasks.join_next().await.is_some() {}
 }

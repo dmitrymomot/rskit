@@ -33,17 +33,16 @@ impl Schedule {
 
     fn parse_cron(expr: &str) -> Self {
         let cron = croner::Cron::new(expr)
+            .with_seconds_optional()
             .parse()
             .unwrap_or_else(|e| panic!("invalid cron expression '{expr}': {e}"));
         Self::Cron(Box::new(cron))
     }
 
-    pub(crate) fn next_tick(&self, from: DateTime<Utc>) -> DateTime<Utc> {
+    pub(crate) fn next_tick(&self, from: DateTime<Utc>) -> Option<DateTime<Utc>> {
         match self {
-            Self::Cron(cron) => cron
-                .find_next_occurrence(&from, false)
-                .expect("cron expression has no future occurrence"),
-            Self::Interval(dur) => from + chrono::Duration::from_std(*dur).unwrap(),
+            Self::Cron(cron) => cron.find_next_occurrence(&from, false).ok(),
+            Self::Interval(dur) => Some(from + chrono::Duration::from_std(*dur).unwrap()),
         }
     }
 }
@@ -142,5 +141,51 @@ mod tests {
     #[should_panic(expected = "no duration components")]
     fn parse_duration_rejects_empty() {
         parse_duration("");
+    }
+
+    #[test]
+    fn parse_named_aliases() {
+        let now = Utc::now();
+        for alias in &[
+            "@yearly",
+            "@annually",
+            "@monthly",
+            "@weekly",
+            "@daily",
+            "@midnight",
+            "@hourly",
+        ] {
+            let s = Schedule::parse(alias);
+            assert!(
+                matches!(s, Schedule::Cron(_)),
+                "{alias} should parse as Cron"
+            );
+            assert!(
+                s.next_tick(now).is_some(),
+                "{alias} should have a future tick"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_every_interval() {
+        let s = Schedule::parse("@every 5m");
+        match s {
+            Schedule::Interval(dur) => assert_eq!(dur, Duration::from_secs(300)),
+            _ => panic!("expected Interval variant"),
+        }
+    }
+
+    #[test]
+    fn parse_standard_cron() {
+        let s = Schedule::parse("0 30 * * * *");
+        assert!(matches!(s, Schedule::Cron(_)));
+        assert!(s.next_tick(Utc::now()).is_some());
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid cron expression")]
+    fn parse_invalid_cron_panics() {
+        Schedule::parse("not a cron");
     }
 }
