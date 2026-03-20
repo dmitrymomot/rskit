@@ -13,6 +13,9 @@ pub mod session;
 pub mod tracing;
 pub mod validate;
 
+#[cfg(feature = "auth")]
+pub mod auth;
+
 pub use config::Config;
 pub use error::{Error, Result};
 pub use extractor::Service;

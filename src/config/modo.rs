@@ -12,4 +12,7 @@ pub struct Config {
     pub csrf: crate::middleware::CsrfConfig,
     pub rate_limit: crate::middleware::RateLimitConfig,
     pub session: crate::session::SessionConfig,
+    #[cfg(feature = "auth")]
+    #[serde(default)]
+    pub oauth: crate::auth::oauth::OAuthConfig,
 }
