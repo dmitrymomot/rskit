@@ -129,3 +129,10 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Job `attempt` is incremented on claim (not on failure) — a job with `attempt=3` has been claimed 3 times regardless of outcome
 - `tokio_util::sync::CancellationToken` is used for all background loop shutdown — always check `cancel.cancelled()` in `tokio::select!`
 - `JobContext` and `CronContext` are `pub` structs with `pub(crate)` fields — public because handler traits expose them in method signatures, but only this crate can construct them
+- Blanket impl macros using type params as variable names (`let $T = $T::from_context(...)`) need `#[allow(non_snake_case)]` on the generated method
+- Methods named `from_str` that don't implement `std::str::FromStr` need `#[allow(clippy::should_implement_trait)]`
+- `croner::Cron` is 224 bytes — must `Box` it inside enums to avoid clippy `large_enum_variant` lint
+- `croner::Cron::new(expr)` defaults to 5-field (no seconds) — call `.with_seconds_optional()` before `.parse()` to support 6-field cron expressions
+- SQLite does NOT support `ON CONFLICT` with partial unique indexes — use plain `INSERT` and catch `sqlx::Error::Database` with `is_unique_violation()` instead
+- Job/cron test schemas that need a partial unique index must create it as a separate `CREATE UNIQUE INDEX ... WHERE ...` statement after the `CREATE TABLE`
+- DB-backed modules (session, job) don't ship migration files — end-apps own their migrations; framework provides schema in docs/tests
