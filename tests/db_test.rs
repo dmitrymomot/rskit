@@ -153,8 +153,8 @@ fn test_pool_overrides_defaults() {
 
 #[cfg(feature = "sqlite")]
 #[tokio::test]
-async fn test_pool_as_pool_trait() {
-    use modo::db::AsPool;
+async fn test_pool_reader_writer_traits() {
+    use modo::db::{Reader, Writer};
 
     let config = modo::db::SqliteConfig {
         path: ":memory:".to_string(),
@@ -162,9 +162,19 @@ async fn test_pool_as_pool_trait() {
     };
     let pool = modo::db::connect(&config).await.unwrap();
 
-    // Pool implements AsPool
-    let inner = pool.pool();
-    let row: (i64,) = sqlx::query_as("SELECT 1").fetch_one(inner).await.unwrap();
+    // Pool implements Reader and Writer
+    let read_inner = pool.read_pool();
+    let row: (i64,) = sqlx::query_as("SELECT 1")
+        .fetch_one(read_inner)
+        .await
+        .unwrap();
+    assert_eq!(row.0, 1);
+
+    let write_inner = pool.write_pool();
+    let row: (i64,) = sqlx::query_as("SELECT 1")
+        .fetch_one(write_inner)
+        .await
+        .unwrap();
     assert_eq!(row.0, 1);
 }
 

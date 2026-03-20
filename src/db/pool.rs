@@ -15,8 +15,12 @@ pub struct ReadPool(InnerPool);
 #[derive(Clone)]
 pub struct WritePool(InnerPool);
 
-pub trait AsPool {
-    fn pool(&self) -> &InnerPool;
+pub trait Reader {
+    fn read_pool(&self) -> &InnerPool;
+}
+
+pub trait Writer {
+    fn write_pool(&self) -> &InnerPool;
 }
 
 impl Pool {
@@ -49,20 +53,38 @@ impl WritePool {
     }
 }
 
-impl AsPool for Pool {
-    fn pool(&self) -> &InnerPool {
+impl Reader for Pool {
+    fn read_pool(&self) -> &InnerPool {
         &self.0
     }
 }
 
-impl AsPool for WritePool {
-    fn pool(&self) -> &InnerPool {
+impl Writer for Pool {
+    fn write_pool(&self) -> &InnerPool {
         &self.0
     }
 }
 
-// ReadPool intentionally does NOT implement AsPool
-// to prevent passing it to migration functions.
+impl Reader for ReadPool {
+    fn read_pool(&self) -> &InnerPool {
+        &self.0
+    }
+}
+
+// ReadPool intentionally does NOT implement Writer
+// to prevent passing it to migration or write functions.
+
+impl Reader for WritePool {
+    fn read_pool(&self) -> &InnerPool {
+        &self.0
+    }
+}
+
+impl Writer for WritePool {
+    fn write_pool(&self) -> &InnerPool {
+        &self.0
+    }
+}
 
 impl Deref for Pool {
     type Target = InnerPool;

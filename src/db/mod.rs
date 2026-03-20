@@ -13,7 +13,7 @@ pub use config::{JournalMode, PoolOverrides, SynchronousMode, TempStore};
 pub use connect::{connect, connect_rw};
 pub use managed::{ManagedPool, managed};
 pub use migrate::migrate;
-pub use pool::{AsPool, InnerPool, Pool, ReadPool, WritePool};
+pub use pool::{InnerPool, Pool, ReadPool, Reader, WritePool, Writer};
 
 #[cfg(feature = "sqlite")]
 pub type Config = SqliteConfig;
