@@ -16,4 +16,5 @@ pub use locale::{
     AcceptLanguageResolver, CookieResolver, LocaleResolver, QueryParamResolver, SessionResolver,
 };
 pub use middleware::TemplateContextLayer;
+pub use minijinja::context;
 pub use renderer::Renderer;

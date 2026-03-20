@@ -39,7 +39,10 @@ pub use auth::oauth::{
 };
 
 #[cfg(feature = "templates")]
-pub use template::TemplateConfig;
+pub use template::{
+    Engine, EngineBuilder, HxRequest, Renderer, TemplateConfig, TemplateContext,
+    TemplateContextLayer,
+};
 
 // Re-exports for user convenience
 pub use axum;
