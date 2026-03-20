@@ -22,7 +22,7 @@ Two modules: `job` (DB-backed background job queue) and `cron` (in-memory recurr
 10. **Separate `Meta` types** — `job::Meta` (id, name, queue, attempt, max_attempts, deadline) and `cron::Meta` (name, deadline, tick). No shared type with `Option` fields.
 11. **Cron job names auto-derived** — from `std::any::type_name`. No configuration surface for custom names.
 12. **All SQL timestamps computed in Rust** — bound as RFC 3339 string parameters. No `now()` or timestamp arithmetic in SQL. Matches session module pattern.
-13. **Registry snapshot** — `Worker::builder()` and `Scheduler::builder()` clone the registry's internal `HashMap` into an `Arc` at construction time. The `Arc<RegistrySnapshot>` is shared across all spawned job/cron contexts. The original `Registry` can still be consumed by `into_state()` afterward.
+13. **Registry snapshot** — `Worker::builder()` and `Scheduler::builder()` clone the registry's internal `HashMap` into an `Arc` at construction time. The `Arc<RegistrySnapshot>` is shared across all spawned job/cron contexts. The original `Registry` can still be consumed by `into_state()` afterward. `Registry` gains a `pub(crate) fn snapshot(&self) -> Arc<RegistrySnapshot>` method for this — `RegistrySnapshot` is `HashMap<TypeId, Arc<dyn Any + Send + Sync>>` (same structure as `AppState`'s inner type).
 
 ## Database Schema
 
@@ -67,6 +67,7 @@ CREATE INDEX idx_modo_jobs_unique
 - All timestamps as RFC 3339 strings (matching session module pattern)
 - Partial indexes on hot query paths: claim, stale reap, cleanup, uniqueness check
 - Cleanup index uses `updated_at` (not `completed_at`) — matches the cleanup query
+- Requires SQLite 3.35.0+ for `UPDATE ... RETURNING` support (released 2021-03-12)
 
 **Note on `max_attempts`:** This value lives in the handler's `JobOptions` config, not in the DB. If a handler's `max_attempts` changes between deploys, the new value applies to all in-flight retries. This is intentional — the operator controls retry policy, not the enqueuer.
 
@@ -224,6 +225,7 @@ impl WorkerBuilder {
         H: JobHandler<Args>;
 
     /// Start the worker. Spawns poll loop, stale reaper, and cleanup loop.
+    /// Extracts `WritePool` from the registry snapshot. Panics if not registered.
     pub async fn start(self) -> Worker;
 }
 
@@ -445,7 +447,10 @@ Standard cron expressions parsed by the `croner` crate. `@every` and named alias
 | `@daily` / `@midnight`  | Midnight                            |
 | `@hourly`               | Top of every hour                   |
 | `@every <duration>`     | `1h`, `30m`, `15s`, `1h30m`         |
+
 | Standard cron           | `0 0 9 * * MON-FRI` (6-field)      |
+
+`@every` duration grammar: `(\d+h)?(\d+m)?(\d+s)?` — at least one component required. No milliseconds, no days. Examples: `15m`, `1h30m`, `30s`, `2h`. Invalid strings (e.g., `@every 500ms`, `@every 1d`) panic at `start()`.
 
 Validated at `start()` — invalid schedule panics. Fail fast.
 
