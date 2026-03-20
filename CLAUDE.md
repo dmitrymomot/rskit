@@ -35,6 +35,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - sha2 0.10, ipnet 2
 - axum-extra 0.12 (cookie-signed, cookie-private, multipart), tower_governor 0.8, regex 1, nanohtml2text 0.2
 - Auth deps (behind `auth` feature): argon2 0.5, hmac 0.12, sha1 0.10, data-encoding 2, subtle 2, hyper 1, hyper-rustls 0.27, hyper-util 0.1, http-body-util 0.1
+- tokio-util 0.7 (CancellationToken for background loop shutdown)
+- croner 2 (cron expression parsing)
 - Future deps: opendal 0.55 (`services-s3`)
 
 ## Commands
@@ -70,7 +72,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 2 (Web Core):** sanitize, validate, extractors, cookie, middleware (9 layers), Sentry — DONE
 - **Plan 3 (Session):** DB-backed sessions with token hashing, fingerprinting, middleware lifecycle — DONE
 - **Plan 4 (Auth + OAuth):** password hashing, TOTP, OTP, backup codes, Google/GitHub OAuth — DONE
-- **Plan 5 (Job + Cron):** DB-backed job queue, worker, enqueuer, in-memory cron scheduler
+- **Plan 5 (Job + Cron):** DB-backed job queue, worker, enqueuer, in-memory cron scheduler — DONE
 - **Plan 6 (Email):** SMTP transport, markdown templates with YAML frontmatter, layout engine
 - **Plan 7 (Template + SSE + Tenant):** MiniJinja engine, i18n, static files, broadcast SSE, tenant resolution
 - **Plan 8 (Upload):** S3-compatible storage via OpenDAL, presigned URLs
@@ -85,6 +87,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Session plan: `docs/superpowers/plans/2026-03-20-modo-v2-session.md`
 - Auth + OAuth spec: `docs/superpowers/specs/2026-03-20-modo-v2-auth-oauth-design.md`
 - Auth + OAuth plan: `docs/superpowers/plans/2026-03-20-modo-v2-auth-oauth.md`
+- Job + Cron spec: `docs/superpowers/specs/2026-03-20-modo-v2-job-cron-design.md`
+- Job + Cron plan: `docs/superpowers/plans/2026-03-20-modo-v2-job-cron.md`
 
 ## Gotchas
 
@@ -121,3 +125,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - TOTP uses HMAC-SHA1 only (not SHA256/SHA512) — SHA1 is what authenticator apps expect
 - In-crate `#[cfg(test)] mod tests` blocks run with `cargo test --lib -- module::tests`, not `cargo test --test`
 - Multi-task scaffolding: `todo!()` stubs need `#[allow(dead_code)]` to pass clippy; remove the annotations when implementing the real code
+- Worker poll loop builds dynamic SQL with `IN (?, ?, ...)` — SQLite limits to 999 bind params, so max ~900 registered handlers per worker
+- Job `attempt` is incremented on claim (not on failure) — a job with `attempt=3` has been claimed 3 times regardless of outcome
+- `tokio_util::sync::CancellationToken` is used for all background loop shutdown — always check `cancel.cancelled()` in `tokio::select!`
+- `JobContext` and `CronContext` are `pub` structs with `pub(crate)` fields — public because handler traits expose them in method signatures, but only this crate can construct them
