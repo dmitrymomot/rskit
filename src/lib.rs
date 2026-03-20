@@ -24,6 +24,7 @@ pub use config::Config;
 pub use error::{Error, Result};
 pub use extractor::Service;
 pub use sanitize::Sanitize;
+pub use session::{Session, SessionConfig, SessionData, SessionToken};
 pub use validate::{Validate, ValidationError, Validator};
 
 // Re-exports for user convenience

@@ -11,4 +11,5 @@ pub struct Config {
     pub cors: crate::middleware::CorsConfig,
     pub csrf: crate::middleware::CsrfConfig,
     pub rate_limit: crate::middleware::RateLimitConfig,
+    pub session: crate::session::SessionConfig,
 }

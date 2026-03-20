@@ -12,8 +12,8 @@ use tower::{Layer, Service};
 
 use crate::cookie::{CookieConfig, Key};
 
+use super::extractor::{SessionAction, SessionState};
 use super::meta::{SessionMeta, extract_client_ip, header_str};
-use super::session::{SessionAction, SessionState};
 use super::store::Store;
 use super::token::SessionToken;
 
@@ -187,37 +187,36 @@ where
                                     .expect("session mutex poisoned");
                                 guard.as_ref().map(|s| s.data.clone())
                             };
-                            if let Some(data) = data {
-                                if let Err(e) =
+                            if let Some(data) = data
+                                && let Err(e) =
                                     store.flush(&session.id, &data, now, new_expires).await
-                                {
-                                    tracing::error!(
-                                        session_id = session.id,
-                                        "failed to flush session data: {e}"
-                                    );
-                                }
-                            }
-                        } else if should_touch {
-                            if let Err(e) = store.touch(&session.id, now, new_expires).await {
+                            {
                                 tracing::error!(
                                     session_id = session.id,
-                                    "failed to touch session: {e}"
+                                    "failed to flush session data: {e}"
                                 );
                             }
+                        } else if should_touch
+                            && let Err(e) = store.touch(&session.id, now, new_expires).await
+                        {
+                            tracing::error!(
+                                session_id = session.id,
+                                "failed to touch session: {e}"
+                            );
                         }
 
                         // Refresh cookie if we did a flush or touch
-                        if is_dirty || should_touch {
-                            if let Some(ref token) = session_token {
-                                set_signed_cookie(
-                                    &mut response,
-                                    cookie_name,
-                                    &token.as_hex(),
-                                    ttl_secs,
-                                    &cookie_config,
-                                    &key,
-                                );
-                            }
+                        if (is_dirty || should_touch)
+                            && let Some(ref token) = session_token
+                        {
+                            set_signed_cookie(
+                                &mut response,
+                                cookie_name,
+                                &token.as_hex(),
+                                ttl_secs,
+                                &cookie_config,
+                                &key,
+                            );
                         }
                     }
 
