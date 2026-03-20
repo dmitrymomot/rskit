@@ -19,6 +19,9 @@ pub mod job;
 #[cfg(feature = "auth")]
 pub mod auth;
 
+#[cfg(feature = "email")]
+pub mod email;
+
 pub use config::Config;
 pub use error::{Error, Result};
 pub use extractor::Service;

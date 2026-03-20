@@ -16,4 +16,7 @@ pub struct Config {
     #[cfg(feature = "auth")]
     #[serde(default)]
     pub oauth: crate::auth::oauth::OAuthConfig,
+    #[cfg(feature = "email")]
+    #[serde(default)]
+    pub email: crate::email::EmailConfig,
 }
