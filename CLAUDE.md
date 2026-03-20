@@ -74,9 +74,11 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 4 (Auth + OAuth):** password hashing, TOTP, OTP, backup codes, Google/GitHub OAuth — DONE
 - **Plan 5 (Job + Cron):** DB-backed job queue, worker, enqueuer, in-memory cron scheduler — DONE
 - **Plan 6 (Email):** SMTP transport, markdown templates with YAML frontmatter, layout engine
-- **Plan 7 (Template + SSE + Tenant):** MiniJinja engine, i18n, static files, broadcast SSE, tenant resolution
-- **Plan 8 (Upload):** S3-compatible storage via OpenDAL, presigned URLs
-- **Plan 9 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
+- **Plan 7 (Template):** MiniJinja engine, i18n, static files
+- **Plan 8 (SSE):** broadcast SSE
+- **Plan 9 (Tenant):** tenant resolution
+- **Plan 10 (Upload):** S3-compatible storage via OpenDAL, presigned URLs
+- **Plan 11 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
 
 ## Key References
 
