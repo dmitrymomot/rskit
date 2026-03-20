@@ -62,8 +62,11 @@ pub(crate) fn build_static_url(
 pub(crate) fn make_static_url_function(
     prefix: String,
     hashes: HashMap<String, String>,
-) -> impl Fn(String) -> String + Send + Sync + 'static {
-    move |path: String| build_static_url(&prefix, &hashes, &path)
+) -> impl Fn(String) -> minijinja::Value + Send + Sync + 'static {
+    move |path: String| {
+        let url = build_static_url(&prefix, &hashes, &path);
+        minijinja::Value::from_safe_string(url)
+    }
 }
 
 pub(crate) fn static_service(static_path: &str, prefix: &str) -> axum::Router {
