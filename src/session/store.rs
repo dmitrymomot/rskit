@@ -55,7 +55,7 @@ impl Store {
         let hash = token.hash();
         let now = Utc::now().to_rfc3339();
         let row = sqlx::query_as::<_, SessionRow>(
-            "SELECT id, token_hash, user_id, ip_address, user_agent, device_name, device_type, \
+            "SELECT id, user_id, ip_address, user_agent, device_name, device_type, \
              fingerprint, data, created_at, last_active_at, expires_at \
              FROM modo_sessions WHERE token_hash = ? AND expires_at > ?",
         )
@@ -70,7 +70,7 @@ impl Store {
 
     pub async fn read(&self, id: &str) -> Result<Option<SessionData>> {
         let row = sqlx::query_as::<_, SessionRow>(
-            "SELECT id, token_hash, user_id, ip_address, user_agent, device_name, device_type, \
+            "SELECT id, user_id, ip_address, user_agent, device_name, device_type, \
              fingerprint, data, created_at, last_active_at, expires_at \
              FROM modo_sessions WHERE id = ?",
         )
@@ -85,7 +85,7 @@ impl Store {
     pub async fn list_for_user(&self, user_id: &str) -> Result<Vec<SessionData>> {
         let now = Utc::now().to_rfc3339();
         let rows = sqlx::query_as::<_, SessionRow>(
-            "SELECT id, token_hash, user_id, ip_address, user_agent, device_name, device_type, \
+            "SELECT id, user_id, ip_address, user_agent, device_name, device_type, \
              fingerprint, data, created_at, last_active_at, expires_at \
              FROM modo_sessions WHERE user_id = ? AND expires_at > ? \
              ORDER BY last_active_at DESC",
@@ -315,8 +315,6 @@ impl Store {
 #[derive(sqlx::FromRow)]
 struct SessionRow {
     id: String,
-    #[allow(dead_code)]
-    token_hash: String,
     user_id: String,
     ip_address: String,
     user_agent: String,
