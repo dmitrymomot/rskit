@@ -4,6 +4,10 @@
 
 Two modules: `job` (DB-backed background job queue) and `cron` (in-memory recurring task scheduler). Both use extractor-based handlers matching the axum pattern. Always-on — no feature flags.
 
+**New dependency:** `tokio-util` (with `rt` feature) for `CancellationToken` — used by both Worker and Scheduler for clean shutdown signaling.
+
+**Cron parsing:** Use the `croner` crate for standard cron expression parsing. `@every <duration>` aliases are parsed in-house (simple duration string → `std::time::Duration`).
+
 ## Design Decisions
 
 1. **Extractor-based handlers** — `FromJobContext` / `FromCronContext` traits, axum-style blanket impls over function signatures. `Service<T>` shared across HTTP, job, and cron contexts via three trait impls.
@@ -17,6 +21,8 @@ Two modules: `job` (DB-backed background job queue) and `cron` (in-memory recurr
 9. **Cron overlap: skip-if-running** — stays on schedule. If previous run is still going when next tick fires, skip that tick.
 10. **Separate `Meta` types** — `job::Meta` (id, name, queue, attempt, max_attempts, deadline) and `cron::Meta` (name, deadline, tick). No shared type with `Option` fields.
 11. **Cron job names auto-derived** — from `std::any::type_name`. No configuration surface for custom names.
+12. **All SQL timestamps computed in Rust** — bound as RFC 3339 string parameters. No `now()` or timestamp arithmetic in SQL. Matches session module pattern.
+13. **Registry snapshot** — `Worker::builder()` and `Scheduler::builder()` clone the registry's internal `HashMap` into an `Arc` at construction time. The `Arc<RegistrySnapshot>` is shared across all spawned job/cron contexts. The original `Registry` can still be consumed by `into_state()` afterward.
 
 ## Database Schema
 
@@ -47,7 +53,7 @@ CREATE INDEX idx_modo_jobs_stale
     WHERE status = 'running';
 
 CREATE INDEX idx_modo_jobs_cleanup
-    ON modo_jobs (status, completed_at);
+    ON modo_jobs (status, updated_at);
 
 CREATE INDEX idx_modo_jobs_unique
     ON modo_jobs (payload_hash, status)
@@ -60,6 +66,9 @@ CREATE INDEX idx_modo_jobs_unique
 - `attempt` — incremented by worker on each claim; checked against handler's `max_attempts`
 - All timestamps as RFC 3339 strings (matching session module pattern)
 - Partial indexes on hot query paths: claim, stale reap, cleanup, uniqueness check
+- Cleanup index uses `updated_at` (not `completed_at`) — matches the cleanup query
+
+**Note on `max_attempts`:** This value lives in the handler's `JobOptions` config, not in the DB. If a handler's `max_attempts` changes between deploys, the new value applies to all in-flight retries. This is intentional — the operator controls retry policy, not the enqueuer.
 
 ## Job Lifecycle
 
@@ -77,7 +86,7 @@ stale reaper → Running back to Pending (worker crash recovery, attempt unchang
 cleanup → deletes terminal states after retention period
 ```
 
-Backoff formula: `delay_secs = min(5 * 2^(attempt - 1), 3600)`. Applied by setting `run_at = now() + delay`.
+Backoff formula: `delay_secs = min(5 * 2^(attempt - 1), 3600)`. Applied by setting `run_at = Utc::now() + delay` (computed in Rust, bound as RFC 3339).
 
 ## Core Types
 
@@ -116,6 +125,8 @@ pub struct JobOptions {
     pub timeout_secs: u64,    // default: 300
 }
 ```
+
+**Raw payload access:** Handlers that need untyped JSON access use `Payload<serde_json::Value>`. There is no separate raw payload field on `Meta`.
 
 ### Cron Module
 
@@ -156,10 +167,13 @@ impl Enqueuer {
         &self, name: &str, payload: &T, options: EnqueueOptions,
     ) -> Result<String>;
 
-    /// Deduplicated enqueue. Checks for existing pending/running job
-    /// with same SHA-256(name + payload) within TTL.
+    /// Deduplicated enqueue. Returns Duplicate(id) if a pending/running job
+    /// with the same name+payload already exists; Created(id) otherwise.
+    /// No TTL — deduplication is active as long as a matching job is
+    /// pending or running. Once the job completes/dies/is cancelled,
+    /// the same payload can be enqueued again.
     pub async fn enqueue_unique<T: Serialize>(
-        &self, name: &str, payload: &T, ttl: Duration,
+        &self, name: &str, payload: &T,
     ) -> Result<EnqueueResult>;
 
     /// Cancel a pending job. Returns true if cancelled, false if not found
@@ -172,13 +186,26 @@ impl Enqueuer {
 - `enqueue()` and `enqueue_at()` are convenience methods over `enqueue_with()`
 - Added to registry as `Service<Enqueuer>` in HTTP handlers
 
+### Deduplication Query
+
+`enqueue_unique()` computes `SHA-256(name + serde_json::to_string(payload))` and checks:
+
+```sql
+SELECT id FROM modo_jobs
+WHERE payload_hash = ?
+  AND status IN ('pending', 'running')
+LIMIT 1
+```
+
+If a row is found, return `EnqueueResult::Duplicate(id)`. Otherwise, insert the job with `payload_hash` set, and return `EnqueueResult::Created(id)`. The `payload_hash` includes the job name, so a separate `name` filter is redundant.
+
 ## Worker
 
 ```rust
 pub struct Worker { /* internal */ }
 
 impl Worker {
-    pub fn new(config: &JobConfig, registry: &Registry) -> WorkerBuilder;
+    pub fn builder(config: &JobConfig, registry: &Registry) -> WorkerBuilder;
 }
 
 pub struct WorkerBuilder { /* internal */ }
@@ -202,7 +229,7 @@ impl WorkerBuilder {
 
 impl Task for Worker {
     async fn shutdown(self) -> Result<()>;
-    // 1. Stop polling
+    // 1. Cancel CancellationToken (stops poll loop, reaper, cleanup)
     // 2. Wait up to drain_timeout_secs for in-flight jobs
     // 3. Force-cancel remaining via JoinHandle abort
 }
@@ -210,67 +237,82 @@ impl Task for Worker {
 
 ### Polling Loop
 
+All timestamp values are computed in Rust as `Utc::now().to_rfc3339()` and bound as query parameters. Handler name list is included as bind parameters — practical limit is several hundred handlers per the SQLite default of 999 bind parameters, well beyond typical usage.
+
 ```
 loop:
-    sleep(poll_interval)
-    for each queue in config order:
-        slots = semaphore.available_permits()
-        if slots == 0: continue
+    select! {
+        _ = cancellation_token.cancelled() => break,
+        _ = sleep(poll_interval) => {
+            let now = Utc::now().to_rfc3339();
+            for each queue in config order:
+                slots = semaphore.available_permits()
+                if slots == 0: continue
 
-        claimed = UPDATE modo_jobs
-            SET status = 'running',
-                attempt = attempt + 1,
-                started_at = now(),
-                updated_at = now()
-            WHERE id IN (
-                SELECT id FROM modo_jobs
-                WHERE status = 'pending'
-                  AND run_at <= now()
-                  AND queue = ?
-                  AND name IN (registered_handler_names)
-                ORDER BY run_at ASC
-                LIMIT ?
-            )
-            RETURNING *
+                claimed = UPDATE modo_jobs
+                    SET status = 'running',
+                        attempt = attempt + 1,
+                        started_at = ?,  -- now (bound from Rust)
+                        updated_at = ?   -- now (bound from Rust)
+                    WHERE id IN (
+                        SELECT id FROM modo_jobs
+                        WHERE status = 'pending'
+                          AND run_at <= ?  -- now (bound from Rust)
+                          AND queue = ?
+                          AND name IN (?, ?, ...)  -- registered handler names
+                        ORDER BY run_at ASC
+                        LIMIT ?  -- available semaphore permits
+                    )
+                    RETURNING *
 
-        for each job in claimed:
-            acquire semaphore permit
-            tokio::spawn:
-                build JobContext (registry + payload + meta + deadline)
-                match tokio::time::timeout(duration, handler.call(ctx)):
-                    Ok(Ok(())) → mark completed
-                    Ok(Err(e)) → attempt < max ? reschedule with backoff : mark dead
-                    Err(elapsed) → same as Err (timeout)
-                JoinHandle panic → same as Err
-                release semaphore permit
+                for each job in claimed:
+                    acquire semaphore permit
+                    tokio::spawn:
+                        build JobContext (registry snapshot + payload + meta + deadline)
+                        match tokio::time::timeout(duration, handler.call(ctx)):
+                            Ok(Ok(())) → mark completed
+                            Ok(Err(e)) → attempt < max ? reschedule with backoff : mark dead
+                            Err(elapsed) → same as Err (timeout)
+                        JoinHandle panic → same as Err
+                        release semaphore permit
+        }
+    }
 ```
 
 ### Stale Reaper
 
-Dedicated loop running every `stale_reaper_interval_secs` (default 60s):
+Dedicated loop running every `stale_reaper_interval_secs` (default 60s). Uses `CancellationToken` for shutdown. All timestamps computed in Rust:
 
-```sql
-UPDATE modo_jobs
-SET status = 'pending',
-    started_at = NULL,
-    updated_at = now()
-WHERE status = 'running'
-  AND started_at < now() - stale_threshold_secs
+```rust
+let threshold = (Utc::now() - chrono::Duration::seconds(stale_threshold_secs)).to_rfc3339();
+let now = Utc::now().to_rfc3339();
+
+sqlx::query(
+    "UPDATE modo_jobs SET status = 'pending', started_at = NULL, updated_at = ? \
+     WHERE status = 'running' AND started_at < ?"
+)
+.bind(&now)
+.bind(&threshold)
+.execute(&writer).await?;
 ```
 
 Recovers jobs stuck `running` after worker process crash. Attempt count is unchanged — it was already incremented on claim.
 
 ### Cleanup Loop
 
-Dedicated loop running every `cleanup.interval_secs` (default 3600s):
+Dedicated loop running every `cleanup.interval_secs` (default 3600s). Uses `CancellationToken` for shutdown. All timestamps computed in Rust:
 
-```sql
-DELETE FROM modo_jobs
-WHERE status IN ('completed', 'dead', 'cancelled')
-  AND updated_at < now() - cleanup.retention_secs
+```rust
+let threshold = (Utc::now() - chrono::Duration::seconds(retention_secs)).to_rfc3339();
+
+sqlx::query(
+    "DELETE FROM modo_jobs WHERE status IN ('completed', 'dead', 'cancelled') AND updated_at < ?"
+)
+.bind(&threshold)
+.execute(&writer).await?;
 ```
 
-Default retention: 72h (259200s). Opt-out by setting `cleanup: null` in config.
+Default retention: 72h (259200s). Cleanup always deletes terminal states (`completed`, `dead`, `cancelled`) — this is not configurable. Opt-out of the entire cleanup loop by setting `cleanup: null` in config.
 
 ## Handler Traits
 
@@ -285,9 +327,9 @@ pub trait FromJobContext: Sized {
     fn from_job_context(ctx: &JobContext) -> Result<Self>;
 }
 
-// Implementations:
-// - Payload<T>: deserializes ctx.payload JSON into T
-// - Service<T>: reads from ctx.registry
+// Implementations (in job/context.rs):
+// - Payload<T>: deserializes ctx.payload JSON string into T
+// - Service<T>: reads from ctx.registry (FromJobContext impl on extractor::Service<T>)
 // - job::Meta: clones ctx.meta
 ```
 
@@ -323,8 +365,8 @@ pub trait FromCronContext: Sized {
     fn from_cron_context(ctx: &CronContext) -> Result<Self>;
 }
 
-// Implementations:
-// - Service<T>: reads from ctx.registry
+// Implementations (in cron/context.rs):
+// - Service<T>: reads from ctx.registry (FromCronContext impl on extractor::Service<T>)
 // - cron::Meta: clones ctx.meta
 // (No Payload — cron jobs have no input data)
 ```
@@ -335,16 +377,28 @@ Same macro pattern for 0..12 extractor tuples.
 
 ```rust
 pub(crate) struct JobContext {
-    registry: Arc<Registry>,
-    payload: Vec<u8>,
+    registry: Arc<RegistrySnapshot>,
+    payload: String,    // JSON text from DB, deserialized by Payload<T> extractor
     meta: job::Meta,
 }
 
 pub(crate) struct CronContext {
-    registry: Arc<Registry>,
+    registry: Arc<RegistrySnapshot>,
     meta: cron::Meta,
 }
 ```
+
+`RegistrySnapshot` is a `HashMap<TypeId, Arc<dyn Any + Send + Sync>>` cloned from the `Registry` at builder construction time. It supports the same `get::<T>() -> Option<Arc<T>>` lookup that `Service<T>` needs.
+
+### Extractor Impl Locations
+
+- `FromJobContext for Service<T>` — implemented in `job/context.rs`
+- `FromJobContext for Payload<T>` — implemented in `job/context.rs`
+- `FromJobContext for job::Meta` — implemented in `job/context.rs`
+- `FromCronContext for Service<T>` — implemented in `cron/context.rs`
+- `FromCronContext for cron::Meta` — implemented in `cron/context.rs`
+
+All impls are crate-local (single crate), so no orphan rule concerns.
 
 ## Cron Scheduler
 
@@ -352,7 +406,7 @@ pub(crate) struct CronContext {
 pub struct Scheduler { /* internal */ }
 
 impl Scheduler {
-    pub fn new(registry: &Registry) -> SchedulerBuilder;
+    pub fn builder(registry: &Registry) -> SchedulerBuilder;
 }
 
 pub struct SchedulerBuilder { /* internal */ }
@@ -374,12 +428,14 @@ impl SchedulerBuilder {
 
 impl Task for Scheduler {
     async fn shutdown(self) -> Result<()>;
-    // 1. Signal all job loops to stop via CancellationToken
+    // 1. Cancel CancellationToken (stops all job loops)
     // 2. Wait for in-flight handlers to finish (with drain timeout)
 }
 ```
 
 ### Schedule Formats
+
+Standard cron expressions parsed by the `croner` crate. `@every` and named aliases parsed in-house.
 
 | Format                  | Example                              |
 | ----------------------- | ------------------------------------ |
@@ -397,8 +453,11 @@ Validated at `start()` — invalid schedule panics. Fail fast.
 
 ```
 1. Parse schedule, compute next_tick
-2. tokio::time::sleep_until(next_tick)
-3. Check skip flag — if previous run still going, skip, compute next_tick, goto 2
+2. select! {
+       _ = cancellation_token.cancelled() => return,
+       _ = tokio::time::sleep_until(next_tick) => { ... }
+   }
+3. Check skip flag (AtomicBool) — if previous run still going, skip, compute next_tick, goto 2
 4. Set skip flag
 5. tokio::time::timeout(duration, handler.call(ctx))
 6. Log result (success or error) — no retries, no persistence
@@ -410,6 +469,7 @@ Validated at `start()` — invalid schedule panics. Fail fast.
 - Each cron job is its own `tokio::spawn` loop
 - Errors are logged and swallowed — next tick runs fresh
 - `CancellationToken` from `tokio_util` for clean shutdown signaling
+- Skip flag is `AtomicBool` — lock-free overlap detection
 
 ## Configuration
 
@@ -427,8 +487,9 @@ job:
     cleanup:
         interval_secs: 3600
         retention_secs: 259200
-        statuses: [completed, dead, cancelled]
 ```
+
+Cleanup always targets terminal states (`completed`, `dead`, `cancelled`). No `statuses` config field — this is not user-configurable; terminal states are an implementation invariant.
 
 Cron has no config struct — schedule strings and options are set in code.
 
@@ -437,23 +498,28 @@ Cron has no config struct — schedule strings and options are set in code.
 ```
 src/
   job/
-    mod.rs          -- mod imports, re-exports
+    mod.rs          -- mod imports, re-exports (JobConfig, Enqueuer, EnqueueOptions,
+                       EnqueueResult, Worker, WorkerBuilder, JobOptions, JobHandler,
+                       FromJobContext, Payload, Meta, Status)
     config.rs       -- JobConfig, QueueConfig, CleanupConfig
     enqueuer.rs     -- Enqueuer, EnqueueOptions, EnqueueResult
     worker.rs       -- Worker, WorkerBuilder, JobOptions
     handler.rs      -- JobHandler trait, blanket impls (macro)
-    context.rs      -- JobContext (pub(crate)), FromJobContext trait
-    payload.rs      -- Payload<T> extractor
-    meta.rs         -- job::Meta
+    context.rs      -- JobContext (pub(crate)), FromJobContext trait,
+                       FromJobContext impls for Service<T>, Payload<T>, Meta
+    payload.rs      -- Payload<T> extractor type
+    meta.rs         -- job::Meta, job::Status
     reaper.rs       -- stale reaper loop
     cleanup.rs      -- cleanup loop
   cron/
-    mod.rs          -- mod imports, re-exports
+    mod.rs          -- mod imports, re-exports (Scheduler, SchedulerBuilder,
+                       CronOptions, CronHandler, FromCronContext, Meta)
     scheduler.rs    -- Scheduler, SchedulerBuilder, CronOptions
     handler.rs      -- CronHandler trait, blanket impls (macro)
-    context.rs      -- CronContext (pub(crate)), FromCronContext trait
+    context.rs      -- CronContext (pub(crate)), FromCronContext trait,
+                       FromCronContext impls for Service<T>, Meta
     meta.rs         -- cron::Meta
-    schedule.rs     -- schedule parsing (@every, @daily, standard cron)
+    schedule.rs     -- schedule parsing (@every, @daily, standard cron via croner)
 ```
 
 ## Bootstrap Example
@@ -474,7 +540,7 @@ async fn main() -> anyhow::Result<()> {
     registry.add(writer.clone());
     registry.add(job::Enqueuer::new(&writer));
 
-    let worker = job::Worker::new(&config.modo.job, &registry)
+    let worker = job::Worker::builder(&config.modo.job, &registry)
         .register("send_confirmation", send_confirmation)
         .register_with("heavy_task", heavy_task, job::JobOptions {
             max_attempts: 5,
@@ -482,7 +548,7 @@ async fn main() -> anyhow::Result<()> {
         })
         .start().await;
 
-    let scheduler = cron::Scheduler::new(&registry)
+    let scheduler = cron::Scheduler::builder(&registry)
         .job("@every 15m", cleanup_sessions)
         .job_with("@every 30s", health_check, cron::CronOptions {
             timeout_secs: 10,
