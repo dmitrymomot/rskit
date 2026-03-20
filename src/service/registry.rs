@@ -23,6 +23,11 @@ impl Registry {
             .and_then(|arc| arc.clone().downcast::<T>().ok())
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn snapshot(&self) -> Arc<super::RegistrySnapshot> {
+        Arc::new(super::RegistrySnapshot::new(self.services.clone()))
+    }
+
     pub fn into_state(self) -> super::AppState {
         super::AppState::from(self)
     }
