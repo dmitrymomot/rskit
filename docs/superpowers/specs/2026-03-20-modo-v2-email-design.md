@@ -6,7 +6,7 @@ SMTP transport, markdown templates with YAML frontmatter, layout engine.
 
 | Decision | Choice |
 |---|---|
-| Template embedding | Disk-only; optional `embed-templates` feature flag for binary embedding |
+| Template embedding | Disk-only; binary embedding deferred to a future plan |
 | Variable substitution | Simple `{{var}}` only — no logic, loops, or filters; safe for user-authored templates |
 | Template storage | Filesystem for developer templates; app provides custom `TemplateSource` for DB or other backends |
 | Sending model | Direct send only — job integration is the caller's responsibility |
@@ -118,7 +118,68 @@ pub enum SmtpSecurity {
 }
 ```
 
+### Default Implementations
+
+```rust
+impl Default for EmailConfig {
+    fn default() -> Self {
+        Self {
+            templates_path: "emails".into(),
+            layouts_path: "emails/layouts".into(),
+            default_from_name: String::new(),
+            default_from_email: String::new(),
+            default_reply_to: None,
+            default_locale: "en".into(),
+            cache_templates: true,
+            template_cache_size: 100,
+            smtp: SmtpConfig::default(),
+        }
+    }
+}
+
+impl Default for SmtpConfig {
+    fn default() -> Self {
+        Self {
+            host: "localhost".into(),
+            port: 587,
+            username: None,
+            password: None,
+            security: SmtpSecurity::default(),
+        }
+    }
+}
+
+impl Default for SmtpSecurity {
+    fn default() -> Self {
+        Self::StartTls
+    }
+}
+```
+
+### SMTP Authentication
+
+- Both `username` and `password` are `Some` → authenticate with credentials
+- Both are `None` → unauthenticated connection
+- Mismatched (one `Some`, one `None`) → `Error::bad_request("SMTP username and password must both be set or both be empty")`
+
+### Config Integration
+
 Added to `modo::Config` behind `#[cfg(feature = "email")]`, same pattern as `oauth`.
+
+### Service Registry Wiring
+
+```rust
+// In main()
+let mailer = modo::email::Mailer::new(&config.email)?;
+registry.add(mailer);
+
+// In handler
+async fn send_welcome(Service(mailer): Service<modo::email::Mailer>) -> Result<()> {
+    mailer.send(SendEmail::new("welcome", "user@example.com")
+        .var("name", "Dmytro")).await?;
+    Ok(())
+}
+```
 
 ## Template Format
 
@@ -173,14 +234,13 @@ If you have questions, reply to this email.
 
 ### Variable Substitution
 
-Simple `{{var}}` string replacement on the entire raw template string before frontmatter parsing. Variables work in both frontmatter and body.
+All `{{var}}` substitution uses raw (unescaped) values. HTML escaping is NOT done during substitution — it is handled downstream by `pulldown-cmark` when rendering markdown to HTML (pulldown-cmark escapes text content automatically). This means variables work identically in frontmatter and body, and the pipeline ordering is clean: substitute first, parse second.
 
 Rules:
-- `{{var}}` — replaced with value if present, empty string if missing
+- `{{var}}` — replaced with raw value if present, empty string if missing
 - No nesting, no filters, no conditionals
 - Variable names: `[a-zA-Z_][a-zA-Z0-9_]*`
-- In the HTML body, variable values are HTML-escaped
-- In the subject line and plain text output, values are raw (unescaped)
+- HTML escaping is handled by pulldown-cmark during Stage 3, not during substitution
 
 ## Rendering Pipeline
 
@@ -195,7 +255,7 @@ Raw template string
 
 ### Stage 1: Substitute
 
-Replace all `{{var}}` in the raw string. Body values are HTML-escaped; subject/frontmatter values are raw.
+Replace all `{{var}}` in the raw string with raw (unescaped) values. HTML escaping is deferred to Stage 3 (pulldown-cmark handles it).
 
 ### Stage 2: Parse
 
@@ -216,11 +276,11 @@ Walk `pulldown-cmark` events. When a link text matches `button|Label` or `button
 
 ### Stage 4: Layout
 
-Load the layout by name:
+Look up the layout by name:
 - `"base"` → built-in responsive HTML layout (compiled into the crate)
-- Any other name → read from `layouts_path/{name}.html`
+- Any other name → look up in the eagerly-loaded layouts map (loaded at `Mailer` construction)
 
-Layout is a plain HTML file with `{{content}}` placeholder where the rendered body is injected. The layout also receives variable substitution for `brand_color`, `logo_url`, `footer_text`, etc.
+Layout is a plain HTML file with `{{content}}` placeholder where the rendered body is injected. After content injection, `{{var}}` substitution runs on the full layout HTML using the same `vars` map from `SendEmail`.
 
 ### Stage 5: Plain text
 
@@ -311,9 +371,11 @@ pub trait TemplateSource: Send + Sync {
 
 Returns the raw template string (frontmatter + body). The `Mailer` handles rendering. `default_locale` is passed so implementations can do their own fallback logic.
 
+`TemplateSource::load()` is intentionally synchronous. `FileSource` uses `std::fs` for file reads. Since `Mailer::render()` is also synchronous, there is no risk of blocking the tokio runtime from the render path. `Mailer::send()` is async but calls `render()` (sync) before the async SMTP send — the sync portion is fast (file read + string processing) and acceptable on a tokio worker thread.
+
 ### FileSource
 
-Implements the 4-step locale fallback chain described above. Reads from `templates_path` on the filesystem.
+Implements the 4-step locale fallback chain described above. Reads from `templates_path` on the filesystem using `std::fs::read_to_string`.
 
 ### CachedSource Wrapper
 
@@ -322,9 +384,11 @@ Wraps any `TemplateSource` with LRU caching, keyed by `(name, locale)`. Only use
 ```rust
 pub struct CachedSource<S: TemplateSource> {
     inner: S,
-    cache: Mutex<LruCache<(String, String), String>>,
+    cache: std::sync::Mutex<LruCache<(String, String), String>>,
 }
 ```
+
+Uses `std::sync::Mutex` (not `tokio::sync::Mutex`) since `load()` is synchronous and the lock is never held across `.await`. The lock scope is limited to cache lookup/insert — fast and non-blocking.
 
 ## Built-in Base Layout
 
@@ -341,7 +405,7 @@ A single responsive HTML email layout compiled into the crate.
 
 ### Layout Variables
 
-Optional — omit them and the section doesn't render:
+Layout variables come from the same `SendEmail::vars` map as template variables. The caller passes them alongside other variables. These three are recognized by the built-in `base` layout — omit them and the corresponding section doesn't render:
 
 | Variable | Effect |
 |---|---|
@@ -349,9 +413,13 @@ Optional — omit them and the section doesn't render:
 | `footer_text` | Renders a muted text section below the card |
 | `brand_color` | Overrides primary button color and accent elements |
 
+Custom layouts can use any variable names from the `vars` map.
+
 ### Custom Layouts
 
-Plain HTML files in `layouts_path/` with `{{content}}` as the body placeholder. They receive the same variable substitution as templates.
+Plain HTML files in `layouts_path/` with `{{content}}` as the body placeholder. They receive `{{var}}` substitution from the same `vars` map.
+
+Custom layouts are loaded eagerly at `Mailer` construction time (not lazily at render time). If a layout file is added after the `Mailer` is created, it will not be available until the `Mailer` is reconstructed. Templates, by contrast, are loaded lazily via `TemplateSource` on each render.
 
 Referenced in template frontmatter:
 
@@ -362,7 +430,7 @@ layout: marketing
 ---
 ```
 
-Resolution: `"base"` → built-in. Anything else → load from `layouts_path/{name}.html`.
+Resolution: `"base"` → built-in. Anything else → look up in the eagerly-loaded `layouts` map → error if not found.
 
 ## Mailer API
 
@@ -385,11 +453,19 @@ let mailer = Mailer::with_stub_transport(&config.email, stub.clone())?;
 ```rust
 pub struct Mailer {
     source: Arc<dyn TemplateSource>,
-    transport: /* enum or trait object wrapping AsyncSmtpTransport or AsyncStubTransport */,
+    transport: Transport,
     config: EmailConfig,
     layouts: HashMap<String, String>,  // custom layouts loaded at construction
 }
+
+enum Transport {
+    Smtp(lettre::AsyncSmtpTransport<lettre::Tokio1Executor>),
+    #[cfg(test)]
+    Stub(lettre::transport::stub::AsyncStubTransport),
+}
 ```
+
+Transport is a private enum, not a trait object. The `Stub` variant is only available in test builds. This keeps the public API clean — users interact with `Mailer::new()` and `Mailer::with_source()` only. `Mailer::with_stub_transport()` is gated behind `#[cfg(test)]`.
 
 ### Methods
 
