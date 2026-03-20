@@ -1568,65 +1568,19 @@ async fn poll_loop(
 
                                     tracing::info!(job_id = %job_id, job_name = %job_name, "job completed");
                                 }
-                                Ok(Err(e)) | Err(_) => {
-                                    let error_msg = match &result {
-                                        Ok(Err(e)) => format!("{e}"),
-                                        Err(_) => "timeout".to_string(),
-                                        _ => unreachable!(),
-                                    };
-
-                                    if (attempt as u32) >= max_attempts {
-                                        // Mark dead
-                                        let _ = sqlx::query(
-                                            "UPDATE modo_jobs SET status = 'dead', \
-                                             failed_at = ?, error_message = ?, updated_at = ? WHERE id = ?",
-                                        )
-                                        .bind(&now_str)
-                                        .bind(&error_msg)
-                                        .bind(&now_str)
-                                        .bind(&job_id)
-                                        .execute(&writer)
-                                        .await;
-
-                                        tracing::error!(
-                                            job_id = %job_id,
-                                            job_name = %job_name,
-                                            attempt = attempt,
-                                            error = %error_msg,
-                                            "job dead after max attempts"
-                                        );
-                                    } else {
-                                        // Reschedule with backoff
-                                        let delay_secs = std::cmp::min(
-                                            5u64 * 2u64.pow(attempt as u32 - 1),
-                                            3600,
-                                        );
-                                        let retry_at = (Utc::now()
-                                            + chrono::Duration::seconds(delay_secs as i64))
-                                            .to_rfc3339();
-
-                                        let _ = sqlx::query(
-                                            "UPDATE modo_jobs SET status = 'pending', \
-                                             run_at = ?, started_at = NULL, \
-                                             failed_at = ?, error_message = ?, updated_at = ? WHERE id = ?",
-                                        )
-                                        .bind(&retry_at)
-                                        .bind(&now_str)
-                                        .bind(&error_msg)
-                                        .bind(&now_str)
-                                        .bind(&job_id)
-                                        .execute(&writer)
-                                        .await;
-
-                                        tracing::warn!(
-                                            job_id = %job_id,
-                                            job_name = %job_name,
-                                            attempt = attempt,
-                                            retry_in_secs = delay_secs,
-                                            error = %error_msg,
-                                            "job failed, rescheduled"
-                                        );
-                                    }
+                                Ok(Err(e)) => {
+                                    let error_msg = format!("{e}");
+                                    handle_job_failure(
+                                        &writer, &job_id, &job_name, attempt as u32,
+                                        max_attempts, &error_msg, &now_str,
+                                    ).await;
+                                }
+                                Err(_) => {
+                                    let error_msg = "timeout".to_string();
+                                    handle_job_failure(
+                                        &writer, &job_id, &job_name, attempt as u32,
+                                        max_attempts, &error_msg, &now_str,
+                                    ).await;
                                 }
                             }
 
@@ -1639,14 +1593,85 @@ async fn poll_loop(
     }
 }
 
-async fn reaper_loop(
+async fn handle_job_failure(
+    writer: &InnerPool,
+    job_id: &str,
+    job_name: &str,
+    attempt: u32,
+    max_attempts: u32,
+    error_msg: &str,
+    now_str: &str,
+) {
+    if attempt >= max_attempts {
+        let _ = sqlx::query(
+            "UPDATE modo_jobs SET status = 'dead', \
+             failed_at = ?, error_message = ?, updated_at = ? WHERE id = ?",
+        )
+        .bind(now_str)
+        .bind(error_msg)
+        .bind(now_str)
+        .bind(job_id)
+        .execute(writer)
+        .await;
+
+        tracing::error!(
+            job_id = %job_id,
+            job_name = %job_name,
+            attempt = attempt,
+            error = %error_msg,
+            "job dead after max attempts"
+        );
+    } else {
+        let delay_secs = std::cmp::min(5u64 * 2u64.pow(attempt - 1), 3600);
+        let retry_at = (Utc::now()
+            + chrono::Duration::seconds(delay_secs as i64))
+            .to_rfc3339();
+
+        let _ = sqlx::query(
+            "UPDATE modo_jobs SET status = 'pending', \
+             run_at = ?, started_at = NULL, \
+             failed_at = ?, error_message = ?, updated_at = ? WHERE id = ?",
+        )
+        .bind(&retry_at)
+        .bind(now_str)
+        .bind(error_msg)
+        .bind(now_str)
+        .bind(job_id)
+        .execute(writer)
+        .await;
+
+        tracing::warn!(
+            job_id = %job_id,
+            job_name = %job_name,
+            attempt = attempt,
+            retry_in_secs = delay_secs,
+            error = %error_msg,
+            "job failed, rescheduled"
+        );
+    }
+}
+```
+
+**Note:** The `reaper_loop` and `cleanup_loop` functions go in separate files per spec convention. See below.
+
+- [ ] **Step 2: Create `src/job/reaper.rs`**
+
+Create `src/job/reaper.rs`:
+
+```rust
+use std::time::Duration;
+
+use chrono::Utc;
+use tokio_util::sync::CancellationToken;
+
+use crate::db::InnerPool;
+
+pub(crate) async fn reaper_loop(
     writer: InnerPool,
     stale_threshold_secs: u64,
     interval_secs: u64,
     cancel: CancellationToken,
 ) {
-    use chrono::Utc;
-
     let interval = Duration::from_secs(interval_secs);
 
     loop {
@@ -1682,15 +1707,26 @@ async fn reaper_loop(
         }
     }
 }
+```
 
-async fn cleanup_loop(
+- [ ] **Step 3: Create `src/job/cleanup.rs`**
+
+Create `src/job/cleanup.rs`:
+
+```rust
+use std::time::Duration;
+
+use chrono::Utc;
+use tokio_util::sync::CancellationToken;
+
+use crate::db::InnerPool;
+
+pub(crate) async fn cleanup_loop(
     writer: InnerPool,
     interval_secs: u64,
     retention_secs: u64,
     cancel: CancellationToken,
 ) {
-    use chrono::Utc;
-
     let interval = Duration::from_secs(interval_secs);
 
     loop {
@@ -1725,11 +1761,21 @@ async fn cleanup_loop(
 }
 ```
 
-- [ ] **Step 2: Update job/mod.rs**
+- [ ] **Step 4: Update `worker.rs` imports to use reaper/cleanup modules**
+
+In `worker.rs`, replace the inline `reaper_loop` and `cleanup_loop` function definitions with imports. The `start()` method calls:
+```rust
+use super::reaper::reaper_loop;
+use super::cleanup::cleanup_loop;
+```
+
+- [ ] **Step 5: Update job/mod.rs**
 
 Add to `src/job/mod.rs`:
 
 ```rust
+mod cleanup;
+mod reaper;
 mod worker;
 
 pub use worker::{JobOptions, Worker, WorkerBuilder};
@@ -1795,7 +1841,11 @@ async fn setup() -> (Registry, db::Pool) {
     sqlx::query(CREATE_TABLE).execute(&*pool).await.unwrap();
 
     let mut registry = Registry::new();
-    registry.add(pool.clone());
+    // Worker::builder() expects WritePool in the registry (not Pool).
+    // Pool derefs to InnerPool (SqlitePool), so we clone the inner pool
+    // and wrap it in WritePool for the registry.
+    let write_pool = db::WritePool::new((*pool).clone());
+    registry.add(write_pool);
     registry.add(Enqueuer::new(&pool));
     (registry, pool)
 }
@@ -2533,9 +2583,13 @@ impl Scheduler {
 impl crate::runtime::Task for Scheduler {
     async fn shutdown(self) -> Result<()> {
         self.cancel.cancel();
-        for handle in self.handles {
-            let _ = handle.await;
-        }
+        // Wait up to 30s for all cron job loops to finish
+        let drain = async {
+            for handle in self.handles {
+                let _ = handle.await;
+            }
+        };
+        let _ = tokio::time::timeout(Duration::from_secs(30), drain).await;
         Ok(())
     }
 }
@@ -2581,21 +2635,29 @@ async fn cron_job_loop(
                     },
                 };
 
-                let result = tokio::time::timeout(timeout_dur, (handler)(ctx)).await;
+                // Spawn handler in separate task so the loop continues
+                // and can detect overlap on next tick
+                let running_flag = running.clone();
+                let handler_clone = handler.clone();
+                let job_name = name.clone();
+                tokio::spawn(async move {
+                    let result = tokio::time::timeout(timeout_dur, (handler_clone)(ctx)).await;
 
-                match result {
-                    Ok(Ok(())) => {
-                        tracing::debug!(cron_job = %name, "completed");
+                    match result {
+                        Ok(Ok(())) => {
+                            tracing::debug!(cron_job = %job_name, "completed");
+                        }
+                        Ok(Err(e)) => {
+                            tracing::error!(cron_job = %job_name, error = %e, "failed");
+                        }
+                        Err(_) => {
+                            tracing::error!(cron_job = %job_name, "timed out");
+                        }
                     }
-                    Ok(Err(e)) => {
-                        tracing::error!(cron_job = %name, error = %e, "failed");
-                    }
-                    Err(_) => {
-                        tracing::error!(cron_job = %name, "timed out");
-                    }
-                }
 
-                running.store(false, Ordering::SeqCst);
+                    running_flag.store(false, Ordering::SeqCst);
+                });
+
                 next_tick = schedule.next_tick(Utc::now());
             }
         }
