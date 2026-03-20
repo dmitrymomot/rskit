@@ -31,7 +31,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - thiserror 2, anyhow 1
 - ulid 1, chrono 0.4
 - rand 0.10
-- Feature flags: `sqlite` (default) / `postgres` (mutually exclusive)
+- SQLite is the only DB backend — no feature flags for DB selection
+- sha2 0.10, ipnet 2
 - axum-extra 0.12 (cookie-signed, cookie-private, multipart), tower_governor 0.8, regex 1, nanohtml2text 0.2
 - Future deps: opendal 0.55 (`services-s3`)
 
@@ -54,7 +55,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Response types: `Json<T>`, `Html<String>`, `Redirect`, `Response`
 - Service registry: `Registry` is `HashMap<TypeId, Arc<dyn Any>>` — `.add(value)` inserts, `Service<T>` extracts
 - Config: YAML with `${VAR}` / `${VAR:default}` env var substitution, loaded per `APP_ENV`
-- Database: `Pool`, `ReadPool`, `WritePool` newtypes; `connect()` / `connect_rw()` for pools; `:memory:` auto-limits to 1 connection; reader pool opens read-only
+- Database: `Pool`, `ReadPool`, `WritePool` newtypes; `Reader`/`Writer` traits (replaced `AsPool`); `connect()` / `connect_rw()` for pools; `:memory:` auto-limits to 1 connection; reader pool opens read-only
+- Cookie: `CookieConfig` has `secret`, `secure`, `http_only`, `same_site` — no `domain` or `path` (path hardcoded to `"/"`)
 - Server defaults: host `localhost`, port `8080`, shutdown timeout 30s
 - IDs: `src/id/` module — `id::ulid()` for full ULID (26 chars), `id::short()` for short time-sortable ID (13 chars, base36) — no UUID anywhere. Short ID ported from v1 (`modo-db/src/id.rs`): 42-bit ms timestamp | 22-bit random → base36
 - Runtime: `Task` trait + `run!` macro for sequential shutdown
@@ -65,7 +67,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 
 - **Plan 1 (Foundation):** error, id, config, service, runtime, db, tracing, server — DONE
 - **Plan 2 (Web Core):** sanitize, validate, extractors, cookie, middleware (9 layers), Sentry — DONE
-- **Plan 3 (Session):** DB-backed sessions with token hashing, fingerprinting, middleware lifecycle
+- **Plan 3 (Session):** DB-backed sessions with token hashing, fingerprinting, middleware lifecycle — DONE
 - **Plan 4 (Auth + OAuth):** guards, password hashing, TOTP, OTP, backup codes, Google/GitHub OAuth
 - **Plan 5 (Job + Cron):** DB-backed job queue, worker, enqueuer, in-memory cron scheduler
 - **Plan 6 (Email):** SMTP transport, markdown templates with YAML frontmatter, layout engine
@@ -87,10 +89,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Config tests that modify env vars must use `serial_test` crate to avoid races
 - `run!` macro uses `$crate::tracing::info!` paths (not bare `tracing::`) for correct hygiene — this rule applies ONLY inside macros; regular library code can use bare `tracing::` paths
 - `server::http()` accepts `Router` (i.e., `Router<()>`, after `.with_state()` has been called)
-- `sqlite` and `postgres` features are mutually exclusive — enforced via `compile_error!`
 - To lint test code, run `cargo clippy --tests` — plain `cargo clippy` only checks lib code
-- Postgres support is stubbed (`PostgresConfig` struct + type alias only) — full implementation deferred
-- `ReadPool` intentionally does NOT implement `AsPool` — prevents passing it to migration functions
+- `ReadPool` intentionally does NOT implement `Writer` — prevents passing it to migration or write functions
 - `connect_rw()` connects writer pool before reader — SQLite `?mode=ro` requires the file to already exist
 - Pool newtypes (`Pool`, `ReadPool`, `WritePool`) don't derive `Debug` — tests on `Result<(ReadPool, WritePool)>` must use `.err().unwrap()` not `.unwrap_err()`
 - `into_inner()` on pool newtypes is `pub(crate)` — not available to downstream users
@@ -99,3 +99,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - String length checks must use `.chars().count()`, not `.len()` — `.len()` counts bytes, not characters (breaks on emoji, CJK, etc.)
 - Middleware adding response headers must check `!headers.contains_key()` before inserting — handler-set headers take precedence
 - Use official documentation only when researching dependencies
+- rand 0.10 API: use `rand::fill(&mut bytes)` not `rand::rng().fill_bytes()` — the latter requires `use rand::Rng` which is easy to miss
+- Clippy rejects `mod foo` inside `foo/mod.rs` (same-name module lint) — name the file differently (e.g., `extractor.rs` instead of `session.rs` inside `session/`)
+- `std::sync::MutexGuard` is not `Send` — never hold it across `.await` or axum handler futures become non-Send (breaks `Handler` trait). Extract values into locals, drop the guard, then await.
+- axum handler functions defined inside `#[tokio::test]` closures don't satisfy `Handler` bounds — define them as module-level `async fn` instead
+- Session middleware uses raw `cookie::CookieJar` with `.signed()`/`.signed_mut()` for cookie signing — NOT `axum_extra::extract::cookie::SignedCookieJar` (which is an axum extractor, not suitable for manual middleware use)
