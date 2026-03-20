@@ -380,7 +380,9 @@ Serves files from disk via `tower_http::ServeDir`. No embedding — production s
 
 ### Wiring
 
-`engine.static_service()` returns a `Router` that internally uses `nest_service` at the configured `static_url_prefix`. Use `.merge()` to combine it with the app router:
+`engine.static_service()` is optional — skip it if a reverse proxy (Caddy, nginx) serves static files. The `static_url()` template function works regardless (it just generates versioned URLs from the hash map).
+
+When the app serves static files itself, `static_service()` returns a `Router` that internally uses `nest_service` at the configured `static_url_prefix`. Use `.merge()` to combine it with the app router:
 
 ```rust
 let app = Router::new()
