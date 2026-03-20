@@ -61,7 +61,10 @@ pub fn render_button_html(
     btn_type: ButtonType,
     brand_color: Option<&str>,
 ) -> String {
+    use crate::email::render;
     let (bg, fg) = btn_type.colors(brand_color);
+    let label = render::escape_html(label);
+    let url = render::escape_html(url);
     format!(
         r#"<table role="presentation" cellpadding="0" cellspacing="0" style="margin: 16px 0;"><tr><td style="background-color: {bg}; border-radius: 6px; padding: 12px 24px;"><a href="{url}" style="color: {fg}; text-decoration: none; font-weight: 600; display: inline-block;">{label}</a></td></tr></table>"#
     )
@@ -146,5 +149,17 @@ mod tests {
     fn render_text_format() {
         let text = render_button_text("Get Started", "https://example.com");
         assert_eq!(text, "Get Started: https://example.com");
+    }
+
+    #[test]
+    fn render_html_escapes_special_chars() {
+        let html = render_button_html(
+            "<b>Bold</b>",
+            r#"https://x.com/?a=1&b="2""#,
+            ButtonType::Primary,
+            None,
+        );
+        assert!(html.contains(">&lt;b&gt;Bold&lt;/b&gt;</a>"));
+        assert!(html.contains("href=\"https://x.com/?a=1&amp;b=&quot;2&quot;\""));
     }
 }

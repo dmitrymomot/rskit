@@ -108,6 +108,9 @@ pub fn markdown_to_text(markdown: &str) -> String {
             Event::Text(t) if in_link.is_some() => {
                 link_text.push_str(&t);
             }
+            Event::Code(t) if in_link.is_some() => {
+                link_text.push_str(&t);
+            }
             Event::End(TagEnd::Link) => {
                 if let Some(url) = in_link.take() {
                     if let Some((_, label)) = button::parse_button(&link_text) {
@@ -233,5 +236,11 @@ mod tests {
         let text = markdown_to_text("- Item 1\n- Item 2");
         assert!(text.contains("- Item 1"));
         assert!(text.contains("- Item 2"));
+    }
+
+    #[test]
+    fn text_code_inside_link() {
+        let text = markdown_to_text("[`code`](https://example.com)");
+        assert_eq!(text, "code (https://example.com)");
     }
 }

@@ -28,18 +28,29 @@ pub fn substitute(input: &str, vars: &HashMap<String, String>) -> String {
         .into_owned()
 }
 
+/// Escape HTML special characters for safe interpolation into HTML attributes and text.
+pub(crate) fn escape_html(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
 /// Split a template string into frontmatter and body.
 /// Template must start with `---\n` and have a closing `---\n`.
-pub fn parse_frontmatter(template: &str) -> Result<(Frontmatter, &str)> {
-    let template = template.trim_start();
+/// Normalizes CRLF line endings before parsing.
+pub fn parse_frontmatter(template: &str) -> Result<(Frontmatter, String)> {
+    let normalized = template.replace("\r\n", "\n");
+    let trimmed = normalized.trim_start();
 
-    if !template.starts_with("---") {
+    if !trimmed.starts_with("---") {
         return Err(Error::bad_request(
             "email template missing frontmatter delimiter '---'",
         ));
     }
 
-    let after_first = &template[3..];
+    let after_first = &trimmed[3..];
     let after_first = after_first.strip_prefix('\n').unwrap_or(after_first);
 
     let end = after_first.find("\n---").ok_or_else(|| {
@@ -59,7 +70,7 @@ pub fn parse_frontmatter(template: &str) -> Result<(Frontmatter, &str)> {
         ));
     }
 
-    Ok((frontmatter, body))
+    Ok((frontmatter, body.to_string()))
 }
 
 #[cfg(test)]
@@ -160,5 +171,53 @@ mod tests {
     fn parse_frontmatter_empty_subject() {
         let result = parse_frontmatter("---\nsubject: \"\"\n---\nBody");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn escape_html_basic() {
+        assert_eq!(
+            escape_html(r#"<b>"Bold" & <i>italic</i></b>"#),
+            "&lt;b&gt;&quot;Bold&quot; &amp; &lt;i&gt;italic&lt;/i&gt;&lt;/b&gt;"
+        );
+    }
+
+    #[test]
+    fn escape_html_empty() {
+        assert_eq!(escape_html(""), "");
+    }
+
+    #[test]
+    fn escape_html_no_special_chars() {
+        assert_eq!(escape_html("Hello world"), "Hello world");
+    }
+
+    #[test]
+    fn parse_frontmatter_crlf() {
+        let template = "---\r\nsubject: Welcome!\r\n---\r\nHello body";
+        let (fm, body) = parse_frontmatter(template).unwrap();
+        assert_eq!(fm.subject, "Welcome!");
+        assert_eq!(body, "Hello body");
+    }
+
+    #[test]
+    fn parse_frontmatter_leading_whitespace() {
+        let template = "  \n---\nsubject: Hello\n---\nBody";
+        let (fm, body) = parse_frontmatter(template).unwrap();
+        assert_eq!(fm.subject, "Hello");
+        assert_eq!(body, "Body");
+    }
+
+    #[test]
+    fn parse_frontmatter_malformed_yaml() {
+        let result = parse_frontmatter("---\nsubject: [broken\n---\nBody");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_frontmatter_body_with_triple_dash() {
+        let template = "---\nsubject: Hello\n---\nBefore\n---\nAfter";
+        let (fm, body) = parse_frontmatter(template).unwrap();
+        assert_eq!(fm.subject, "Hello");
+        assert_eq!(body, "Before\n---\nAfter");
     }
 }

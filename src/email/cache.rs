@@ -6,10 +6,10 @@ use std::sync::Mutex;
 use crate::email::source::TemplateSource;
 
 /// LRU-cached wrapper around any `TemplateSource`.
-/// Cache key is `(name, locale)`.
+/// Cache key is `(name, locale, default_locale)`.
 pub struct CachedSource<S: TemplateSource> {
     inner: S,
-    cache: Mutex<LruCache<(String, String), String>>,
+    cache: Mutex<LruCache<(String, String, String), String>>,
 }
 
 impl<S: TemplateSource> CachedSource<S> {
@@ -24,7 +24,11 @@ impl<S: TemplateSource> CachedSource<S> {
 
 impl<S: TemplateSource> TemplateSource for CachedSource<S> {
     fn load(&self, name: &str, locale: &str, default_locale: &str) -> Result<String> {
-        let key = (name.to_string(), locale.to_string());
+        let key = (
+            name.to_string(),
+            locale.to_string(),
+            default_locale.to_string(),
+        );
 
         {
             let mut cache = self.cache.lock().unwrap();
@@ -136,5 +140,29 @@ mod tests {
 
         let result = cached.load("missing", "en", "en");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn cache_capacity_zero_uses_one() {
+        let mut templates = HashMap::new();
+        templates.insert("a".into(), "content".into());
+        let (source, _) = CountingSource::new(templates);
+        // capacity 0 should not panic, falls back to 1
+        let cached = CachedSource::new(source, 0);
+        let result = cached.load("a", "en", "en").unwrap();
+        assert_eq!(result, "content");
+    }
+
+    #[test]
+    fn cache_different_default_locales_are_separate() {
+        let mut templates = HashMap::new();
+        templates.insert("t".into(), "content".into());
+        let (source, calls) = CountingSource::new(templates);
+        let cached = CachedSource::new(source, 10);
+
+        cached.load("t", "fr", "en").unwrap();
+        cached.load("t", "fr", "de").unwrap();
+        // Different default_locale → separate cache entries → 2 inner calls
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 }

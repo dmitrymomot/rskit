@@ -140,14 +140,14 @@ impl Mailer {
 
         // Stage 3: Render markdown to HTML
         let brand_color = email.vars.get("brand_color").map(|s| s.as_str());
-        let html_body = markdown::markdown_to_html(body, brand_color);
+        let html_body = markdown::markdown_to_html(&body, brand_color);
 
         // Stage 4: Apply layout
         let layout_html = layout::resolve_layout(&frontmatter.layout, &self.layouts)?;
         let html = layout::apply_layout(&layout_html, &html_body, &email.vars);
 
         // Stage 5: Plain text
-        let text = markdown::markdown_to_text(body);
+        let text = markdown::markdown_to_text(&body);
 
         Ok(RenderedEmail {
             subject: frontmatter.subject,
@@ -249,5 +249,75 @@ impl Mailer {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::email::config::SmtpConfig;
+
+    fn test_email_config(smtp: SmtpConfig) -> EmailConfig {
+        EmailConfig {
+            templates_path: "/tmp/nonexistent".into(),
+            layouts_path: "/tmp/nonexistent".into(),
+            default_from_name: "Test".into(),
+            default_from_email: "test@example.com".into(),
+            default_reply_to: None,
+            default_locale: "en".into(),
+            cache_templates: false,
+            template_cache_size: 10,
+            smtp,
+        }
+    }
+
+    #[test]
+    fn build_smtp_transport_username_without_password() {
+        let config = test_email_config(SmtpConfig {
+            host: "localhost".into(),
+            port: 25,
+            username: Some("user".into()),
+            password: None,
+            security: SmtpSecurity::None,
+        });
+        let result = Mailer::build_smtp_transport(&config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn build_smtp_transport_password_without_username() {
+        let config = test_email_config(SmtpConfig {
+            host: "localhost".into(),
+            port: 25,
+            username: None,
+            password: Some("pass".into()),
+            security: SmtpSecurity::None,
+        });
+        let result = Mailer::build_smtp_transport(&config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn with_source_creates_mailer() {
+        struct MockSource;
+        impl TemplateSource for MockSource {
+            fn load(&self, _name: &str, _locale: &str, _default_locale: &str) -> Result<String> {
+                Ok("---\nsubject: Test\n---\nBody".into())
+            }
+        }
+
+        let config = test_email_config(SmtpConfig {
+            host: "localhost".into(),
+            port: 25,
+            username: None,
+            password: None,
+            security: SmtpSecurity::None,
+        });
+        let source: Arc<dyn TemplateSource> = Arc::new(MockSource);
+        let mailer = Mailer::with_source(&config, source).unwrap();
+
+        let email = SendEmail::new("any", "user@example.com");
+        let rendered = mailer.render(&email).unwrap();
+        assert_eq!(rendered.subject, "Test");
     }
 }
