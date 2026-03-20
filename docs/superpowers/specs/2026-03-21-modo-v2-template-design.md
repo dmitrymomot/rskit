@@ -11,9 +11,9 @@ MiniJinja template engine, i18n, and static file serving for modo v2.
 - **No RenderLayer** — handlers call `Renderer` methods directly and return responses. No middleware intercepting responses.
 - **Renderer is the primary interface** — users never call `Engine` methods directly (except `static_service()` for wiring). `Renderer` bundles Engine + TemplateContext + HTMX state.
 - **Config is the single source of truth** — paths and settings come from YAML config, not builder methods. Builder is only for custom functions, filters, and locale chain overrides.
-- **Feature-flagged** — `templates` gates the entire module; `static-embed` adds `include_dir` for binary embedding.
+- **Feature-flagged** — `templates` gates the entire module.
 - **i18n locale resolution is pluggable** — default chain (query → cookie → session → Accept-Language → default), replaceable or extendable via `LocaleResolver` trait.
-- **Static file versioning** — filesystem mode uses unix timestamp, embedded mode uses content hash. Cache headers hardcoded per mode.
+- **Static file versioning** — content hash (SHA-256, 8 hex chars) computed once at startup. No embedding — production uses reverse proxy/CDN.
 - **Dev auto-reload** — clears all templates before each render in debug mode. Simple, proven in v1.
 - **minijinja-contrib included** — batteries-included common filters (datetime, pluralize, etc.).
 
@@ -40,13 +40,9 @@ src/template/
 - `minijinja-contrib` — common filters
 - `intl_pluralrules` — CLDR-compliant plural category selection
 
-**Behind `static-embed` feature (implies `templates`):**
-- `include_dir` — compile-time directory embedding
-
 **Cargo.toml feature flags:**
 ```toml
 templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules"]
-static-embed = ["templates", "dep:include_dir"]
 ```
 
 Note: re-exporting `context!` from `minijinja` makes `minijinja` a public dependency. Version bumps to `minijinja` are semver-relevant for modo.
@@ -58,7 +54,6 @@ template:
   templates_path: "templates"
   static_path: "static"
   static_url_prefix: "/assets"
-  embed: false
   locales_path: "locales"
   default_locale: "en"
   locale_cookie: "lang"
@@ -72,7 +67,6 @@ pub struct TemplateConfig {
     pub templates_path: String,      // "templates"
     pub static_path: String,         // "static"
     pub static_url_prefix: String,   // "/assets"
-    pub embed: bool,                 // false
     pub locales_path: String,        // "locales"
     pub default_locale: String,      // "en"
     pub locale_cookie: String,       // "lang"
@@ -374,21 +368,15 @@ Engine::builder()
 
 ## Static Files
 
-### Two Modes
+Serves files from disk via `tower_http::ServeDir`. No embedding — production setups should use a reverse proxy or CDN for static files.
 
-**Filesystem mode (default):**
-- Serves files from disk via `tower_http::ServeDir`
-- `Cache-Control: no-cache`
-- No ETag
-- `static_url("css/app.css")` → `/assets/css/app.css?v=<unix_timestamp>`
-- Version is server startup timestamp (computed once at `Engine::build()`) — consistent with `no-cache` behavior, just a cache-buster
+**Versioning:** `Engine::build()` scans all files in `static_path`, computes SHA-256 (first 8 hex chars), and caches results in a `HashMap<String, String>` (path → hash). Computed once at startup, never recomputed. `static_url()` is a map lookup.
 
-**Embedded mode (`static-embed` feature + `embed: true` in config):**
-- Files compiled into binary via `include_dir!`
-- `Cache-Control: max-age=31536000, immutable`
-- ETag from content hash (SHA-256, first 8 hex chars)
-- `static_url("css/app.css")` → `/assets/css/app.css?v=a3f2b1c4`
-- Version hashes computed once at `Engine::build()` and cached in a `HashMap<String, String>` (path → hash)
+`static_url("css/app.css")` → `/assets/css/app.css?v=a3f2b1c4`
+
+**Cache headers** (based on `cfg!(debug_assertions)`):
+- Dev: `Cache-Control: no-cache` — browser always revalidates
+- Prod: `Cache-Control: max-age=31536000, immutable` — hash changes = new URL
 
 ### Wiring
 
@@ -407,31 +395,6 @@ let app = Router::new()
 <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
 <script src="{{ static_url('js/app.js') }}"></script>
 ```
-
-### Embedded Mode Wiring
-
-`include_dir!` must be invoked at the user's crate (not inside the library). Users pass the embedded directory to the builder:
-
-```rust
-use include_dir::{include_dir, Dir};
-
-static STATIC_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/static");
-
-let engine = Engine::builder()
-    .config(config.template)
-    .embedded_static(&STATIC_DIR)
-    .build()?;
-```
-
-The `.embedded_static()` method is only available behind the `static-embed` feature flag. When provided and `embed: true` in config, the engine serves from the embedded directory instead of the filesystem.
-
-### Testing Embedded Mode
-
-```bash
-cargo run --features static-embed    # test embedded mode locally
-```
-
-Set `embed: true` in config to activate. Without the feature flag, the config field is ignored. `Engine::build()` logs `tracing::warn!` if `embed: true` but `static-embed` feature is not compiled in.
 
 ## HxRequest Extractor
 
