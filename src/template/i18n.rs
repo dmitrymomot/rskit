@@ -17,10 +17,24 @@ pub(crate) enum Entry {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct TranslationStore {
     translations: HashMap<String, HashMap<String, Entry>>,
     default_locale: String,
+    plural_rules: HashMap<String, PluralRules>,
+}
+
+impl std::fmt::Debug for TranslationStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TranslationStore")
+            .field("translations", &self.translations)
+            .field("default_locale", &self.default_locale)
+            .field(
+                "plural_rules",
+                &self.plural_rules.keys().collect::<Vec<_>>(),
+            )
+            .finish()
+    }
 }
 
 impl TranslationStore {
@@ -54,9 +68,20 @@ impl TranslationStore {
             translations.insert(locale, locale_entries);
         }
 
+        let en: LanguageIdentifier = "en".parse().unwrap();
+        let en_rules = PluralRules::create(en.clone(), PluralRuleType::CARDINAL).unwrap();
+        let mut plural_rules = HashMap::new();
+        for locale_str in translations.keys() {
+            let lang_id: LanguageIdentifier = locale_str.parse().unwrap_or_else(|_| en.clone());
+            let rules = PluralRules::create(lang_id, PluralRuleType::CARDINAL)
+                .unwrap_or_else(|_| en_rules.clone());
+            plural_rules.insert(locale_str.clone(), rules);
+        }
+
         Ok(Self {
             translations,
             default_locale: default_locale.to_string(),
+            plural_rules,
         })
     }
 
@@ -110,7 +135,7 @@ impl TranslationStore {
                 many,
                 other,
             } => {
-                let category = resolve_plural_category(locale, count);
+                let category = self.plural_category(locale, count);
                 match category {
                     PluralCategory::ZERO => zero.as_deref().unwrap_or(other),
                     PluralCategory::ONE => one.as_deref().unwrap_or(other),
@@ -142,6 +167,18 @@ impl TranslationStore {
     fn lookup(&self, locale: &str, key: &str) -> Option<&Entry> {
         self.translations.get(locale)?.get(key)
     }
+
+    fn plural_category(&self, locale: &str, count: i64) -> PluralCategory {
+        let abs_count = count.unsigned_abs() as usize;
+        if let Some(rules) = self.plural_rules.get(locale) {
+            rules.select(abs_count).unwrap_or(PluralCategory::OTHER)
+        } else {
+            // Fallback to English rules for unknown locales
+            let en: LanguageIdentifier = "en".parse().unwrap();
+            let rules = PluralRules::create(en, PluralRuleType::CARDINAL).unwrap();
+            rules.select(abs_count).unwrap_or(PluralCategory::OTHER)
+        }
+    }
 }
 
 fn entry_to_string(entry: &Entry) -> &str {
@@ -149,17 +186,6 @@ fn entry_to_string(entry: &Entry) -> &str {
         Entry::Plain(s) => s,
         Entry::Plural { other, .. } => other,
     }
-}
-
-fn resolve_plural_category(locale: &str, count: i64) -> PluralCategory {
-    let en: LanguageIdentifier = "en".parse().unwrap();
-    let lang_id: LanguageIdentifier = locale.parse().unwrap_or_else(|_| en.clone());
-
-    let rules = PluralRules::create(lang_id, PluralRuleType::CARDINAL)
-        .unwrap_or_else(|_| PluralRules::create(en, PluralRuleType::CARDINAL).unwrap());
-
-    let abs_count = count.unsigned_abs() as usize;
-    rules.select(abs_count).unwrap_or(PluralCategory::OTHER)
 }
 
 pub(crate) fn interpolate(template: &str, kwargs: &[(&str, &str)]) -> String {
@@ -522,5 +548,111 @@ mod tests {
     fn load_returns_error_on_missing_directory() {
         let result = TranslationStore::load(Path::new("/nonexistent/path"), "en");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn plural_slavic_rules_ukrainian() {
+        let dir = tempfile::tempdir().unwrap();
+        let uk_dir = dir.path().join("uk");
+        std::fs::create_dir_all(&uk_dir).unwrap();
+        std::fs::write(
+            uk_dir.join("items.yaml"),
+            "count:\n  one: \"{count} елемент\"\n  few: \"{count} елементи\"\n  many: \"{count} елементів\"\n  other: \"{count} елементів\"",
+        )
+        .unwrap();
+        let en_dir = dir.path().join("en");
+        std::fs::create_dir_all(&en_dir).unwrap();
+        std::fs::write(
+            en_dir.join("items.yaml"),
+            "count:\n  one: \"{count} item\"\n  other: \"{count} items\"",
+        )
+        .unwrap();
+
+        let store = TranslationStore::load(dir.path(), "en").unwrap();
+        assert_eq!(
+            store.translate_plural("uk", "items.count", 1, &[]).unwrap(),
+            "1 елемент"
+        );
+        assert_eq!(
+            store.translate_plural("uk", "items.count", 3, &[]).unwrap(),
+            "3 елементи"
+        );
+        assert_eq!(
+            store.translate_plural("uk", "items.count", 5, &[]).unwrap(),
+            "5 елементів"
+        );
+        assert_eq!(
+            store
+                .translate_plural("uk", "items.count", 21, &[])
+                .unwrap(),
+            "21 елемент"
+        );
+        assert_eq!(
+            store
+                .translate_plural("uk", "items.count", 22, &[])
+                .unwrap(),
+            "22 елементи"
+        );
+    }
+
+    #[test]
+    fn translate_plural_negative_count() {
+        let dir = tempfile::tempdir().unwrap();
+        write_locale_file(
+            dir.path(),
+            "en",
+            "items.yaml",
+            "count:\n  one: \"{count} item\"\n  other: \"{count} items\"",
+        );
+        let store = TranslationStore::load(dir.path(), "en").unwrap();
+        // Negative counts use absolute value for plural category selection,
+        // but {count} interpolates the original signed value.
+        assert_eq!(
+            store
+                .translate_plural("en", "items.count", -1, &[])
+                .unwrap(),
+            "-1 item"
+        );
+        assert_eq!(
+            store
+                .translate_plural("en", "items.count", -5, &[])
+                .unwrap(),
+            "-5 items"
+        );
+    }
+
+    #[test]
+    fn yml_extension_support() {
+        let dir = tempfile::tempdir().unwrap();
+        let en_dir = dir.path().join("en");
+        std::fs::create_dir_all(&en_dir).unwrap();
+        std::fs::write(en_dir.join("messages.yml"), "hello: Hi there").unwrap();
+        let store = TranslationStore::load(dir.path(), "en").unwrap();
+        assert_eq!(
+            store.translate("en", "messages.hello", &[]).unwrap(),
+            "Hi there"
+        );
+    }
+
+    #[test]
+    fn t_function_with_count_kwarg() {
+        let dir = tempfile::tempdir().unwrap();
+        write_locale_file(
+            dir.path(),
+            "en",
+            "items.yaml",
+            "count:\n  one: \"{count} item\"\n  other: \"{count} items\"",
+        );
+        let store = TranslationStore::load(dir.path(), "en").unwrap();
+
+        let mut env = minijinja::Environment::new();
+        let t_fn = make_t_function(store);
+        env.add_function("t", t_fn);
+        env.add_template("test", "{{ t('items.count', count=5) }}")
+            .unwrap();
+
+        let tmpl = env.get_template("test").unwrap();
+        let result = tmpl.render(minijinja::context! { locale => "en" }).unwrap();
+        assert_eq!(result, "5 items");
     }
 }

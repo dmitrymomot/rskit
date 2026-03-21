@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -7,12 +6,8 @@ use super::i18n::{TranslationStore, make_t_function};
 use super::locale::{self, LocaleResolver};
 use super::static_files;
 
-#[allow(dead_code)]
 struct EngineInner {
     env: std::sync::RwLock<minijinja::Environment<'static>>,
-    i18n: Option<TranslationStore>,
-    static_hashes: HashMap<String, String>,
-    static_url_prefix: String,
     locale_chain: Vec<Arc<dyn LocaleResolver>>,
     config: TemplateConfig,
 }
@@ -169,9 +164,6 @@ impl EngineBuilder {
 
         let inner = EngineInner {
             env: std::sync::RwLock::new(env),
-            i18n,
-            static_hashes,
-            static_url_prefix: config.static_url_prefix.clone(),
             locale_chain,
             config,
         };
@@ -271,5 +263,79 @@ mod tests {
             .unwrap();
         assert!(result.starts_with("/assets/css/app.css?v="));
         assert_eq!(result.len(), "/assets/css/app.css?v=".len() + 8);
+    }
+
+    #[test]
+    fn build_engine_without_locales_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_templates(dir.path());
+        setup_static(dir.path());
+        // Do NOT create locales dir — verify build still succeeds
+
+        let config = test_config(dir.path());
+        let engine = Engine::builder().config(config).build().unwrap();
+        let result = engine
+            .render("hello.html", minijinja::context! { name => "World" })
+            .unwrap();
+        assert_eq!(result, "Hello, World!");
+    }
+
+    #[test]
+    fn custom_function_registered() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_static(dir.path());
+
+        let tpl_dir = dir.path().join("templates");
+        std::fs::create_dir_all(&tpl_dir).unwrap();
+        std::fs::write(tpl_dir.join("greet.html"), "{{ greet() }}").unwrap();
+
+        let config = test_config(dir.path());
+        let engine = Engine::builder()
+            .config(config)
+            .function("greet", || -> Result<String, minijinja::Error> {
+                Ok("Hi!".into())
+            })
+            .build()
+            .unwrap();
+
+        let result = engine.render("greet.html", minijinja::context! {}).unwrap();
+        assert_eq!(result, "Hi!");
+    }
+
+    #[test]
+    fn custom_filter_registered() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_static(dir.path());
+
+        let tpl_dir = dir.path().join("templates");
+        std::fs::create_dir_all(&tpl_dir).unwrap();
+        std::fs::write(tpl_dir.join("shout.html"), r#"{{ "hello"|shout }}"#).unwrap();
+
+        let config = test_config(dir.path());
+        let engine = Engine::builder()
+            .config(config)
+            .filter("shout", |val: String| -> Result<String, minijinja::Error> {
+                Ok(val.to_uppercase())
+            })
+            .build()
+            .unwrap();
+
+        let result = engine.render("shout.html", minijinja::context! {}).unwrap();
+        assert_eq!(result, "HELLO");
+    }
+
+    #[test]
+    fn render_missing_template_returns_error() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_static(dir.path());
+
+        let tpl_dir = dir.path().join("templates");
+        std::fs::create_dir_all(&tpl_dir).unwrap();
+
+        let config = test_config(dir.path());
+        let engine = Engine::builder().config(config).build().unwrap();
+
+        let result = engine.render("nonexistent.html", minijinja::context! {});
+        assert!(result.is_err());
     }
 }

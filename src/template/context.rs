@@ -29,6 +29,10 @@ impl TemplateContext {
                     merged.insert(key.to_string(), val);
                 }
             }
+        } else if !handler_context.is_none() && !handler_context.is_undefined() {
+            tracing::warn!(
+                "Handler context is not a map — handler values ignored. Use context! {{ ... }}"
+            );
         }
 
         minijinja::Value::from(merged)
@@ -91,5 +95,19 @@ mod tests {
         ctx.set("key", minijinja::Value::from("value"));
         let cloned = ctx.clone();
         assert_eq!(cloned.get("key").unwrap().to_string(), "value");
+    }
+
+    #[test]
+    fn merge_with_non_map_ignores_handler_values() {
+        let mut ctx = TemplateContext::default();
+        ctx.set("locale", minijinja::Value::from("en"));
+        ctx.set("name", minijinja::Value::from("middleware"));
+
+        // Pass a non-map value as handler context
+        let merged = ctx.merge(minijinja::Value::from("not a map"));
+
+        // Only middleware values should survive
+        assert_eq!(merged.get_attr("locale").unwrap().to_string(), "en");
+        assert_eq!(merged.get_attr("name").unwrap().to_string(), "middleware");
     }
 }

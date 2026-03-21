@@ -136,6 +136,10 @@ mod tests {
         std::fs::create_dir_all(&static_dir).unwrap();
         std::fs::write(locales_dir.join("common.yaml"), "greeting: Hello").unwrap();
 
+        let uk_locales_dir = dir.path().join("locales/uk");
+        std::fs::create_dir_all(&uk_locales_dir).unwrap();
+        std::fs::write(uk_locales_dir.join("common.yaml"), "greeting: Привіт").unwrap();
+
         let config = TemplateConfig {
             templates_path: tpl_dir.to_str().unwrap().into(),
             locales_path: dir.path().join("locales").to_str().unwrap().into(),
@@ -166,17 +170,35 @@ mod tests {
         (StatusCode::OK, is_htmx)
     }
 
+    async fn extract_locale(req: Request<Body>) -> (StatusCode, String) {
+        let ctx = req.extensions().get::<TemplateContext>().unwrap();
+        let locale = ctx.get("locale").map(|v| v.to_string()).unwrap_or_default();
+        (StatusCode::OK, locale)
+    }
+
+    async fn extract_request_id(req: Request<Body>) -> (StatusCode, String) {
+        let ctx = req.extensions().get::<TemplateContext>().unwrap();
+        let request_id = ctx
+            .get("request_id")
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        (StatusCode::OK, request_id)
+    }
+
     #[tokio::test]
-    async fn injects_current_url() {
+    async fn injects_current_url_value() {
         let (_dir, engine) = test_engine();
         let app = Router::new()
             .route("/test", get(extract_url))
             .layer(TemplateContextLayer::new(engine));
 
         let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
-
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(body, "/test");
     }
 
     #[tokio::test]
@@ -189,5 +211,76 @@ mod tests {
         let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn injects_is_htmx_true() {
+        let (_dir, engine) = test_engine();
+        let app = Router::new()
+            .route("/test", get(extract_is_htmx))
+            .layer(TemplateContextLayer::new(engine));
+
+        let req = Request::builder()
+            .uri("/test")
+            .header("hx-request", "true")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(body, "true");
+    }
+
+    #[tokio::test]
+    async fn injects_locale_default() {
+        let (_dir, engine) = test_engine();
+        let app = Router::new()
+            .route("/test", get(extract_locale))
+            .layer(TemplateContextLayer::new(engine));
+
+        let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(body, "en");
+    }
+
+    #[tokio::test]
+    async fn injects_locale_from_query() {
+        let (_dir, engine) = test_engine();
+        let app = Router::new()
+            .route("/test", get(extract_locale))
+            .layer(TemplateContextLayer::new(engine));
+
+        let req = Request::builder()
+            .uri("/test?lang=uk")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(body, "uk");
+    }
+
+    #[tokio::test]
+    async fn injects_request_id() {
+        let (_dir, engine) = test_engine();
+        let app = Router::new()
+            .route("/test", get(extract_request_id))
+            .layer(TemplateContextLayer::new(engine));
+
+        let req = Request::builder()
+            .uri("/test")
+            .header("x-request-id", "abc123")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(body, "abc123");
     }
 }

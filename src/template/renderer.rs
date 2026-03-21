@@ -65,11 +65,7 @@ where
                 crate::Error::internal("Renderer requires TemplateContextLayer middleware")
             })?;
 
-        let is_htmx = parts
-            .headers
-            .get("hx-request")
-            .and_then(|v| v.to_str().ok())
-            .is_some_and(|v| v == "true");
+        let is_htmx = context.get("is_htmx").map(|v| v.is_true()).unwrap_or(false);
 
         Ok(Renderer {
             engine,
@@ -176,6 +172,33 @@ mod tests {
             engine,
             context: TemplateContext::default(),
             is_htmx: true,
+        };
+        assert!(renderer.is_htmx());
+    }
+
+    #[test]
+    fn render_nonexistent_template_returns_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = setup_engine(dir.path());
+        let renderer = Renderer {
+            engine,
+            context: TemplateContext::default(),
+            is_htmx: false,
+        };
+        let result = renderer.html("nonexistent.html", context! {});
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn is_htmx_from_context() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = setup_engine(dir.path());
+        let mut ctx = TemplateContext::default();
+        ctx.set("is_htmx", minijinja::Value::from(true));
+        let renderer = Renderer {
+            engine,
+            context: ctx,
+            is_htmx: true, // matches what from_request_parts would set
         };
         assert!(renderer.is_htmx());
     }

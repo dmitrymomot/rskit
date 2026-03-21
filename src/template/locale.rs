@@ -11,12 +11,14 @@ pub trait LocaleResolver: Send + Sync {
 
 pub struct QueryParamResolver {
     param_name: String,
+    available_locales: Vec<String>,
 }
 
 impl QueryParamResolver {
-    pub fn new(param_name: &str) -> Self {
+    pub fn new(param_name: &str, available_locales: &[String]) -> Self {
         Self {
             param_name: param_name.to_string(),
+            available_locales: available_locales.to_vec(),
         }
     }
 }
@@ -27,6 +29,8 @@ impl LocaleResolver for QueryParamResolver {
         for pair in query.split('&') {
             if let Some((key, value)) = pair.split_once('=')
                 && key == self.param_name
+                && (self.available_locales.is_empty()
+                    || self.available_locales.iter().any(|l| l == value))
             {
                 return Some(value.to_string());
             }
@@ -39,12 +43,14 @@ impl LocaleResolver for QueryParamResolver {
 
 pub struct CookieResolver {
     cookie_name: String,
+    available_locales: Vec<String>,
 }
 
 impl CookieResolver {
-    pub fn new(cookie_name: &str) -> Self {
+    pub fn new(cookie_name: &str, available_locales: &[String]) -> Self {
         Self {
             cookie_name: cookie_name.to_string(),
+            available_locales: available_locales.to_vec(),
         }
     }
 }
@@ -57,7 +63,12 @@ impl LocaleResolver for CookieResolver {
             if let Some((name, value)) = cookie.split_once('=')
                 && name.trim() == self.cookie_name
             {
-                return Some(value.trim().to_string());
+                let value = value.trim();
+                if self.available_locales.is_empty()
+                    || self.available_locales.iter().any(|l| l == value)
+                {
+                    return Some(value.to_string());
+                }
             }
         }
         None
@@ -139,8 +150,14 @@ pub(crate) fn default_chain(
     available_locales: &[String],
 ) -> Vec<Arc<dyn LocaleResolver>> {
     vec![
-        Arc::new(QueryParamResolver::new(&config.locale_query_param)),
-        Arc::new(CookieResolver::new(&config.locale_cookie)),
+        Arc::new(QueryParamResolver::new(
+            &config.locale_query_param,
+            available_locales,
+        )),
+        Arc::new(CookieResolver::new(
+            &config.locale_cookie,
+            available_locales,
+        )),
         Arc::new(SessionResolver),
         Arc::new(AcceptLanguageResolver::new(
             &available_locales
@@ -166,7 +183,7 @@ mod tests {
 
     #[test]
     fn query_param_resolver_extracts_lang() {
-        let resolver = QueryParamResolver::new("lang");
+        let resolver = QueryParamResolver::new("lang", &[]);
         let req = Request::builder().uri("/?lang=uk").body(()).unwrap();
         let parts = parts_from_request(req);
         assert_eq!(resolver.resolve(&parts), Some("uk".into()));
@@ -174,7 +191,7 @@ mod tests {
 
     #[test]
     fn query_param_resolver_returns_none_when_absent() {
-        let resolver = QueryParamResolver::new("lang");
+        let resolver = QueryParamResolver::new("lang", &[]);
         let req = Request::builder().uri("/").body(()).unwrap();
         let parts = parts_from_request(req);
         assert_eq!(resolver.resolve(&parts), None);
@@ -182,7 +199,7 @@ mod tests {
 
     #[test]
     fn cookie_resolver_extracts_locale() {
-        let resolver = CookieResolver::new("lang");
+        let resolver = CookieResolver::new("lang", &[]);
         let req = Request::builder()
             .header("cookie", "lang=uk; other=value")
             .body(())
@@ -193,7 +210,7 @@ mod tests {
 
     #[test]
     fn cookie_resolver_returns_none_when_absent() {
-        let resolver = CookieResolver::new("lang");
+        let resolver = CookieResolver::new("lang", &[]);
         let req = Request::builder().body(()).unwrap();
         let parts = parts_from_request(req);
         assert_eq!(resolver.resolve(&parts), None);
@@ -249,5 +266,73 @@ mod tests {
         let req = Request::builder().body(()).unwrap();
         let parts = parts_from_request(req);
         assert_eq!(resolver.resolve(&parts), None);
+    }
+
+    #[test]
+    fn query_param_rejects_unknown_locale() {
+        let available = vec!["en".into(), "uk".into()];
+        let resolver = QueryParamResolver::new("lang", &available);
+        let req = Request::builder().uri("/?lang=xx").body(()).unwrap();
+        let parts = parts_from_request(req);
+        assert_eq!(resolver.resolve(&parts), None);
+    }
+
+    #[test]
+    fn query_param_accepts_known_locale() {
+        let available = vec!["en".into(), "uk".into()];
+        let resolver = QueryParamResolver::new("lang", &available);
+        let req = Request::builder().uri("/?lang=uk").body(()).unwrap();
+        let parts = parts_from_request(req);
+        assert_eq!(resolver.resolve(&parts), Some("uk".into()));
+    }
+
+    #[test]
+    fn cookie_rejects_unknown_locale() {
+        let available = vec!["en".into(), "uk".into()];
+        let resolver = CookieResolver::new("lang", &available);
+        let req = Request::builder()
+            .header("cookie", "lang=xx")
+            .body(())
+            .unwrap();
+        let parts = parts_from_request(req);
+        assert_eq!(resolver.resolve(&parts), None);
+    }
+
+    #[test]
+    fn cookie_accepts_known_locale() {
+        let available = vec!["en".into(), "uk".into()];
+        let resolver = CookieResolver::new("lang", &available);
+        let req = Request::builder()
+            .header("cookie", "lang=uk")
+            .body(())
+            .unwrap();
+        let parts = parts_from_request(req);
+        assert_eq!(resolver.resolve(&parts), Some("uk".into()));
+    }
+
+    #[test]
+    fn resolve_locale_chain_ordering() {
+        let available: Vec<String> = vec!["en".into(), "uk".into(), "fr".into()];
+        let chain: Vec<Arc<dyn LocaleResolver>> = vec![
+            Arc::new(QueryParamResolver::new("lang", &available)),
+            Arc::new(CookieResolver::new("lang", &available)),
+        ];
+        // Both query param and cookie set — query param should win (first in chain)
+        let req = Request::builder()
+            .uri("/?lang=uk")
+            .header("cookie", "lang=fr")
+            .body(())
+            .unwrap();
+        let parts = parts_from_request(req);
+        let result = resolve_locale(&chain, &parts);
+        assert_eq!(result, Some("uk".into()));
+    }
+
+    #[test]
+    fn default_chain_builds_all_resolvers() {
+        let config = TemplateConfig::default();
+        let available = vec!["en".into(), "uk".into()];
+        let chain = default_chain(&config, &available);
+        assert_eq!(chain.len(), 4);
     }
 }

@@ -51,4 +51,30 @@ mod tests {
             .unwrap();
         assert!(!hx.is_htmx());
     }
+
+    #[tokio::test]
+    async fn hx_request_false_header_is_not_htmx() {
+        let req = Request::builder()
+            .header("hx-request", "false")
+            .body(())
+            .unwrap();
+        let (mut parts, _) = req.into_parts();
+        let hx = HxRequest::from_request_parts(&mut parts, &())
+            .await
+            .unwrap();
+        assert!(!hx.is_htmx());
+    }
+
+    #[tokio::test]
+    async fn hx_request_header_case_insensitive() {
+        let req = Request::builder()
+            .header("HX-Request", "true")
+            .body(())
+            .unwrap();
+        let (mut parts, _) = req.into_parts();
+        let hx = HxRequest::from_request_parts(&mut parts, &())
+            .await
+            .unwrap();
+        assert!(hx.is_htmx());
+    }
 }

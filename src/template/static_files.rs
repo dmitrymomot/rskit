@@ -97,10 +97,13 @@ async fn no_cache_middleware(
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     let mut resp = next.run(req).await;
-    resp.headers_mut().insert(
-        http::header::CACHE_CONTROL,
-        http::HeaderValue::from_static("no-cache"),
-    );
+    let headers = resp.headers_mut();
+    if !headers.contains_key(http::header::CACHE_CONTROL) {
+        headers.insert(
+            http::header::CACHE_CONTROL,
+            http::HeaderValue::from_static("no-cache"),
+        );
+    }
     resp
 }
 
@@ -109,10 +112,13 @@ async fn immutable_cache_middleware(
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     let mut resp = next.run(req).await;
-    resp.headers_mut().insert(
-        http::header::CACHE_CONTROL,
-        http::HeaderValue::from_static("public, max-age=31536000, immutable"),
-    );
+    let headers = resp.headers_mut();
+    if !headers.contains_key(http::header::CACHE_CONTROL) {
+        headers.insert(
+            http::header::CACHE_CONTROL,
+            http::HeaderValue::from_static("public, max-age=31536000, immutable"),
+        );
+    }
     resp
 }
 
@@ -191,5 +197,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let map = compute_hashes(dir.path()).unwrap();
         assert!(map.is_empty());
+    }
+
+    #[test]
+    fn non_existent_static_path_returns_empty_map() {
+        let hashes = compute_hashes(Path::new("/tmp/definitely-does-not-exist-modo-test")).unwrap();
+        assert!(hashes.is_empty());
     }
 }
