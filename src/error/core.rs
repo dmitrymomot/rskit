@@ -163,7 +163,7 @@ impl IntoResponse for Error {
             message,
             source: None, // source can't be cloned
             details,
-            lagged: false,
+            lagged: self.lagged,
         };
 
         let mut response = (status, axum::Json(body)).into_response();
