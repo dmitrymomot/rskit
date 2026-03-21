@@ -49,8 +49,14 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `cargo fmt --check` — format check
 - `cargo fmt` — format code
 
+## Workflow
+
+- Use `superpowers:brainstorming` skill to design specs before implementation
+- Use `superpowers:subagent-driven-development` skill for plan implementation
+
 ## Conventions
 
+- Paths: NEVER use absolute paths — always relative to project root
 - File organization: `mod.rs` is ONLY for `mod` imports and re-exports — all code goes in separate files
 - File organization applies to `lib.rs` too — no trait defs, impl blocks, or functions; only `mod`, `pub use`, and re-exports
 - Handlers are plain async functions — no macros
