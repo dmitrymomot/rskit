@@ -57,4 +57,16 @@ mod tests {
         let last_id = result.unwrap();
         assert_eq!(last_id.0, None);
     }
+
+    #[tokio::test]
+    async fn non_visible_ascii_header_returns_none() {
+        let (mut parts, _body) = Request::builder().body(()).unwrap().into_parts();
+        parts.headers.insert(
+            "last-event-id",
+            http::HeaderValue::from_bytes(&[0x80]).unwrap(),
+        );
+        let result = LastEventId::from_request_parts(&mut parts, &()).await;
+        let last_id = result.unwrap();
+        assert_eq!(last_id.0, None);
+    }
 }
