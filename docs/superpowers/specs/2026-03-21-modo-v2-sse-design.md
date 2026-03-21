@@ -12,7 +12,7 @@ Server-Sent Events support for real-time event delivery over HTTP.
 6. Wrap event stream into axum SSE response with keep-alive + `X-Accel-Buffering: no`
 7. Imperative sender (spawned task with sender handle) for monitoring use cases
 8. `LastEventId` standalone extractor for reconnection
-9. `.sse_map()` stream combinator for transforming domain types to events
+9. `.cast_events()` stream combinator for transforming domain types to events
 10. `replay()` helper to convert a `Vec<T>` into a stream for reconnection replay
 11. Config: keep-alive interval from YAML, buffer size at broadcaster construction
 
@@ -290,7 +290,7 @@ where
     ///
     /// Errors from the source stream pass through converted via `Into<Error>`.
     /// Errors returned by the closure also propagate.
-    fn sse_map<F>(self, f: F) -> impl Stream<Item = Result<Event, Error>> + Send
+    fn cast_events<F>(self, f: F) -> impl Stream<Item = Result<Event, Error>> + Send
     where
         F: FnMut(T) -> Result<Event, Error> + Send,
         T: Send,
@@ -351,7 +351,7 @@ import `futures_util` directly.
 ///         live.right_stream()
 ///     };
 ///
-///     let events = stream.sse_map(|msg| {
+///     let events = stream.cast_events(|msg| {
 ///         Event::new(id::short(), "message")?.json(&msg)
 ///     });
 ///
@@ -382,7 +382,7 @@ async fn metrics(
 ) -> Response {
     let stream = bc.subscribe(&"cpu".into())
         .on_lag(LagPolicy::Skip)
-        .sse_map(|m| {
+        .cast_events(|m| {
             Event::new(id::short(), "metric")?.json(&m)
         });
     bc.response(stream)
@@ -399,7 +399,7 @@ async fn chat_events(
 ) -> Response {
     let stream = bc.subscribe(&room_id)
         .on_lag(LagPolicy::End)
-        .sse_map(move |msg| {
+        .cast_events(move |msg| {
             let html = renderer.render("chat/message.html", context! { msg })?;
             Ok(Event::new(id::short(), "message")?.html(html))
         });
@@ -442,7 +442,7 @@ async fn notifications(
         live.right_stream()
     };
 
-    let events = stream.sse_map(|n| {
+    let events = stream.cast_events(|n| {
         Event::new(id::short(), "notification")?.json(&n)
     });
 
