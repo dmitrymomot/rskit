@@ -75,7 +75,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 3 (Session):** DB-backed sessions with token hashing, fingerprinting, middleware lifecycle — DONE
 - **Plan 4 (Auth + OAuth):** password hashing, TOTP, OTP, backup codes, Google/GitHub OAuth — DONE
 - **Plan 5 (Job + Cron):** DB-backed job queue, worker, enqueuer, in-memory cron scheduler — DONE
-- **Plan 6 (Email):** SMTP transport, markdown templates with YAML frontmatter, layout engine
+- **Plan 6 (Email):** SMTP transport, markdown templates with YAML frontmatter, layout engine — DONE
 - **Plan 7 (Template):** MiniJinja engine, i18n, static files — DONE
 - **Plan 8 (SSE):** broadcast SSE
 - **Plan 9 (Tenant):** tenant resolution
