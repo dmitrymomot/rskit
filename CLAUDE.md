@@ -77,7 +77,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 5 (Job + Cron):** DB-backed job queue, worker, enqueuer, in-memory cron scheduler — DONE
 - **Plan 6 (Email):** SMTP transport, markdown templates with YAML frontmatter, layout engine — DONE
 - **Plan 7 (Template):** MiniJinja engine, i18n, static files — DONE
-- **Plan 8 (SSE):** broadcast SSE
+- **Plan 8 (SSE):** broadcast SSE — DONE
 - **Plan 9 (Tenant):** tenant resolution
 - **Plan 10 (Upload):** S3-compatible storage via OpenDAL, presigned URLs
 - **Plan 11 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
@@ -95,6 +95,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Job + Cron plan: `docs/superpowers/plans/2026-03-20-modo-v2-job-cron.md`
 - Template spec: `docs/superpowers/specs/2026-03-21-modo-v2-template-design.md`
 - Template plan: `docs/superpowers/plans/2026-03-21-modo-v2-template.md`
+- SSE spec: `docs/superpowers/specs/2026-03-21-modo-v2-sse-design.md`
+- SSE plan: `docs/superpowers/plans/2026-03-21-modo-v2-sse.md`
 
 ## Gotchas
 
@@ -153,3 +155,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - MiniJinja `Value` booleans: use `value.is_true()` to extract a `bool` from a `Value::from(true/false)` — don't use `to_string()` comparison
 - Feature-gated modules: use `cargo test --features templates` and `cargo clippy --features templates --tests` to test/lint template code
 - `SessionState` re-export from `session/mod.rs` is gated behind `#[cfg(feature = "templates")]` — only the template locale resolver needs it
+- `futures-util` is an optional dep behind `sse` feature — use `cargo test --features sse` and `cargo clippy --features sse --tests`
+- `Broadcaster` uses `Arc<Inner>` pattern (like `Engine`) — never double-wrap in `Arc<Broadcaster>`
+- `Event::new()` is fallible — validates no `\n`/`\r` in id and event name; in practice `id::short()` and hardcoded names never fail
+- `BroadcastStream` field ordering: `Receiver` before cleanup closure — Rust drops in declaration order
+- `std::sync::RwLock` (not tokio) for broadcaster channel map — all ops are synchronous; never hold across `.await`
