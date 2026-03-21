@@ -18,9 +18,12 @@ Server-Sent Events support for real-time event delivery over HTTP.
 
 ## Feature Gate
 
-Behind `sse` feature flag. Depends on `futures-util` (optional dep, already in Cargo.toml).
+Behind `sse` feature flag. Depends on `futures-util` (must be added as optional dep).
 
 ```toml
+[dependencies]
+futures-util = { version = "0.3", optional = true }
+
 [features]
 sse = ["dep:futures-util"]
 ```
@@ -33,7 +36,7 @@ src/sse/
   config.rs        — SseConfig
   event.rs         — Event
   broadcaster.rs   — Broadcaster<K, T>, BroadcastStream<T>, LagPolicy, replay()
-  channel.rs       — Sender
+  sender.rs        — Sender (used by Broadcaster::channel())
   stream.rs        — SseStreamExt trait
   last_event_id.rs — LastEventId extractor
 ```
@@ -42,25 +45,34 @@ src/sse/
 
 ### `Event`
 
-SSE event builder. `id` and `event` name are required at construction.
+SSE event builder. `id` and event name are required at construction.
+
+`id` and event name are validated at construction — `\n` and `\r` are rejected
+with an error, ensuring the downstream `TryFrom<axum::response::sse::Event>`
+conversion cannot fail due to invalid characters.
 
 ```rust
 pub struct Event {
     id: String,
-    name: String,
+    event: String,
     data: Option<String>,
     retry: Option<Duration>,
 }
 
 impl Event {
-    /// Create a new event. Both `id` and `name` are required.
+    /// Create a new event. Both `id` and `event` are required.
     ///
     /// - `id` maps to the SSE `id:` field — used by clients for `Last-Event-ID`
     ///   on reconnection.
-    /// - `name` maps to the SSE `event:` field — clients listen for specific
+    /// - `event` maps to the SSE `event:` field — clients listen for specific
     ///   event types (e.g., `eventSource.addEventListener("message", handler)`
     ///   or HTMX `hx-trigger="sse:message"`).
-    pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `id` or `event` contain `\n` or `\r` — these
+    /// characters are invalid in SSE `id:` and `event:` fields.
+    pub fn new(id: impl Into<String>, event: impl Into<String>) -> Result<Self, Error>;
 
     /// Set the data payload as a plain string.
     ///
@@ -106,29 +118,46 @@ pub struct SseConfig {
     pub keep_alive_interval_secs: u64,
 }
 
+impl Default for SseConfig {
+    fn default() -> Self {
+        Self {
+            keep_alive_interval_secs: 15,
+        }
+    }
+}
+
 impl SseConfig {
-    pub fn keep_alive_interval(&self) -> Duration;
+    pub fn keep_alive_interval(&self) -> Duration {
+        Duration::from_secs(self.keep_alive_interval_secs)
+    }
 }
 ```
 
-Default: 15 seconds. Passed to `Broadcaster::new()` at construction time.
+Passed to `Broadcaster::new()` at construction time.
 
 ### `Broadcaster<K, T>`
 
 Keyed broadcast channel registry. Owns config, manages channel lifecycle,
 produces SSE responses.
 
+Uses the `Arc<Inner>` pattern (same as `Engine`) — cheaply cloneable, never
+double-wrap in `Arc<Broadcaster>`.
+
 ```rust
-pub struct Broadcaster<K, T> {
-    channels: Arc<RwLock<HashMap<K, broadcast::Sender<T>>>>,
+struct BroadcasterInner<K, T> {
+    channels: RwLock<HashMap<K, broadcast::Sender<T>>>,
     buffer: usize,
     config: SseConfig,
+}
+
+pub struct Broadcaster<K, T> {
+    inner: Arc<BroadcasterInner<K, T>>,
 }
 ```
 
 **Type constraints:** `K: Hash + Eq + Clone + Send + Sync + 'static`, `T: Clone + Send + Sync + 'static`.
 
-**Clone:** via `Arc` on the inner channel map. Cheap to share in service registry.
+**Clone:** clones the `Arc` — all clones share the same channel map, buffer, and config.
 
 ```rust
 impl<K, T> Broadcaster<K, T> {
@@ -149,9 +178,10 @@ impl<K, T> Broadcaster<K, T> {
 
     /// Send an event to all subscribers of a key.
     ///
-    /// Returns the number of receivers that got the message. Returns `Ok(0)`
+    /// Returns the number of receivers that got the message. Returns 0
     /// if no subscribers exist for the key — does NOT create a channel.
-    pub fn send(&self, key: &K, event: T) -> Result<usize, Error>;
+    /// Sending to a nonexistent key is a no-op, not an error.
+    pub fn send(&self, key: &K, event: T) -> usize;
 
     /// Number of active subscribers for a key. Returns 0 if no channel exists.
     pub fn subscriber_count(&self, key: &K) -> usize;
@@ -191,12 +221,15 @@ impl<K, T> Broadcaster<K, T> {
 
 **Locking strategy:**
 - `send()` takes a read-lock (hot path) — concurrent sends don't block each other
-- `subscribe()` takes a write-lock only to insert a new channel
-- Cleanup on last drop: read-lock fast path checks `receiver_count > 0`, upgrades to write-lock only when removal is needed
+- `subscribe()` takes a write-lock to insert a new channel
+- Cleanup on last subscriber drop: takes a write-lock and re-checks `receiver_count == 0` before removing (no lock upgrade — drop always takes write-lock directly, re-check prevents race with concurrent new subscribers)
 
 ### `BroadcastStream<T>`
 
 Stream wrapper around `tokio::sync::broadcast::Receiver<T>`.
+
+This is a custom implementation (not `tokio_stream::wrappers::BroadcastStream`)
+because it needs lag policy support and cleanup-on-drop behavior.
 
 ```rust
 impl<T> BroadcastStream<T> {
@@ -210,7 +243,7 @@ impl<T> BroadcastStream<T> {
     ///   value supersedes the previous.
     ///
     /// Default (no call): propagate the lag error through the stream as
-    /// `Error` — caller handles it.
+    /// `Error` — caller handles it via standard stream combinators.
     pub fn on_lag(self, policy: LagPolicy) -> Self;
 }
 
@@ -222,7 +255,7 @@ pub enum LagPolicy {
 
 Implements `Stream<Item = Result<T, Error>>`.
 
-**Drop behavior:** cleanup closure fires, removes channel entry from the broadcaster if `receiver_count == 0`. Uses read-lock fast path, upgrades to write-lock only for actual removal.
+**Drop behavior:** cleanup closure fires, takes a write-lock on the channel map, re-checks `receiver_count == 0`, and removes the channel entry only if no other subscribers joined since the drop started.
 
 **Field ordering:** the `broadcast::Receiver` field must be declared before the cleanup closure field — Rust drops fields in declaration order, and the receiver must drop first (decrementing `receiver_count`) before the cleanup closure checks it.
 
@@ -255,11 +288,9 @@ where
 {
     /// Map each item to an `Event` with a custom closure.
     ///
-    /// The event name is passed for documentation clarity — the closure
-    /// is responsible for setting it on the `Event`. Errors pass through
-    /// converted via `Into<Error>`.
-    fn sse_map<F>(self, name: &'static str, f: F)
-        -> impl Stream<Item = Result<Event, Error>> + Send
+    /// Errors from the source stream pass through converted via `Into<Error>`.
+    /// Errors returned by the closure also propagate.
+    fn sse_map<F>(self, f: F) -> impl Stream<Item = Result<Event, Error>> + Send
     where
         F: FnMut(T) -> Result<Event, Error> + Send,
         T: Send,
@@ -284,11 +315,18 @@ Implements `FromRequestParts<S>` for any `S: Send + Sync`. Contains `None` on fi
 
 Helper to convert a `Vec<T>` into a stream for reconnection replay.
 
+Wraps `futures_util::stream::iter()` internally so app code doesn't need to
+import `futures_util` directly.
+
 ```rust
 /// Convert a `Vec<T>` into a `Stream<Item = Result<T, Error>>`.
 ///
 /// Use this to replay missed events from a data store before chaining
 /// with a live broadcast stream on client reconnection.
+///
+/// The returned stream yields each item wrapped in `Ok`. Chain it with
+/// a live `BroadcastStream` using `.chain()` from `futures_util::StreamExt`
+/// (re-exported by this module).
 ///
 /// # Example
 ///
@@ -296,22 +334,25 @@ Helper to convert a `Vec<T>` into a stream for reconnection replay.
 /// use modo::sse::{replay, Broadcaster, LastEventId, Event, SseStreamExt};
 ///
 /// async fn events(
+///     Path(room_id): Path<String>,
 ///     Service(bc): Service<Broadcaster<String, ChatMessage>>,
 ///     last_event_id: LastEventId,
 ///     Service(db): Service<Pool>,
 /// ) -> Result<Response, Error> {
-///     let live = bc.subscribe(&"room".into())
+///     let live = bc.subscribe(&room_id)
 ///         .on_lag(LagPolicy::End);
 ///
 ///     let stream = if let Some(ref id) = last_event_id.0 {
 ///         let missed = load_messages_after(&db, id).await?;
+///         // left_stream() and right_stream() come from futures_util::StreamExt
+///         // — they unify two different stream types into Either<L, R>
 ///         replay(missed).chain(live).left_stream()
 ///     } else {
 ///         live.right_stream()
 ///     };
 ///
-///     let events = stream.sse_map("message", |msg| {
-///         Ok(Event::new(id::short(), "message").json(&msg)?)
+///     let events = stream.sse_map(|msg| {
+///         Event::new(id::short(), "message")?.json(&msg)
 ///     });
 ///
 ///     Ok(bc.response(events))
@@ -341,8 +382,8 @@ async fn metrics(
 ) -> Response {
     let stream = bc.subscribe(&"cpu".into())
         .on_lag(LagPolicy::Skip)
-        .sse_map("metric", |m| {
-            Ok(Event::new(id::short(), "metric").json(&m)?)
+        .sse_map(|m| {
+            Event::new(id::short(), "metric")?.json(&m)
         });
     bc.response(stream)
 }
@@ -352,14 +393,15 @@ async fn metrics(
 
 ```rust
 async fn chat_events(
+    Path(room_id): Path<String>,
     Service(bc): Service<Broadcaster<String, ChatMessage>>,
     Service(renderer): Service<Renderer>,
 ) -> Response {
     let stream = bc.subscribe(&room_id)
         .on_lag(LagPolicy::End)
-        .sse_map("message", move |msg| {
+        .sse_map(move |msg| {
             let html = renderer.render("chat/message.html", context! { msg })?;
-            Ok(Event::new(id::short(), "message").html(html))
+            Ok(Event::new(id::short(), "message")?.html(html))
         });
     bc.response(stream)
 }
@@ -374,7 +416,7 @@ async fn health_events(
     bc.channel(|tx| async move {
         loop {
             let status = check_something().await;
-            tx.send(Event::new(id::short(), "health").json(&status)?).await?;
+            tx.send(Event::new(id::short(), "health")?.json(&status)?).await?;
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
     })
@@ -385,6 +427,7 @@ async fn health_events(
 
 ```rust
 async fn notifications(
+    Path(user_id): Path<String>,
     Service(bc): Service<Broadcaster<String, Notification>>,
     last_event_id: LastEventId,
     Service(db): Service<Pool>,
@@ -399,8 +442,8 @@ async fn notifications(
         live.right_stream()
     };
 
-    let events = stream.sse_map("notification", |n| {
-        Ok(Event::new(id::short(), "notification").json(&n)?)
+    let events = stream.sse_map(|n| {
+        Event::new(id::short(), "notification")?.json(&n)
     });
 
     Ok(bc.response(events))
@@ -411,13 +454,7 @@ async fn notifications(
 
 ### Request timeout
 
-The global `TimeoutLayer` terminates SSE connections after the configured timeout. SSE connections are long-lived — set a long timeout or disable it for SSE routes:
-
-```yaml
-server:
-  http:
-    timeout: 3600
-```
+If a global request timeout layer is configured, it will terminate SSE connections. SSE connections are long-lived — either set a long timeout or exclude SSE routes from the timeout layer.
 
 ### Reverse proxy buffering
 
@@ -425,13 +462,7 @@ Nginx buffers responses by default, breaking SSE. The module auto-sets `X-Accel-
 
 ### HTTP compression
 
-`CompressionLayer` buffers response data before sending, preventing real-time event flushing. Disable compression if using SSE:
-
-```yaml
-server:
-  http:
-    compression: false
-```
+`CompressionLayer` buffers response data before sending, preventing real-time event flushing. Disable compression for SSE routes using per-route layer overrides or `CompressionLayer`'s predicate option — prefer per-route disabling over turning compression off globally.
 
 ### Multi-line HTML
 
@@ -444,3 +475,7 @@ The broadcaster uses `std::sync::RwLock` for the channel map. All operations und
 ### Drop ordering in `BroadcastStream`
 
 The `broadcast::Receiver` field must be declared before the cleanup closure. Rust drops fields in declaration order — the receiver must drop first (decrementing `receiver_count`) before the cleanup closure checks it.
+
+### `Event::new()` is fallible
+
+`Event::new()` returns `Result` because it validates that `id` and `event` contain no `\n`/`\r` characters. In practice, IDs from `id::short()` and hardcoded event names never fail — use `?` to propagate.
