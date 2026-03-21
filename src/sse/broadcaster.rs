@@ -1,8 +1,15 @@
 use crate::error::Error;
-use futures_util::Stream;
+use axum::response::{IntoResponse, Response};
+use futures_util::{Stream, StreamExt};
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::pin::Pin;
+use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 use tokio::sync::broadcast;
+
+use super::config::SseConfig;
+use super::event::Event;
 
 /// Policy for handling lagged subscribers in a broadcast stream.
 #[derive(Debug, Clone, Copy)]
@@ -43,7 +50,6 @@ impl<T: Clone + Send + 'static> BroadcastStream<T> {
     }
 
     /// Create a new broadcast stream with a cleanup closure.
-    #[allow(dead_code)]
     pub(crate) fn with_cleanup(
         rx: broadcast::Receiver<T>,
         cleanup: impl FnOnce() + Send + 'static,
@@ -75,7 +81,6 @@ impl<T: Clone + Send + 'static> BroadcastStream<T> {
 }
 
 /// Default unfold: propagate lag errors.
-#[allow(dead_code)]
 fn unfold_default<T: Clone + Send + 'static>(
     rx: broadcast::Receiver<T>,
 ) -> impl Stream<Item = Result<T, Error>> {
@@ -141,6 +146,198 @@ where
     T: Send + 'static,
 {
     futures_util::stream::iter(items.into_iter().map(Ok))
+}
+
+struct BroadcasterInner<K, T> {
+    channels: RwLock<HashMap<K, broadcast::Sender<T>>>,
+    buffer: usize,
+    config: SseConfig,
+}
+
+/// Keyed broadcast channel registry for fan-out SSE delivery.
+///
+/// Each key maps to an independent broadcast channel. All subscribers of a key
+/// receive every message sent to that key. Register one broadcaster per domain
+/// concept (e.g., chat messages, notifications, metrics).
+///
+/// # Construction
+///
+/// ```rust,ignore
+/// use modo::sse::{Broadcaster, SseConfig};
+///
+/// let chat: Broadcaster<String, ChatMessage> =
+///     Broadcaster::new(128, SseConfig::default());
+/// registry.add(chat);
+/// ```
+///
+/// # Channel lifecycle
+///
+/// - Channels are created lazily on first [`subscribe()`](Self::subscribe)
+/// - Channels are auto-cleaned when the last subscriber's stream is dropped
+/// - [`remove()`](Self::remove) forces immediate cleanup
+pub struct Broadcaster<K, T>
+where
+    K: Hash + Eq + Clone + Send + Sync + 'static,
+    T: Clone + Send + Sync + 'static,
+{
+    inner: Arc<BroadcasterInner<K, T>>,
+}
+
+impl<K, T> Clone for Broadcaster<K, T>
+where
+    K: Hash + Eq + Clone + Send + Sync + 'static,
+    T: Clone + Send + Sync + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+impl<K, T> Broadcaster<K, T>
+where
+    K: Hash + Eq + Clone + Send + Sync + 'static,
+    T: Clone + Send + Sync + 'static,
+{
+    /// Create a new broadcaster.
+    ///
+    /// - `buffer` — per-channel buffer size. When a subscriber falls behind
+    ///   by this many messages, it lags. Typical values: 64–256 for chat,
+    ///   16–64 for dashboards.
+    /// - `config` — SSE configuration (keep-alive interval).
+    pub fn new(buffer: usize, config: SseConfig) -> Self {
+        Self {
+            inner: Arc::new(BroadcasterInner {
+                channels: RwLock::new(HashMap::new()),
+                buffer,
+                config,
+            }),
+        }
+    }
+
+    /// Subscribe to a keyed channel.
+    ///
+    /// Creates the channel lazily on first subscription. Returns a stream
+    /// of raw `T` values. The stream carries a cleanup closure that removes
+    /// the channel entry when the last subscriber drops.
+    pub fn subscribe(&self, key: &K) -> BroadcastStream<T> {
+        let mut channels = self
+            .inner
+            .channels
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+
+        let sender = channels
+            .entry(key.clone())
+            .or_insert_with(|| broadcast::channel(self.inner.buffer).0);
+        let rx = sender.subscribe();
+
+        let inner_ref = Arc::clone(&self.inner);
+        let key_owned = key.clone();
+        let cleanup = move || {
+            let mut channels = inner_ref
+                .channels
+                .write()
+                .unwrap_or_else(|e| e.into_inner());
+            if let std::collections::hash_map::Entry::Occupied(entry) = channels.entry(key_owned)
+                && entry.get().receiver_count() == 0
+            {
+                entry.remove();
+            }
+        };
+
+        BroadcastStream::with_cleanup(rx, cleanup)
+    }
+
+    /// Send an event to all subscribers of a key.
+    ///
+    /// Returns the number of receivers that got the message. Returns 0
+    /// if no subscribers exist for the key — does NOT create a channel.
+    pub fn send(&self, key: &K, event: T) -> usize {
+        let channels = self
+            .inner
+            .channels
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(sender) = channels.get(key) {
+            match sender.send(event) {
+                Ok(count) => count,
+                Err(_) => {
+                    drop(channels);
+                    let mut channels = self
+                        .inner
+                        .channels
+                        .write()
+                        .unwrap_or_else(|e| e.into_inner());
+                    if let std::collections::hash_map::Entry::Occupied(entry) =
+                        channels.entry(key.clone())
+                        && entry.get().receiver_count() == 0
+                    {
+                        entry.remove();
+                    }
+                    0
+                }
+            }
+        } else {
+            0
+        }
+    }
+
+    /// Number of active subscribers for a key. Returns 0 if no channel exists.
+    pub fn subscriber_count(&self, key: &K) -> usize {
+        let channels = self
+            .inner
+            .channels
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        channels.get(key).map(|s| s.receiver_count()).unwrap_or(0)
+    }
+
+    /// Manually remove a channel and disconnect all its subscribers.
+    ///
+    /// Typically not needed — channels auto-clean on last subscriber drop.
+    /// Use for explicit teardown (e.g., deleting a chat room).
+    pub fn remove(&self, key: &K) {
+        let mut channels = self
+            .inner
+            .channels
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        channels.remove(key);
+    }
+
+    /// Access the SSE config.
+    pub fn config(&self) -> &SseConfig {
+        &self.inner.config
+    }
+
+    /// Wrap an event stream into an SSE HTTP response.
+    ///
+    /// Applies keep-alive comments at the configured interval and sets
+    /// the `X-Accel-Buffering: no` header for nginx compatibility.
+    pub fn response<S>(&self, stream: S) -> Response
+    where
+        S: Stream<Item = Result<Event, Error>> + Send + 'static,
+    {
+        let mapped = stream.map(|result| {
+            result.map_err(axum::Error::new).and_then(|event| {
+                axum::response::sse::Event::try_from(event).map_err(axum::Error::new)
+            })
+        });
+
+        let keep_alive =
+            axum::response::sse::KeepAlive::new().interval(self.inner.config.keep_alive_interval());
+
+        let mut resp = axum::response::sse::Sse::new(mapped)
+            .keep_alive(keep_alive)
+            .into_response();
+
+        resp.headers_mut()
+            .insert("x-accel-buffering", http::HeaderValue::from_static("no"));
+
+        resp
+    }
 }
 
 #[cfg(test)]
@@ -249,5 +446,105 @@ mod tests {
         drop(stream);
         assert!(cleaned.load(Ordering::SeqCst));
         drop(tx);
+    }
+
+    #[tokio::test]
+    async fn broadcaster_subscribe_and_send() {
+        let bc: Broadcaster<String, String> = Broadcaster::new(16, SseConfig::default());
+        let key = "room1".to_string();
+
+        let mut stream = bc.subscribe(&key);
+        assert_eq!(bc.subscriber_count(&key), 1);
+
+        let count = bc.send(&key, "hello".into());
+        assert_eq!(count, 1);
+
+        let item = stream.next().await.unwrap().unwrap();
+        assert_eq!(item, "hello");
+    }
+
+    #[tokio::test]
+    async fn broadcaster_send_to_nonexistent_key_returns_zero() {
+        let bc: Broadcaster<String, String> = Broadcaster::new(16, SseConfig::default());
+        let count = bc.send(&"nobody".into(), "hello".into());
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn broadcaster_multiple_subscribers() {
+        let bc: Broadcaster<String, i32> = Broadcaster::new(16, SseConfig::default());
+        let key = "k".to_string();
+
+        let mut s1 = bc.subscribe(&key);
+        let mut s2 = bc.subscribe(&key);
+        assert_eq!(bc.subscriber_count(&key), 2);
+
+        bc.send(&key, 42);
+        assert_eq!(s1.next().await.unwrap().unwrap(), 42);
+        assert_eq!(s2.next().await.unwrap().unwrap(), 42);
+    }
+
+    #[tokio::test]
+    async fn broadcaster_auto_cleanup_on_last_drop() {
+        let bc: Broadcaster<String, i32> = Broadcaster::new(16, SseConfig::default());
+        let key = "cleanup".to_string();
+
+        let s1 = bc.subscribe(&key);
+        let s2 = bc.subscribe(&key);
+        assert_eq!(bc.subscriber_count(&key), 2);
+
+        drop(s1);
+        // Channel still exists (s2 is alive)
+        assert_eq!(bc.subscriber_count(&key), 1);
+
+        drop(s2);
+        // Channel should be cleaned up
+        assert_eq!(bc.subscriber_count(&key), 0);
+    }
+
+    #[tokio::test]
+    async fn broadcaster_remove_disconnects_subscribers() {
+        let bc: Broadcaster<String, i32> = Broadcaster::new(16, SseConfig::default());
+        let key = "rm".to_string();
+
+        let mut stream = bc.subscribe(&key);
+        bc.remove(&key);
+
+        // Stream should end because sender was dropped
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn broadcaster_clone_shares_state() {
+        let bc1: Broadcaster<String, String> = Broadcaster::new(16, SseConfig::default());
+        let bc2 = bc1.clone();
+        let key = "shared".to_string();
+
+        let mut stream = bc1.subscribe(&key);
+        bc2.send(&key, "from_clone".into());
+
+        let item = stream.next().await.unwrap().unwrap();
+        assert_eq!(item, "from_clone");
+    }
+
+    #[test]
+    fn broadcaster_config_accessible() {
+        let config = SseConfig {
+            keep_alive_interval_secs: 30,
+        };
+        let bc: Broadcaster<String, String> = Broadcaster::new(64, config);
+        assert_eq!(bc.config().keep_alive_interval_secs, 30);
+    }
+
+    #[tokio::test]
+    async fn broadcaster_response_returns_valid_response() {
+        let bc: Broadcaster<String, String> = Broadcaster::new(16, SseConfig::default());
+        let stream = futures_util::stream::empty::<Result<super::Event, crate::error::Error>>();
+        let response = bc.response(stream);
+        assert_eq!(response.headers().get("x-accel-buffering").unwrap(), "no");
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "text/event-stream"
+        );
     }
 }
