@@ -25,6 +25,9 @@ pub mod email;
 #[cfg(feature = "templates")]
 pub mod template;
 
+#[cfg(feature = "sse")]
+pub mod sse;
+
 pub use config::Config;
 pub use error::{Error, Result};
 pub use extractor::Service;
