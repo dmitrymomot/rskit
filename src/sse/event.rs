@@ -111,10 +111,8 @@ impl Event {
     }
 }
 
-impl TryFrom<Event> for axum::response::sse::Event {
-    type Error = Error;
-
-    fn try_from(event: Event) -> Result<Self, Self::Error> {
+impl From<Event> for axum::response::sse::Event {
+    fn from(event: Event) -> Self {
         let mut axum_event = axum::response::sse::Event::default();
         axum_event = axum_event.id(event.id);
         axum_event = axum_event.event(event.event);
@@ -124,7 +122,7 @@ impl TryFrom<Event> for axum::response::sse::Event {
         if let Some(retry) = event.retry {
             axum_event = axum_event.retry(retry);
         }
-        Ok(axum_event)
+        axum_event
     }
 }
 
@@ -189,13 +187,12 @@ mod tests {
     }
 
     #[test]
-    fn try_from_converts_to_axum_event() {
+    fn from_converts_to_axum_event() {
         let event = Event::new("id1", "message")
             .unwrap()
             .data("hello")
             .retry(std::time::Duration::from_millis(3000));
-        let axum_event: axum::response::sse::Event = event.try_into().unwrap();
-        // axum Event doesn't expose fields, but conversion should not error
+        let axum_event: axum::response::sse::Event = event.into();
         let _ = axum_event;
     }
 
@@ -203,5 +200,40 @@ mod tests {
     fn data_methods_replace_previous() {
         let event = Event::new("id", "ev").unwrap().data("first").html("second");
         assert_eq!(event.data.as_deref(), Some("second"));
+    }
+
+    #[test]
+    fn new_with_empty_id_and_event_succeeds() {
+        let event = Event::new("", "").unwrap();
+        assert_eq!(event.id, "");
+        assert_eq!(event.event, "");
+    }
+
+    #[test]
+    fn new_rejects_carriage_return_in_id() {
+        let result = Event::new("evt\r01", "message");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().message().contains("id"));
+    }
+
+    #[test]
+    fn new_rejects_newline_in_event() {
+        let result = Event::new("evt_01", "msg\n");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().message().contains("event"));
+    }
+
+    #[test]
+    fn getter_methods_return_expected_values() {
+        let event = Event::new("id1", "update").unwrap().data("payload");
+        assert_eq!(event.id(), "id1");
+        assert_eq!(event.event_name(), "update");
+        assert_eq!(event.data_ref(), Some("payload"));
+    }
+
+    #[test]
+    fn data_ref_returns_none_when_no_data() {
+        let event = Event::new("id1", "ping").unwrap();
+        assert!(event.data_ref().is_none());
     }
 }

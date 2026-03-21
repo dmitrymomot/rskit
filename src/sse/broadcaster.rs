@@ -358,9 +358,9 @@ where
         S: Stream<Item = Result<Event, Error>> + Send + 'static,
     {
         let mapped = stream.map(|result| {
-            result.map_err(axum::Error::new).and_then(|event| {
-                axum::response::sse::Event::try_from(event).map_err(axum::Error::new)
-            })
+            result
+                .map(axum::response::sse::Event::from)
+                .map_err(axum::Error::new)
         });
 
         let keep_alive =
@@ -603,5 +603,59 @@ mod tests {
             response.headers().get("content-type").unwrap(),
             "text/event-stream"
         );
+    }
+
+    #[tokio::test]
+    async fn channel_closure_error_produces_valid_response() {
+        let bc: Broadcaster<String, String> = Broadcaster::new(16, SseConfig::default());
+
+        let response =
+            bc.channel(|_tx| async move { Err(crate::error::Error::internal("deliberate error")) });
+
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "text/event-stream"
+        );
+        assert_eq!(response.headers().get("x-accel-buffering").unwrap(), "no");
+    }
+
+    #[tokio::test]
+    async fn channel_closure_panic_produces_valid_response() {
+        let bc: Broadcaster<String, String> = Broadcaster::new(16, SseConfig::default());
+
+        let response = bc.channel(|_tx| async move {
+            panic!("deliberate panic");
+        });
+
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "text/event-stream"
+        );
+        assert_eq!(response.headers().get("x-accel-buffering").unwrap(), "no");
+    }
+
+    #[tokio::test]
+    async fn concurrent_subscribe_and_send() {
+        let bc: Broadcaster<String, i32> = Broadcaster::new(256, SseConfig::default());
+        let key = "concurrent".to_string();
+
+        let mut set = tokio::task::JoinSet::new();
+
+        for task_num in 0..10 {
+            let bc = bc.clone();
+            let key = key.clone();
+            set.spawn(async move {
+                let mut stream = bc.subscribe(&key);
+                bc.send(&key, task_num);
+                stream.next().await.unwrap().unwrap()
+            });
+        }
+
+        let mut results = Vec::new();
+        while let Some(result) = set.join_next().await {
+            results.push(result.expect("Task panicked"));
+        }
+
+        assert_eq!(results.len(), 10);
     }
 }
