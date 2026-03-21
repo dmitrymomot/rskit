@@ -1,6 +1,6 @@
 use crate::error::Error;
 use axum::response::{IntoResponse, Response};
-use futures_util::{Stream, StreamExt};
+use futures_util::{FutureExt, Stream, StreamExt};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::pin::Pin;
@@ -312,6 +312,43 @@ where
         &self.inner.config
     }
 
+    /// Create an SSE response with an imperative sender.
+    ///
+    /// Spawns the closure as a tokio task. The closure receives a [`Sender`]
+    /// for pushing events. The task runs until:
+    /// - The closure returns `Ok(())` — stream ends cleanly
+    /// - The closure returns `Err(e)` — error is logged, stream ends
+    /// - A `tx.send()` call fails — client disconnected
+    ///
+    /// Panics in the closure are caught and logged.
+    pub fn channel<F, Fut>(&self, f: F) -> Response
+    where
+        F: FnOnce(super::Sender) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<(), Error>> + Send,
+    {
+        const CHANNEL_BUFFER: usize = 32;
+        let (tx, rx) = tokio::sync::mpsc::channel(CHANNEL_BUFFER);
+        let sender = super::Sender { tx };
+
+        tokio::spawn(async move {
+            let result = std::panic::AssertUnwindSafe(f(sender)).catch_unwind().await;
+            match result {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    tracing::debug!(error = %e, "SSE channel closure ended with error")
+                }
+                Err(_) => tracing::error!("SSE channel closure panicked"),
+            }
+        });
+
+        // Wrap the mpsc receiver as a stream of Events
+        let stream = futures_util::stream::unfold(rx, |mut rx| async move {
+            rx.recv().await.map(|event| (Ok(event), rx))
+        });
+
+        self.response(stream)
+    }
+
     /// Wrap an event stream into an SSE HTTP response.
     ///
     /// Applies keep-alive comments at the configured interval and sets
@@ -525,6 +562,26 @@ mod tests {
 
         let item = stream.next().await.unwrap().unwrap();
         assert_eq!(item, "from_clone");
+    }
+
+    #[tokio::test]
+    async fn broadcaster_channel_produces_events() {
+        let bc: Broadcaster<String, String> = Broadcaster::new(16, SseConfig::default());
+
+        let response = bc.channel(|tx| async move {
+            tx.send(super::Event::new("e1", "test").unwrap().data("hello"))
+                .await?;
+            tx.send(super::Event::new("e2", "test").unwrap().data("world"))
+                .await?;
+            Ok(())
+        });
+
+        // Response should have SSE headers
+        assert_eq!(response.headers().get("x-accel-buffering").unwrap(), "no");
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "text/event-stream"
+        );
     }
 
     #[test]
