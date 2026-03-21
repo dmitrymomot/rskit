@@ -9,6 +9,7 @@ pub struct Error {
     message: String,
     source: Option<Box<dyn std::error::Error + Send + Sync>>,
     details: Option<serde_json::Value>,
+    lagged: bool,
 }
 
 impl Error {
@@ -18,6 +19,7 @@ impl Error {
             message: message.into(),
             source: None,
             details: None,
+            lagged: false,
         }
     }
 
@@ -31,6 +33,7 @@ impl Error {
             message: message.into(),
             source: Some(Box::new(source)),
             details: None,
+            lagged: false,
         }
     }
 
@@ -82,6 +85,22 @@ impl Error {
     pub fn internal(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, msg)
     }
+
+    /// Create an error indicating a broadcast subscriber lagged behind.
+    pub fn lagged(skipped: u64) -> Self {
+        Self {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: format!("SSE subscriber lagged, skipped {skipped} messages"),
+            source: None,
+            details: None,
+            lagged: true,
+        }
+    }
+
+    /// Returns `true` if this error represents a broadcast lag.
+    pub fn is_lagged(&self) -> bool {
+        self.lagged
+    }
 }
 
 impl Clone for Error {
@@ -91,6 +110,7 @@ impl Clone for Error {
             message: self.message.clone(),
             source: None, // source (Box<dyn Error>) can't be cloned
             details: self.details.clone(),
+            lagged: self.lagged,
         }
     }
 }
@@ -108,6 +128,7 @@ impl fmt::Debug for Error {
             .field("message", &self.message)
             .field("source", &self.source)
             .field("details", &self.details)
+            .field("lagged", &self.lagged)
             .finish()
     }
 }
@@ -142,10 +163,35 @@ impl IntoResponse for Error {
             message,
             source: None, // source can't be cloned
             details,
+            lagged: false,
         };
 
         let mut response = (status, axum::Json(body)).into_response();
         response.extensions_mut().insert(ext_error);
         response
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lagged_error_has_internal_status() {
+        let err = Error::lagged(5);
+        assert_eq!(err.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(err.message().contains('5'));
+    }
+
+    #[test]
+    fn is_lagged_returns_true_for_lagged_error() {
+        let err = Error::lagged(10);
+        assert!(err.is_lagged());
+    }
+
+    #[test]
+    fn is_lagged_returns_false_for_other_errors() {
+        let err = Error::internal("something else");
+        assert!(!err.is_lagged());
     }
 }
