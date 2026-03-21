@@ -149,4 +149,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - MiniJinja auto-escaping: functions returning URLs/HTML must use `minijinja::Value::from_safe_string()` — bare strings get `/` escaped to `&#x2f;`
 - MiniJinja `add_function`/`add_filter` consume `F` by move — builder storing deferred registrations must use `Box<dyn FnOnce>`, not `Box<dyn Fn>`
 - `intl_pluralrules`: `select()` returns `Result<PluralCategory, &str>`, not bare `PluralCategory`; requires `unic-langid` as explicit dep for `LanguageIdentifier`
+- `intl_pluralrules::PluralRules` does not derive `Debug` — structs containing it need manual `impl Debug` (it does derive `Clone`)
+- MiniJinja `Value` booleans: use `value.is_true()` to extract a `bool` from a `Value::from(true/false)` — don't use `to_string()` comparison
+- Feature-gated modules: use `cargo test --features templates` and `cargo clippy --features templates --tests` to test/lint template code
 - `SessionState` re-export from `session/mod.rs` is gated behind `#[cfg(feature = "templates")]` — only the template locale resolver needs it
