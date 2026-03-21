@@ -160,3 +160,5 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `Event::new()` is fallible — validates no `\n`/`\r` in id and event name; in practice `id::short()` and hardcoded names never fail
 - `BroadcastStream` field ordering: `Receiver` before cleanup closure — Rust drops in declaration order
 - `std::sync::RwLock` (not tokio) for broadcaster channel map — all ops are synchronous; never hold across `.await`
+- `Event` builder method `data(self, ...)` and getter `data_ref(&self)` have different names — Rust forbids method overloading; specs must not define two methods with the same name differing only by `self` type
+- Adding fields to `Error` struct requires updating ALL struct literal sites — especially `IntoResponse` extension copy, which must propagate new fields (not hardcode defaults)
