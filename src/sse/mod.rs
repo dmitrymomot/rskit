@@ -1,1 +1,3 @@
-// SSE module — populated in subsequent tasks
+mod config;
+
+pub use config::SseConfig;
