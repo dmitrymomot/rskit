@@ -177,5 +177,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Subdomain strategies allow only one subdomain level relative to base domain — `test.app.acme.com` with base `acme.com` is invalid
 - `subdomain_or_domain` errors on exact base domain match — base domain without subdomain is not a valid tenant for tenant route groups
 - `tracing()` middleware must declare `tenant_id = tracing::field::Empty` in span so tenant middleware can `record()` it later
-- axum 0.8 requires explicit `OptionalFromRequestParts` impl for `Option<Tenant<T>>` — no blanket impl from `FromRequestParts`
+- axum 0.8 requires explicit `OptionalFromRequestParts` impl for any custom extractor to support `Option<MyExtractor>` — no blanket impl from `FromRequestParts`
 - `PathParamStrategy` uses `axum::extract::RawPathParams` via synchronous poll with `NoopWaker` — the future is always immediately ready (no real async I/O)
+- `#[derive(Clone)]` on generic structs with `Arc<T>` fields adds unnecessary `T: Clone` bounds — use manual `Clone` impl instead (e.g., `TenantLayer`, `TenantMiddleware`)
+- `axum::extract::RawPathParams` depends on internal `UrlParams` (`pub(crate)`) — positive tests require a real `axum::Router` with `route_layer()` + `tower::ServiceExt::oneshot`, not direct extension insertion
