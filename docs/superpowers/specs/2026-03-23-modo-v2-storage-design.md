@@ -74,6 +74,7 @@ pub(crate) struct SigningParams<'a> {
     pub method: &'a str,
     pub canonical_uri: &'a str,   // pre-computed by caller: "/{bucket}/{key}" (path) or "/{key}" (virtual-hosted)
     pub host: &'a str,            // pre-computed by caller based on path_style
+    pub query_string: &'a str,    // canonical query string (sorted alphabetically by sign_request)
     pub extra_headers: &'a [(String, String)],  // additional headers to sign (Content-Type, Content-Disposition, etc.)
     pub payload_hash: &'a str,    // SHA-256 hex of body, or "UNSIGNED-PAYLOAD"
     pub now: chrono::DateTime<chrono::Utc>,
