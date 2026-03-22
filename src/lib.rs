@@ -29,8 +29,8 @@ pub mod template;
 #[cfg(feature = "sse")]
 pub mod sse;
 
-#[cfg(feature = "upload")]
-pub mod upload;
+#[cfg(feature = "storage")]
+pub mod storage;
 
 pub use config::Config;
 pub use error::{Error, Result};
@@ -52,8 +52,8 @@ pub use template::{
     TemplateContextLayer,
 };
 
-#[cfg(feature = "upload")]
-pub use upload::{BucketConfig, Buckets, PutOptions, Storage};
+#[cfg(feature = "storage")]
+pub use storage::{BucketConfig, PutOptions};
 
 // Re-exports for user convenience
 pub use axum;

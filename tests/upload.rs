@@ -1,4 +1,4 @@
-#![cfg(feature = "upload-test")]
+#![cfg(feature = "storage-test")]
 
 use modo::extractor::UploadedFile;
 use modo::upload::{Buckets, PutOptions, Storage};
