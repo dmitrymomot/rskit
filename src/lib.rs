@@ -15,6 +15,7 @@ pub mod validate;
 
 pub mod cron;
 pub mod job;
+pub mod tenant;
 
 #[cfg(feature = "auth")]
 pub mod auth;
@@ -33,6 +34,7 @@ pub use error::{Error, Result};
 pub use extractor::Service;
 pub use sanitize::Sanitize;
 pub use session::{Session, SessionConfig, SessionData, SessionToken};
+pub use tenant::{HasTenantId, Tenant, TenantId, TenantResolver, TenantStrategy};
 pub use validate::{Validate, ValidationError, Validator};
 
 #[cfg(feature = "auth")]
