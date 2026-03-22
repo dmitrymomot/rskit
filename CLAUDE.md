@@ -118,6 +118,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `ReadPool` intentionally does NOT implement `Writer` — prevents passing it to migration or write functions
 - `connect_rw()` connects writer pool before reader — SQLite `?mode=ro` requires the file to already exist
 - Pool newtypes (`Pool`, `ReadPool`, `WritePool`) don't derive `Debug` — tests on `Result<(ReadPool, WritePool)>` must use `.err().unwrap()` not `.unwrap_err()`
+- `Storage` and `Buckets` don't derive `Debug` — same `.err().unwrap()` pattern as pool newtypes
 - `into_inner()` on pool newtypes is `pub(crate)` — not available to downstream users
 - `tracing::init()` returns `Result<TracingGuard>` and uses `try_init()` — safe to call multiple times (idempotent); callers must hold the guard
 - Tests that modify env vars must clean up BEFORE assertions — if an assert panics, `remove_var` after it never runs
@@ -135,6 +136,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `hyper-rustls` needs `webpki-roots` feature for `.with_webpki_roots()` builder method
 - Transitive deps (e.g., `http-body-util` via axum) must still be declared in `Cargo.toml` to use them directly
 - `pub(crate)` items cannot be tested from integration tests (`tests/*.rs`) — use `#[cfg(test)] mod tests` inside the source file instead
+- `cfg(test)` is NOT set on the library crate when compiling integration tests (`tests/*.rs`) — methods gated on `#[cfg(any(test, feature = "X-test"))]` require the feature flag in integration tests
 - OAuthProvider trait uses RPITIT (`-> impl Future + Send`) — not object-safe; providers must be concrete types (`Service<Google>`, not `Arc<dyn OAuthProvider>`)
 - `password::hash()` and `password::verify()` are `async` — they use `spawn_blocking` internally because Argon2id is CPU-intensive
 - OTP and backup code `verify()` use constant-time comparison via `subtle::ConstantTimeEq`
@@ -187,7 +189,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `Storage::memory()` / `Buckets::memory()` only available with `upload-test` feature or `#[cfg(test)]` (unit tests only — integration tests in `tests/` need `upload-test`)
 - `presigned_url()` errors on Memory backend (no signing support) — tests should expect an error
 - `opendal::Operator` is `Clone` (wraps `Arc` internally) — `Storage` still uses its own `Arc<StorageInner>` for extra fields
-- OpenDAL `WriteOptions` has no per-write ACL field — ACL is set once at operator construction via `default_acl` config (if supported)
+- OpenDAL 0.55 S3 builder has no `default_acl()` method — ACL must be configured at the bucket/IAM level in the cloud provider, not via OpenDAL
 - `delete()` on non-existent key is a no-op (returns `Ok(())`) — matches S3 semantics
 - `Buckets::get()` returns a cloned `Storage` (cheap `Arc` clone), not `&Storage`
 - `delete_prefix()` is O(n) network calls — not suitable for prefixes with thousands of objects
