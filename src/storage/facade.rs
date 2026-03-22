@@ -144,7 +144,7 @@ impl Storage {
             if let Err(del_err) = delete_result {
                 tracing::warn!(key = %key, error = %del_err, "failed to clean up partial upload");
             }
-            return Err(Error::internal(format!("failed to upload file: {e}")));
+            return Err(e);
         }
 
         tracing::info!(key = %key, size = input.data.len(), "file uploaded");

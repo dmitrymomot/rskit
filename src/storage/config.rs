@@ -104,7 +104,9 @@ pub(crate) fn parse_size(s: &str) -> Result<usize> {
         .parse()
         .map_err(|_| Error::internal(format!("invalid size string: \"{s}\"")))?;
 
-    let result = num * multiplier;
+    let result = num
+        .checked_mul(multiplier)
+        .ok_or_else(|| Error::internal(format!("size value overflows: \"{s}\"")))?;
     if result == 0 {
         return Err(Error::internal(format!(
             "size must be greater than 0: \"{s}\""
@@ -186,6 +188,22 @@ mod tests {
     fn parse_size_zero_rejected() {
         assert!(parse_size("0mb").is_err());
         assert!(parse_size("0").is_err());
+    }
+
+    #[test]
+    fn parse_size_overflow() {
+        assert!(parse_size("999999999999gb").is_err());
+        assert!(parse_size("99999999999999999999").is_err());
+    }
+
+    #[test]
+    fn parse_size_negative_rejected() {
+        assert!(parse_size("-1mb").is_err());
+    }
+
+    #[test]
+    fn parse_size_single_byte() {
+        assert_eq!(parse_size("1b").unwrap(), 1);
     }
 
     // -- size helpers --

@@ -133,7 +133,12 @@ pub(crate) fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
 }
 
 pub(crate) fn hex_encode(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    use std::fmt::Write;
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        write!(s, "{b:02x}").unwrap();
+    }
+    s
 }
 
 #[cfg(test)]
@@ -237,6 +242,46 @@ mod tests {
             ),
             "auth header: {auth}"
         );
+    }
+
+    #[test]
+    fn hex_encode_empty() {
+        assert_eq!(hex_encode(&[]), "");
+    }
+
+    #[test]
+    fn hex_encode_known_bytes() {
+        assert_eq!(hex_encode(&[0xde, 0xad, 0xbe, 0xef]), "deadbeef");
+    }
+
+    #[test]
+    fn hex_encode_all_zeros() {
+        assert_eq!(hex_encode(&[0, 0, 0, 0]), "00000000");
+    }
+
+    #[test]
+    fn sign_delete_request() {
+        let params = SigningParams {
+            access_key: ACCESS_KEY,
+            secret_key: SECRET_KEY,
+            region: REGION,
+            method: "DELETE",
+            canonical_uri: "/test.txt",
+            host: "examplebucket.s3.amazonaws.com",
+            query_string: "",
+            extra_headers: &[],
+            payload_hash: EMPTY_HASH,
+            now: test_time(),
+        };
+        let (auth, headers) = sign_request(&params);
+        assert!(auth.starts_with("AWS4-HMAC-SHA256 Credential="));
+        assert!(auth.contains("SignedHeaders=host;x-amz-content-sha256;x-amz-date"));
+        assert!(auth.contains("Signature="));
+        // Verify headers contain required SigV4 headers
+        let header_names: Vec<&str> = headers.iter().map(|(k, _)| k.as_str()).collect();
+        assert!(header_names.contains(&"host"));
+        assert!(header_names.contains(&"x-amz-date"));
+        assert!(header_names.contains(&"x-amz-content-sha256"));
     }
 
     #[test]
