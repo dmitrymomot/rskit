@@ -1,3 +1,5 @@
+mod backend;
+mod client;
 mod config;
 pub(crate) mod memory;
 mod options;

@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use super::signing::{derive_signing_key, hex_encode, hmac_sha256, sha256_hex, uri_encode};
 
-#[allow(dead_code)]
 pub(crate) struct PresignParams<'a> {
     pub access_key: &'a str,
     pub secret_key: &'a str,
@@ -16,7 +15,6 @@ pub(crate) struct PresignParams<'a> {
     pub now: chrono::DateTime<chrono::Utc>,
 }
 
-#[allow(dead_code)]
 pub(crate) fn presign_url(params: &PresignParams) -> String {
     let date_stamp = params.now.format("%Y%m%d").to_string();
     let amz_date = params.now.format("%Y%m%dT%H%M%SZ").to_string();

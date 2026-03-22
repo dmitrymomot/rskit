@@ -4,7 +4,6 @@ use sha2::{Digest, Sha256};
 type HmacSha256 = Hmac<Sha256>;
 
 /// Parameters needed to sign an S3 request.
-#[allow(dead_code)]
 pub(crate) struct SigningParams<'a> {
     pub access_key: &'a str,
     pub secret_key: &'a str,
@@ -19,7 +18,6 @@ pub(crate) struct SigningParams<'a> {
 }
 
 /// SHA-256 hash of data, returned as lowercase hex.
-#[allow(dead_code)]
 pub(crate) fn sha256_hex(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
@@ -28,7 +26,6 @@ pub(crate) fn sha256_hex(data: &[u8]) -> String {
 
 /// URI-encode per AWS spec. Encodes everything except A-Za-z0-9_.-~.
 /// If `encode_slash` is true, '/' is also encoded.
-#[allow(dead_code)]
 pub(crate) fn uri_encode(input: &str, encode_slash: bool) -> String {
     let mut result = String::with_capacity(input.len() * 2);
     for byte in input.bytes() {
@@ -49,7 +46,6 @@ pub(crate) fn uri_encode(input: &str, encode_slash: bool) -> String {
 
 /// Sign an S3 request using AWS SigV4.
 /// Returns (authorization_header_value, all_headers_to_add).
-#[allow(dead_code)]
 pub(crate) fn sign_request(params: &SigningParams) -> (String, Vec<(String, String)>) {
     let date_stamp = params.now.format("%Y%m%d").to_string();
     let amz_date = params.now.format("%Y%m%dT%H%M%SZ").to_string();
@@ -120,7 +116,6 @@ pub(crate) fn sign_request(params: &SigningParams) -> (String, Vec<(String, Stri
     (authorization, headers)
 }
 
-#[allow(dead_code)]
 pub(crate) fn derive_signing_key(secret_key: &str, date_stamp: &str, region: &str) -> Vec<u8> {
     let k_date = hmac_sha256(
         format!("AWS4{secret_key}").as_bytes(),
@@ -131,14 +126,12 @@ pub(crate) fn derive_signing_key(secret_key: &str, date_stamp: &str, region: &st
     hmac_sha256(&k_service, b"aws4_request")
 }
 
-#[allow(dead_code)]
 pub(crate) fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
     let mut mac = HmacSha256::new_from_slice(key).expect("HMAC accepts any key length");
     mac.update(data);
     mac.finalize().into_bytes().to_vec()
 }
 
-#[allow(dead_code)]
 pub(crate) fn hex_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
