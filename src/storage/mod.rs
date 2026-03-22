@@ -1,4 +1,5 @@
 mod backend;
+mod bridge;
 mod client;
 mod config;
 mod facade;
