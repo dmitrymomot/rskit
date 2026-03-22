@@ -205,6 +205,9 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `PutOptions.content_type` overrides `PutInput.content_type` when `Some`
 - Hand-parsed XML for ListObjectsV2 — if parsing breaks, switch to `quick-xml`
 - `storage` and `auth` features share optional deps (hmac, hyper, hyper-rustls, hyper-util, http-body-util) — no new crates
+- S3 client URLs: always URI-encode object keys with `uri_encode(key, false)` — both in HTTP request URLs and SigV4 canonical URIs; omitting breaks keys with spaces or `+`
+- Conditionally-used items (e.g., `BackendKind::Memory`, test-only constructors): use `#[cfg_attr(not(any(test, feature = "X-test")), allow(dead_code))]` — exists unconditionally but suppresses warnings in non-test builds
+- Modules whose items are imported behind `#[cfg(any(test, ...))]` from sibling files need `pub(crate) mod`, not plain `mod` — otherwise the import is invisible
 - `std::sync::RwLock` does NOT support lock upgrading (read→write) — must drop read lock, acquire write lock, then re-check for races
 - Sharded concurrent maps: never take read locks on other shards while holding a write lock on one shard — deadlock risk with concurrent inserts
 - Before concluding a dependency is unused, grep ALL source files — a dep may appear unused in obvious modules but be used in unexpected places
