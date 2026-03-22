@@ -85,7 +85,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 7 (Template):** MiniJinja engine, i18n, static files — DONE
 - **Plan 8 (SSE):** broadcast SSE — DONE
 - **Plan 9 (Tenant):** tenant resolution with strategies, resolver trait, middleware enforcement — DONE
-- **Plan 10 (Upload):** S3-compatible storage via OpenDAL, presigned URLs — PLANNED
+- **Plan 10 (Upload):** S3-compatible storage via OpenDAL, presigned URLs — DONE
 - **Plan 11 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
 
 ## Key References
@@ -183,3 +183,11 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `PathParamStrategy` uses `axum::extract::RawPathParams` via synchronous poll with `NoopWaker` — the future is always immediately ready (no real async I/O)
 - `#[derive(Clone)]` on generic structs with `Arc<T>` fields adds unnecessary `T: Clone` bounds — use manual `Clone` impl instead (e.g., `TenantLayer`, `TenantMiddleware`)
 - `axum::extract::RawPathParams` depends on internal `UrlParams` (`pub(crate)`) — positive tests require a real `axum::Router` with `route_layer()` + `tower::ServiceExt::oneshot`, not direct extension insertion
+- `upload` feature required: `cargo test --features upload` and `cargo clippy --features upload --tests`
+- `Storage::memory()` / `Buckets::memory()` only available with `upload-test` feature (or `#[cfg(test)]`)
+- `presigned_url()` errors on Memory backend (no signing support) — tests should expect an error
+- `opendal::Operator` is `Clone` (wraps `Arc` internally) — `Storage` still uses its own `Arc<StorageInner>` for extra fields
+- OpenDAL `WriteOptions` has no per-write ACL field — ACL is set once at operator construction via `default_acl` config (if supported)
+- `delete()` on non-existent key is a no-op (returns `Ok(())`) — matches S3 semantics
+- `Buckets::get()` returns a cloned `Storage` (cheap `Arc` clone), not `&Storage`
+- `delete_prefix()` is O(n) network calls — not suitable for prefixes with thousands of objects
