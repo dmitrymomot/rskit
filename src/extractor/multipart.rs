@@ -59,51 +59,6 @@ impl UploadedFile {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn file_with_name(name: &str) -> UploadedFile {
-        UploadedFile {
-            name: name.to_string(),
-            content_type: "application/octet-stream".to_string(),
-            size: 0,
-            data: bytes::Bytes::new(),
-        }
-    }
-
-    #[test]
-    fn extension_lowercase() {
-        assert_eq!(file_with_name("photo.JPG").extension(), Some("jpg".into()));
-    }
-
-    #[test]
-    fn extension_compound() {
-        assert_eq!(
-            file_with_name("archive.tar.gz").extension(),
-            Some("gz".into())
-        );
-    }
-
-    #[test]
-    fn extension_none() {
-        assert_eq!(file_with_name("noext").extension(), None);
-    }
-
-    #[test]
-    fn extension_dotfile() {
-        assert_eq!(
-            file_with_name(".gitignore").extension(),
-            Some("gitignore".into())
-        );
-    }
-
-    #[test]
-    fn extension_empty_filename() {
-        assert_eq!(file_with_name("").extension(), None);
-    }
-}
-
 /// A map of field-name to uploaded files.
 ///
 /// Use `get()` for a shared reference, `file()` to take one file,
@@ -199,5 +154,50 @@ where
         value.sanitize();
 
         Ok(MultipartRequest(value, Files(file_fields)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file_with_name(name: &str) -> UploadedFile {
+        UploadedFile {
+            name: name.to_string(),
+            content_type: "application/octet-stream".to_string(),
+            size: 0,
+            data: bytes::Bytes::new(),
+        }
+    }
+
+    #[test]
+    fn extension_lowercase() {
+        assert_eq!(file_with_name("photo.JPG").extension(), Some("jpg".into()));
+    }
+
+    #[test]
+    fn extension_compound() {
+        assert_eq!(
+            file_with_name("archive.tar.gz").extension(),
+            Some("gz".into())
+        );
+    }
+
+    #[test]
+    fn extension_none() {
+        assert_eq!(file_with_name("noext").extension(), None);
+    }
+
+    #[test]
+    fn extension_dotfile() {
+        assert_eq!(
+            file_with_name(".gitignore").extension(),
+            Some("gitignore".into())
+        );
+    }
+
+    #[test]
+    fn extension_empty_filename() {
+        assert_eq!(file_with_name("").extension(), None);
     }
 }
