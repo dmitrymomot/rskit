@@ -13,14 +13,13 @@ struct StoredObject {
     content_type: String,
 }
 
-#[allow(dead_code)]
 pub(crate) struct MemoryBackend {
     objects: RwLock<HashMap<String, StoredObject>>,
     fake_url_base: String,
 }
 
-#[allow(dead_code)]
 impl MemoryBackend {
+    #[cfg_attr(not(any(test, feature = "storage-test")), allow(dead_code))]
     pub fn new() -> Self {
         Self {
             objects: RwLock::new(HashMap::new()),

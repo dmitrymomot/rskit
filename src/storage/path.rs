@@ -4,7 +4,6 @@ use crate::error::{Error, Result};
 ///
 /// Rejects path traversal (`..`), absolute paths (`/`), empty strings,
 /// and control characters.
-#[allow(dead_code)]
 pub(crate) fn validate_path(path: &str) -> Result<()> {
     if path.is_empty() {
         return Err(Error::bad_request("storage path must not be empty"));
@@ -28,7 +27,6 @@ pub(crate) fn validate_path(path: &str) -> Result<()> {
 /// Generate a unique storage key for an uploaded file.
 ///
 /// Format: `{prefix}{ulid}.{ext}` or `{prefix}{ulid}` if no extension.
-#[allow(dead_code)]
 pub(crate) fn generate_key(prefix: &str, extension: Option<&str>) -> String {
     let id = crate::id::ulid();
     match extension {

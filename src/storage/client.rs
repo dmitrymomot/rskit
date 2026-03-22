@@ -12,7 +12,6 @@ use super::presign::{PresignParams, presign_url};
 use super::signing::{SigningParams, sign_request, uri_encode};
 use crate::error::{Error, Result};
 
-#[allow(dead_code)]
 pub(crate) struct RemoteBackend {
     client: Client<
         hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
@@ -28,10 +27,8 @@ pub(crate) struct RemoteBackend {
 }
 
 /// SHA-256 hash of an empty body (used for DELETE, HEAD, GET).
-#[allow(dead_code)]
 const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-#[allow(dead_code)]
 impl RemoteBackend {
     pub fn new(
         bucket: String,
@@ -378,7 +375,6 @@ impl RemoteBackend {
 
 // Free functions exposed for unit tests
 
-#[allow(dead_code)]
 fn build_url_and_host(
     endpoint: &str,
     endpoint_host: &str,
@@ -399,7 +395,6 @@ fn build_url_and_host(
     }
 }
 
-#[allow(dead_code)]
 fn build_canonical_uri(bucket: &str, key: &str, path_style: bool) -> String {
     if path_style {
         format!("/{bucket}/{key}")
@@ -408,7 +403,6 @@ fn build_canonical_uri(bucket: &str, key: &str, path_style: bool) -> String {
     }
 }
 
-#[allow(dead_code)]
 fn strip_scheme(endpoint: &str) -> &str {
     endpoint
         .strip_prefix("https://")
@@ -417,7 +411,6 @@ fn strip_scheme(endpoint: &str) -> &str {
 }
 
 /// Extract all values between `<tag>` and `</tag>` from XML.
-#[allow(dead_code)]
 fn extract_xml_values(xml: &str, tag: &str) -> Vec<String> {
     let open = format!("<{tag}>");
     let close = format!("</{tag}>");
@@ -436,7 +429,6 @@ fn extract_xml_values(xml: &str, tag: &str) -> Vec<String> {
 }
 
 /// Extract a single value between `<tag>` and `</tag>`.
-#[allow(dead_code)]
 fn extract_xml_value(xml: &str, tag: &str) -> Option<String> {
     extract_xml_values(xml, tag).into_iter().next()
 }

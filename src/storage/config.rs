@@ -43,7 +43,6 @@ impl Default for BucketConfig {
     }
 }
 
-#[allow(dead_code)]
 impl BucketConfig {
     /// Validate configuration. Returns an error if required fields are missing
     /// or `max_file_size` is invalid. Called by `Storage::new()`.
@@ -82,7 +81,6 @@ impl BucketConfig {
 ///
 /// Format: `<number><unit>` where unit is `b`, `kb`, `mb`, `gb` (case-insensitive).
 /// Bare numbers (e.g. `"1024"`) are treated as bytes.
-#[allow(dead_code)]
 pub(crate) fn parse_size(s: &str) -> Result<usize> {
     let s = s.trim().to_ascii_lowercase();
     if s.is_empty() {
