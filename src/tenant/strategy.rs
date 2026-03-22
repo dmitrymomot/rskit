@@ -409,6 +409,14 @@ mod tests {
     }
 
     #[test]
+    fn subdomain_case_insensitive() {
+        let s = subdomain("acme.com");
+        let mut parts = make_parts(Some("TENANT1.ACME.COM"), "/");
+        let id = s.extract(&mut parts).unwrap();
+        assert_eq!(id, TenantId::Slug("tenant1".into()));
+    }
+
+    #[test]
     fn subdomain_bare_base_domain_error() {
         let s = subdomain("acme.com");
         let mut parts = make_parts(Some("acme.com"), "/");
@@ -644,7 +652,69 @@ mod tests {
         assert_eq!(parts.uri.query(), Some("foo=bar&baz=1"));
     }
 
+    #[test]
+    fn path_prefix_empty_prefix() {
+        let s = path_prefix("");
+        let mut parts = make_parts(Some("localhost"), "/acme/page");
+        let id = s.extract(&mut parts).unwrap();
+        assert_eq!(id, TenantId::Slug("acme".into()));
+        assert_eq!(parts.uri.path(), "/page");
+    }
+
     // -- PathParamStrategy --------------------------------------------------
+
+    #[tokio::test]
+    async fn path_param_extracts_from_route() {
+        use axum::Router;
+        use axum::routing::get;
+        use tower::ServiceExt as _;
+
+        use super::super::middleware as tenant_middleware;
+        use super::super::traits::{HasTenantId, TenantResolver};
+
+        #[derive(Clone, Debug)]
+        struct TestTenant {
+            slug: String,
+        }
+
+        impl HasTenantId for TestTenant {
+            fn tenant_id(&self) -> &str {
+                &self.slug
+            }
+        }
+
+        struct SlugResolver;
+        impl TenantResolver for SlugResolver {
+            type Tenant = TestTenant;
+            async fn resolve(&self, id: &TenantId) -> crate::Result<TestTenant> {
+                Ok(TestTenant {
+                    slug: id.as_str().to_string(),
+                })
+            }
+        }
+
+        // Handler is module-level async fn to satisfy axum Handler bounds
+        async fn handler(tenant: super::super::Tenant<TestTenant>) -> String {
+            format!("tenant:{}", tenant.slug)
+        }
+
+        let layer = tenant_middleware(path_param("tenant"), SlugResolver);
+        let app = Router::new()
+            .route("/{tenant}/action", get(handler))
+            .route_layer(layer);
+
+        let req = http::Request::builder()
+            .uri("/acme/action")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), http::StatusCode::OK);
+
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&body[..], b"tenant:acme");
+    }
 
     #[test]
     fn path_param_missing_returns_error() {
