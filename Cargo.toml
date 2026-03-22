@@ -29,8 +29,6 @@ tower-http = { version = "0.6", features = ["compression-full", "catch-panic", "
 
 axum-extra = { version = "0.12", features = ["cookie-signed", "cookie-private", "multipart"] }
 cookie = { version = "0.18", features = ["signed"] }
-tower_governor = { version = "0.8", default-features = false, features = ["axum"] }
-governor = "0.10"
 
 # Database
 sqlx = { version = "0.8", features = ["runtime-tokio", "chrono", "migrate", "derive", "sqlite"], default-features = false }

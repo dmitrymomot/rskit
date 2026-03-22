@@ -14,6 +14,9 @@ pub use compression::compression;
 pub use cors::{CorsConfig, cors, cors_with, subdomains, urls};
 pub use csrf::{CsrfConfig, CsrfToken, csrf};
 pub use error_handler::error_handler;
-pub use rate_limit::{RateLimitConfig, rate_limit, rate_limit_with};
+pub use rate_limit::{
+    GlobalKeyExtractor, KeyExtractor, PeerIpKeyExtractor, RateLimitConfig, RateLimitLayer,
+    rate_limit, rate_limit_with,
+};
 pub use request_id::request_id;
 pub use security_headers::{SecurityHeadersConfig, security_headers};

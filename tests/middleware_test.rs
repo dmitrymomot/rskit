@@ -5,8 +5,10 @@ use axum::routing::get;
 use http::StatusCode;
 use modo::middleware::CsrfConfig;
 use modo::service::Registry;
+use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
-use tower_governor::key_extractor::GlobalKeyExtractor;
+
+use modo::middleware::GlobalKeyExtractor;
 
 // ---------------------------------------------------------------------------
 // CORS
@@ -598,6 +600,7 @@ async fn test_rate_limit_config_defaults() {
     assert_eq!(config.burst_size, 10);
     assert!(config.use_headers);
     assert_eq!(config.cleanup_interval_secs, 60);
+    assert_eq!(config.max_keys, 10_000);
 }
 
 #[tokio::test]
@@ -607,12 +610,14 @@ per_second: 5
 burst_size: 20
 use_headers: false
 cleanup_interval_secs: 120
+max_keys: 5000
 "#;
     let config: modo::middleware::RateLimitConfig = serde_yaml_ng::from_str(yaml).unwrap();
     assert_eq!(config.per_second, 5);
     assert_eq!(config.burst_size, 20);
     assert!(!config.use_headers);
     assert_eq!(config.cleanup_interval_secs, 120);
+    assert_eq!(config.max_keys, 5000);
 }
 
 #[tokio::test]
@@ -626,6 +631,7 @@ per_second: 3
     assert_eq!(config.burst_size, 10);
     assert!(config.use_headers);
     assert_eq!(config.cleanup_interval_secs, 60);
+    assert_eq!(config.max_keys, 10_000);
 }
 
 #[tokio::test]
@@ -639,6 +645,7 @@ async fn test_rate_limit_allows_within_burst() {
         burst_size: 5,
         use_headers: true,
         cleanup_interval_secs: 60,
+        max_keys: 10_000,
     };
     // Use GlobalKeyExtractor because oneshot tests lack ConnectInfo<SocketAddr>
     let app = Router::new()
@@ -646,6 +653,7 @@ async fn test_rate_limit_allows_within_burst() {
         .layer(modo::middleware::rate_limit_with(
             &config,
             GlobalKeyExtractor,
+            CancellationToken::new(),
         ))
         .with_state(Registry::new().into_state());
 
@@ -669,12 +677,14 @@ async fn test_rate_limit_includes_headers() {
         burst_size: 5,
         use_headers: true,
         cleanup_interval_secs: 60,
+        max_keys: 10_000,
     };
     let app = Router::new()
         .route("/", get(handler))
         .layer(modo::middleware::rate_limit_with(
             &config,
             GlobalKeyExtractor,
+            CancellationToken::new(),
         ))
         .with_state(Registry::new().into_state());
 
@@ -706,12 +716,14 @@ async fn test_rate_limit_rejects_over_burst() {
         burst_size: 2,
         use_headers: true,
         cleanup_interval_secs: 60,
+        max_keys: 10_000,
     };
     let app = Router::new()
         .route("/", get(handler))
         .layer(modo::middleware::rate_limit_with(
             &config,
             GlobalKeyExtractor,
+            CancellationToken::new(),
         ))
         .with_state(Registry::new().into_state());
 
