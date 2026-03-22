@@ -131,11 +131,11 @@ Returns full `Host` header value as `TenantId::Domain`.
 Combined strategy. Checks if Host is a subdomain of the base domain.
 
 - If Host is exactly one level above base domain → `Slug(subdomain)`
-- If Host is anything else (including equal to base domain, or multi-level subdomain) → `Domain(full_host)`
+- If Host does not end with base domain → `Domain(full_host)` (custom domain)
 - `app.acme.com` with base `acme.com` → `Slug("app")`
 - `custom.com` → `Domain("custom.com")`
-- `acme.com` (equals base) → `Domain("acme.com")`
-- `test.app.acme.com` with base `acme.com` → `Domain("test.app.acme.com")` (multi-level, treated as custom domain)
+- Error if Host equals base domain exactly (no subdomain, not a custom domain — invalid for tenant routes)
+- Error if Host is multi-level subdomain of base domain (`test.app.acme.com` with base `acme.com` — invalid)
 - Error if Host missing
 
 ### `header(name)` → `HeaderStrategy`
@@ -378,7 +378,7 @@ let app = Router::new()
 **`strategy.rs`** — each strategy:
 - `subdomain`: valid single-level subdomain, multi-level subdomain (error), bare base domain (error), missing Host (error), port stripping, multi-level base domain with valid subdomain
 - `domain`: valid Host, missing Host (error), port stripping
-- `subdomain_or_domain`: subdomain branch (single-level), custom domain branch, exact base domain (→ Domain), multi-level subdomain (→ Domain, treated as custom), missing Host (error)
+- `subdomain_or_domain`: subdomain branch (single-level), custom domain branch, exact base domain (error), multi-level subdomain (error), missing Host (error)
 - `header` / `api_key_header`: present header, missing header (error), non-UTF-8 (error)
 - `path_prefix`: valid prefix with segment, prefix only (→ `/`), missing segment (error), wrong prefix (error), URI rewriting verification
 - `path_param`: present param, missing param (error)
