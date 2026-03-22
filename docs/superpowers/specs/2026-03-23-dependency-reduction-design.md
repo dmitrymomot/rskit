@@ -37,7 +37,7 @@ Sequential commits on `modo-v2`, one per replacement. Each commit is atomic: imp
 **Design:** Spec-compliant ULID generation using Crockford base32 encoding.
 
 - **Format:** 26-char string — 10 chars timestamp (48-bit milliseconds since Unix epoch) + 16 chars randomness (80-bit)
-- **Encoding:** Crockford base32 alphabet: `0123456789ABCDEFGHJKMNPQRSTVWXYZ`
+- **Encoding:** Crockford base32 alphabet: `0123456789ABCDEFGHJKMNPQRSTVWXYZ`. Encode the 128-bit value (timestamp << 80 | random) as a big-endian integer into 26 Crockford base32 characters (130 bits capacity, top 2 bits zero)
 - **Output:** uppercase per ULID spec
 - **Randomness:** `rand::fill(&mut [u8; 10])` for the 80-bit random portion (uses existing `rand 0.10` dependency)
 - **No monotonicity guarantee:** matches current `ulid::Ulid::new()` behavior
@@ -54,8 +54,8 @@ Sequential commits on `modo-v2`, one per replacement. Each commit is atomic: imp
 
 **Design:** Script/style-aware HTML-to-text converter using a char-by-char state machine.
 
-- **States:** `Normal`, `InsideTag`, `InsideEntity`
-- **Script/style handling:** when entering a `<script` or `<style` tag, discard all content until the matching closing tag
+- **States:** `Normal`, `InsideTag`, `InsideEntity`, `InsideScript`, `InsideStyle`. The `InsideScript`/`InsideStyle` states suppress all output (including nested `<` characters like `if (a < b)`) until the matching `</script>` or `</style>` closing tag is found
+- **Script/style handling:** when entering a `<script` or `<style` tag, transition to the corresponding state and discard all content until the matching closing tag
 - **Entity decoding:** the 5 XML entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&#39;`) plus numeric entities (`&#123;`, `&#x7B;`). Unknown entities pass through as-is
 - **Whitespace:** collapse consecutive whitespace from tag removal into a single space, trim the result
 - **Implementation:** single `String` output built incrementally, no regex
@@ -68,16 +68,16 @@ Sequential commits on `modo-v2`, one per replacement. Each commit is atomic: imp
 
 ## 3. LRU Cache Replacement
 
-**Files:** `src/cache/mod.rs` (new module)
+**Files:** `src/cache/lru.rs` (new), `src/cache/mod.rs` (re-exports only)
 
-**Design:** Minimal bounded LRU cache using stdlib only.
+**Design:** Minimal bounded LRU cache using stdlib only. Not feature-gated — uses only stdlib types (`HashMap`, `VecDeque`).
 
 - **Structure:** `HashMap<K, V>` for O(1) lookup + `VecDeque<K>` for access ordering (most recent at back)
-- **On get:** if key exists, remove it from its current position in the deque and push to back (mark as recently used), return value
+- **On get:** takes `&mut self` (must mutate ordering). If key exists, remove it from its current position in the deque and push to back (mark as recently used), return value
 - **On put:** if key exists, update value and move to back. If at capacity, pop from front (least recently used) and remove from map. Insert new entry, push key to back
 - **Capacity:** `NonZeroUsize`, matches `lru::LruCache` API
 - **Generics:** `LruCache<K: Eq + Hash + Clone, V>` — `Clone` bound on `K` because `VecDeque` stores owned keys
-- **API:** `new(capacity)`, `get(&K) -> Option<&V>`, `put(K, V)`
+- **API:** `new(capacity)`, `get(&mut self, &K) -> Option<&V>`, `put(&mut self, K, V)`
 
 **Performance note:** `VecDeque` remove-and-reinsert on `get()` is O(n). With email template caches of ~100 entries, this is a few hundred nanoseconds — irrelevant.
 
@@ -103,7 +103,7 @@ Sequential commits on `modo-v2`, one per replacement. Each commit is atomic: imp
 ### `base64url.rs`
 
 - `pub fn encode(bytes: &[u8]) -> String` — RFC 4648 base64url (alphabet `A-Za-z0-9-_`), no padding
-- `pub fn decode(encoded: &str) -> Result<Vec<u8>>` — handles missing padding, returns `crate::Error::bad_request` on invalid input
+- `pub fn decode(encoded: &str) -> Result<Vec<u8>>` — accepts unpadded input only (matches encode output), returns `crate::Error::bad_request` on invalid input
 
 ### `mod.rs`
 
@@ -137,7 +137,7 @@ struct ShardedMap<K, V> {
 
 - Configurable shard count (default: 16)
 - Key → shard via `DefaultHasher` → `hash % num_shards`
-- `get_or_insert(key, f)` — read lock first, upgrade to write only if key missing
+- `get_or_insert(key, f)` — read lock first to check existence, drop read lock, then acquire write lock if key missing (re-check after acquiring write lock to handle races). `std::sync::RwLock` does not support lock upgrading
 - `retain(f)` — iterates shards sequentially, write-locking one at a time (cleanup never blocks the whole map)
 
 **Why sharding:** modo may serve chat widgets embedded on arbitrary third-party sites. Traffic spikes with many unique IPs would cause contention on a single `RwLock<HashMap>` write lock during inserts. Sharding ensures inserts to different shards proceed concurrently.
@@ -200,14 +200,19 @@ Headers added on both allowed and rejected responses.
 
 ### Cleanup
 
-- Background `tokio::spawn` task runs every `cleanup_interval_secs` (default: 60s)
+- Background `tokio::spawn` task with `CancellationToken` for graceful shutdown (per project convention — `tokio::select!` on `cancel.cancelled()`)
+- The `CancellationToken` is accepted as a parameter in `rate_limit()` and `rate_limit_with()`
+- Runs every `cleanup_interval_secs` (default: 60s)
 - Iterates shards one at a time, write-locking each briefly
-- Evicts entries where `last_refill` is older than `burst_size / per_second` seconds (bucket would be full — no state to preserve)
+- Evicts entries where `last_refill` is older than `burst_size / per_second` seconds (bucket would be full — functionally equivalent to a fresh bucket, so no state is lost)
 
 ### Public API
 
-- `rate_limit(config: &RateLimitConfig) -> RateLimitLayer<PeerIpKeyExtractor>` — IP-based rate limiting
-- `rate_limit_with(config: &RateLimitConfig, extractor: K) -> RateLimitLayer<K>` — custom key extraction
+- `rate_limit(config: &RateLimitConfig, cancel: CancellationToken) -> RateLimitLayer<PeerIpKeyExtractor>` — IP-based rate limiting
+- `rate_limit_with(config: &RateLimitConfig, extractor: K, cancel: CancellationToken) -> RateLimitLayer<K>` — custom key extraction
+- `RateLimitLayer<K>`, `KeyExtractor` trait, `PeerIpKeyExtractor` — all re-exported from `middleware/mod.rs`
+
+The `KeyExtractor` trait uses `Option<String>` (not an associated type). `None` maps to 500. This is a simplification over `tower_governor`'s `KeyExtractor` which had an associated `Key` type and returned `Result<Key, GovernorError>`.
 
 ### What This Handles
 
@@ -235,6 +240,18 @@ Remove from `[dependencies]`:
 - `tower_governor`
 
 No new dependencies added.
+
+## CLAUDE.md Updates
+
+Remove from the Stack section:
+- `ulid 1`
+- `nanohtml2text 0.2`
+- `tower_governor 0.8`, `governor 0.10`
+- `data-encoding 2` (from auth deps)
+
+Add to Conventions:
+- `src/cache/` module provides `LruCache` (always available, no feature gate)
+- `src/encoding/` module provides `base32` and `base64url` encode/decode (always available, no feature gate)
 
 ## Testing
 
