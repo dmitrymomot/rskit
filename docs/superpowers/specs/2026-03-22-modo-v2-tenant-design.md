@@ -114,8 +114,9 @@ All strategies strip port from `Host` header before processing (e.g., `acme.app.
 
 Parses `Host` header, strips base domain, returns `TenantId::Slug`.
 
-- `acme.app.com` → `Slug("acme")`
-- Multi-level subdomains: entire prefix becomes the slug. `foo.bar.app.com` → `Slug("foo.bar")`
+- `acme.app.com` with base `acme.com` → `Slug("app")`
+- Only one subdomain level allowed relative to base domain. `test.app.acme.com` with base `acme.com` → Error (multi-level subdomain)
+- Base domain itself can be multi-level: `test.app.acme.com` with base `app.acme.com` → `Slug("test")`
 - Error if Host equals base domain (no subdomain) or missing
 
 ### `domain()` → `DomainStrategy`
@@ -129,9 +130,12 @@ Returns full `Host` header value as `TenantId::Domain`.
 
 Combined strategy. Checks if Host is a subdomain of the base domain.
 
-- If Host ends with `.{base_domain}` → `Slug(subdomain)`
-- If Host is anything else (including equal to base domain) → `Domain(full_host)`
-- `acme.app.com` → `Slug("acme")`, `custom.com` → `Domain("custom.com")`, `app.com` → `Domain("app.com")`
+- If Host is exactly one level above base domain → `Slug(subdomain)`
+- If Host is anything else (including equal to base domain, or multi-level subdomain) → `Domain(full_host)`
+- `app.acme.com` with base `acme.com` → `Slug("app")`
+- `custom.com` → `Domain("custom.com")`
+- `acme.com` (equals base) → `Domain("acme.com")`
+- `test.app.acme.com` with base `acme.com` → `Domain("test.app.acme.com")` (multi-level, treated as custom domain)
 - Error if Host missing
 
 ### `header(name)` → `HeaderStrategy`
@@ -207,6 +211,18 @@ pub struct TenantService<Svc, S, R> { inner: Svc, strategy: Arc<S>, resolver: Ar
 ```
 
 `S: TenantStrategy`, `R: TenantResolver`. Both wrapped in `Arc` for cheap cloning per-request.
+
+### Tracing integration
+
+After successful resolution, the middleware records the tenant identity on the current request span:
+
+```rust
+tracing::Span::current().record("tenant_id", tenant.tenant_id());
+```
+
+This uses `HasTenantId::tenant_id()` on the resolved value. The field appears automatically in all downstream log lines for the request — handlers and other middleware don't need to add it manually.
+
+The request tracing middleware (from Plan 2) must declare the `tenant_id` field as `Empty` in its span so the tenant middleware can fill it in later. If the tracing middleware doesn't declare the field, `record()` silently drops it.
 
 ## Extractor
 
@@ -360,9 +376,9 @@ let app = Router::new()
 - Equality comparisons
 
 **`strategy.rs`** — each strategy:
-- `subdomain`: valid subdomain extraction, multi-level subdomain (`foo.bar.app.com`), bare base domain (error), missing Host (error), port stripping
+- `subdomain`: valid single-level subdomain, multi-level subdomain (error), bare base domain (error), missing Host (error), port stripping, multi-level base domain with valid subdomain
 - `domain`: valid Host, missing Host (error), port stripping
-- `subdomain_or_domain`: subdomain branch, custom domain branch, exact base domain (→ Domain), missing Host (error)
+- `subdomain_or_domain`: subdomain branch (single-level), custom domain branch, exact base domain (→ Domain), multi-level subdomain (→ Domain, treated as custom), missing Host (error)
 - `header` / `api_key_header`: present header, missing header (error), non-UTF-8 (error)
 - `path_prefix`: valid prefix with segment, prefix only (→ `/`), missing segment (error), wrong prefix (error), URI rewriting verification
 - `path_param`: present param, missing param (error)
