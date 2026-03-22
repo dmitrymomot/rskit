@@ -8,13 +8,15 @@ repository = "https://github.com/dmitrymomot/modo"
 
 [features]
 default = []
-full = ["templates", "sse", "auth", "sentry", "email"]
+full = ["templates", "sse", "auth", "sentry", "email", "upload"]
 sentry = ["dep:sentry", "dep:sentry-tracing"]
 templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
 sse = ["dep:futures-util"]
 auth = ["dep:argon2", "dep:hmac", "dep:sha1", "dep:data-encoding", "dep:subtle", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
 email = ["dep:lettre", "dep:pulldown-cmark", "dep:lru"]
 email-test = ["email"]
+upload = ["dep:opendal"]
+upload-test = ["upload", "opendal/services-memory"]
 
 [dependencies]
 # Web
@@ -85,7 +87,11 @@ unic-langid = { version = "0.9", optional = true }
 # SSE (optional, gated by "sse" feature)
 futures-util = { version = "0.3", optional = true }
 
+# Upload (optional, gated by "upload" feature)
+opendal = { version = "0.55", optional = true, default-features = false, features = ["services-s3"] }
+
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
 tempfile = "3"
 serial_test = "3"
+opendal = { version = "0.55", default-features = false, features = ["services-s3", "services-memory"] }

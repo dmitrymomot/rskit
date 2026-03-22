@@ -29,6 +29,9 @@ pub mod template;
 #[cfg(feature = "sse")]
 pub mod sse;
 
+#[cfg(feature = "upload")]
+pub mod upload;
+
 pub use config::Config;
 pub use error::{Error, Result};
 pub use extractor::Service;
