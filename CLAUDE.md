@@ -39,7 +39,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - croner 2 (cron expression parsing)
 - Template deps (behind `templates` feature): minijinja 2 (with loader), minijinja-contrib 2, intl_pluralrules 7, unic-langid 0.9
 - tower-http `fs` feature required for `ServeDir` static file serving
-- Upload deps (behind `upload` feature): opendal 0.55 (services-s3, default-features = false)
+- Storage deps (behind `storage` feature): hmac 0.12, hyper 1, hyper-rustls 0.27, hyper-util 0.1, http-body-util 0.1 (all shared with `auth` feature)
 
 ## Commands
 
@@ -85,7 +85,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 7 (Template):** MiniJinja engine, i18n, static files — DONE
 - **Plan 8 (SSE):** broadcast SSE — DONE
 - **Plan 9 (Tenant):** tenant resolution with strategies, resolver trait, middleware enforcement — DONE
-- **Plan 10 (Storage):** Custom S3 client with SigV4 signing replacing opendal, presigned URLs — IN PROGRESS
+- **Plan 10 (Storage):** Custom S3 client with SigV4 signing, presigned URLs, multi-bucket support — DONE
 - **Plan 11 (Dep Reduction):** Replace ulid, nanohtml2text, lru, data-encoding, governor+tower_governor with custom impls
 - **Plan 12 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
 
@@ -190,14 +190,21 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `PathParamStrategy` uses `axum::extract::RawPathParams` via synchronous poll with `NoopWaker` — the future is always immediately ready (no real async I/O)
 - `#[derive(Clone)]` on generic structs with `Arc<T>` fields adds unnecessary `T: Clone` bounds — use manual `Clone` impl instead (e.g., `TenantLayer`, `TenantMiddleware`)
 - `axum::extract::RawPathParams` depends on internal `UrlParams` (`pub(crate)`) — positive tests require a real `axum::Router` with `route_layer()` + `tower::ServiceExt::oneshot`, not direct extension insertion
-- `upload` feature required: `cargo test --features upload` and `cargo clippy --features upload --tests`
-- `Storage::memory()` / `Buckets::memory()` only available with `upload-test` feature or `#[cfg(test)]` (unit tests only — integration tests in `tests/` need `upload-test`)
-- `presigned_url()` errors on Memory backend (no signing support) — tests should expect an error
-- `opendal::Operator` is `Clone` (wraps `Arc` internally) — `Storage` still uses its own `Arc<StorageInner>` for extra fields
-- OpenDAL 0.55 S3 builder has no `default_acl()` method — ACL must be configured at the bucket/IAM level in the cloud provider, not via OpenDAL
+- `storage` feature required: `cargo test --features storage` and `cargo clippy --features storage --tests`
+- `Storage::memory()` / `Buckets::memory()` only available with `storage-test` feature or `#[cfg(test)]` (unit tests only — integration tests in `tests/` need `storage-test`)
+- `presigned_url()` on memory backend returns fake URL (`https://memory.test/{key}?expires=...`) — does not error
 - `delete()` on non-existent key is a no-op (returns `Ok(())`) — matches S3 semantics
 - `Buckets::get()` returns a cloned `Storage` (cheap `Arc` clone), not `&Storage`
 - `delete_prefix()` is O(n) network calls — not suitable for prefixes with thousands of objects
+- `path_style: true` (default) uses `{endpoint}/{bucket}/{key}`; `false` uses `https://{bucket}.{endpoint_host}/{key}` (virtual-hosted)
+- `region` defaults to `"us-east-1"` when `None` — sufficient for most S3-compatible services
+- SigV4 signing uses `UNSIGNED-PAYLOAD` for PUT body — avoids hashing large uploads
+- `list` is internal only (supports `delete_prefix`) — not exposed on public `Storage` API
+- `std::sync::RwLock` (not tokio) for MemoryBackend — all ops are synchronous; never hold across `.await`
+- `PutInput::from_upload()` filters empty filenames to `None` — key generation skips extension
+- `PutOptions.content_type` overrides `PutInput.content_type` when `Some`
+- Hand-parsed XML for ListObjectsV2 — if parsing breaks, switch to `quick-xml`
+- `storage` and `auth` features share optional deps (hmac, hyper, hyper-rustls, hyper-util, http-body-util) — no new crates
 - `std::sync::RwLock` does NOT support lock upgrading (read→write) — must drop read lock, acquire write lock, then re-check for races
 - Sharded concurrent maps: never take read locks on other shards while holding a write lock on one shard — deadlock risk with concurrent inserts
 - Before concluding a dependency is unused, grep ALL source files — a dep may appear unused in obvious modules but be used in unexpected places
