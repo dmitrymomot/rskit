@@ -20,10 +20,18 @@ where
 }
 
 /// Tower layer that produces `TenantMiddleware` services.
-#[derive(Clone)]
 pub struct TenantLayer<S, R> {
     strategy: Arc<S>,
     resolver: Arc<R>,
+}
+
+impl<S, R> Clone for TenantLayer<S, R> {
+    fn clone(&self) -> Self {
+        Self {
+            strategy: self.strategy.clone(),
+            resolver: self.resolver.clone(),
+        }
+    }
 }
 
 impl<S, R> TenantLayer<S, R> {
@@ -52,11 +60,20 @@ where
 }
 
 /// Tower service that resolves tenants from requests.
-#[derive(Clone)]
 pub struct TenantMiddleware<Svc, S, R> {
     inner: Svc,
     strategy: Arc<S>,
     resolver: Arc<R>,
+}
+
+impl<Svc: Clone, S, R> Clone for TenantMiddleware<Svc, S, R> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            strategy: self.strategy.clone(),
+            resolver: self.resolver.clone(),
+        }
+    }
 }
 
 impl<Svc, S, R> Service<Request<Body>> for TenantMiddleware<Svc, S, R>
@@ -161,6 +178,14 @@ mod tests {
         }
     }
 
+    struct InternalErrorResolver;
+    impl TenantResolver for InternalErrorResolver {
+        type Tenant = TestTenant;
+        async fn resolve(&self, _id: &TenantId) -> crate::Result<TestTenant> {
+            Err(Error::internal("db failure"))
+        }
+    }
+
     /// Inner service that checks extensions for resolved tenant.
     async fn echo_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
         let has_tenant = req.extensions().get::<Arc<TestTenant>>().is_some();
@@ -196,6 +221,60 @@ mod tests {
         let req = Request::builder().body(Body::empty()).unwrap();
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn resolver_internal_error_returns_500() {
+        let layer = TenantLayer::new(OkStrategy, InternalErrorResolver);
+        let svc = layer.layer(tower::service_fn(echo_handler));
+
+        let req = Request::builder().body(Body::empty()).unwrap();
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn strategy_fail_does_not_call_inner() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let called = Arc::new(AtomicBool::new(false));
+        let called_clone = called.clone();
+
+        let layer = TenantLayer::new(FailStrategy, OkResolver);
+        let svc = layer.layer(tower::service_fn(move |_req: Request<Body>| {
+            let called = called_clone.clone();
+            async move {
+                called.store(true, Ordering::SeqCst);
+                Ok::<_, Infallible>(Response::new(Body::from("should not reach")))
+            }
+        }));
+
+        let req = Request::builder().body(Body::empty()).unwrap();
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert!(!called.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn resolver_fail_does_not_call_inner() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let called = Arc::new(AtomicBool::new(false));
+        let called_clone = called.clone();
+
+        let layer = TenantLayer::new(OkStrategy, NotFoundResolver);
+        let svc = layer.layer(tower::service_fn(move |_req: Request<Body>| {
+            let called = called_clone.clone();
+            async move {
+                called.store(true, Ordering::SeqCst);
+                Ok::<_, Infallible>(Response::new(Body::from("should not reach")))
+            }
+        }));
+
+        let req = Request::builder().body(Body::empty()).unwrap();
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        assert!(!called.load(Ordering::SeqCst));
     }
 
     #[tokio::test]
