@@ -41,6 +41,67 @@ impl UploadedFile {
             data,
         })
     }
+
+    /// File extension from the original filename (lowercase, without dot).
+    /// Returns `None` if no extension present.
+    pub fn extension(&self) -> Option<String> {
+        let ext = self.name.rsplit('.').next()?;
+        if ext == self.name {
+            None
+        } else {
+            Some(ext.to_ascii_lowercase())
+        }
+    }
+
+    /// Start building a fluent validation chain for this file.
+    pub fn validate(&self) -> crate::extractor::upload_validator::UploadValidator<'_> {
+        crate::extractor::upload_validator::UploadValidator::new(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file_with_name(name: &str) -> UploadedFile {
+        UploadedFile {
+            name: name.to_string(),
+            content_type: "application/octet-stream".to_string(),
+            size: 0,
+            data: bytes::Bytes::new(),
+        }
+    }
+
+    #[test]
+    fn extension_lowercase() {
+        assert_eq!(file_with_name("photo.JPG").extension(), Some("jpg".into()));
+    }
+
+    #[test]
+    fn extension_compound() {
+        assert_eq!(
+            file_with_name("archive.tar.gz").extension(),
+            Some("gz".into())
+        );
+    }
+
+    #[test]
+    fn extension_none() {
+        assert_eq!(file_with_name("noext").extension(), None);
+    }
+
+    #[test]
+    fn extension_dotfile() {
+        assert_eq!(
+            file_with_name(".gitignore").extension(),
+            Some("gitignore".into())
+        );
+    }
+
+    #[test]
+    fn extension_empty_filename() {
+        assert_eq!(file_with_name("").extension(), None);
+    }
 }
 
 /// A map of field-name to uploaded files.
