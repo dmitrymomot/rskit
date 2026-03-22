@@ -52,6 +52,9 @@ pub use template::{
     TemplateContextLayer,
 };
 
+#[cfg(feature = "upload")]
+pub use upload::{BucketConfig, Buckets, PutOptions, Storage};
+
 // Re-exports for user convenience
 pub use axum;
 pub use serde;
