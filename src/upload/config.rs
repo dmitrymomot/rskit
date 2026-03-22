@@ -20,13 +20,10 @@ pub struct BucketConfig {
     pub secret_key: String,
     /// Base URL for public (non-signed) file URLs. `None` means `url()` will error.
     pub public_url: Option<String>,
-    /// Default ACL applied to all writes (e.g. `"public-read"`). Best-effort — provider may ignore.
-    pub default_acl: Option<String>,
     /// Maximum file size in human-readable format (e.g. `"10mb"`). `None` disables the limit.
     pub max_file_size: Option<String>,
 }
 
-#[allow(dead_code)]
 impl BucketConfig {
     /// Validate configuration. Returns an error if required fields are missing
     /// or `max_file_size` is invalid. Called by `Storage::new()`.
@@ -65,7 +62,6 @@ impl BucketConfig {
 ///
 /// Format: `<number><unit>` where unit is `b`, `kb`, `mb`, `gb` (case-insensitive).
 /// Bare numbers (e.g. `"1024"`) are treated as bytes.
-#[allow(dead_code)]
 pub(crate) fn parse_size(s: &str) -> Result<usize> {
     let s = s.trim().to_ascii_lowercase();
     if s.is_empty() {

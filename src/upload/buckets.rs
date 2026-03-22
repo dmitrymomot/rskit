@@ -128,4 +128,14 @@ mod tests {
         // Both point to the same Arc
         assert!(cloned.get("a").is_ok());
     }
+
+    #[test]
+    fn new_rejects_empty_name() {
+        let configs = vec![BucketConfig {
+            bucket: "b1".into(),
+            endpoint: "https://s3.example.com".into(),
+            ..Default::default()
+        }];
+        assert!(Buckets::new(&configs).is_err());
+    }
 }
