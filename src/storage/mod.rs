@@ -1,6 +1,7 @@
 mod config;
 mod options;
 mod path;
+mod presign;
 mod signing;
 
 pub use config::BucketConfig;
