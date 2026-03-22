@@ -84,7 +84,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 6 (Email):** SMTP transport, markdown templates with YAML frontmatter, layout engine — DONE
 - **Plan 7 (Template):** MiniJinja engine, i18n, static files — DONE
 - **Plan 8 (SSE):** broadcast SSE — DONE
-- **Plan 9 (Tenant):** tenant resolution
+- **Plan 9 (Tenant):** tenant resolution with strategies, resolver trait, middleware enforcement — DONE
 - **Plan 10 (Upload):** S3-compatible storage via OpenDAL, presigned URLs
 - **Plan 11 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
 
@@ -103,6 +103,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Template plan: `docs/superpowers/plans/2026-03-21-modo-v2-template.md`
 - SSE spec: `docs/superpowers/specs/2026-03-21-modo-v2-sse-design.md`
 - SSE plan: `docs/superpowers/plans/2026-03-21-modo-v2-sse.md`
+- Tenant spec: `docs/superpowers/specs/2026-03-22-modo-v2-tenant-design.md`
+- Tenant plan: `docs/superpowers/plans/2026-03-22-modo-v2-tenant.md`
 
 ## Gotchas
 
@@ -168,3 +170,12 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `std::sync::RwLock` (not tokio) for broadcaster channel map — all ops are synchronous; never hold across `.await`
 - `Event` builder method `data(self, ...)` and getter `data_ref(&self)` have different names — Rust forbids method overloading; specs must not define two methods with the same name differing only by `self` type
 - Adding fields to `Error` struct requires updating ALL struct literal sites — especially `IntoResponse` extension copy, which must propagate new fields (not hardcode defaults)
+- Tenant module is NOT feature-gated — always available, no `cfg(feature)` needed
+- `TenantResolver` uses RPITIT (like `OAuthProvider`) — not object-safe; resolvers must be concrete types
+- `PathParamStrategy` requires `.route_layer()` not `.layer()` — axum path params only exist after route matching
+- `TenantId::ApiKey` must be redacted in Display/Debug — never log raw API keys
+- Subdomain strategies allow only one subdomain level relative to base domain — `test.app.acme.com` with base `acme.com` is invalid
+- `subdomain_or_domain` errors on exact base domain match — base domain without subdomain is not a valid tenant for tenant route groups
+- `tracing()` middleware must declare `tenant_id = tracing::field::Empty` in span so tenant middleware can `record()` it later
+- axum 0.8 requires explicit `OptionalFromRequestParts` impl for `Option<Tenant<T>>` — no blanket impl from `FromRequestParts`
+- `PathParamStrategy` uses `axum::extract::RawPathParams` via synchronous poll with `NoopWaker` — the future is always immediately ready (no real async I/O)
