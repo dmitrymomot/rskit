@@ -8,9 +8,57 @@ S3-compatible storage via OpenDAL with presigned URLs, multi-bucket support, and
 - **Concrete `Storage` type, not a trait.** The `opendal::Operator` itself is the abstraction — swapping backends (S3 vs Memory) happens at operator construction, not via trait dispatch.
 - **Multi-bucket via `Buckets` map.** `Storage` is a single bucket. `Buckets` holds named `Storage` instances for apps that need multiple buckets.
 - **Per-handler validation, no global allowed_types.** Each handler validates file type/size using `UploadedFile::validate().accept().max_size().check()`. Different endpoints can accept different types.
-- **Pre-configured ACL, not per-object.** `default_acl` is set at the operator level (one ACL per `Storage` instance). Per-object ACL is not abstracted — provider support is too fragmented (R2, Hetzner, B2, MinIO don't support it; OpenDAL has no per-write ACL field).
-- **Presigned URLs via OpenDAL `presign_read()`.** Works with any S3-compatible service. Async but no network round-trip for S3 backends.
+- **Pre-configured ACL, not per-object.** `default_acl` is set at the operator level (one ACL per `Storage` instance). Per-object ACL is not abstracted — provider support is too fragmented (R2, Hetzner, B2, MinIO don't support it; OpenDAL has no per-write ACL field). Implementation must verify that OpenDAL 0.55's `S3` builder supports `default_acl()` — if not, apply ACL via raw `x-amz-acl` header in `user_metadata` or drop the field.
+- **Presigned URLs via OpenDAL `presign_read()`.** Works with any S3-compatible service. Async but no network round-trip for S3 backends. Returns `PresignedRequest` — implementation extracts URL via `.uri().to_string()`.
 - **`upload-test` feature** for `Storage::memory()` / `Buckets::memory()` constructors, mirroring the `email-test` pattern.
+
+## Prerequisites
+
+The following must be added before or during upload module implementation:
+
+### `HttpError::PayloadTooLarge`
+
+Add `PayloadTooLarge` variant to `HttpError` enum in `src/error/http_error.rs` with HTTP 413 status code. Add convenience constructor `Error::payload_too_large()` (and `with_message` variant via `HttpError::PayloadTooLarge.with_message()`).
+
+### `UploadedFile` enhancements
+
+The current `UploadedFile` in `src/extractor/multipart.rs` has public fields (`name`, `content_type`, `size`, `data`). The following must be added:
+
+- `extension(&self) -> Option<String>` — extract extension from `name`, lowercase, without dot. Returns `None` if no extension.
+- `validate(&self) -> UploadValidator` — fluent validation builder.
+
+### `UploadValidator`
+
+New struct (in extractor module or a shared `validate` location):
+
+```rust
+pub struct UploadValidator<'a> {
+    file: &'a UploadedFile,
+    errors: Vec<String>,
+}
+
+impl<'a> UploadValidator<'a> {
+    pub fn max_size(self, max: usize) -> Self;
+    pub fn accept(self, pattern: &str) -> Self;  // "image/*", "application/pdf", "*/*"
+    pub fn check(self) -> Result<()>;
+}
+```
+
+Pattern matching: exact (`image/png`), wildcard subtype (`image/*`), catch-all (`*/*`). Parameters after `;` stripped before matching.
+
+### Size helpers
+
+Add `mb()`, `kb()`, `gb()` helper functions (bytes conversion) — either in extractor module or `upload` module, re-exported from `modo::upload`.
+
+```rust
+pub fn kb(n: usize) -> usize { n * 1024 }
+pub fn mb(n: usize) -> usize { n * 1024 * 1024 }
+pub fn gb(n: usize) -> usize { n * 1024 * 1024 * 1024 }
+```
+
+### `parse_size()` utility
+
+Add a `parse_size(s: &str) -> Result<usize>` function for parsing human-readable size strings like `"10mb"`, `"500kb"`, `"1gb"`. Format: `<number><unit>` where unit is `b`, `kb`, `mb`, `gb` (case-insensitive, no spaces). Used by config validation at construction time.
 
 ## Config
 
@@ -69,7 +117,7 @@ pub struct BucketConfig {
 
 - `bucket` must not be empty.
 - `endpoint` must not be empty.
-- `max_file_size` if set, must parse to > 0 bytes.
+- `max_file_size` if set, must parse via `parse_size()` to > 0 bytes.
 - `public_url: Some("")` normalized to `None`.
 - Invalid config = error at startup, not at request time.
 
@@ -103,16 +151,19 @@ impl Storage {
     pub async fn put_with(&self, file: &UploadedFile, prefix: &str, opts: PutOptions) -> Result<String>;
 
     /// Delete a single object by key.
+    /// Deleting a non-existent key is a no-op (returns Ok(())) — matches S3 semantics.
     pub async fn delete(&self, key: &str) -> Result<()>;
 
     /// Delete all objects under a prefix.
+    /// Uses OpenDAL's list() + sequential delete. O(n) network calls for n objects.
     pub async fn delete_prefix(&self, prefix: &str) -> Result<()>;
 
     /// Public URL (string concatenation, no network call).
     /// Returns Error if public_url is not configured.
     pub fn url(&self, key: &str) -> Result<String>;
 
-    /// Presigned URL via OpenDAL. Works with any S3-compatible service.
+    /// Presigned URL via OpenDAL presign_read(). Works with any S3-compatible service.
+    /// Extracts URL from PresignedRequest via .uri().to_string().
     pub async fn presigned_url(&self, key: &str, expires_in: Duration) -> Result<String>;
 
     /// Check if a key exists.
@@ -127,8 +178,8 @@ impl Buckets {
     /// Create from a list of bucket configs. Errors on duplicate names.
     pub fn new(configs: &[BucketConfig]) -> Result<Self>;
 
-    /// Get a Storage by name. Errors if not found.
-    pub fn get(&self, name: &str) -> Result<&Storage>;
+    /// Get a Storage by name (cloned — cheap, Arc-backed). Errors if not found.
+    pub fn get(&self, name: &str) -> Result<Storage>;
 
     /// Testing: create named in-memory buckets.
     #[cfg(feature = "upload-test")]
@@ -208,6 +259,7 @@ struct StorageInner {
 
 - `Storage` is cheaply cloneable (`Arc`).
 - `Buckets` wraps `Arc<HashMap<String, Storage>>`.
+- `Buckets::get()` returns a cloned `Storage` (not `&Storage`) — consistent with cheap `Arc` cloning pattern, avoids lifetime issues for callers.
 
 ### File Key Generation
 
@@ -236,8 +288,8 @@ Applied to prefix (in `put`) and key (in `delete`, `url`, `presigned_url`, `exis
 1. Validate prefix (path safety).
 2. Check `max_file_size` if configured → `Error::payload_too_large()`.
 3. Generate key: `{prefix}{ulid}.{ext}`.
-4. Write via `operator.write()` or `operator.write_with()` (if PutOptions).
-5. On write failure: best-effort `operator.delete()` cleanup.
+4. Write via `operator.write()` or `operator.write_with()` (if PutOptions). Returned `Metadata` is ignored.
+5. On write failure: attempt `operator.delete(&key)`. If delete also fails, log at `warn` level and return the original write error.
 6. Return the key as `String`.
 
 ### Network Call Summary
@@ -246,7 +298,7 @@ Applied to prefix (in `put`) and key (in `delete`, `url`, `presigned_url`, `exis
 |---|---|---|
 | `put()` / `put_with()` | Yes | Writes to S3 |
 | `delete()` | Yes | Deletes from S3 |
-| `delete_prefix()` | Yes | Lists + deletes |
+| `delete_prefix()` | Yes | Lists + sequential deletes, O(n) |
 | `exists()` | Yes | HEAD request |
 | `url()` | No | String concatenation |
 | `presigned_url()` | No* | OpenDAL computes locally for S3 |
@@ -257,20 +309,21 @@ Applied to prefix (in `put`) and key (in `delete`, `url`, `presigned_url`, `exis
 
 | Scenario | Error |
 |---|---|
-| File exceeds `max_file_size` | `Error::payload_too_large()` |
+| File exceeds `max_file_size` | `Error::payload_too_large()` (HTTP 413, prerequisite) |
 | Path traversal (`..`, leading `/`) | `Error::bad_request()` |
 | `url()` without `public_url` configured | `Error::internal("public_url not configured")` |
 | `buckets.get("unknown")` | `Error::internal("bucket 'unknown' not configured")` |
 | OpenDAL write/delete/presign failure | `Error::internal(format!(...))` |
 | Duplicate `name` in `Buckets::new()` | `Error::internal("duplicate bucket name '...'")` |
 | Empty `bucket` or `endpoint` in config | `Error::internal("bucket name is required")` |
+| `delete()` on non-existent key | `Ok(())` — no-op, matches S3 semantics |
 
 ### Tracing
 
 - `put()` / `put_with()`: `info!(key, size, "file uploaded")`
 - `delete()`: `info!(key, "file deleted")`
 - `delete_prefix()`: `info!(prefix, "prefix deleted")`
-- Cleanup failure: `warn!(key, error, "failed to clean up partial upload")`
+- Write cleanup failure: `warn!(key, error, "failed to clean up partial upload")`
 
 ## Module Structure
 
@@ -292,15 +345,12 @@ upload = ["dep:opendal"]
 upload-test = ["upload"]
 
 [dependencies]
-opendal = { version = "0.55", optional = true, features = ["services-s3"] }
-
-[dev-dependencies]
-opendal = { version = "0.55", features = ["services-s3", "services-memory"] }
+opendal = { version = "0.55", optional = true, default-features = false, features = ["services-s3"] }
 ```
 
-- `upload` gates all upload code + opendal dependency.
-- `upload-test` enables `Storage::memory()` and `Buckets::memory()`.
-- Dev-dependencies always have `services-memory` for in-crate tests.
+- `upload` gates all upload code + opendal dependency. Uses `default-features = false` to avoid pulling in unnecessary backends.
+- `upload-test` enables `Storage::memory()` and `Buckets::memory()`. The `services-memory` feature is added conditionally: `upload-test = ["upload", "dep:opendal/services-memory"]` (verify exact Cargo.toml syntax during implementation).
+- In-crate `#[cfg(test)] mod tests` blocks can use Memory backend directly since dev-dependencies can add the feature.
 - Lint/test commands: `cargo test --features upload`, `cargo clippy --features upload --tests`.
 
 ### Re-exports
@@ -313,12 +363,14 @@ pub use buckets::Buckets;
 pub use options::PutOptions;
 ```
 
-### Existing Code (no changes needed)
+Also re-export size helpers: `pub use path::{kb, mb, gb};` (or wherever they end up).
 
-- `UploadedFile` stays in `src/extractor/multipart.rs`.
-- `Files`, `MultipartRequest` stay in extractor module.
-- Validation (`validate().max_size().accept().check()`) stays in extractor.
-- `Storage::put()` accepts `&UploadedFile` — cross-module reference.
+### Changes to Existing Code
+
+- Add `HttpError::PayloadTooLarge` variant (HTTP 413) to `src/error/http_error.rs`.
+- Add `extension()` and `validate()` methods to `UploadedFile` in `src/extractor/multipart.rs`.
+- Add `UploadValidator` struct (fluent builder with `max_size()`, `accept()`, `check()`).
+- Add `parse_size()` utility and `kb()`/`mb()`/`gb()` helpers.
 
 ## Testing Strategy
 
@@ -335,6 +387,7 @@ pub use options::PutOptions;
 - Extension preserved, lowercased.
 - No extension → no dot.
 - Path validation rejects `..`, leading `/`, empty prefix, control chars.
+- `parse_size()`: accepts "10mb", "500kb", "1gb", "1024" (bare bytes). Rejects "0mb", "", "abc".
 
 **`options.rs`:**
 - `PutOptions::default()` — all `None`.
@@ -344,12 +397,12 @@ pub use options::PutOptions;
 - `put()` respects max_file_size → payload_too_large error.
 - `put_with()` passes options through.
 - `delete()` removes file, subsequent `exists()` returns false.
-- `delete()` on non-existent key — verify behavior.
+- `delete()` on non-existent key returns `Ok(())`.
 - `delete_prefix()` removes all under prefix.
 - `url()` returns `{public_url}/{key}`.
 - `url()` errors when `public_url` is `None`.
 - `url()` handles trailing slash in `public_url`.
-- `presigned_url()` — test that Memory backend returns a clear error or URL.
+- `presigned_url()` — Memory backend may not support presigning; test should assert a clear error.
 - `exists()` true after put, false after delete.
 
 **`buckets.rs`:**
@@ -368,7 +421,12 @@ pub use options::PutOptions;
 
 - `upload` feature required: `cargo test --features upload`, `cargo clippy --features upload --tests`.
 - `Storage::memory()` / `Buckets::memory()` only available with `upload-test` feature.
-- `presigned_url()` may error on Memory backend (no signing support) — tests should handle this.
+- `presigned_url()` errors on Memory backend (no signing support) — tests should expect an error, not a URL.
 - `opendal::Operator` is `Clone` (wraps `Arc` internally) — `Storage` still uses its own `Arc<StorageInner>` because it holds extra fields (`public_url`, `max_file_size`).
-- OpenDAL `WriteOptions` has no per-write ACL field — ACL is set once via `S3::default_acl()` at operator construction.
-- Provider ACL support varies: R2/Hetzner/B2/MinIO don't support per-object ACL. `default_acl` config is best-effort.
+- OpenDAL `WriteOptions` has no per-write ACL field — ACL is set once at operator construction via `default_acl` config.
+- `default_acl` support in OpenDAL 0.55 must be verified during implementation — if `S3::default_acl()` builder method doesn't exist, use `user_metadata` with `x-amz-acl` header or drop the field.
+- Provider ACL support varies: R2/Hetzner/B2/MinIO don't support per-object ACL. `default_acl` config is best-effort — no error if provider ignores it.
+- `delete_prefix()` is O(n) network calls — document that it's not suitable for prefixes with thousands of objects.
+- `Buckets::get()` returns a cloned `Storage` (not `&Storage`) — cheap `Arc` clone, avoids lifetime complexity.
+- OpenDAL `presign_read()` returns `PresignedRequest` — extract URL via `.uri().to_string()`.
+- OpenDAL `write()` returns `Result<Metadata>` — ignored by `put()`.
