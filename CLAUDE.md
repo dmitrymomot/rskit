@@ -86,7 +86,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 8 (SSE):** broadcast SSE — DONE
 - **Plan 9 (Tenant):** tenant resolution with strategies, resolver trait, middleware enforcement — DONE
 - **Plan 10 (Upload):** S3-compatible storage via OpenDAL, presigned URLs — DONE
-- **Plan 11 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
+- **Plan 11 (Dep Reduction):** Replace ulid, nanohtml2text, lru, data-encoding, governor+tower_governor with custom impls
+- **Plan 12 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
 
 ## Key References
 
@@ -107,6 +108,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Tenant plan: `docs/superpowers/plans/2026-03-22-modo-v2-tenant.md`
 - Upload spec: `docs/superpowers/specs/2026-03-22-modo-v2-upload-design.md`
 - Upload plan: `docs/superpowers/plans/2026-03-22-modo-v2-upload.md`
+- Dep reduction spec: `docs/superpowers/specs/2026-03-23-dependency-reduction-design.md`
+- Dep reduction plan: `docs/superpowers/plans/2026-03-23-dependency-reduction.md`
 
 ## Gotchas
 
@@ -193,3 +196,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `delete()` on non-existent key is a no-op (returns `Ok(())`) — matches S3 semantics
 - `Buckets::get()` returns a cloned `Storage` (cheap `Arc` clone), not `&Storage`
 - `delete_prefix()` is O(n) network calls — not suitable for prefixes with thousands of objects
+- `std::sync::RwLock` does NOT support lock upgrading (read→write) — must drop read lock, acquire write lock, then re-check for races
+- Sharded concurrent maps: never take read locks on other shards while holding a write lock on one shard — deadlock risk with concurrent inserts
+- Before concluding a dependency is unused, grep ALL source files — a dep may appear unused in obvious modules but be used in unexpected places
+- `cargo tree -p <pkg>` fails when the package is behind a feature flag — use `cargo tree --features <feat>` or `--invert <pkg>` instead
+- `cargo tree --invert <pkg>` is the most reliable way to check who depends on a crate — `comm` on tree output is unreliable due to version strings and `(*)` markers
