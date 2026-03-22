@@ -46,10 +46,12 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Runtime: `Task` trait + `run!` macro for sequential shutdown
 - Tracing fields: always snake_case (`user_id`, `session_id`, `job_id`)
 - Pluggable backends: wrap with `Arc<dyn Trait>` (not `Box`)
+- Cache: `src/cache/` module provides `LruCache` — always available, no feature gate
+- Encoding: `src/encoding/` module provides `base32` and `base64url` encode/decode — always available, no feature gate
+- Rate limiting: custom `KeyExtractor` trait in `src/middleware/rate_limit.rs` — `PeerIpKeyExtractor` for IP-based, `GlobalKeyExtractor` for shared bucket; `rate_limit()` and `rate_limit_with()` accept `CancellationToken` for cleanup shutdown
 
 ## Current Work
 
-- **Plan 11 (Dep Reduction):** Replace ulid, nanohtml2text, lru, data-encoding, governor+tower_governor with custom impls
 - **Plan 12 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
 
 ## Gotchas
@@ -62,6 +64,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `Arc<Inner>` pattern (Engine, Broadcaster, Storage) — never double-wrap in `Arc`
 - RPITIT traits (OAuthProvider, TenantResolver) — not object-safe; use concrete types
 - Conditionally-used items: `#[cfg_attr(not(any(test, feature = "X-test")), allow(dead_code))]`; modules imported behind `cfg` need `pub(crate) mod`
+- `Cargo.lock` is gitignored (library crate) — don't stage it in commits
 
 ### Rust 2024 / Tooling
 
@@ -71,6 +74,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `cargo clippy --tests` needed to lint test code (plain `cargo clippy` skips it)
 - Clippy rejects `mod foo` inside `foo/mod.rs` — name the file differently
 - `cargo tree -p <pkg>` fails behind feature flags — use `cargo tree --invert <pkg>` instead
+- Clippy `manual_div_ceil`: use `n.div_ceil(d)` not `(n + d - 1) / d` — flagged since Rust 1.92
 
 ### axum
 
@@ -99,6 +103,11 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - S3 keys: always URI-encode with `uri_encode(key, false)` — omitting breaks keys with spaces/`+`
 - `delete_prefix()` is O(n) network calls — not for large prefixes
 - Hand-parsed XML for ListObjectsV2 — switch to `quick-xml` if parsing breaks
+
+### Rate Limiting
+
+- `rate_limit()` and `rate_limit_with()` require a `CancellationToken` — cleanup task shuts down when token is cancelled
+- `ShardedMap::check_or_insert()` counts total keys across all shards to enforce `max_keys` — this takes read locks on all shards briefly
 
 ### Design Decisions
 
