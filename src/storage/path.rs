@@ -87,6 +87,26 @@ mod tests {
         assert!(validate_path("avatars/\nfile.jpg").is_err());
     }
 
+    #[test]
+    fn rejects_tab() {
+        assert!(validate_path("avatars/\tfile.jpg").is_err());
+    }
+
+    #[test]
+    fn rejects_carriage_return() {
+        assert!(validate_path("avatars/\rfile.jpg").is_err());
+    }
+
+    #[test]
+    fn rejects_mixed_valid_and_control() {
+        assert!(validate_path("valid/path/\x07hidden").is_err());
+    }
+
+    #[test]
+    fn allows_single_dot_segment() {
+        validate_path("a/./b").unwrap();
+    }
+
     // -- generate_key --
 
     #[test]

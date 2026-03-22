@@ -77,7 +77,6 @@ async fn put_with_options() {
                 content_disposition: Some("attachment".into()),
                 cache_control: Some("no-cache".into()),
                 content_type: Some("text/plain".into()),
-                ..Default::default()
             },
         )
         .await
@@ -103,4 +102,31 @@ async fn from_upload_bridge() {
     assert!(key.starts_with("avatars/"));
     assert!(key.ends_with(".jpg"));
     assert!(storage.exists(&key).await.unwrap());
+}
+
+#[tokio::test]
+async fn delete_prefix_removes_multiple() {
+    let storage = Storage::memory();
+    let mut keys = Vec::new();
+    for i in 0..3 {
+        let input = PutInput {
+            data: bytes::Bytes::from(format!("data-{i}")),
+            prefix: "cleanup/".into(),
+            filename: Some(format!("file{i}.txt")),
+            content_type: "text/plain".into(),
+        };
+        keys.push(storage.put(&input).await.unwrap());
+    }
+
+    storage.delete_prefix("cleanup/").await.unwrap();
+
+    for key in &keys {
+        assert!(!storage.exists(key).await.unwrap());
+    }
+}
+
+#[tokio::test]
+async fn delete_prefix_empty_is_noop() {
+    let storage = Storage::memory();
+    storage.delete_prefix("nonexistent/").await.unwrap();
 }

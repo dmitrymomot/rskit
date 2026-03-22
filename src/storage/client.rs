@@ -499,6 +499,59 @@ mod tests {
         assert_eq!(uri, "/photos/cat.jpg");
     }
 
+    // -- XML parsing --
+
+    #[test]
+    fn extract_single_value() {
+        let xml = "<Key>photos/cat.jpg</Key>";
+        assert_eq!(extract_xml_values(xml, "Key"), vec!["photos/cat.jpg"]);
+    }
+
+    #[test]
+    fn extract_multiple_values() {
+        let xml = "<r><Key>a.txt</Key><Key>b.txt</Key></r>";
+        assert_eq!(extract_xml_values(xml, "Key"), vec!["a.txt", "b.txt"]);
+    }
+
+    #[test]
+    fn extract_missing_tag() {
+        let xml = "<Bucket>test</Bucket>";
+        assert!(extract_xml_values(xml, "Key").is_empty());
+    }
+
+    #[test]
+    fn extract_empty_value() {
+        let xml = "<Key></Key>";
+        assert_eq!(extract_xml_values(xml, "Key"), vec![""]);
+    }
+
+    #[test]
+    fn extract_ignores_unrelated_tags() {
+        let xml = "<ListBucketResult><Bucket>test</Bucket><Contents><Key>file.txt</Key></Contents></ListBucketResult>";
+        assert_eq!(extract_xml_values(xml, "Key"), vec!["file.txt"]);
+        assert_eq!(extract_xml_values(xml, "Bucket"), vec!["test"]);
+    }
+
+    #[test]
+    fn extract_no_close_tag() {
+        let xml = "<Key>broken";
+        assert!(extract_xml_values(xml, "Key").is_empty());
+    }
+
+    #[test]
+    fn extract_single_value_helper() {
+        let xml = "<IsTruncated>false</IsTruncated>";
+        assert_eq!(
+            extract_xml_value(xml, "IsTruncated"),
+            Some("false".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_single_value_helper_missing() {
+        assert_eq!(extract_xml_value("<a>b</a>", "Key"), None);
+    }
+
     #[test]
     fn endpoint_host_strips_https() {
         assert_eq!(strip_scheme("https://s3.example.com"), "s3.example.com");
