@@ -184,7 +184,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `#[derive(Clone)]` on generic structs with `Arc<T>` fields adds unnecessary `T: Clone` bounds — use manual `Clone` impl instead (e.g., `TenantLayer`, `TenantMiddleware`)
 - `axum::extract::RawPathParams` depends on internal `UrlParams` (`pub(crate)`) — positive tests require a real `axum::Router` with `route_layer()` + `tower::ServiceExt::oneshot`, not direct extension insertion
 - `upload` feature required: `cargo test --features upload` and `cargo clippy --features upload --tests`
-- `Storage::memory()` / `Buckets::memory()` only available with `upload-test` feature (or `#[cfg(test)]`)
+- `Storage::memory()` / `Buckets::memory()` only available with `upload-test` feature or `#[cfg(test)]` (unit tests only — integration tests in `tests/` need `upload-test`)
 - `presigned_url()` errors on Memory backend (no signing support) — tests should expect an error
 - `opendal::Operator` is `Clone` (wraps `Arc` internally) — `Storage` still uses its own `Arc<StorageInner>` for extra fields
 - OpenDAL `WriteOptions` has no per-write ACL field — ACL is set once at operator construction via `default_acl` config (if supported)
