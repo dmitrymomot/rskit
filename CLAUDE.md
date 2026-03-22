@@ -39,7 +39,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - croner 2 (cron expression parsing)
 - Template deps (behind `templates` feature): minijinja 2 (with loader), minijinja-contrib 2, intl_pluralrules 7, unic-langid 0.9
 - tower-http `fs` feature required for `ServeDir` static file serving
-- Future deps: opendal 0.55 (`services-s3`)
+- Upload deps (behind `upload` feature): opendal 0.55 (services-s3, default-features = false)
 
 ## Commands
 
@@ -85,7 +85,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 7 (Template):** MiniJinja engine, i18n, static files — DONE
 - **Plan 8 (SSE):** broadcast SSE — DONE
 - **Plan 9 (Tenant):** tenant resolution with strategies, resolver trait, middleware enforcement — DONE
-- **Plan 10 (Upload):** S3-compatible storage via OpenDAL, presigned URLs
+- **Plan 10 (Upload):** S3-compatible storage via OpenDAL, presigned URLs — PLANNED
 - **Plan 11 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
 
 ## Key References
@@ -105,6 +105,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - SSE plan: `docs/superpowers/plans/2026-03-21-modo-v2-sse.md`
 - Tenant spec: `docs/superpowers/specs/2026-03-22-modo-v2-tenant-design.md`
 - Tenant plan: `docs/superpowers/plans/2026-03-22-modo-v2-tenant.md`
+- Upload spec: `docs/superpowers/specs/2026-03-22-modo-v2-upload-design.md`
+- Upload plan: `docs/superpowers/plans/2026-03-22-modo-v2-upload.md`
 
 ## Gotchas
 
