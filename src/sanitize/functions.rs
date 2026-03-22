@@ -28,7 +28,7 @@ pub fn collapse_whitespace(s: &mut String) {
 
 /// Strips all HTML tags and decodes entities, leaving only plain text.
 pub fn strip_html(s: &mut String) {
-    *s = nanohtml2text::html2text(s);
+    *s = super::html::html_to_text(s);
 }
 
 /// Truncates the string to at most `max_chars` characters, respecting char boundaries.

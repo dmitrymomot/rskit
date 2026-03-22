@@ -1,4 +1,5 @@
 mod functions;
+mod html;
 mod traits;
 
 pub use functions::{
