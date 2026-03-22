@@ -85,7 +85,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 7 (Template):** MiniJinja engine, i18n, static files — DONE
 - **Plan 8 (SSE):** broadcast SSE — DONE
 - **Plan 9 (Tenant):** tenant resolution with strategies, resolver trait, middleware enforcement — DONE
-- **Plan 10 (Upload):** S3-compatible storage via OpenDAL, presigned URLs — DONE
+- **Plan 10 (Storage):** Custom S3 client with SigV4 signing replacing opendal, presigned URLs — IN PROGRESS
 - **Plan 11 (Dep Reduction):** Replace ulid, nanohtml2text, lru, data-encoding, governor+tower_governor with custom impls
 - **Plan 12 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
 
@@ -108,6 +108,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Tenant plan: `docs/superpowers/plans/2026-03-22-modo-v2-tenant.md`
 - Upload spec: `docs/superpowers/specs/2026-03-22-modo-v2-upload-design.md`
 - Upload plan: `docs/superpowers/plans/2026-03-22-modo-v2-upload.md`
+- Storage spec: `docs/superpowers/specs/2026-03-23-modo-v2-storage-design.md`
+- Storage plan: `docs/superpowers/plans/2026-03-23-modo-v2-storage.md`
 - Dep reduction spec: `docs/superpowers/specs/2026-03-23-dependency-reduction-design.md`
 - Dep reduction plan: `docs/superpowers/plans/2026-03-23-dependency-reduction.md`
 
