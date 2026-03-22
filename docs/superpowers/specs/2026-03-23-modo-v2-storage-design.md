@@ -71,20 +71,23 @@ pub(crate) struct SigningParams<'a> {
     pub access_key: &'a str,
     pub secret_key: &'a str,
     pub region: &'a str,
-    pub bucket: &'a str,
-    pub key: &'a str,
     pub method: &'a str,
-    pub headers: &'a [(String, String)],
-    pub payload_hash: &'a str,
+    pub canonical_uri: &'a str,   // pre-computed by caller: "/{bucket}/{key}" (path) or "/{key}" (virtual-hosted)
+    pub host: &'a str,            // pre-computed by caller based on path_style
+    pub extra_headers: &'a [(String, String)],  // additional headers to sign (Content-Type, Content-Disposition, etc.)
+    pub payload_hash: &'a str,    // SHA-256 hex of body, or "UNSIGNED-PAYLOAD"
     pub now: chrono::DateTime<chrono::Utc>,
 }
 
-/// Returns (authorization_header_value, signed_headers_map).
+/// Returns (authorization_header_value, all_signed_headers) ready to attach to a request.
+/// The caller pre-computes `canonical_uri` and `host` based on `path_style`.
+/// `extra_headers` are headers beyond Host and x-amz-* that must be signed (e.g., Content-Type).
+/// The function adds Host, x-amz-date, and x-amz-content-sha256 automatically.
 pub(crate) fn sign_request(params: &SigningParams) -> (String, Vec<(String, String)>)
 ```
 
 Implementation details:
-- Uses `hmac 0.12` + `sha2 0.10` (both already in dep tree)
+- Uses `hmac 0.12` (optional dep, activated by `storage` feature) + `sha2 0.10` (non-optional, always available)
 - `chrono::Utc::now()` for timestamps (already in dep tree)
 - `uri_encode()` follows AWS spec: encode everything except `A-Za-z0-9_.-~`, slash optionally
 - PUT requests use `UNSIGNED-PAYLOAD` for payload hash — avoids double-hashing large uploads
@@ -123,15 +126,20 @@ pub(crate) struct RemoteBackend {
     client: Client<HttpsConnector<HttpConnector>, Full<Bytes>>,
     bucket: String,
     endpoint: String,
-    endpoint_host: String,
+    endpoint_host: String,  // derived from endpoint by stripping scheme (e.g., "https://s3.example.com" → "s3.example.com")
     access_key: String,
     secret_key: String,
-    region: String,
+    region: String,          // resolved from config: config.region.unwrap_or("us-east-1")
     path_style: bool,
 }
 ```
 
 The hyper client is created once in `RemoteBackend::new()` and reused across requests (unlike the OAuth client which builds per-request — storage ops can be frequent).
+
+`endpoint_host` is derived from `config.endpoint` by stripping the URL scheme (`https://` or `http://`). This value is used for:
+- The `Host` header on all requests
+- Virtual-hosted URL construction (`{bucket}.{endpoint_host}`)
+- SigV4 signing (the Host header must match)
 
 ### URL Construction
 
@@ -168,6 +176,7 @@ struct StoredObject {
 - `fake_url_base` defaults to `"https://memory.test"`
 - `presigned_url()` returns `"https://memory.test/{key}?expires={secs}"` — enables full-flow testing without errors
 - `delete()` on missing key is no-op (matches S3 semantics)
+- `list()` iterates HashMap keys, returning those matching `starts_with(prefix)`
 
 ## Storage Facade (`storage.rs`)
 
@@ -193,10 +202,14 @@ Decouples storage from the multipart extractor:
 pub struct PutInput {
     pub data: Bytes,
     pub prefix: String,
-    pub filename: Option<String>,
+    pub filename: Option<String>,   // used to extract file extension for key generation
     pub content_type: String,
 }
 ```
+
+`PutInput` has no `size` field — `max_file_size` validation uses `input.data.len()`.
+
+Extension extraction: `put()`/`put_with()` parse the extension from `filename` using the same logic as `UploadedFile::extension()` — split on `.`, take the last segment. `None` filename or empty string produces no extension (key has no `.ext` suffix).
 
 ### Public Methods
 
@@ -217,9 +230,11 @@ impl Storage {
 }
 ```
 
-- `put`/`put_with` validate `max_file_size`, generate ULID-based key via `path::generate_key()`, delegate to backend. On failure, attempt cleanup delete + log warning.
+- `put`/`put_with` validate `max_file_size` using `input.data.len()`, extract extension from `input.filename`, generate ULID-based key via `path::generate_key()`, delegate to backend. On failure, attempt cleanup delete + log warning.
+- `put_with` content-type precedence: `opts.content_type` (if `Some`) overrides `input.content_type`. Same behavior as current upload module.
 - `url()` returns `{public_url}/{key}`. Errors if `public_url` not configured.
 - `delete_prefix()` calls `backend.list(prefix)` then loops `backend.delete(key)` — same O(n) behavior as opendal's `remove_all()`.
+- `list` is internal only — not exposed on the public `Storage` API. It exists solely to support `delete_prefix()`. If end-users need listing (e.g., file browsers), it can be added later.
 - Manual `Clone` impl (Arc clone).
 
 ## Bridge (`bridge.rs`)
@@ -229,15 +244,25 @@ Convenience constructor bridging `UploadedFile` → `PutInput`:
 ```rust
 impl PutInput {
     pub fn from_upload(file: &UploadedFile, prefix: &str) -> Self {
+        // Filter empty/unnamed filenames to None so key generation skips extension
+        let filename = if file.name.is_empty() {
+            None
+        } else {
+            Some(file.name.clone())
+        };
         Self {
             data: file.data.clone(),
             prefix: prefix.to_string(),
-            filename: Some(file.name.clone()),
+            filename,
             content_type: file.content_type.clone(),
         }
     }
 }
 ```
+
+`from_upload()` filters empty filenames to `None` so that key generation produces extensionless keys rather than keys with an empty extension. Non-empty filenames (including `"unnamed"` from the multipart extractor) are passed through — `"unnamed"` has no `.` so `extension()` returns `None` anyway.
+
+`PutInput` is defined in `storage.rs`; `bridge.rs` only adds the `from_upload()` impl block via `use super::storage::PutInput`.
 
 Usage:
 
