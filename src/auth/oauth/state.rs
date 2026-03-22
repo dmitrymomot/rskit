@@ -154,8 +154,7 @@ fn generate_random_string(len: usize) -> String {
 }
 
 fn base64url_encode(bytes: &[u8]) -> String {
-    use data_encoding::BASE64URL_NOPAD;
-    BASE64URL_NOPAD.encode(bytes)
+    crate::encoding::base64url::encode(bytes)
 }
 
 #[cfg(test)]

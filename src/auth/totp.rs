@@ -1,4 +1,3 @@
-use data_encoding::BASE32_NOPAD;
 use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use sha1::Sha1;
@@ -39,13 +38,12 @@ impl Totp {
     pub fn generate_secret() -> String {
         let mut bytes = [0u8; 20];
         rand::fill(&mut bytes);
-        BASE32_NOPAD.encode(&bytes)
+        crate::encoding::base32::encode(&bytes)
     }
 
     pub fn from_base32(encoded: &str, config: &TotpConfig) -> crate::Result<Self> {
-        let bytes = BASE32_NOPAD
-            .decode(encoded.as_bytes())
-            .map_err(|e| crate::Error::bad_request(format!("invalid base32 secret: {e}")))?;
+        let bytes = crate::encoding::base32::decode(encoded)
+            .map_err(|_| crate::Error::bad_request("invalid base32 secret"))?;
         Ok(Self::new(bytes, config))
     }
 
@@ -90,7 +88,7 @@ impl Totp {
     }
 
     pub fn otpauth_uri(&self, issuer: &str, account: &str) -> String {
-        let secret_b32 = BASE32_NOPAD.encode(&self.secret);
+        let secret_b32 = crate::encoding::base32::encode(&self.secret);
         let encoded_account = urlencoding_encode(account);
         let encoded_issuer = urlencoding_encode(issuer);
         format!(

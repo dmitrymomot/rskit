@@ -2,6 +2,7 @@ pub mod cache;
 pub mod config;
 pub mod cookie;
 pub mod db;
+pub mod encoding;
 pub mod error;
 pub mod extractor;
 pub mod id;

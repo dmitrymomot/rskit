@@ -12,7 +12,7 @@ full = ["templates", "sse", "auth", "sentry", "email", "storage"]
 sentry = ["dep:sentry", "dep:sentry-tracing"]
 templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
 sse = ["dep:futures-util"]
-auth = ["dep:argon2", "dep:hmac", "dep:sha1", "dep:data-encoding", "dep:subtle", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
+auth = ["dep:argon2", "dep:hmac", "dep:sha1", "dep:subtle", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
 email = ["dep:lettre", "dep:pulldown-cmark"]
 email-test = ["email"]
 storage = ["dep:hmac", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
@@ -64,7 +64,6 @@ sentry-tracing = { version = "0.38", optional = true }
 argon2 = { version = "0.5", optional = true }
 hmac = { version = "0.12", optional = true }
 sha1 = { version = "0.10", optional = true }
-data-encoding = { version = "2", optional = true }
 subtle = { version = "2", optional = true }
 hyper = { version = "1", optional = true }
 hyper-rustls = { version = "0.27", optional = true, default-features = false, features = ["ring", "http1", "tls12", "logging", "webpki-roots"] }
