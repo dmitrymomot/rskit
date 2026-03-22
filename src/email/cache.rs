@@ -1,5 +1,5 @@
 use crate::Result;
-use lru::LruCache;
+use crate::cache::LruCache;
 use std::num::NonZeroUsize;
 use std::sync::Mutex;
 
