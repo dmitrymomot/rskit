@@ -82,6 +82,10 @@ impl Error {
         Self::new(StatusCode::TOO_MANY_REQUESTS, msg)
     }
 
+    pub fn payload_too_large(msg: impl Into<String>) -> Self {
+        Self::new(StatusCode::PAYLOAD_TOO_LARGE, msg)
+    }
+
     pub fn internal(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, msg)
     }
@@ -193,5 +197,12 @@ mod tests {
     fn is_lagged_returns_false_for_other_errors() {
         let err = Error::internal("something else");
         assert!(!err.is_lagged());
+    }
+
+    #[test]
+    fn payload_too_large_error_has_413_status() {
+        let err = Error::payload_too_large("file too big");
+        assert_eq!(err.status(), StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(err.message(), "file too big");
     }
 }
