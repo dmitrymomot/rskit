@@ -382,24 +382,26 @@ fn build_url_and_host(
     key: &str,
     path_style: bool,
 ) -> (String, String) {
+    let encoded_key = uri_encode(key, false);
     if path_style {
         (
-            format!("{endpoint}/{bucket}/{key}"),
+            format!("{endpoint}/{bucket}/{encoded_key}"),
             endpoint_host.to_string(),
         )
     } else {
         (
-            format!("https://{bucket}.{endpoint_host}/{key}"),
+            format!("https://{bucket}.{endpoint_host}/{encoded_key}"),
             format!("{bucket}.{endpoint_host}"),
         )
     }
 }
 
 fn build_canonical_uri(bucket: &str, key: &str, path_style: bool) -> String {
+    let encoded_key = uri_encode(key, false);
     if path_style {
-        format!("/{bucket}/{key}")
+        format!("/{bucket}/{encoded_key}")
     } else {
-        format!("/{key}")
+        format!("/{encoded_key}")
     }
 }
 
