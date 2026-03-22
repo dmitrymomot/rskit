@@ -1,5 +1,6 @@
 mod backend;
 mod bridge;
+mod buckets;
 mod client;
 mod config;
 mod facade;
@@ -9,6 +10,7 @@ mod path;
 mod presign;
 mod signing;
 
+pub use buckets::Buckets;
 pub use config::BucketConfig;
 pub use config::{gb, kb, mb};
 pub use facade::{PutInput, Storage};

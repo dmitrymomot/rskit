@@ -53,7 +53,7 @@ pub use template::{
 };
 
 #[cfg(feature = "storage")]
-pub use storage::{BucketConfig, PutInput, PutOptions, Storage};
+pub use storage::{BucketConfig, Buckets, PutInput, PutOptions, Storage};
 
 // Re-exports for user convenience
 pub use axum;
