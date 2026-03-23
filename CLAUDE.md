@@ -35,7 +35,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 
 - Paths: NEVER use absolute paths — always relative to project root
 - File organization: `mod.rs` and `lib.rs` are ONLY for `mod` imports and re-exports — all code goes in separate files
-- Extractors: `Service<T>` reads from registry, `JsonRequest<T>` / `FormRequest<T>` for request bodies, `Path<T>` / `Query<T>` for params
+- Extractors: `Service<T>` reads from registry, `JsonRequest<T>` / `FormRequest<T>` for request bodies (require `T: Sanitize`), `Path<T>` / `Query<T>` for params
 - Error handling: `modo::Error` with status + message + optional source; `modo::Result<T>` alias; `?` everywhere
 - Error constructors: `Error::not_found()`, `Error::bad_request()`, `Error::internal()`, etc.
 - Response types: `Json<T>`, `Html<String>`, `Redirect`, `Response`
@@ -53,7 +53,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 
 ## Current Work
 
-- **Plan 12 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
+- **Plan 12 (Test Helpers):** DONE — `src/testing/` module behind `test-helpers` feature flag
+- Test migration fixtures live at `tests/fixtures/migrations/` — used by `TestDb::migrate()` tests
 - **Plan 13 (RBAC):** Trait-based `RoleExtractor`, `require_role()` / `require_authenticated()` guard middleware layers — roles only, no permissions, session-based
 - **Plan 14 (JWT):** Full JWT service — create + validate tokens, typed claims, signing algorithms (HS256/RS256), `Bearer` extraction middleware. Feature-gated under `auth`
 - **Plan 15 (Webhook Delivery):** `WebhookSender` — fire-and-forget with retries + exponential backoff, HMAC signing. Standalone `sign()` / `verify()` helpers. App wraps in job for durability
@@ -70,7 +71,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - RPITIT traits (OAuthProvider, TenantResolver, RoleExtractor) — not object-safe; use concrete types
 - New middleware traits that need session access must take `&mut Parts` (not `&Parts`) so they can call `Session::from_request_parts()` — `SessionState` is `pub(crate)`
 - Guard/middleware errors use `Error::into_response()` — never construct raw HTTP responses; errors flow through the app's custom error handler
-- Always-available modules (no feature gate): cache, encoding, session, tenant, rbac, job, cron
+- Always-available modules (no feature gate): cache, encoding, session, tenant, rbac, job, cron, testing (`test-helpers` feature)
 - `std::sync::RwLock` (not tokio) for all sync-only state — never hold across `.await`
 - Feature-gated modules: test with `cargo test --features X`, lint with `cargo clippy --features X --tests`, integration test files need `#![cfg(feature = "X")]`
 - No self-referencing dev-dependencies for feature-gated tests — use `#![cfg(feature = "X")]` guards and run via `cargo test --features X`
