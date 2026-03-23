@@ -2,4 +2,4 @@ mod secret;
 mod signature;
 
 pub use secret::WebhookSecret;
-pub use signature::{sign, verify};
+pub use signature::{SignedHeaders, sign, sign_headers, verify, verify_headers};
