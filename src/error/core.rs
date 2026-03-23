@@ -239,8 +239,7 @@ mod tests {
     fn chain_sets_source() {
         use std::error::Error as _;
         use std::io;
-        let err =
-            super::Error::internal("failed").chain(io::Error::new(io::ErrorKind::Other, "disk"));
+        let err = super::Error::internal("failed").chain(io::Error::other("disk"));
         assert!(err.source().is_some());
     }
 
@@ -257,7 +256,7 @@ mod tests {
     #[test]
     fn source_as_returns_none_for_wrong_type() {
         use std::io;
-        let err = Error::internal("failed").chain(io::Error::new(io::ErrorKind::Other, "x"));
+        let err = Error::internal("failed").chain(io::Error::other("x"));
         let downcasted = err.source_as::<std::num::ParseIntError>();
         assert!(downcasted.is_none());
     }
