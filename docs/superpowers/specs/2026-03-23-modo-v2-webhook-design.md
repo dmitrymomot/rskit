@@ -258,7 +258,7 @@ In `lib.rs`, only types are re-exported at the crate root. Functions stay namesp
 
 ```rust
 #[cfg(feature = "webhooks")]
-pub(crate) mod webhook;
+pub mod webhook;
 
 #[cfg(feature = "webhooks")]
 pub use webhook::{

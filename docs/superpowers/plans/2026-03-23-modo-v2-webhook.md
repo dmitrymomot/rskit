@@ -634,6 +634,7 @@ git commit -m "feat(webhook): add Standard Webhooks sign_headers/verify_headers"
 - [ ] **Step 1: Create `src/webhook/client.rs`**
 
 ```rust
+use std::future::Future;
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -1198,7 +1199,7 @@ async fn hyper_client_timeout_on_slow_server() {
 
     // Server accepts but never responds
     let _handle = tokio::spawn(async move {
-        let (mut stream, _) = listener.accept().await.unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
         tokio::time::sleep(Duration::from_secs(60)).await;
         drop(stream);
     });
