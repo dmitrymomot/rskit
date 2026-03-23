@@ -20,7 +20,6 @@ pub struct JwtEncoder {
 struct JwtEncoderInner {
     signer: Arc<dyn TokenSigner>,
     default_expiry: Option<Duration>,
-    #[cfg_attr(not(feature = "auth"), allow(dead_code))]
     validation: super::validation::ValidationConfig,
 }
 
@@ -44,7 +43,6 @@ impl JwtEncoder {
 
     /// Returns a reference to the inner signer (as verifier).
     /// Used by `JwtDecoder::from(&encoder)` to share the same key.
-    #[allow(dead_code)]
     pub(super) fn verifier(&self) -> Arc<dyn super::signer::TokenVerifier> {
         // Trait upcasting: Arc<dyn TokenSigner> → Arc<dyn TokenVerifier>
         // Stabilized in Rust 1.76.
@@ -53,7 +51,6 @@ impl JwtEncoder {
 
     /// Returns a clone of the validation config.
     /// Used by `JwtDecoder::from(&encoder)`.
-    #[allow(dead_code)]
     pub(super) fn validation(&self) -> super::validation::ValidationConfig {
         self.inner.validation.clone()
     }
