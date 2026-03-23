@@ -65,11 +65,15 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 
 ### Patterns (apply across modules)
 
+- Tower middleware pattern: `Layer` + `Service` structs, manual `Clone` impls, `std::mem::swap` in `call()` to preserve ready service — see `src/tenant/middleware.rs` as reference
+- RPITIT traits (OAuthProvider, TenantResolver, RoleExtractor) — not object-safe; use concrete types
+- New middleware traits that need session access must take `&mut Parts` (not `&Parts`) so they can call `Session::from_request_parts()` — `SessionState` is `pub(crate)`
+- Guard/middleware errors use `Error::into_response()` — never construct raw HTTP responses; errors flow through the app's custom error handler
+- Always-available modules (no feature gate): cache, encoding, session, tenant, rbac, job, cron
 - `std::sync::RwLock` (not tokio) for all sync-only state — never hold across `.await`
 - Feature-gated modules: test with `cargo test --features X`, lint with `cargo clippy --features X --tests`, integration test files need `#![cfg(feature = "X")]`
 - Types without `Debug` (pool newtypes, `Storage`, `Buckets`): use `.err().unwrap()` not `.unwrap_err()` in tests
 - `Arc<Inner>` pattern (Engine, Broadcaster, Storage) — never double-wrap in `Arc`
-- RPITIT traits (OAuthProvider, TenantResolver) — not object-safe; use concrete types
 - Conditionally-used items: `#[cfg_attr(not(any(test, feature = "X-test")), allow(dead_code))]`; modules imported behind `cfg` need `pub(crate) mod`
 - `Cargo.lock` is gitignored (library crate) — don't stage it in commits
 
@@ -118,6 +122,9 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 
 ### Design Decisions
 
+- RBAC is roles-only (no permissions model) — app handles permissions in handler logic
+- Job priority is handled by separate queues/worker pools, not numeric priority in a single queue
+- `.env` loading is the end-app's responsibility (via Justfile) — framework only does YAML config with `${VAR}` substitution
 - DB-backed modules (session, job) don't ship migrations — end-apps own their schemas
 - `TenantId::ApiKey` must be redacted in Display/Debug — never log raw API keys
 - `tracing()` middleware must declare `tenant_id = tracing::field::Empty` for tenant middleware to `record()` later
