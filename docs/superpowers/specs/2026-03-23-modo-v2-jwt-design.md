@@ -399,6 +399,7 @@ pub struct JwtEncoder {
 
 struct JwtEncoderInner {
     signer: Arc<dyn TokenSigner>,
+    default_expiry: Option<Duration>,
 }
 
 impl JwtEncoder {
@@ -418,7 +419,7 @@ Encode flow:
 
 Uses modo's `encoding::base64url` module (always available).
 
-Note: `encode()` does NOT enforce `exp` presence — callers are responsible for setting expiration via `Claims::with_exp_in()`. However, `decode()` always requires `exp` and rejects tokens without it. This is an intentional safety net: tokens must always expire. If a use case genuinely needs non-expiring tokens, the caller should set a far-future `exp`.
+`encode()` auto-fills `exp` when missing: if `claims.exp` is `None` and `default_expiry` is configured, encoder sets `exp = now + default_expiry`. If `claims.exp` is already `Some`, the explicit value is preserved. This guarantees tokens always have an expiration (since `decode()` requires `exp`).
 
 ### `JwtDecoder`
 
@@ -544,6 +545,7 @@ YAML configuration struct. Drives `from_config()` constructors.
 # config/default.yaml
 jwt:
   secret: "${JWT_SECRET}"
+  default_expiry: 3600        # seconds, auto-fills exp when not set by caller
   leeway: 5                   # seconds, clock skew tolerance for exp/nbf
   issuer: "my-app"            # optional, policy-level require_issuer
   audience: "api"             # optional, policy-level require_audience
@@ -553,6 +555,7 @@ jwt:
 #[derive(Deserialize)]
 pub struct JwtConfig {
     pub secret: String,
+    pub default_expiry: Option<u64>,  // seconds; None means caller must always set exp
     #[serde(default)]
     pub leeway: u64,
     pub issuer: Option<String>,
