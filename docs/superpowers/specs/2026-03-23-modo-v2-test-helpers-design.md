@@ -76,6 +76,8 @@ impl TestDb {
 
 Internally, `new()` calls `db::connect()` with `SqliteConfig { path: ":memory:".into(), ..Default::default() }`. The `connect()` function already forces `max_connections=1` for `:memory:`. All three pool accessors wrap the same inner `SqlitePool` via the newtype constructors.
 
+`exec()` and `migrate()` consume `self` and return `Self` for chaining. All schema setup should be done before extracting pools — once you call `pool()`, keep using the `TestDb` for further SQL via its pool directly with sqlx.
+
 ### TestApp and TestAppBuilder
 
 ```rust
@@ -91,11 +93,18 @@ pub struct TestAppBuilder {
 impl TestApp {
     pub fn builder() -> TestAppBuilder;
 
+    /// Wrap an already-built Router (with state applied) — for tests that don't need a registry
+    pub fn from_router(router: Router) -> Self;
+
     pub fn get(&self, uri: &str) -> TestRequestBuilder;
     pub fn post(&self, uri: &str) -> TestRequestBuilder;
     pub fn put(&self, uri: &str) -> TestRequestBuilder;
     pub fn patch(&self, uri: &str) -> TestRequestBuilder;
     pub fn delete(&self, uri: &str) -> TestRequestBuilder;
+    pub fn options(&self, uri: &str) -> TestRequestBuilder;
+
+    /// Any HTTP method — escape hatch for HEAD, TRACE, etc.
+    pub fn request(&self, method: Method, uri: &str) -> TestRequestBuilder;
 }
 
 impl TestAppBuilder {
@@ -117,8 +126,10 @@ impl TestAppBuilder {
 ```
 
 Notes:
-- `build()` calls `registry.into_state()` and `router.with_state(state)`
+- `build()` calls `registry.into_state()` and `router.with_state(state)` — converts `Router<AppState>` to `Router<()>`
+- `from_router()` accepts a `Router<()>` (already has state applied) — useful for middleware-only tests without a registry
 - `TestApp` clones the router on each request method call (Router is cheap to clone) so the app is reusable across multiple requests
+- `request()` is the generic escape hatch — all named methods (`get`, `post`, etc.) delegate to it
 
 ### TestRequestBuilder
 
@@ -133,10 +144,12 @@ impl TestRequestBuilder {
     /// Set a header
     pub fn header(self, key: &str, value: &str) -> Self;
 
-    /// Set JSON body — auto-sets Content-Type: application/json
+    /// Set JSON body via serde_json — auto-sets Content-Type: application/json
+    /// Panics if serialization fails
     pub fn json<T: Serialize>(self, body: &T) -> Self;
 
-    /// Set form body — auto-sets Content-Type: application/x-www-form-urlencoded
+    /// Set form body via serde_urlencoded — auto-sets Content-Type: application/x-www-form-urlencoded
+    /// Panics if serialization fails
     pub fn form<T: Serialize>(self, body: &T) -> Self;
 
     /// Set raw body bytes
