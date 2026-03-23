@@ -56,7 +56,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 12 (Test Helpers):** DONE — `src/testing/` module behind `test-helpers` feature flag
 - Test migration fixtures live at `tests/fixtures/migrations/` — used by `TestDb::migrate()` tests
 - **Plan 13 (RBAC):** DONE — `src/rbac/` module with `RoleExtractor` trait, `Role` extractor, RBAC middleware, `require_role()` / `require_authenticated()` guard layers (22 unit + 8 integration tests)
-- **Plan 14 (JWT):** Full JWT service — create + validate tokens, typed claims, HS256 signing (algorithm-agnostic traits for future RS256/ES256), `Bearer` extraction middleware, pluggable `TokenSource`, optional `Revocation` trait. Feature-gated under `auth`. Spec + plan written.
+- **Plan 14 (JWT):** DONE — `src/auth/jwt/` module with `JwtEncoder`/`JwtDecoder`, `Claims<T>`, `HmacSigner` (HS256), `JwtLayer<T>` middleware, pluggable `TokenSource`, optional `Revocation` trait, `Bearer` extractor. Feature-gated under `auth` (73 unit + 13 integration tests)
 - **Plan 15 (Webhook Delivery):** `WebhookSender` — fire-and-forget with retries + exponential backoff, HMAC signing. Standalone `sign()` / `verify()` helpers. App wraps in job for durability
 - **Plan 16 (Flash Messages):** Cookie-based (signed), read-once-and-clear. `FlashMessage` extractor + `set_flash()`. Template function `flash("key")`. No session dependency
 - **Plan 17 (Storage ACL + Upload from URL):** Extend `src/storage/` — `ACL::Private` / `ACL::PublicRead` on upload, `put_from_url()` with auto content-type detection from response headers
@@ -78,6 +78,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Types without `Debug` (pool newtypes, `Storage`, `Buckets`): use `.err().unwrap()` not `.unwrap_err()` in tests
 - `Error`'s `Clone` and `IntoResponse` both drop `source` (can't clone `Box<dyn Error>`) — use `error_code: Option<&'static str>` field to preserve error identity through the response pipeline
 - `Error::with_source(status, msg, source)` is a constructor (3 args) — the builder-style method is `chain(source)` (1 arg); don't confuse them
+- Error identity pattern: `Error::unauthorized("unauthorized").chain(JwtError::Expired).with_code(JwtError::Expired.code())` — `source_as::<T>()` for pre-response, `error_code()` for post-response
 - `Arc<Inner>` pattern (Engine, Broadcaster, Storage) — never double-wrap in `Arc`
 - Conditionally-used items: `#[cfg_attr(not(any(test, feature = "X-test")), allow(dead_code))]`; modules imported behind `cfg` need `pub(crate) mod`
 - `Cargo.lock` is gitignored (library crate) — don't stage it in commits
@@ -91,6 +92,9 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Clippy rejects `mod foo` inside `foo/mod.rs` — name the file differently
 - `cargo tree -p <pkg>` fails behind feature flags — use `cargo tree --invert <pkg>` instead
 - Clippy `manual_div_ceil`: use `n.div_ceil(d)` not `(n + d - 1) / d` — flagged since Rust 1.92
+- Clippy `io_other_error`: use `io::Error::other("msg")` not `io::Error::new(io::ErrorKind::Other, "msg")` — flagged since Rust 1.92
+- Rust 2024 edition rejects explicit `ref` in `if let` patterns through references — use `if let (Some(x), ...)` not `if let (Some(ref x), ...)`
+- Clippy `collapsible_if`: nested `if let` + `if` must use let-chains — `if let Some(x) = y && condition {}`
 
 ### axum
 
