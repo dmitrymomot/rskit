@@ -71,6 +71,11 @@ pub use template::{
 #[cfg(feature = "storage")]
 pub use storage::{BucketConfig, Buckets, PutInput, PutOptions, Storage};
 
+#[cfg(feature = "webhooks")]
+pub use webhook::{
+    HttpClient, HyperClient, SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender,
+};
+
 // Re-exports for user convenience
 pub use axum;
 pub use serde;
