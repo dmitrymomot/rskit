@@ -81,10 +81,12 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Error identity pattern: `Error::unauthorized("unauthorized").chain(JwtError::Expired).with_code(JwtError::Expired.code())` — `source_as::<T>()` for pre-response, `error_code()` for post-response
 - `Arc<Inner>` pattern (Engine, Broadcaster, Storage) — never double-wrap in `Arc`
 - Conditionally-used items: `#[cfg_attr(not(any(test, feature = "X-test")), allow(dead_code))]`; modules imported behind `cfg` need `pub(crate) mod`
+- Feature-gated modules accessed by integration tests (`tests/*.rs`) must use `pub mod` not `pub(crate) mod` — integration tests are external crate consumers
 - `Cargo.lock` is gitignored (library crate) — don't stage it in commits
 
 ### Rust 2024 / Tooling
 
+- Rust 2024 prelude includes `Future` — no `use std::future::Future` needed for RPITIT traits
 - `std::env::set_var` / `remove_var` are `unsafe` — tests must wrap in `unsafe {}` blocks
 - Config tests that modify env vars must use `serial_test` to avoid races
 - Tests that modify env vars must clean up BEFORE assertions — panics skip cleanup
@@ -112,6 +114,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 
 ### Dependencies
 
+- `base64` crate for standard base64 (webhooks feature) — NOT `encoding::base64url` which is RFC 4648 no-padding
 - YAML deserialization uses `serde_yaml_ng` — NOT `serde_yaml` (different crate)
 - `run!` macro uses `$crate::tracing::info!` for hygiene — regular code uses bare `tracing::`
 - `rand::fill(&mut bytes)` not `rand::rng().fill_bytes()` (latter needs `use rand::Rng`)
