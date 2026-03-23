@@ -53,6 +53,12 @@ pub use auth::oauth::{
     OAuthProviderConfig, OAuthState, UserProfile,
 };
 
+#[cfg(feature = "auth")]
+pub use auth::jwt::{
+    Bearer, Claims, HmacSigner, JwtConfig, JwtDecoder, JwtEncoder, JwtError, JwtLayer, Revocation,
+    TokenSigner, TokenSource, TokenVerifier, ValidationConfig,
+};
+
 #[cfg(feature = "templates")]
 pub use template::{
     Engine, EngineBuilder, HxRequest, Renderer, TemplateConfig, TemplateContext,
