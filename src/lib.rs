@@ -17,6 +17,7 @@ pub mod validate;
 
 pub mod cron;
 pub mod job;
+pub mod rbac;
 pub mod tenant;
 
 #[cfg(feature = "auth")]
