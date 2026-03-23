@@ -35,6 +35,9 @@ pub mod sse;
 #[cfg(feature = "storage")]
 pub mod storage;
 
+#[cfg(feature = "webhooks")]
+pub mod webhook;
+
 #[cfg(feature = "test-helpers")]
 pub mod testing;
 
