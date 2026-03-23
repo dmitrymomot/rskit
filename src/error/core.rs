@@ -8,6 +8,7 @@ pub struct Error {
     status: StatusCode,
     message: String,
     source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    error_code: Option<&'static str>,
     details: Option<serde_json::Value>,
     lagged: bool,
 }
@@ -18,6 +19,7 @@ impl Error {
             status,
             message: message.into(),
             source: None,
+            error_code: None,
             details: None,
             lagged: false,
         }
@@ -32,6 +34,7 @@ impl Error {
             status,
             message: message.into(),
             source: Some(Box::new(source)),
+            error_code: None,
             details: None,
             lagged: false,
         }
@@ -52,6 +55,28 @@ impl Error {
     pub fn with_details(mut self, details: serde_json::Value) -> Self {
         self.details = Some(details);
         self
+    }
+
+    /// Attach a source error (builder-style).
+    pub fn chain(mut self, source: impl std::error::Error + Send + Sync + 'static) -> Self {
+        self.source = Some(Box::new(source));
+        self
+    }
+
+    /// Attach a static error code to preserve error identity through the response pipeline.
+    pub fn with_code(mut self, code: &'static str) -> Self {
+        self.error_code = Some(code);
+        self
+    }
+
+    /// Returns the error code, if one was set.
+    pub fn error_code(&self) -> Option<&str> {
+        self.error_code
+    }
+
+    /// Downcast the source error to a concrete type.
+    pub fn source_as<T: std::error::Error + 'static>(&self) -> Option<&T> {
+        self.source.as_ref()?.downcast_ref::<T>()
     }
 
     pub fn bad_request(msg: impl Into<String>) -> Self {
@@ -96,6 +121,7 @@ impl Error {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("SSE subscriber lagged, skipped {skipped} messages"),
             source: None,
+            error_code: None,
             details: None,
             lagged: true,
         }
@@ -113,6 +139,7 @@ impl Clone for Error {
             status: self.status,
             message: self.message.clone(),
             source: None, // source (Box<dyn Error>) can't be cloned
+            error_code: self.error_code,
             details: self.details.clone(),
             lagged: self.lagged,
         }
@@ -131,6 +158,7 @@ impl fmt::Debug for Error {
             .field("status", &self.status)
             .field("message", &self.message)
             .field("source", &self.source)
+            .field("error_code", &self.error_code)
             .field("details", &self.details)
             .field("lagged", &self.lagged)
             .finish()
@@ -166,6 +194,7 @@ impl IntoResponse for Error {
             status,
             message,
             source: None, // source can't be cloned
+            error_code: self.error_code,
             details,
             lagged: self.lagged,
         };
@@ -204,5 +233,67 @@ mod tests {
         let err = Error::payload_too_large("file too big");
         assert_eq!(err.status(), StatusCode::PAYLOAD_TOO_LARGE);
         assert_eq!(err.message(), "file too big");
+    }
+
+    #[test]
+    fn chain_sets_source() {
+        use std::error::Error as _;
+        use std::io;
+        let err =
+            super::Error::internal("failed").chain(io::Error::new(io::ErrorKind::Other, "disk"));
+        assert!(err.source().is_some());
+    }
+
+    #[test]
+    fn source_as_downcasts_correctly() {
+        use std::io;
+        let io_err = io::Error::new(io::ErrorKind::NotFound, "missing");
+        let err = Error::internal("failed").chain(io_err);
+        let downcasted = err.source_as::<io::Error>();
+        assert!(downcasted.is_some());
+        assert_eq!(downcasted.unwrap().kind(), io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn source_as_returns_none_for_wrong_type() {
+        use std::io;
+        let err = Error::internal("failed").chain(io::Error::new(io::ErrorKind::Other, "x"));
+        let downcasted = err.source_as::<std::num::ParseIntError>();
+        assert!(downcasted.is_none());
+    }
+
+    #[test]
+    fn source_as_returns_none_when_no_source() {
+        let err = Error::internal("no source");
+        let downcasted = err.source_as::<std::io::Error>();
+        assert!(downcasted.is_none());
+    }
+
+    #[test]
+    fn with_code_sets_error_code() {
+        let err = Error::unauthorized("denied").with_code("jwt:expired");
+        assert_eq!(err.error_code(), Some("jwt:expired"));
+    }
+
+    #[test]
+    fn error_code_is_none_by_default() {
+        let err = Error::internal("plain");
+        assert!(err.error_code().is_none());
+    }
+
+    #[test]
+    fn error_code_survives_clone() {
+        let err = Error::unauthorized("denied").with_code("jwt:expired");
+        let cloned = err.clone();
+        assert_eq!(cloned.error_code(), Some("jwt:expired"));
+    }
+
+    #[test]
+    fn error_code_survives_into_response() {
+        use axum::response::IntoResponse;
+        let err = Error::unauthorized("denied").with_code("jwt:expired");
+        let response = err.into_response();
+        let ext_err = response.extensions().get::<Error>().unwrap();
+        assert_eq!(ext_err.error_code(), Some("jwt:expired"));
     }
 }
