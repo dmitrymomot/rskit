@@ -41,6 +41,7 @@ pub mod testing;
 pub use config::Config;
 pub use error::{Error, Result};
 pub use extractor::Service;
+pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
 pub use session::{Session, SessionConfig, SessionData, SessionToken};
 pub use tenant::{HasTenantId, Tenant, TenantId, TenantResolver, TenantStrategy};
