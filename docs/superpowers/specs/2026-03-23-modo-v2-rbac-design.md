@@ -93,11 +93,13 @@ Applied to a router group via `.layer()`. All routes in the group will have the 
 
 ### Error Handling
 
+All errors use `e.into_response()` — they flow through the app's custom error handler middleware. The RBAC middleware never constructs raw HTTP responses directly.
+
 | Failure | Error |
 |---|---|
 | Extractor returns unauthorized | `unauthorized` (401) — no authenticated user |
 | Extractor returns internal error | `internal` (500) — DB failure |
-| Extractor returns any other error | Propagated as-is |
+| Extractor returns any other error | Propagated as-is via `into_response()` |
 
 ### Layer Type
 
@@ -126,11 +128,11 @@ fn call(&mut self, request: Request<Body>) -> Self::Future {
 
 ## Guard Layers
 
-Guard layers read `Role` from request extensions and reject requests that don't match.
+Guard layers read `Role` from request extensions and reject requests that don't match. All rejections use `Error::unauthorized()` / `Error::forbidden()` converted via `into_response()` — errors flow through the app's custom error handler middleware the same way as any other `modo::Error`.
 
 ### `require_role(roles)`
 
-Rejects request unless the resolved role matches ANY of the allowed roles. Returns 403 Forbidden.
+Rejects request unless the resolved role matches ANY of the allowed roles.
 
 ```rust
 pub fn require_role(roles: impl IntoIterator<Item = impl Into<String>>) -> RequireRoleLayer;
@@ -140,13 +142,13 @@ Accepts any iterable of string-like values. Collects into `Arc<Vec<String>>` int
 
 Request flow:
 1. Read `Role` from extensions
-2. If missing → 401 Unauthorized (middleware not applied or extraction failed)
-3. If present but not in allowed list → 403 Forbidden
+2. If missing → `Error::unauthorized("authentication required").into_response()`
+3. If present but not in allowed list → `Error::forbidden("insufficient role").into_response()`
 4. If present and in allowed list → call inner service
 
 ### `require_authenticated()`
 
-Rejects request unless a `Role` is present in extensions. Returns 401 Unauthorized. Does not check which role — just that the user is authenticated and has a role.
+Rejects request unless a `Role` is present in extensions. Does not check which role — just that the user is authenticated and has a role.
 
 ```rust
 pub fn require_authenticated() -> RequireAuthenticatedLayer;
@@ -154,7 +156,7 @@ pub fn require_authenticated() -> RequireAuthenticatedLayer;
 
 Request flow:
 1. Read `Role` from extensions
-2. If missing → 401 Unauthorized
+2. If missing → `Error::unauthorized("authentication required").into_response()`
 3. If present → call inner service
 
 ### Guard Layer Types
@@ -168,6 +170,10 @@ pub struct RequireAuthenticatedService<S> { inner: S }
 ```
 
 Both follow the standard tower `Layer` + `Service` pattern. `roles` is `Arc`-wrapped to avoid cloning per-request.
+
+### Error Handler Integration
+
+Guards return `modo::Error` via `into_response()`. If the app has a custom error handler middleware applied above the guards in the layer stack, it will intercept these errors — same as any handler or middleware error. This allows the app to render custom 401/403 pages (e.g., redirect to login, show "access denied" template).
 
 ## Extractor
 
