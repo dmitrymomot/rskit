@@ -55,7 +55,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 
 - **Plan 12 (Test Helpers):** DONE — `src/testing/` module behind `test-helpers` feature flag
 - Test migration fixtures live at `tests/fixtures/migrations/` — used by `TestDb::migrate()` tests
-- **Plan 13 (RBAC):** Trait-based `RoleExtractor`, `require_role()` / `require_authenticated()` guard middleware layers — roles only, no permissions, session-based
+- **Plan 13 (RBAC):** DONE — `src/rbac/` module with `RoleExtractor` trait, `Role` extractor, RBAC middleware, `require_role()` / `require_authenticated()` guard layers (22 unit + 8 integration tests)
 - **Plan 14 (JWT):** Full JWT service — create + validate tokens, typed claims, signing algorithms (HS256/RS256), `Bearer` extraction middleware. Feature-gated under `auth`
 - **Plan 15 (Webhook Delivery):** `WebhookSender` — fire-and-forget with retries + exponential backoff, HMAC signing. Standalone `sign()` / `verify()` helpers. App wraps in job for durability
 - **Plan 16 (Flash Messages):** Cookie-based (signed), read-once-and-clear. `FlashMessage` extractor + `set_flash()`. Template function `flash("key")`. No session dependency
