@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ship test helpers as part of the `modo` crate behind a `test-helpers` feature flag. Four types: `TestDb`, `TestApp`, `TestRequestBuilder`, `TestResponse`. Zero new dependencies. In-process only (tower `oneshot()`, no TCP listener).
+Ship test helpers as part of the `modo` crate behind a `test-helpers` feature flag. Five types: `TestDb`, `TestApp`, `TestRequestBuilder`, `TestResponse`, `TestSession`. Zero new dependencies. In-process only (tower `oneshot()`, no TCP listener).
 
 ## Design Decisions
 
@@ -21,7 +21,8 @@ src/testing/
 ├── app.rs          # TestApp, TestAppBuilder
 ├── request.rs      # TestRequestBuilder
 ├── response.rs     # TestResponse
-└── db.rs           # TestDb
+├── db.rs           # TestDb
+└── session.rs      # TestSession
 ```
 
 Feature flag in `Cargo.toml`:
@@ -195,7 +196,56 @@ Notes:
 - `text()` and `json()` panic on failure — appropriate for test code
 - `status()` returns `u16` for simpler assertions (`assert_eq!(res.status(), 200)`)
 
-## Usage Example
+### TestSession
+
+Convenience helper for testing authenticated handlers. Creates the sessions table, wires cookie config + key + store, and provides direct session creation without needing a login endpoint.
+
+```rust
+pub struct TestSession {
+    store: Store,
+    cookie_config: CookieConfig,
+    key: Key,
+}
+
+impl TestSession {
+    /// Create with test defaults:
+    /// - Sessions table auto-created in the provided TestDb
+    /// - CookieConfig: secret = "a" * 64, secure = false, http_only = true, same_site = "lax"
+    /// - SessionConfig::default()
+    /// - Key derived via key_from_config()
+    pub async fn new(db: &TestDb) -> Self;
+
+    /// Create with custom session and cookie configs
+    pub async fn with_config(
+        db: &TestDb,
+        session_config: SessionConfig,
+        cookie_config: CookieConfig,
+    ) -> Self;
+
+    /// Create a session in the DB for the given user and return the signed
+    /// cookie string ready for .header("cookie", &cookie)
+    pub async fn authenticate(&self, user_id: &str) -> String;
+
+    /// Same as authenticate but with custom session data
+    pub async fn authenticate_with(
+        &self,
+        user_id: &str,
+        data: serde_json::Value,
+    ) -> String;
+
+    /// Returns the session middleware layer to add to TestApp
+    pub fn layer(&self) -> SessionLayer;
+}
+```
+
+Internally:
+- `new()` executes the `CREATE TABLE modo_sessions (...)` SQL on the TestDb's pool, then creates `Store::new()` with `SessionConfig::default()`
+- `authenticate()` calls `Store::create()` with a default `SessionMeta` (ip = "127.0.0.1", empty user-agent/language/encoding), then signs the returned `SessionToken` into a cookie string using the same signing logic as the session middleware
+- The returned string is in `cookie_name=signed_value` format, ready to pass directly to `.header("cookie", &cookie)`
+
+## Usage Examples
+
+### Basic handler test
 
 ```rust
 use modo::testing::{TestApp, TestDb};
@@ -224,6 +274,44 @@ async fn test_user_crud() {
     let users: Vec<User> = res.json();
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].name, "Alice");
+}
+```
+
+### Authenticated handler test
+
+```rust
+use modo::testing::{TestApp, TestDb, TestSession};
+use modo::session::Session;
+use axum::routing::get;
+
+async fn protected(session: Session) -> String {
+    match session.user_id() {
+        Some(uid) => format!("hello {uid}"),
+        None => "unauthorized".into(),
+    }
+}
+
+#[tokio::test]
+async fn test_authenticated_access() {
+    let db = TestDb::new().await;
+    let session = TestSession::new(&db).await;
+
+    let app = TestApp::builder()
+        .route("/me", get(protected))
+        .layer(session.layer())
+        .build();
+
+    // Unauthenticated
+    let res = app.get("/me").send().await;
+    assert_eq!(res.text(), "unauthorized");
+
+    // Authenticated — no login endpoint needed
+    let cookie = session.authenticate("user-1").await;
+    let res = app.get("/me")
+        .header("cookie", &cookie)
+        .send().await;
+    assert_eq!(res.status(), 200);
+    assert_eq!(res.text(), "hello user-1");
 }
 ```
 
@@ -261,11 +349,13 @@ let users: Vec<User> = res.json();
 - **ReadPool/WritePool in handlers:** Register via `.service(db.read_pool())` and `.service(db.write_pool())` — both hit the same in-memory DB
 - **Empty body:** `send()` uses `Body::empty()` when no body is set
 - **Invalid JSON in json():** Panics at serialization time — test fails fast with clear error
+- **Multiple authenticated users:** Call `session.authenticate("user-a")` and `session.authenticate("user-b")` — each returns a different cookie
+- **Custom session data:** Use `session.authenticate_with("user-1", json!({"role": "admin"}))` for handlers that read session data
+- **Session + other services:** Combine `TestSession::layer()` with `.service()` calls — they're independent
 
 ## Non-Goals
 
 - Real HTTP server / TCP listener
-- Cookie jar management (users set cookies via `.header()`)
+- Automatic cookie jar (users pass cookies explicitly via `.header()`)
 - WebSocket testing
 - Multipart file upload helpers
-- Test fixtures for specific domain objects (users, sessions, etc.)
