@@ -31,6 +31,7 @@ impl TestRequestBuilder {
 
     pub fn json<T: Serialize>(mut self, body: &T) -> Self {
         let bytes = serde_json::to_vec(body).expect("failed to serialize JSON body");
+        self.headers.retain(|(k, _)| k != "content-type");
         self.headers
             .push(("content-type".to_string(), "application/json".to_string()));
         self.body = Some(bytes);
@@ -39,6 +40,7 @@ impl TestRequestBuilder {
 
     pub fn form<T: Serialize>(mut self, body: &T) -> Self {
         let encoded = serde_urlencoded::to_string(body).expect("failed to serialize form body");
+        self.headers.retain(|(k, _)| k != "content-type");
         self.headers.push((
             "content-type".to_string(),
             "application/x-www-form-urlencoded".to_string(),
