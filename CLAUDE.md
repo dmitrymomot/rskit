@@ -53,6 +53,13 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 ## Current Work
 
 - **Plan 12 (Test Helpers):** TestApp, TestClient, fixtures, in-memory DB helpers
+- **Plan 13 (RBAC):** Trait-based `RoleExtractor`, `require_role()` / `require_authenticated()` guard middleware layers — roles only, no permissions, session-based
+- **Plan 14 (JWT):** Full JWT service — create + validate tokens, typed claims, signing algorithms (HS256/RS256), `Bearer` extraction middleware. Feature-gated under `auth`
+- **Plan 15 (Webhook Delivery):** `WebhookSender` — fire-and-forget with retries + exponential backoff, HMAC signing. Standalone `sign()` / `verify()` helpers. App wraps in job for durability
+- **Plan 16 (Flash Messages):** Cookie-based (signed), read-once-and-clear. `FlashMessage` extractor + `set_flash()`. Template function `flash("key")`. No session dependency
+- **Plan 17 (Storage ACL + Upload from URL):** Extend `src/storage/` — `ACL::Private` / `ACL::PublicRead` on upload, `put_from_url()` with auto content-type detection from response headers
+- **Plan 18 (DNS Verification):** TXT record ownership check + CNAME verification for custom domain routing
+- **Plan 19 (Geolocation):** MaxMind GeoLite2 `.mmdb` reader, `GeoLocator` service with `lookup(ip) -> Location`. Feature-gated
 
 ## Gotchas
 
