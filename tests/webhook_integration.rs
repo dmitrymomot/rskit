@@ -7,9 +7,7 @@ use http::StatusCode;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-use modo::webhook::{
-    HttpClient, HyperClient, WebhookSecret, WebhookSender, sign_headers, verify_headers,
-};
+use modo::webhook::{HttpClient, HyperClient, WebhookSecret, WebhookSender, verify_headers};
 
 /// Start a minimal HTTP server that captures the request and returns the given status.
 async fn start_test_server(
