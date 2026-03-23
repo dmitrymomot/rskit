@@ -8,7 +8,7 @@ repository = "https://github.com/dmitrymomot/modo"
 
 [features]
 default = []
-full = ["templates", "sse", "auth", "sentry", "email", "storage"]
+full = ["templates", "sse", "auth", "sentry", "email", "storage", "webhooks"]
 sentry = ["dep:sentry", "dep:sentry-tracing"]
 templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
 sse = ["dep:futures-util"]
@@ -17,6 +17,8 @@ email = ["dep:lettre", "dep:pulldown-cmark"]
 email-test = ["email"]
 storage = ["dep:hmac", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
 storage-test = ["storage"]
+webhooks = ["dep:hmac", "dep:base64", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
+webhooks-test = ["webhooks"]
 test-helpers = []
 
 [dependencies]
@@ -68,6 +70,7 @@ hyper = { version = "1", optional = true }
 hyper-rustls = { version = "0.27", optional = true, default-features = false, features = ["ring", "http1", "tls12", "logging", "webpki-roots"] }
 hyper-util = { version = "0.1", optional = true, features = ["client-legacy", "http1", "tokio"] }
 http-body-util = { version = "0.1", optional = true }
+base64 = { version = "0.22", optional = true }
 
 # Email (optional, gated by "email" feature)
 lettre = { version = "0.11", optional = true, default-features = false, features = ["smtp-transport", "tokio1", "builder", "hostname", "tokio1-rustls", "ring", "webpki-roots"] }
