@@ -17,6 +17,7 @@ email = ["dep:lettre", "dep:pulldown-cmark"]
 email-test = ["email"]
 storage = ["dep:hmac", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
 storage-test = ["storage"]
+test-helpers = []
 
 [dependencies]
 # Web

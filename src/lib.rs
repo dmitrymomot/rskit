@@ -34,6 +34,9 @@ pub mod sse;
 #[cfg(feature = "storage")]
 pub mod storage;
 
+#[cfg(feature = "test-helpers")]
+pub mod testing;
+
 pub use config::Config;
 pub use error::{Error, Result};
 pub use extractor::Service;
