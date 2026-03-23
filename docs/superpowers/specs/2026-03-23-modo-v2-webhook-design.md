@@ -44,9 +44,24 @@ Consumers verify using off-the-shelf `standardwebhooks` libraries in Go, TypeScr
 | Secret format | `WebhookSecret` newtype | Parses `whsec_<base64>`, redacted Debug/Display |
 | HTTP client | Injected trait | Testable with mocks, app can share connection pool |
 | Return type | `Result<WebhookResponse>` | Status + body — caller decides retry strategy |
-| Timeout | Configurable, 30s default | Set once at construction |
+| Timeout | Configurable, 30s default | Lives in `HyperClient`, not the sender |
 | User-Agent | Configurable, `modo-webhooks/{version}` default | Override from app config |
 | Signing API | Two layers | Low-level HMAC primitives + high-level header-aware helpers |
+| Base64 encoding | Standard base64 (not base64url) | Standard Webhooks spec requires `+/=` alphabet |
+| HTTP scheme | `https_or_http()` | Allows plain HTTP for local development |
+
+## Dependencies
+
+The `webhooks` feature gate adds:
+
+```toml
+webhooks = ["dep:hmac", "dep:base64", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
+```
+
+Notes:
+- `sha2` is always available (not feature-gated) — used for HMAC-SHA256
+- `subtle` comes transitively through `hmac` — no direct dependency needed
+- `base64` crate is needed for standard base64 encoding (the existing `src/encoding/base64url.rs` is RFC 4648 base64url without padding, which is not compatible with the Standard Webhooks spec)
 
 ## Module Structure
 
@@ -92,6 +107,10 @@ impl Debug for WebhookSecret {
     // "WebhookSecret(***)" — redacted.
 }
 
+impl Serialize for WebhookSecret {
+    // Delegates to Display — outputs "whsec_<base64>".
+}
+
 impl Deserialize for WebhookSecret {
     // Delegates to FromStr — works in YAML config.
 }
@@ -116,19 +135,19 @@ pub struct WebhookResponse {
     pub body: Bytes,
 }
 
-pub struct HyperClient { /* hyper_util Client internally */ }
+pub struct HyperClient { /* hyper_util Client + timeout internally */ }
 
 impl HyperClient {
     pub fn new(timeout: Duration) -> Self;
 }
 
 impl HttpClient for HyperClient {
-    // HTTPS via hyper-rustls + webpki-roots.
+    // hyper-rustls with https_or_http() — allows plain HTTP for local dev.
     // Timeout applied via tokio::time::timeout.
 }
 ```
 
-`HttpClient` is RPITIT — not object-safe, used as concrete type parameter.
+`HttpClient` is RPITIT — not object-safe, used as concrete type parameter. In the service `Registry`, the entry is `WebhookSender<HyperClient>` in production and `WebhookSender<MockClient>` in tests.
 
 ### `WebhookSender<C>`
 
@@ -137,7 +156,6 @@ impl HttpClient for HyperClient {
 
 struct WebhookSenderInner<C: HttpClient> {
     client: C,
-    timeout: Duration,
     user_agent: String,
 }
 
@@ -148,17 +166,18 @@ pub struct WebhookSender<C: HttpClient> {
 impl<C: HttpClient> Clone for WebhookSender<C> { /* Arc clone */ }
 
 impl<C: HttpClient> WebhookSender<C> {
-    /// Create with explicit client and timeout.
-    pub fn new(client: C, timeout: Duration) -> Self;
+    /// Create with explicit client.
+    pub fn new(client: C) -> Self;
 
     /// Override the default user-agent string.
     pub fn with_user_agent(self, user_agent: impl Into<String>) -> Self;
 
     /// Send a webhook. Steps:
-    /// 1. Get current unix timestamp
-    /// 2. sign_headers(secrets, id, timestamp, body)
-    /// 3. POST to url with content-type, user-agent, and signed headers
-    /// 4. Return WebhookResponse or Error on timeout/network failure
+    /// 1. Validate id is non-empty, secrets is non-empty
+    /// 2. Get current unix timestamp
+    /// 3. sign_headers(secrets, id, timestamp, body)
+    /// 4. POST to url with content-type, user-agent, and signed headers
+    /// 5. Return WebhookResponse or Error on timeout/network failure
     pub async fn send(
         &self,
         url: &str,
@@ -174,6 +193,15 @@ impl WebhookSender<HyperClient> {
 }
 ```
 
+### Input Validation
+
+`send()` validates inputs before making the HTTP call:
+
+- **Empty `secrets` slice** → `Error::bad_request("at least one secret required")`
+- **Empty `id`** → `Error::bad_request("webhook id must not be empty")`
+- **Invalid `url`** → `Error::bad_request("invalid webhook url: ...")` (URL comes from user/app input, not framework config)
+- **Empty `body`** → valid — signed content becomes `{id}.{timestamp}.` (empty trailing segment)
+
 ## Signing API
 
 ### Low-level primitives
@@ -184,7 +212,8 @@ impl WebhookSender<HyperClient> {
 /// HMAC-SHA256 of arbitrary content, returned as standard base64.
 pub fn sign(secret: &WebhookSecret, content: &[u8]) -> String;
 
-/// Constant-time verify: decodes base64 signature, compares HMAC.
+/// Constant-time verify: decodes base64 signature, compares via
+/// hmac::Mac::verify_slice() (uses subtle internally).
 pub fn verify(secret: &WebhookSecret, content: &[u8], signature: &str) -> bool;
 ```
 
@@ -201,6 +230,7 @@ pub struct SignedHeaders {
 
 /// Assembles "{id}.{timestamp}.{body}", signs with each secret.
 /// Returns headers ready to set on the request.
+/// Panics if secrets is empty (caller must validate).
 pub fn sign_headers(
     secrets: &[&WebhookSecret],
     id: &str,
@@ -209,27 +239,22 @@ pub fn sign_headers(
 ) -> SignedHeaders;
 
 /// Parses webhook-id/timestamp/signature from HeaderMap,
-/// reassembles signed content, tries each v1 signature against secret,
-/// validates timestamp within tolerance.
+/// reassembles signed content, tries each v1 signature against
+/// each secret, validates timestamp within tolerance.
 /// Returns Ok(()) or descriptive Error.
 pub fn verify_headers(
-    secret: &WebhookSecret,
+    secrets: &[&WebhookSecret],
     headers: &http::HeaderMap,
     body: &[u8],
     tolerance: Duration,
 ) -> Result<()>;
 ```
 
-## Feature Gate
+`verify_headers` accepts a slice of secrets for key rotation on the receiving side. It iterates all `v1,` signatures in the header against all provided secrets — succeeds if any combination matches.
 
-In `Cargo.toml`:
+## Re-exports
 
-```toml
-[features]
-webhooks = ["dep:hmac", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
-```
-
-In `lib.rs`:
+In `lib.rs`, only types are re-exported at the crate root. Functions stay namespaced under `modo::webhook::` to avoid ambiguity with other signing functions:
 
 ```rust
 #[cfg(feature = "webhooks")]
@@ -239,8 +264,9 @@ pub(crate) mod webhook;
 pub use webhook::{
     WebhookSecret, WebhookSender, WebhookResponse,
     HyperClient, HttpClient, SignedHeaders,
-    sign, verify, sign_headers, verify_headers,
 };
+
+// Functions accessed as modo::webhook::sign, modo::webhook::verify, etc.
 ```
 
 ## Usage Example
@@ -248,6 +274,8 @@ pub use webhook::{
 ### Sending (in a job handler)
 
 ```rust
+use modo::webhook;
+
 async fn send_webhook_job(
     Service(sender): Service<WebhookSender<HyperClient>>,
     Payload(event): Payload<WebhookEvent>,
@@ -273,13 +301,15 @@ async fn send_webhook_job(
 ### Verifying (receiving side)
 
 ```rust
+use modo::webhook;
+
 async fn receive_webhook(
     headers: HeaderMap,
     body: Bytes,
 ) -> modo::Result<()> {
     let secret = WebhookSecret::new(b"my-secret-bytes");
 
-    verify_headers(&secret, &headers, &body, Duration::from_secs(300))?;
+    webhook::verify_headers(&[&secret], &headers, &body, Duration::from_secs(300))?;
 
     // Signature valid, process the event...
     Ok(())
@@ -289,11 +319,13 @@ async fn receive_webhook(
 ### Low-level signing
 
 ```rust
+use modo::webhook;
+
 let secret = WebhookSecret::generate();
 let content = b"arbitrary data";
 
-let sig = sign(&secret, content);
-assert!(verify(&secret, content, &sig));
+let sig = webhook::sign(&secret, content);
+assert!(webhook::verify(&secret, content, &sig));
 ```
 
 ## Testing Strategy
@@ -302,13 +334,13 @@ All tests behind `#![cfg(feature = "webhooks")]`.
 
 ### Unit tests
 
-- `WebhookSecret`: parse valid `whsec_` string, reject invalid prefix, reject bad base64, round-trip Display/FromStr, Debug is redacted, generate produces valid secret, Deserialize from string
+- `WebhookSecret`: parse valid `whsec_` string, reject invalid prefix, reject bad base64, round-trip Display/FromStr, Debug is redacted, generate produces valid secret, Deserialize from string, Serialize round-trip
 - `sign` / `verify`: known test vector, wrong secret fails, tampered content fails, empty content works
-- `sign_headers`: correct header format, multiple secrets produce space-delimited signatures, timestamp matches input
-- `verify_headers`: valid signature passes, wrong signature fails, expired timestamp rejected, future timestamp rejected, missing headers return descriptive errors, multi-signature rotation (one valid + one invalid = pass)
-- `WebhookSender::send`: mock `HttpClient`, verify correct headers set, verify timeout error, verify user-agent header (default and custom)
+- `sign_headers`: correct header format, multiple secrets produce space-delimited signatures, timestamp matches input, empty secrets slice panics
+- `verify_headers`: valid signature passes, wrong signature fails, expired timestamp rejected, future timestamp rejected, missing headers return descriptive errors, multi-signature rotation (one valid + one invalid = pass), multi-secret rotation on verify side
+- `WebhookSender::send`: mock `HttpClient`, verify correct headers set, verify user-agent header (default and custom), empty id rejected, empty secrets rejected, invalid url rejected, empty body accepted
 
 ### Integration tests
 
-- `HyperClient`: POST to a local test server (tokio TcpListener), verify request arrives with correct headers and body, verify timeout triggers on slow server
+- `HyperClient`: POST to a local test server (tokio TcpListener), verify request arrives with correct headers and body, verify timeout triggers on slow server, verify both HTTP and HTTPS work
 - End-to-end: `WebhookSender<HyperClient>` → local server → `verify_headers` on received request

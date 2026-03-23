@@ -57,7 +57,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Test migration fixtures live at `tests/fixtures/migrations/` — used by `TestDb::migrate()` tests
 - **Plan 13 (RBAC):** DONE — `src/rbac/` module with `RoleExtractor` trait, `Role` extractor, RBAC middleware, `require_role()` / `require_authenticated()` guard layers (22 unit + 8 integration tests)
 - **Plan 14 (JWT):** DONE — `src/auth/jwt/` module with `JwtEncoder`/`JwtDecoder`, `Claims<T>`, `HmacSigner` (HS256), `JwtLayer<T>` middleware, pluggable `TokenSource`, optional `Revocation` trait, `Bearer` extractor. Feature-gated under `auth` (73 unit + 13 integration tests)
-- **Plan 15 (Webhook Delivery):** `WebhookSender` — fire-and-forget with retries + exponential backoff, HMAC signing. Standalone `sign()` / `verify()` helpers. App wraps in job for durability
+- **Plan 15 (Webhook Delivery):** `WebhookSender` — single-shot delivery, HMAC signing, Standard Webhooks protocol. Standalone `sign()` / `verify()` helpers. No built-in retries — app's job system handles durability
 - **Plan 16 (Flash Messages):** Cookie-based (signed), read-once-and-clear. `FlashMessage` extractor + `set_flash()`. Template function `flash("key")`. No session dependency
 - **Plan 17 (Storage ACL + Upload from URL):** Extend `src/storage/` — `ACL::Private` / `ACL::PublicRead` on upload, `put_from_url()` with auto content-type detection from response headers
 - **Plan 18 (DNS Verification):** TXT record ownership check + CNAME verification for custom domain routing
