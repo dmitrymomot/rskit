@@ -98,6 +98,37 @@ async fn test_pool_read_pool_write_pool_all_share_same_db() {
 }
 
 #[tokio::test]
+async fn test_migrate_runs_sql_files() {
+    let db = TestDb::new()
+        .await
+        .migrate("tests/fixtures/migrations")
+        .await;
+
+    sqlx::query("INSERT INTO items (id, name, status) VALUES ('1', 'Alice', 'active')")
+        .execute(&*db.pool())
+        .await
+        .unwrap();
+
+    let row: (String, String, String) =
+        sqlx::query_as("SELECT id, name, status FROM items WHERE id = '1'")
+            .fetch_one(&*db.pool())
+            .await
+            .unwrap();
+    assert_eq!(row.0, "1");
+    assert_eq!(row.1, "Alice");
+    assert_eq!(row.2, "active");
+}
+
+#[tokio::test]
+#[should_panic(expected = "failed to run migrations")]
+async fn test_migrate_panics_on_invalid_path() {
+    TestDb::new()
+        .await
+        .migrate("tests/fixtures/nonexistent")
+        .await;
+}
+
+#[tokio::test]
 #[should_panic]
 async fn test_exec_panics_on_invalid_sql() {
     TestDb::new().await.exec("NOT VALID SQL").await;

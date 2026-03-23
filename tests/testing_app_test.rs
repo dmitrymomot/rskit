@@ -219,3 +219,33 @@ async fn test_raw_body() {
     let res = app.post("/echo").body(b"raw bytes".to_vec()).send().await;
     assert_eq!(res.bytes(), b"raw bytes");
 }
+
+#[tokio::test]
+async fn test_layer_applies_middleware() {
+    let app = TestApp::builder()
+        .route("/", get(hello))
+        .layer(modo::middleware::request_id())
+        .build();
+
+    let res = app.get("/").send().await;
+    assert_eq!(res.status(), 200);
+    let rid = res
+        .header("x-request-id")
+        .expect("x-request-id header missing");
+    assert_eq!(rid.len(), 26, "expected ULID (26 chars), got: {rid}");
+}
+
+#[tokio::test]
+async fn test_json_overrides_explicit_content_type() {
+    let app = TestApp::builder().route("/echo", post(echo_json)).build();
+
+    let res = app
+        .post("/echo")
+        .header("content-type", "text/plain")
+        .json(&serde_json::json!({"key": "overridden"}))
+        .send()
+        .await;
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json();
+    assert_eq!(body["key"], "overridden");
+}

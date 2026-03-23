@@ -1,7 +1,8 @@
 #![cfg(feature = "test-helpers")]
 
 use axum::routing::get;
-use modo::session::Session;
+use modo::cookie::CookieConfig;
+use modo::session::{Session, SessionConfig};
 use modo::testing::{TestApp, TestDb, TestSession};
 
 async fn whoami(session: Session) -> String {
@@ -84,4 +85,59 @@ async fn test_authenticate_with_custom_data() {
 
     let res = app.get("/role").header("cookie", &cookie).send().await;
     assert_eq!(res.text(), "admin");
+}
+
+#[tokio::test]
+async fn test_with_custom_cookie_name() {
+    let db = TestDb::new().await;
+
+    let session_config = SessionConfig {
+        cookie_name: "my_sess".to_string(),
+        ..Default::default()
+    };
+    let cookie_config = CookieConfig {
+        secret: "b".repeat(64),
+        secure: false,
+        http_only: true,
+        same_site: "lax".to_string(),
+    };
+
+    let session = TestSession::with_config(&db, session_config, cookie_config).await;
+    let cookie = session.authenticate("user-99").await;
+
+    assert!(
+        cookie.starts_with("my_sess="),
+        "expected cookie to start with 'my_sess=', got: {cookie}"
+    );
+}
+
+#[tokio::test]
+async fn test_with_custom_config_still_authenticates() {
+    let db = TestDb::new().await;
+
+    let session_config = SessionConfig {
+        cookie_name: "custom_session".to_string(),
+        session_ttl_secs: 60,
+        validate_fingerprint: false,
+        ..Default::default()
+    };
+    let cookie_config = CookieConfig {
+        secret: "c".repeat(64),
+        secure: false,
+        http_only: true,
+        same_site: "strict".to_string(),
+    };
+
+    let session = TestSession::with_config(&db, session_config, cookie_config).await;
+
+    let app = TestApp::builder()
+        .route("/me", get(whoami))
+        .layer(session.layer())
+        .build();
+
+    let cookie = session.authenticate("custom-user").await;
+
+    let res = app.get("/me").header("cookie", &cookie).send().await;
+    assert_eq!(res.status(), 200);
+    assert_eq!(res.text(), "custom-user");
 }
