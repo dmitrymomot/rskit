@@ -90,7 +90,7 @@ pub use webhook::{
 pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};
 
 #[cfg(feature = "geolocation")]
-pub use geolocation::{GeolocationConfig, Location};
+pub use geolocation::{GeoLocator, GeolocationConfig, Location};
 
 // Re-exports for user convenience
 pub use axum;
