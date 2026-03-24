@@ -19,6 +19,16 @@ pub struct UploadedFile {
     pub data: bytes::Bytes,
 }
 
+impl std::fmt::Debug for UploadedFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UploadedFile")
+            .field("name", &self.name)
+            .field("content_type", &self.content_type)
+            .field("size", &self.size)
+            .finish()
+    }
+}
+
 impl UploadedFile {
     /// Build an `UploadedFile` by consuming an axum multipart field.
     ///
@@ -78,6 +88,14 @@ impl UploadedFile {
 /// [`Files::file`] to take ownership of the first file, or [`Files::files`] to take
 /// all files for a given field name.
 pub struct Files(HashMap<String, Vec<UploadedFile>>);
+
+impl std::fmt::Debug for Files {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Files")
+            .field("fields", &self.0.keys().collect::<Vec<_>>())
+            .finish()
+    }
+}
 
 impl Files {
     /// Create a `Files` collection from a pre-built map.

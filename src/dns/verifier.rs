@@ -41,11 +41,7 @@ pub(crate) struct Inner {
 /// # {
 /// use modo::dns::{DnsConfig, DomainVerifier, generate_verification_token};
 ///
-/// let config = DnsConfig {
-///     nameserver: "8.8.8.8:53".into(),
-///     txt_prefix: "_modo-verify".into(),
-///     timeout_ms: 5000,
-/// };
+/// let config = DnsConfig::new("8.8.8.8:53");
 /// let verifier = DomainVerifier::from_config(&config).unwrap();
 /// let token = generate_verification_token();
 ///

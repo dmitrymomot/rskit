@@ -99,6 +99,7 @@ type EnvCustomizer = Box<dyn FnOnce(&mut minijinja::Environment<'static>) + Send
 ///
 /// Obtained via [`Engine::builder()`]. Call [`EngineBuilder::build`] to construct
 /// the engine after setting options.
+#[must_use]
 #[derive(Default)]
 pub struct EngineBuilder {
     config: Option<TemplateConfig>,

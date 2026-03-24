@@ -4,6 +4,7 @@ use serde::Deserialize;
 ///
 /// Deserializes from the `geolocation` section of the application YAML config.
 /// Requires the `geolocation` feature.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct GeolocationConfig {

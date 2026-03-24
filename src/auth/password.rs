@@ -8,6 +8,7 @@ use serde::Deserialize;
 ///
 /// Deserializes from YAML/TOML config. All fields have OWASP-recommended defaults:
 /// 19 MiB memory, 2 iterations, 1 thread, 32-byte output.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct PasswordConfig {

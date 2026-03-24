@@ -11,6 +11,7 @@ use tower::{Layer, Service};
 /// All fields have sensible defaults. Optional fields (`hsts_max_age`,
 /// `content_security_policy`, `permissions_policy`) are `None` by default
 /// and their corresponding headers are only added when set.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SecurityHeadersConfig {

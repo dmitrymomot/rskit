@@ -18,6 +18,7 @@ pub struct TestApp {
 ///
 /// Register services, routes, layers, and merged sub-routers before calling
 /// [`build()`](TestAppBuilder::build) to produce a [`TestApp`].
+#[must_use]
 pub struct TestAppBuilder {
     registry: Registry,
     router: Router<AppState>,

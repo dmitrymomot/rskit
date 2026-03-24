@@ -28,6 +28,7 @@ where
 ///   touch_interval_secs: 300    # 5 minutes
 ///   max_sessions_per_user: 10
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SessionConfig {

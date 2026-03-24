@@ -17,6 +17,7 @@ use serde::Deserialize;
 ///     client_secret: "${GITHUB_CLIENT_SECRET}"
 ///     redirect_uri: "https://example.com/auth/github/callback"
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct OAuthConfig {
@@ -25,6 +26,7 @@ pub struct OAuthConfig {
 }
 
 /// Per-provider OAuth 2.0 credentials and settings.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 pub struct OAuthProviderConfig {
     /// OAuth application client ID.
@@ -38,9 +40,26 @@ pub struct OAuthProviderConfig {
     pub scopes: Vec<String>,
 }
 
+impl OAuthProviderConfig {
+    /// Create a provider configuration with the given credentials.
+    pub fn new(
+        client_id: impl Into<String>,
+        client_secret: impl Into<String>,
+        redirect_uri: impl Into<String>,
+    ) -> Self {
+        Self {
+            client_id: client_id.into(),
+            client_secret: client_secret.into(),
+            redirect_uri: redirect_uri.into(),
+            scopes: Vec::new(),
+        }
+    }
+}
+
 /// Query parameters delivered by the OAuth provider to the callback route.
 ///
 /// Deserialize this from the request query string with axum's `Query<CallbackParams>`.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 pub struct CallbackParams {
     /// Authorization code returned by the provider.

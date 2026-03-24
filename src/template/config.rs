@@ -16,6 +16,7 @@ use serde::Deserialize;
 /// | `default_locale`     | `"en"`          |
 /// | `locale_cookie`      | `"lang"`        |
 /// | `locale_query_param` | `"lang"`        |
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct TemplateConfig {

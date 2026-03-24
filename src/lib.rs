@@ -1,3 +1,28 @@
+//! # modo
+//!
+//! A Rust web framework for small monolithic apps.
+//!
+//! Single crate, zero proc macros. Handlers are plain `async fn`, routes use
+//! axum's [`Router`](axum::Router) directly, services are wired explicitly in
+//! `main()`, and database queries use raw sqlx.
+//!
+//! ## Quick start
+//!
+//! ```toml
+//! [dependencies]
+//! modo = "0.1"
+//! ```
+//!
+//! Enable optional modules via feature flags: `templates`, `auth`, `sse`,
+//! `email`, `storage`, `webhooks`, `dns`, `geolocation`, `sentry`.
+//!
+//! Or enable everything:
+//!
+//! ```toml
+//! [dependencies]
+//! modo = { version = "0.1", features = ["full"] }
+//! ```
+
 pub mod cache;
 pub mod config;
 pub mod cookie;
@@ -56,9 +81,9 @@ pub use flash::{Flash, FlashEntry, FlashLayer};
 pub use ip::{ClientIp, ClientIpLayer};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
-pub use session::{Session, SessionConfig, SessionData, SessionToken};
+pub use session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};
 pub use tenant::{
-    HasTenantId, Tenant, TenantId, TenantLayer, TenantMiddleware, TenantResolver, TenantStrategy,
+    HasTenantId, Tenant, TenantId, TenantLayer, TenantResolver, TenantStrategy,
     middleware as tenant_middleware,
 };
 pub use validate::{Validate, ValidationError, Validator};

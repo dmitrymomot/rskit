@@ -2,6 +2,7 @@
 ///
 /// Maps to the S3 `x-amz-acl` header. `None` in `PutOptions` means
 /// the bucket default applies.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Acl {
     #[default]
@@ -20,6 +21,7 @@ impl Acl {
 }
 
 /// Options for `Storage::put_with()` and `Storage::put_from_url_with()`.
+#[non_exhaustive]
 #[derive(Debug, Clone, Default)]
 pub struct PutOptions {
     /// Sets the `Content-Disposition` header (e.g. `"attachment"`).

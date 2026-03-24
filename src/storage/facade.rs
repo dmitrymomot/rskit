@@ -19,6 +19,7 @@ use super::memory::MemoryBackend;
 ///
 /// Use `PutInput::from_upload()` to build from an `UploadedFile` received
 /// via multipart form data.
+#[non_exhaustive]
 pub struct PutInput {
     /// Raw file bytes.
     pub data: Bytes,
@@ -31,6 +32,20 @@ pub struct PutInput {
 }
 
 impl PutInput {
+    /// Create a new upload input.
+    pub fn new(
+        data: impl Into<bytes::Bytes>,
+        prefix: impl Into<String>,
+        content_type: impl Into<String>,
+    ) -> Self {
+        Self {
+            data: data.into(),
+            prefix: prefix.into(),
+            filename: None,
+            content_type: content_type.into(),
+        }
+    }
+
     /// Extract file extension from `filename`, if present.
     fn extension(&self) -> Option<String> {
         let name = self.filename.as_deref()?;
@@ -47,6 +62,7 @@ impl PutInput {
 }
 
 /// Input for `Storage::put_from_url()` and `Storage::put_from_url_with()`.
+#[non_exhaustive]
 pub struct PutFromUrlInput {
     /// Source URL to fetch from (must be http or https).
     pub url: String,
@@ -54,6 +70,17 @@ pub struct PutFromUrlInput {
     pub prefix: String,
     /// Optional filename hint — used to extract extension. `None` produces extensionless keys.
     pub filename: Option<String>,
+}
+
+impl PutFromUrlInput {
+    /// Create a new upload-from-URL input.
+    pub fn new(url: impl Into<String>, prefix: impl Into<String>) -> Self {
+        Self {
+            url: url.into(),
+            prefix: prefix.into(),
+            filename: None,
+        }
+    }
 }
 
 pub(crate) struct StorageInner {

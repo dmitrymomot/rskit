@@ -23,6 +23,7 @@ use tower::{Layer, Service};
 /// gets `burst_size` tokens; one token is replenished every `1 / per_second`
 /// seconds. When tokens are exhausted the request receives a
 /// `429 Too Many Requests` response.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct RateLimitConfig {

@@ -13,6 +13,7 @@ use tracing_subscriber::{EnvFilter, fmt};
 /// ```
 ///
 /// All fields have sane defaults so the entire section can be omitted.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Config {

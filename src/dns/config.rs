@@ -27,6 +27,7 @@ fn default_timeout_ms() -> u64 {
 ///   txt_prefix: "_myapp-verify"   # default: _modo-verify
 ///   timeout_ms: 5000              # default: 5000
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 pub struct DnsConfig {
     /// Nameserver address, with or without port. Port 53 is appended when omitted.
@@ -45,6 +46,17 @@ pub struct DnsConfig {
 }
 
 impl DnsConfig {
+    /// Create a DNS configuration with the given nameserver address.
+    ///
+    /// Defaults: `txt_prefix = "_modo-verify"`, `timeout_ms = 5000`.
+    pub fn new(nameserver: impl Into<String>) -> Self {
+        Self {
+            nameserver: nameserver.into(),
+            txt_prefix: "_modo-verify".into(),
+            timeout_ms: 5000,
+        }
+    }
+
     /// Parse `nameserver` into a [`SocketAddr`].
     ///
     /// If the address already contains a port it is used as-is; otherwise port

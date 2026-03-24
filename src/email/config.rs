@@ -4,6 +4,7 @@ use serde::Deserialize;
 ///
 /// Deserializes from YAML. All fields have sensible defaults, so only the
 /// fields that differ from defaults need to be specified.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct EmailConfig {
@@ -48,6 +49,7 @@ impl Default for EmailConfig {
 }
 
 /// SMTP connection settings nested under [`EmailConfig`].
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SmtpConfig {

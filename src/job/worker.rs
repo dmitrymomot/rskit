@@ -53,6 +53,7 @@ struct HandlerEntry {
 /// [`WorkerBuilder::register_with`]) for each job name, then call
 /// [`WorkerBuilder::start`] to spawn the background loops and obtain a
 /// [`Worker`] handle.
+#[must_use]
 pub struct WorkerBuilder {
     config: JobConfig,
     registry: Arc<RegistrySnapshot>,

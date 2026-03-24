@@ -17,6 +17,7 @@ use super::meta::Meta;
 use super::schedule::Schedule;
 
 /// Per-job options supplied to [`SchedulerBuilder::job_with`].
+#[non_exhaustive]
 pub struct CronOptions {
     /// Maximum number of seconds a single execution may run before it is
     /// cancelled and logged as timed out. Defaults to `300` (5 minutes).
@@ -43,6 +44,7 @@ struct CronEntry {
 /// Builder for constructing a [`Scheduler`] with registered cron jobs.
 ///
 /// Obtain a builder with [`Scheduler::builder`].
+#[must_use]
 pub struct SchedulerBuilder {
     registry: Arc<RegistrySnapshot>,
     entries: Vec<CronEntry>,

@@ -12,6 +12,7 @@ use serde::Deserialize;
 ///   issuer: "my-app"
 ///   audience: "api"
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Deserialize)]
 pub struct JwtConfig {
     /// HMAC secret used for signing and verifying tokens.
@@ -29,6 +30,19 @@ pub struct JwtConfig {
     /// Required audience (`aud`). When set, `JwtDecoder::decode()` rejects tokens
     /// whose `aud` does not match.
     pub audience: Option<String>,
+}
+
+impl JwtConfig {
+    /// Create a JWT configuration with the given HMAC signing secret.
+    pub fn new(secret: impl Into<String>) -> Self {
+        Self {
+            secret: secret.into(),
+            default_expiry: None,
+            leeway: 0,
+            issuer: None,
+            audience: None,
+        }
+    }
 }
 
 #[cfg(test)]

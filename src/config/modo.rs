@@ -8,6 +8,7 @@ use serde::Deserialize;
 ///
 /// Applications that need extra config fields can embed `Config` with
 /// `#[serde(flatten)]` inside their own config struct.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct Config {

@@ -7,6 +7,7 @@ use std::time::Duration;
 ///
 /// Built automatically from [`JwtConfig`](super::config::JwtConfig) by
 /// `JwtEncoder::from_config()` and `JwtDecoder::from_config()`.
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct ValidationConfig {
     /// Allowed clock skew applied to `exp` and `nbf` checks.

@@ -8,6 +8,7 @@ type HmacSha1 = Hmac<Sha1>;
 ///
 /// Deserializes from YAML/TOML config. Defaults follow RFC 6238:
 /// 6 digits, 30-second step, ±1-step verification window.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct TotpConfig {

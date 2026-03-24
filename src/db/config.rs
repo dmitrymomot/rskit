@@ -33,6 +33,7 @@ use serde::Deserialize;
 ///   foreign_keys: true
 ///   busy_timeout: 5000
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SqliteConfig {
@@ -191,6 +192,7 @@ impl std::fmt::Display for TempStore {
 ///
 /// Construct sensible defaults via [`PoolOverrides::default_reader`] and
 /// [`PoolOverrides::default_writer`].
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct PoolOverrides {

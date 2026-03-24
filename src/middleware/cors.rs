@@ -10,6 +10,7 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 ///
 /// When one or more origins are specified, only those exact values are
 /// reflected back.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct CorsConfig {
@@ -55,10 +56,8 @@ impl Default for CorsConfig {
 /// ```rust,no_run
 /// use modo::middleware::{cors, CorsConfig};
 ///
-/// let config = CorsConfig {
-///     origins: vec!["https://example.com".to_string()],
-///     ..Default::default()
-/// };
+/// let mut config = CorsConfig::default();
+/// config.origins = vec!["https://example.com".to_string()];
 /// let layer = cors(&config);
 /// ```
 pub fn cors(config: &CorsConfig) -> CorsLayer {

@@ -3,6 +3,7 @@ use serde::Deserialize;
 use crate::error::{Error, Result};
 
 /// Configuration for a single S3-compatible storage bucket.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct BucketConfig {

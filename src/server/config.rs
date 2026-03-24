@@ -13,6 +13,7 @@ use serde::Deserialize;
 ///   port: ${PORT:8080}
 ///   shutdown_timeout_secs: 30
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Config {

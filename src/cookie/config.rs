@@ -13,6 +13,7 @@ fn default_lax() -> String {
 /// Deserializes from the `cookie` section of the application YAML config.
 /// All fields except `secret` have defaults, so a minimal config only needs
 /// to provide `secret`.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 pub struct CookieConfig {
     /// HMAC signing secret. Must be at least 64 characters long.
@@ -29,4 +30,18 @@ pub struct CookieConfig {
     /// Defaults to `"lax"`.
     #[serde(default = "default_lax")]
     pub same_site: String,
+}
+
+impl CookieConfig {
+    /// Create a new cookie configuration with the given signing secret.
+    ///
+    /// Defaults: `secure = true`, `http_only = true`, `same_site = "lax"`.
+    pub fn new(secret: impl Into<String>) -> Self {
+        Self {
+            secret: secret.into(),
+            secure: true,
+            http_only: true,
+            same_site: "lax".to_string(),
+        }
+    }
 }

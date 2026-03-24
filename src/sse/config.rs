@@ -22,6 +22,7 @@ fn default_keep_alive_interval_secs() -> u64 {
 /// | Field | Default |
 /// |-------|---------|
 /// | `keep_alive_interval_secs` | `15` |
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SseConfig {

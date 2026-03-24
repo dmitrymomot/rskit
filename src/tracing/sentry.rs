@@ -18,6 +18,7 @@ use serde::Deserialize;
 ///     traces_sample_rate: 0.1
 /// ```
 #[cfg(feature = "sentry")]
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SentryConfig {

@@ -23,6 +23,7 @@
 //! ```rust,no_run
 //! use modo::cron::Scheduler;
 //! use modo::service::Registry;
+//! use modo::runtime::Task;
 //! use modo::Result;
 //!
 //! async fn cleanup() -> Result<()> {

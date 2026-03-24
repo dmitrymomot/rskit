@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Fields common to all providers are promoted to top-level fields. The raw JSON response from the
 /// provider is preserved in [`raw`](UserProfile::raw) for any provider-specific data your
 /// application needs.
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserProfile {
     /// Lowercase provider identifier (`"google"`, `"github"`, …).
@@ -21,4 +22,23 @@ pub struct UserProfile {
     pub avatar_url: Option<String>,
     /// Raw JSON response from the provider's user-info endpoint.
     pub raw: serde_json::Value,
+}
+
+impl UserProfile {
+    /// Create a new user profile with required fields.
+    pub fn new(
+        provider: impl Into<String>,
+        provider_user_id: impl Into<String>,
+        email: impl Into<String>,
+    ) -> Self {
+        Self {
+            provider: provider.into(),
+            provider_user_id: provider_user_id.into(),
+            email: email.into(),
+            email_verified: false,
+            name: None,
+            avatar_url: None,
+            raw: serde_json::Value::Null,
+        }
+    }
 }

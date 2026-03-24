@@ -11,6 +11,7 @@ use super::response::TestResponse;
 /// or directly via [`TestRequestBuilder::new`]. Configure headers and a body,
 /// then call [`send`](TestRequestBuilder::send) to execute the request and
 /// receive a [`TestResponse`].
+#[must_use]
 pub struct TestRequestBuilder {
     router: axum::Router,
     method: Method,

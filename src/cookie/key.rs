@@ -14,12 +14,7 @@ use super::CookieConfig;
 /// ```rust,no_run
 /// use modo::cookie::{CookieConfig, key_from_config};
 ///
-/// let cfg = CookieConfig {
-///     secret: "a".repeat(64),
-///     secure: true,
-///     http_only: true,
-///     same_site: "lax".to_string(),
-/// };
+/// let cfg = CookieConfig::new("a".repeat(64));
 /// let key = key_from_config(&cfg).expect("secret must be at least 64 characters");
 /// ```
 pub fn key_from_config(config: &CookieConfig) -> Result<Key> {

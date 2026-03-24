@@ -15,6 +15,7 @@ use serde::Deserialize;
 /// | `drain_timeout_secs` | `30` |
 /// | `queues` | one `"default"` queue with concurrency 4 |
 /// | `cleanup` | enabled, 1 h interval, 72 h retention |
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct JobConfig {
@@ -48,6 +49,7 @@ impl Default for JobConfig {
 }
 
 /// Configuration for a single named queue.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 pub struct QueueConfig {
     /// Queue name. Must match the `queue` field used when enqueuing jobs.
@@ -75,6 +77,7 @@ impl Default for QueueConfig {
 ///
 /// Terminal jobs (status `completed`, `dead`, or `cancelled`) whose
 /// `updated_at` is older than `retention_secs` are deleted from the database.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct CleanupConfig {
