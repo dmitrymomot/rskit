@@ -13,8 +13,8 @@ use std::time::Duration;
 /// use modo::sse::Event;
 ///
 /// let event = Event::new("evt_01", "message")?.data("Hello, world!");
-/// let event = Event::new(id::short(), "status")?.json(&status)?;
-/// let event = Event::new(id::short(), "update")?.html("<div>new</div>");
+/// let event = Event::new(modo::id::short(), "status")?.json(&status)?;
+/// let event = Event::new(modo::id::short(), "update")?.html("<div>new</div>");
 /// ```
 #[must_use]
 #[derive(Debug, Clone)]

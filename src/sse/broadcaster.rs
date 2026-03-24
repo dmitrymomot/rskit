@@ -314,7 +314,7 @@ where
 
     /// Create an SSE response with an imperative sender.
     ///
-    /// Spawns the closure as a tokio task. The closure receives a [`Sender`]
+    /// Spawns the closure as a tokio task. The closure receives a [`super::Sender`]
     /// for pushing events. The task runs until:
     /// - The closure returns `Ok(())` — stream ends cleanly
     /// - The closure returns `Err(e)` — error is logged, stream ends

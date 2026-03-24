@@ -15,7 +15,7 @@
 //! ## Stream from a broadcast channel
 //!
 //! ```rust,ignore
-//! use modo::sse::{Broadcaster, Event, SseStreamExt};
+//! use modo::sse::{Broadcaster, Event, LagPolicy, SseConfig, SseStreamExt};
 //! use modo::Service;
 //!
 //! // Register a broadcaster as a service in main()
@@ -27,7 +27,8 @@
 //! async fn events(
 //!     Service(bc): Service<Broadcaster<String, Notification>>,
 //! ) -> axum::response::Response {
-//!     let stream = bc.subscribe(&"topic".into())
+//!     let topic = "topic".to_string();
+//!     let stream = bc.subscribe(&topic)
 //!         .on_lag(LagPolicy::Skip)
 //!         .cast_events(|n| {
 //!             Event::new(modo::id::short(), "notification")?.json(&n)
@@ -39,6 +40,10 @@
 //! ## Imperative channel (monitoring)
 //!
 //! ```rust,ignore
+//! use modo::sse::{Broadcaster, Event};
+//! use modo::Service;
+//! use std::time::Duration;
+//!
 //! async fn health(
 //!     Service(bc): Service<Broadcaster<String, Status>>,
 //! ) -> axum::response::Response {
@@ -55,6 +60,9 @@
 //! ## HTML partials (HTMX)
 //!
 //! ```rust,ignore
+//! use modo::sse::{Broadcaster, Event, LagPolicy, SseStreamExt};
+//! use modo::Service;
+//!
 //! async fn chat(
 //!     Path(room_id): Path<String>,
 //!     Service(bc): Service<Broadcaster<String, ChatMessage>>,
@@ -63,7 +71,7 @@
 //!     let stream = bc.subscribe(&room_id)
 //!         .on_lag(LagPolicy::End)
 //!         .cast_events(move |msg| {
-//!             let html = renderer.render("chat/message.html", context! { msg })?;
+//!             let html = renderer.render("chat/message.html", &msg)?;
 //!             Ok(Event::new(modo::id::short(), "message")?.html(html))
 //!         });
 //!     bc.response(stream)
