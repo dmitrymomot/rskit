@@ -2,6 +2,11 @@ use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// A point-in-time copy of the service map used internally by middleware and other
+/// crate-internal components that need registry access before [`AppState`](super::AppState)
+/// is constructed.
+///
+/// Not part of the public API.
 #[derive(Clone)]
 pub struct RegistrySnapshot {
     services: HashMap<TypeId, Arc<dyn Any + Send + Sync>>,
