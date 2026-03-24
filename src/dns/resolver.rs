@@ -12,7 +12,6 @@ use super::protocol::{self, RecordType};
 
 /// Internal trait for DNS resolution. Object-safe via `Pin<Box<dyn Future>>`.
 /// Not public — exists for test mocking.
-#[allow(dead_code)]
 pub(crate) trait DnsResolver: Send + Sync {
     fn resolve_txt(
         &self,
@@ -32,7 +31,6 @@ pub(crate) struct UdpDnsResolver {
 }
 
 impl UdpDnsResolver {
-    #[allow(dead_code)]
     pub(crate) fn new(nameserver: SocketAddr, timeout: Duration) -> Self {
         Self {
             nameserver,
@@ -40,7 +38,6 @@ impl UdpDnsResolver {
         }
     }
 
-    #[allow(dead_code)]
     async fn send_and_receive(&self, query_bytes: &[u8]) -> Result<Vec<u8>> {
         let socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|_| {
             Error::bad_gateway("dns network error")
