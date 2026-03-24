@@ -60,7 +60,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 15 (Webhook Delivery):** DONE — `src/webhook/` module with `WebhookSender<C>`, `HttpClient` trait, `HyperClient`, `WebhookSecret`, Standard Webhooks signing. Feature-gated under `webhooks`
 - **Plan 16 (Flash Messages):** DONE — `src/flash/` module with `Flash` extractor (`flash.success()` / `flash.set()` / `flash.messages()`), `FlashLayer` middleware, `flash_messages()` template function. Cookie-based (signed), read-once-and-clear. No session dependency. Always-available (no feature gate)
 - **Plan 17 (Storage ACL + Upload from URL):** DONE — `src/storage/` extended with `Acl` enum on `PutOptions`, `x-amz-acl` S3 header, `PutFromUrlInput`, `put_from_url()` / `put_from_url_with()` with streaming fetch and 30s timeout. Feature-gated under `storage`
-- **Plan 18 (DNS Verification):** SPEC + PLAN READY — `DomainVerifier` with `check_txt()`, `check_cname()`, `verify_domain()`, `generate_verification_token()`. Uses `simple-dns` 0.11 for packet parsing, raw UDP transport. Feature-gated under `dns`
+- **Plan 18 (DNS Verification):** DONE — `src/dns/` module with `DomainVerifier` (`check_txt()`, `check_cname()`, `verify_domain()`), `DnsConfig`, `DnsError`, `DomainStatus`, `generate_verification_token()`. Uses `simple-dns` 0.11 for packet parsing, raw UDP transport. Feature-gated under `dns` (39 unit + 5 integration tests)
 - **Plan 19 (Client IP + Geolocation):** SPEC + PLAN READY — `src/ip/` shared module (always available) with `ClientIp` extractor + `ClientIpLayer` middleware; `src/geolocation/` with `GeoLocator` service, `Location` struct, `GeoLayer` middleware. Session refactored to use shared `ClientIp`. Feature-gated under `geolocation`
 
 ## Gotchas
