@@ -61,7 +61,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 16 (Flash Messages):** DONE — `src/flash/` module with `Flash` extractor (`flash.success()` / `flash.set()` / `flash.messages()`), `FlashLayer` middleware, `flash_messages()` template function. Cookie-based (signed), read-once-and-clear. No session dependency. Always-available (no feature gate)
 - **Plan 17 (Storage ACL + Upload from URL):** SPEC + PLAN READY — spec and plan written, ready for implementation. `Acl::Private` / `Acl::PublicRead` on `PutOptions`, `x-amz-acl` S3 header, `PutFromUrlInput`, `put_from_url()` / `put_from_url_with()` with streaming fetch and 30s timeout. Feature-gated under `storage`
 - **Plan 18 (DNS Verification):** SPEC + PLAN READY — `DomainVerifier` with `check_txt()`, `check_cname()`, `verify_domain()`, `generate_verification_token()`. Uses `simple-dns` 0.11 for packet parsing, raw UDP transport. Feature-gated under `dns`
-- **Plan 19 (Geolocation):** MaxMind GeoLite2 `.mmdb` reader, `GeoLocator` service with `lookup(ip) -> Location`. Feature-gated
+- **Plan 19 (Client IP + Geolocation):** SPEC + PLAN READY — `src/ip/` shared module (always available) with `ClientIp` extractor + `ClientIpLayer` middleware; `src/geolocation/` with `GeoLocator` service, `Location` struct, `GeoLayer` middleware. Session refactored to use shared `ClientIp`. Feature-gated under `geolocation`
 
 ## Gotchas
 
@@ -72,7 +72,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Internal traits behind `Arc<dyn Trait>` must use `Pin<Box<dyn Future>>` returns (not RPITIT) to stay object-safe — see `DnsResolver` in `src/dns/resolver.rs`
 - New middleware traits that need session access must take `&mut Parts` (not `&Parts`) so they can call `Session::from_request_parts()` — `SessionState` is `pub(crate)`
 - Guard/middleware errors use `Error::into_response()` — never construct raw HTTP responses; errors flow through the app's custom error handler
-- Always-available modules (no feature gate): cache, encoding, flash, session, tenant, rbac, job, cron, testing (`test-helpers` feature)
+- Always-available modules (no feature gate): cache, encoding, flash, ip, session, tenant, rbac, job, cron, testing (`test-helpers` feature)
 - `std::sync::RwLock` (not tokio) for all sync-only state — never hold across `.await`
 - Feature-gated modules: test with `cargo test --features X`, lint with `cargo clippy --features X --tests`, integration test files need `#![cfg(feature = "X")]`
 - No self-referencing dev-dependencies for feature-gated tests — use `#![cfg(feature = "X")]` guards and run via `cargo test --features X`
@@ -125,6 +125,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `SessionLayer` must be re-exported from `src/session/mod.rs` — needed by test helpers and any code that programmatically creates session layers
 - MiniJinja: URLs/HTML must use `Value::from_safe_string()`; registrations consume by move (`Box<dyn FnOnce>`)
 - `simple-dns` 0.11 for DNS packet parsing (dns feature) — `TXT::attributes()` returns `HashMap<String, Option<String>>`, `CNAME` is tuple struct `CNAME(pub Name<'a>)`
+- `maxminddb` 0.27 for geolocation — two-step API: `reader.lookup(ip)` → `LookupResult`, then `.decode::<T>()`. Error enum is `MaxMindDbError` (not `MaxMindDBError`), `#[non_exhaustive]`
 
 ### Storage
 
