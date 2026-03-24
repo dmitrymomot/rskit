@@ -1,4 +1,0 @@
-CREATE TABLE IF NOT EXISTS jobs (
-    id TEXT PRIMARY KEY,
-    payload TEXT NOT NULL
-);

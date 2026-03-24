@@ -1,8 +1,0 @@
-error: FromMultipart can only be derived for structs
- --> tests/ui/non_struct.rs:4:1
-  |
-4 | / enum BadForm {
-5 | |     A,
-6 | |     B,
-7 | | }
-  | |_^
