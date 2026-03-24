@@ -18,6 +18,19 @@ enum Transport {
     Stub(lettre::transport::stub::AsyncStubTransport),
 }
 
+/// The primary entry point for sending transactional email.
+///
+/// `Mailer` loads Markdown templates, performs variable substitution, renders
+/// HTML and plain-text bodies, applies a layout, and delivers the resulting
+/// message over SMTP.
+///
+/// # Construction
+///
+/// - [`Mailer::new`] — uses a [`FileSource`] (optionally cached) derived from
+///   `EmailConfig::templates_path`.
+/// - [`Mailer::with_source`] — accepts any custom [`TemplateSource`].
+/// - `Mailer::with_stub_transport` — in-memory stub for tests
+///   (requires feature `"email-test"`).
 pub struct Mailer {
     source: Arc<dyn TemplateSource>,
     transport: Transport,
@@ -26,7 +39,14 @@ pub struct Mailer {
 }
 
 impl Mailer {
-    /// Create a new Mailer with the default FileSource (cached if configured).
+    /// Create a new `Mailer` with the default [`FileSource`].
+    ///
+    /// If `config.cache_templates` is `true`, the file source is wrapped in a
+    /// [`CachedSource`] with `config.template_cache_size` capacity.
+    ///
+    /// Returns an error if the SMTP transport cannot be built (e.g., invalid
+    /// host, mismatched credentials) or if the layouts directory cannot be
+    /// read.
     pub fn new(config: &EmailConfig) -> Result<Self> {
         let file_source = FileSource::new(&config.templates_path);
         let source: Arc<dyn TemplateSource> = if config.cache_templates {
@@ -46,7 +66,10 @@ impl Mailer {
         })
     }
 
-    /// Create a new Mailer with a custom TemplateSource.
+    /// Create a new `Mailer` with a custom [`TemplateSource`].
+    ///
+    /// Use this to supply an in-memory source, a database-backed source, or
+    /// any other custom implementation.
     pub fn with_source(config: &EmailConfig, source: Arc<dyn TemplateSource>) -> Result<Self> {
         let transport = Self::build_smtp_transport(config)?;
         let layouts = layout::load_layouts(&config.layouts_path)?;
@@ -59,7 +82,10 @@ impl Mailer {
         })
     }
 
-    /// Create a Mailer with a stub transport for testing.
+    /// Create a `Mailer` with a stub transport for testing.
+    ///
+    /// Requires feature `"email-test"`. The stub transport accepts messages
+    /// without actually sending them over a network.
     #[cfg(feature = "email-test")]
     pub fn with_stub_transport(
         config: &EmailConfig,
@@ -121,6 +147,12 @@ impl Mailer {
     }
 
     /// Render a template without sending.
+    ///
+    /// Performs variable substitution, parses the YAML frontmatter, converts
+    /// the Markdown body to HTML (with button syntax support), applies the
+    /// layout, and generates the plain-text fallback.
+    ///
+    /// Returns a [`RenderedEmail`] containing the subject, HTML, and text.
     pub fn render(&self, email: &SendEmail) -> Result<RenderedEmail> {
         let locale = email
             .locale
@@ -157,6 +189,13 @@ impl Mailer {
     }
 
     /// Render and send an email via SMTP.
+    ///
+    /// Calls [`Self::render`] internally, then builds a `multipart/alternative`
+    /// MIME message (text/plain + text/html) and delivers it over the
+    /// configured transport.
+    ///
+    /// Returns an error if the recipient list is empty, if any address is
+    /// malformed, or if the SMTP delivery fails.
     pub async fn send(&self, email: SendEmail) -> Result<()> {
         if email.to.is_empty() {
             return Err(Error::bad_request("email has no recipients"));

@@ -1,3 +1,24 @@
+//! Email delivery with Markdown templates and SMTP transport.
+//!
+//! Requires feature `"email"`.
+//!
+//! Templates are Markdown files with a YAML frontmatter block that specifies
+//! the subject line and optional layout. Variable substitution uses
+//! `{{var_name}}` placeholders throughout both frontmatter and body.
+//!
+//! # Template format
+//!
+//! ```text
+//! ---
+//! subject: Welcome to {{app_name}}!
+//! layout: base
+//! ---
+//!
+//! Hi {{name}},
+//!
+//! [button|Get started](https://example.com/start)
+//! ```
+
 mod button;
 mod cache;
 mod config;

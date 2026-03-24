@@ -5,14 +5,24 @@ use std::sync::Mutex;
 
 use crate::email::source::TemplateSource;
 
-/// LRU-cached wrapper around any `TemplateSource`.
-/// Cache key is `(name, locale, default_locale)`.
+/// LRU-cached wrapper around any [`TemplateSource`].
+///
+/// On the first call for a given `(name, locale, default_locale)` triple the
+/// inner source is queried and the result is stored in the cache. Subsequent
+/// calls with the same triple return the cached value without touching the
+/// inner source.
+///
+/// The cache is bounded by `capacity` entries. When full, the least-recently
+/// used entry is evicted.
 pub struct CachedSource<S: TemplateSource> {
     inner: S,
     cache: Mutex<LruCache<(String, String, String), String>>,
 }
 
 impl<S: TemplateSource> CachedSource<S> {
+    /// Create a new `CachedSource` wrapping `inner` with the given LRU `capacity`.
+    ///
+    /// A `capacity` of `0` is treated as `1` to avoid a panic.
     pub fn new(inner: S, capacity: usize) -> Self {
         let cap = NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(1).unwrap());
         Self {

@@ -1,16 +1,33 @@
 use serde::Deserialize;
 
+/// Top-level email configuration.
+///
+/// Deserializes from YAML. All fields have sensible defaults, so only the
+/// fields that differ from defaults need to be specified.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct EmailConfig {
+    /// Directory containing email templates (locale sub-directories allowed).
+    /// Default: `"emails"`.
     pub templates_path: String,
+    /// Directory containing custom HTML layout files.
+    /// Default: `"emails/layouts"`.
     pub layouts_path: String,
+    /// Display name used in the `From` header when no [`SenderProfile`](crate::email::SenderProfile) is set.
     pub default_from_name: String,
+    /// Email address used in the `From` header when no [`SenderProfile`](crate::email::SenderProfile) is set.
     pub default_from_email: String,
+    /// Optional default `Reply-To` address.
     pub default_reply_to: Option<String>,
+    /// BCP 47 locale used when a [`SendEmail`](crate::email::SendEmail) carries no explicit locale.
+    /// Default: `"en"`.
     pub default_locale: String,
+    /// When `true`, templates are stored in an in-process LRU cache after the
+    /// first load. Default: `true`.
     pub cache_templates: bool,
+    /// Maximum number of entries in the template LRU cache. Default: `100`.
     pub template_cache_size: usize,
+    /// SMTP connection settings.
     pub smtp: SmtpConfig,
 }
 
@@ -30,13 +47,19 @@ impl Default for EmailConfig {
     }
 }
 
+/// SMTP connection settings nested under [`EmailConfig`].
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SmtpConfig {
+    /// SMTP server hostname. Default: `"localhost"`.
     pub host: String,
+    /// SMTP server port. Default: `587`.
     pub port: u16,
+    /// SMTP authentication username. Must be paired with `password`.
     pub username: Option<String>,
+    /// SMTP authentication password. Must be paired with `username`.
     pub password: Option<String>,
+    /// TLS mode for the SMTP connection. Default: [`SmtpSecurity::StartTls`].
     pub security: SmtpSecurity,
 }
 
@@ -52,12 +75,16 @@ impl Default for SmtpConfig {
     }
 }
 
+/// TLS security mode for the SMTP connection.
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum SmtpSecurity {
+    /// Upgrade a plain connection to TLS via STARTTLS (default).
     #[default]
     StartTls,
+    /// Connect directly over TLS (implicit TLS / port 465).
     Tls,
+    /// No encryption — use only in development or with a local relay.
     None,
 }
 
