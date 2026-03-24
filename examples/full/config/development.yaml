@@ -5,9 +5,6 @@ server:
 database:
   path: data/app.db
 
-job_database:
-  path: data/jobs.db
-
 tracing:
   level: debug
   format: pretty
@@ -21,6 +18,8 @@ session:
   cookie_name: sid
 
 job:
+  database:
+    path: data/jobs.db
   poll_interval_secs: 1
   queues:
     - name: default

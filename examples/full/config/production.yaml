@@ -5,9 +5,6 @@ server:
 database:
   path: ${DATABASE_PATH}
 
-job_database:
-  path: ${JOB_DATABASE_PATH}
-
 tracing:
   level: info
   format: json
@@ -26,6 +23,8 @@ session:
   cookie_name: sid
 
 job:
+  database:
+    path: ${JOB_DATABASE_PATH}
   poll_interval_secs: 1
   queues:
     - name: default

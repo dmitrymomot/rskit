@@ -145,7 +145,7 @@ myapp/
 | `dns` | `DomainVerifier::from_config(&config.modo.dns)` in `main.rs` (`DnsConfig` on `modo::Config`); `dns:` section in YAML |
 | `geolocation` | `GeoLocator` setup in `main.rs`; `GeoLayer` in middleware; geolocation config in YAML with MaxMind DB path |
 | `sentry` | Sentry DSN in `.env.example`; `sentry:` subsection under `tracing:` in YAML |
-| `job` / `cron` | `src/jobs/` with example job (plain `async fn(Payload<T>, Meta) -> Result<()>` for jobs, `async fn() -> Result<()>` for cron — not trait impls); separate job DB pool via `config.modo.job_database` (`Option<db::Config>` on `modo::Config`) + migration in `main.rs`; `migrations/jobs/001_jobs.sql`; `job:` + `job_database:` sections in YAML |
+| `job` / `cron` | `src/jobs/` with example job (plain `async fn(Payload<T>, Meta) -> Result<()>` for jobs, `async fn() -> Result<()>` for cron — not trait impls); separate job DB pool via `config.modo.job.database` (`Option<db::Config>` nested under `job` on `modo::Config`) + migration in `main.rs`; `migrations/jobs/001_jobs.sql`; `job:` section (with nested `database:`) in YAML |
 | `session` | `.layer(modo::session::layer(session_store, cookie_config, &cookie_key))` in middleware (no `SessionLayer::from()`); session config in YAML; session table in `migrations/app/001_initial.sql`; `cookie` config with secret placeholder |
 | `tenant` | `TenantLayer` in middleware; tenant setup in `main.rs` |
 | `rbac` | Role extractor + guard examples in `routes.rs` |
@@ -164,11 +164,11 @@ myapp/
 
 **Job database** (`data/jobs.db`) — always a separate single pool. Keeps job queue writes from contending with app queries. Migrations live in `migrations/jobs/`. Only generated when `job` is selected.
 
-App DB uses `config.modo.database`. Job DB uses `config.modo.job_database` (`Option<db::Config>` on `modo::Config`).
+App DB uses `config.modo.database`. Job DB uses `config.modo.job.database` (`Option<db::Config>` nested under `job` on `modo::Config`).
 
 ### App config struct (`src/config.rs`)
 
-The generated app defines `AppConfig` — it only wraps `modo::Config` via flatten. Since `job_database`, `jwt`, `storage`, `dns`, and all other module configs are now fields on `modo::Config` itself, the scaffold always generates the same minimal wrapper:
+The generated app defines `AppConfig` — it only wraps `modo::Config` via flatten. Since `jwt`, `storage`, `dns`, job `database`, and all other module configs are now fields on `modo::Config` itself, the scaffold always generates the same minimal wrapper:
 
 ```rust
 use serde::Deserialize;
@@ -180,7 +180,7 @@ pub struct AppConfig {
 }
 ```
 
-This gives developers a natural place to add their own app-specific config fields later. All `modo::Config` fields (database, tracing, server, session, email, template, jwt, storage, dns, job_database, etc.) are accessed via `config.modo.*`.
+This gives developers a natural place to add their own app-specific config fields later. All `modo::Config` fields (database, tracing, server, session, email, template, jwt, storage, dns, job.database, etc.) are accessed via `config.modo.*`.
 
 ### Migration content
 
@@ -274,8 +274,8 @@ async fn main() -> Result<()> {
     modo::db::migrate("migrations/app", &pool).await?;
 
     // Job DB — separate pool (only if job selected)
-    // let job_db_config = config.modo.job_database.as_ref()
-    //     .expect("job_database config is required");
+    // let job_db_config = config.modo.job.database.as_ref()
+    //     .expect("job.database config is required");
     // let job_pool = modo::db::connect(job_db_config).await?;
     // modo::db::migrate("migrations/jobs", &job_pool).await?;
 
@@ -353,8 +353,8 @@ async fn main() -> Result<()> {
     modo::db::migrate("migrations/app", &write_pool).await?;
 
     // Job DB — separate single pool
-    let job_db_config = config.modo.job_database.as_ref()
-        .expect("job_database config is required");
+    let job_db_config = config.modo.job.database.as_ref()
+        .expect("job.database config is required");
     let job_pool = modo::db::connect(job_db_config).await?;
     modo::db::migrate("migrations/jobs", &job_pool).await?;
 
@@ -508,10 +508,9 @@ trusted_proxies:
   - "127.0.0.1/8"
 
 # Only if job selected:
-job_database:
-  path: data/jobs.db
-
 job:
+  database:
+    path: data/jobs.db
   poll_interval_secs: 1
   queues:
     - name: default

@@ -19,12 +19,13 @@ async fn main() -> Result<()> {
     let (read_pool, write_pool) = modo::db::connect_rw(&config.modo.database).await?;
     modo::db::migrate("migrations/app", &write_pool).await?;
 
-    // Job DB — separate single pool
+    // Job DB — separate single pool (configured under job.database)
     let job_db_config = config
         .modo
-        .job_database
+        .job
+        .database
         .as_ref()
-        .expect("job_database config is required");
+        .expect("job.database config is required");
     let job_pool = modo::db::connect(job_db_config).await?;
     modo::db::migrate("migrations/jobs", &job_pool).await?;
 

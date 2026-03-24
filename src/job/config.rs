@@ -33,6 +33,10 @@ pub struct JobConfig {
     pub queues: Vec<QueueConfig>,
     /// Optional periodic cleanup of terminal jobs. Set to `None` to disable.
     pub cleanup: Option<CleanupConfig>,
+    /// Separate SQLite database for the job queue. When set, the job worker
+    /// uses this pool instead of the main application database, keeping
+    /// job-queue writes from contending with app queries.
+    pub database: Option<crate::db::Config>,
 }
 
 impl Default for JobConfig {
@@ -44,6 +48,7 @@ impl Default for JobConfig {
             drain_timeout_secs: 30,
             queues: vec![QueueConfig::default()],
             cleanup: Some(CleanupConfig::default()),
+            database: None,
         }
     }
 }

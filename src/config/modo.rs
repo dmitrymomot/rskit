@@ -68,8 +68,4 @@ pub struct Config {
     #[cfg(feature = "auth")]
     #[serde(default)]
     pub jwt: crate::auth::jwt::JwtConfig,
-    /// Separate database for the job queue. When set, the job worker uses
-    /// this pool instead of the main `database` pool.
-    #[serde(default)]
-    pub job_database: Option<crate::db::Config>,
 }
