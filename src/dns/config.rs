@@ -29,6 +29,7 @@ fn default_timeout_ms() -> u64 {
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 pub struct DnsConfig {
     /// Nameserver address, with or without port. Port 53 is appended when omitted.
     ///
@@ -43,6 +44,16 @@ pub struct DnsConfig {
     /// UDP receive timeout in milliseconds. Defaults to `5000`.
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
+}
+
+impl Default for DnsConfig {
+    fn default() -> Self {
+        Self {
+            nameserver: "8.8.8.8".into(),
+            txt_prefix: "_modo-verify".into(),
+            timeout_ms: 5000,
+        }
+    }
 }
 
 impl DnsConfig {

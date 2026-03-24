@@ -56,4 +56,20 @@ pub struct Config {
     #[cfg(feature = "geolocation")]
     #[serde(default)]
     pub geolocation: crate::geolocation::GeolocationConfig,
+    /// S3-compatible storage bucket settings. Requires the `storage` feature.
+    #[cfg(feature = "storage")]
+    #[serde(default)]
+    pub storage: crate::storage::BucketConfig,
+    /// DNS verification settings. Requires the `dns` feature.
+    #[cfg(feature = "dns")]
+    #[serde(default)]
+    pub dns: crate::dns::DnsConfig,
+    /// JWT signing and validation settings. Requires the `auth` feature.
+    #[cfg(feature = "auth")]
+    #[serde(default)]
+    pub jwt: crate::auth::jwt::JwtConfig,
+    /// Separate database for the job queue. When set, the job worker uses
+    /// this pool instead of the main `database` pool.
+    #[serde(default)]
+    pub job_database: Option<crate::db::Config>,
 }

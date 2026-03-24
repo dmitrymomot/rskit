@@ -122,7 +122,7 @@ myapp/
 │   ├── jobs/              ← only if job/cron selected
 │   │   ├── mod.rs
 │   │   └── example.rs
-│   └── services/          ← only if services need wiring
+│   └── services/          ← app-level service code (e.g., user service, auth service)
 │       ├── mod.rs
 │       └── ...
 ├── templates/             ← only if templates selected
@@ -137,21 +137,21 @@ myapp/
 | Feature / Module | Generated Files / Code |
 |------------------|----------------------|
 | `templates` | `templates/base.html`, `templates/home.html`; home handler renders template; `TemplateContextLayer` in middleware |
-| `auth` | Auth config sections in YAML (oauth, jwt); example protected route in `routes.rs`; password/JWT/OAuth setup code in `main.rs` |
+| `auth` | Auth config sections in YAML (oauth, jwt); example protected route in `routes.rs`; JWT via `JwtEncoder::from_config(&config.modo.jwt)` / `JwtDecoder::from_config(&config.modo.jwt)` (`JwtConfig` on `modo::Config`, secret from env var); OAuth + password setup code in `main.rs` |
 | `sse` | SSE `Broadcaster` setup in `main.rs`; example SSE route in `routes.rs` |
 | `email` | `emails/welcome.md`; email sender setup in `main.rs`; Mailpit in `docker-compose.yml`; email config in YAML |
-| `storage` | Storage client setup in `main.rs`; RustFS + bucket-init in `docker-compose.yml`; storage config in YAML |
+| `storage` | Storage client setup in `main.rs` via `config.modo.storage` (`BucketConfig` on `modo::Config`); RustFS + bucket-init in `docker-compose.yml`; storage section in YAML (bucket, endpoint, access_key, secret_key, region) |
 | `webhooks` | `WebhookSender` setup in `main.rs`; webhooks config in YAML |
-| `dns` | `DomainVerifier` setup in `main.rs`; dns config in YAML |
+| `dns` | `DomainVerifier::from_config(&config.modo.dns)` in `main.rs` (`DnsConfig` on `modo::Config`); `dns:` section in YAML |
 | `geolocation` | `GeoLocator` setup in `main.rs`; `GeoLayer` in middleware; geolocation config in YAML with MaxMind DB path |
 | `sentry` | Sentry DSN in `.env.example`; `sentry:` subsection under `tracing:` in YAML |
-| `job` / `cron` | `src/jobs/` with example job; separate job DB pool + migration in `main.rs`; `migrations/jobs/001_jobs.sql`; job + job_database config in YAML |
-| `session` | `SessionLayer` in middleware; session config in YAML; session table in `migrations/app/001_initial.sql`; `cookie` config with secret placeholder |
+| `job` / `cron` | `src/jobs/` with example job (plain `async fn(Payload<T>, Meta) -> Result<()>` for jobs, `async fn() -> Result<()>` for cron — not trait impls); separate job DB pool via `config.modo.job_database` (`Option<db::Config>` on `modo::Config`) + migration in `main.rs`; `migrations/jobs/001_jobs.sql`; `job:` + `job_database:` sections in YAML |
+| `session` | `.layer(modo::session::layer(session_store, cookie_config, &cookie_key))` in middleware (no `SessionLayer::from()`); session config in YAML; session table in `migrations/app/001_initial.sql`; `cookie` config with secret placeholder |
 | `tenant` | `TenantLayer` in middleware; tenant setup in `main.rs` |
 | `rbac` | Role extractor + guard examples in `routes.rs` |
-| `flash` | `FlashLayer` in middleware; `cookie` config with secret placeholder (if not already from session) |
+| `flash` | `FlashLayer::new(cookie_config, &cookie_key)` (two args) in middleware; `cookie` config with secret placeholder (if not already from session) |
 | `rate_limit` | Rate limit middleware with `CancellationToken` wiring; rate limit config in YAML |
-| `ip` | `ClientIpLayer` in middleware; `trusted_proxies` config in YAML |
+| `ip` | `ClientIpLayer::new()` (no args) in middleware; `trusted_proxies` config in YAML |
 
 ### Home handler behavior
 
@@ -164,11 +164,11 @@ myapp/
 
 **Job database** (`data/jobs.db`) — always a separate single pool. Keeps job queue writes from contending with app queries. Migrations live in `migrations/jobs/`. Only generated when `job` is selected.
 
-App DB uses `config.modo.database`. Job DB uses `config.job_database` (on `AppConfig`).
+App DB uses `config.modo.database`. Job DB uses `config.modo.job_database` (`Option<db::Config>` on `modo::Config`).
 
 ### App config struct (`src/config.rs`)
 
-The generated app defines `AppConfig` — by default it only wraps `modo::Config`:
+The generated app defines `AppConfig` — it only wraps `modo::Config` via flatten. Since `job_database`, `jwt`, `storage`, `dns`, and all other module configs are now fields on `modo::Config` itself, the scaffold always generates the same minimal wrapper:
 
 ```rust
 use serde::Deserialize;
@@ -180,18 +180,7 @@ pub struct AppConfig {
 }
 ```
 
-The scaffold adds fields based on selections. For example, if `job` is selected:
-
-```rust
-#[derive(Debug, Clone, Deserialize)]
-pub struct AppConfig {
-    #[serde(flatten)]
-    pub modo: modo::Config,
-    pub job_database: modo::db::Config,
-}
-```
-
-This gives developers a natural place to add their own app-specific config fields later. All `modo::Config` fields (database, tracing, server, session, email, template, etc.) are accessed via `config.modo.*`.
+This gives developers a natural place to add their own app-specific config fields later. All `modo::Config` fields (database, tracing, server, session, email, template, jwt, storage, dns, job_database, etc.) are accessed via `config.modo.*`.
 
 ### Migration content
 
@@ -250,13 +239,21 @@ mailpit:
 
 ## Bootstrap Code Pattern (`main.rs`)
 
-Generated code follows the exact modo bootstrap pattern. Uses `AppConfig` which wraps `modo::Config` via `#[serde(flatten)]`. The scaffold generates one of two DB variants — only the selected variant appears in the output (no commented-out alternatives).
+Generated code follows the exact modo bootstrap pattern. Uses `AppConfig` which wraps `modo::Config` via `#[serde(flatten)]`. The scaffold generates one of two DB variants — only the selected variant appears in the output (no commented-out alternatives). All module configs are accessed via `config.modo.*`.
+
+Key patterns:
+- `routes::router(registry)` — the router function calls `.with_state(registry.into_state())` internally; `Registry` cannot be passed directly as state
+- Worker/Scheduler `.start().await` returns the value directly (not `Result`) — no `?`
+- Job handlers are plain `async fn(Payload<T>, Meta) -> Result<()>`, cron handlers are plain `async fn() -> Result<()>` — not trait impls
+- `ClientIpLayer::new()` takes no args
+- `FlashLayer::new(cookie_config, &cookie_key)` takes two args
+- `modo::session::layer(session_store, cookie_config, &cookie_key)` used directly — no `SessionLayer::from()`
 
 ### Single pool variant
 
 ```rust
 use modo::Result;
-use modo::axum::Router;
+use tokio_util::sync::CancellationToken;
 
 mod config;
 mod handlers;
@@ -270,52 +267,218 @@ async fn main() -> Result<()> {
     let config: AppConfig = modo::config::load("config/")?;
     let _guard = modo::tracing::init(&config.modo.tracing)?;
 
+    // --- Database ---
+
     // App DB — single pool, always file-based
     let pool = modo::db::connect(&config.modo.database).await?;
     modo::db::migrate("migrations/app", &pool).await?;
 
+    // Job DB — separate pool (only if job selected)
+    // let job_db_config = config.modo.job_database.as_ref()
+    //     .expect("job_database config is required");
+    // let job_pool = modo::db::connect(job_db_config).await?;
+    // modo::db::migrate("migrations/jobs", &job_pool).await?;
+
+    // --- Service registry ---
+
     let mut registry = modo::service::Registry::new();
     registry.add(pool.clone());
 
-    // Job DB — separate pool (only if job selected)
-    // let job_pool = modo::db::connect(&config.job_database).await?;
-    // modo::db::migrate("migrations/jobs", &job_pool).await?;
-    // registry.add(job_pool.clone());
+    // Cookie signing key (if session or flash selected)
+    // let cookie_config = config.modo.cookie.as_ref()
+    //     .expect("cookie config is required");
+    // let cookie_key = modo::cookie::key_from_config(cookie_config)?;
 
-    // Conditional: template engine, storage, email, etc.
+    // Conditional: template engine, storage, email, JWT, DNS, etc.
+    // All use config.modo.* fields, e.g.:
+    //   modo::Storage::new(&config.modo.storage)?
+    //   modo::JwtEncoder::from_config(&config.modo.jwt)
+    //   modo::DomainVerifier::from_config(&config.modo.dns)?
+    //   modo::email::Mailer::new(&config.modo.email)?
 
-    // Router with conditional middleware layers
+    // --- Cancellation token (for rate limiter cleanup) ---
+    // let cancel = CancellationToken::new();
+    // let rate_limit_layer = modo::middleware::rate_limit(&config.modo.rate_limit, cancel.clone());
+
+    // --- Router ---
+
     let app = routes::router(registry);
+    // Conditional middleware layers, e.g.:
+    //   .layer(modo::session::layer(session_store, cookie_config, &cookie_key))
+    //   .layer(modo::FlashLayer::new(cookie_config, &cookie_key))
+    //   .layer(modo::ClientIpLayer::new())
+    //   .layer(rate_limit_layer)
 
-    // Conditional: worker start if job selected
+    // --- Background workers (if job/cron selected) ---
+    // Worker .start().await returns directly — no ?
+    // let worker = modo::job::Worker::builder(&config.modo.job, &job_registry)
+    //     .register("example_job", jobs::example::handle)
+    //     .start()
+    //     .await;
+    // let scheduler = modo::cron::Scheduler::builder(&job_registry)
+    //     .job("@hourly", jobs::example::scheduled)
+    //     .start()
+    //     .await;
+
+    // --- Server ---
+
     let managed = modo::db::managed(pool);
     let server = modo::server::http(app, &config.modo.server).await?;
     modo::run!(server, managed).await
 }
 ```
 
-### Read/write split variant
+### Read/write split variant (full example matching `examples/full`)
 
 ```rust
+use modo::Result;
+use tokio_util::sync::CancellationToken;
+
+mod config;
+mod handlers;
+mod jobs;
+mod routes;
+
+use config::AppConfig;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let config: AppConfig = modo::config::load("config/")?;
+    let _guard = modo::tracing::init(&config.modo.tracing)?;
+
+    // --- Database ---
+
     // App DB — read/write split
     let (read_pool, write_pool) = modo::db::connect_rw(&config.modo.database).await?;
     modo::db::migrate("migrations/app", &write_pool).await?;
+
+    // Job DB — separate single pool
+    let job_db_config = config.modo.job_database.as_ref()
+        .expect("job_database config is required");
+    let job_pool = modo::db::connect(job_db_config).await?;
+    modo::db::migrate("migrations/jobs", &job_pool).await?;
+
+    // --- Service registry ---
 
     let mut registry = modo::service::Registry::new();
     registry.add(read_pool.clone());
     registry.add(write_pool.clone());
 
-    // ... same conditional sections ...
+    // Cookie signing key (required by session + flash)
+    let cookie_config = config.modo.cookie.as_ref()
+        .expect("cookie config is required");
+    let cookie_key = modo::cookie::key_from_config(cookie_config)?;
+
+    // Session store
+    let session_store =
+        modo::session::Store::new_rw(&read_pool, &write_pool, config.modo.session.clone());
+
+    // Template engine
+    let engine = modo::Engine::builder()
+        .config(config.modo.template.clone())
+        .build()?;
+    registry.add(engine.clone());
+
+    // Storage (config from modo::Config)
+    let storage = modo::Storage::new(&config.modo.storage)?;
+    registry.add(storage);
+
+    // Email
+    let mailer = modo::email::Mailer::new(&config.modo.email)?;
+    registry.add(mailer);
+
+    // Webhooks
+    let webhook_sender = modo::WebhookSender::default_client();
+    registry.add(webhook_sender);
+
+    // DNS verification (config from modo::Config)
+    let domain_verifier = modo::DomainVerifier::from_config(&config.modo.dns)?;
+    registry.add(domain_verifier);
+
+    // JWT (config from modo::Config)
+    let jwt_encoder = modo::JwtEncoder::from_config(&config.modo.jwt);
+    let jwt_decoder = modo::JwtDecoder::from_config(&config.modo.jwt);
+    registry.add(jwt_encoder);
+    registry.add(jwt_decoder);
+
+    // SSE broadcaster
+    let broadcaster = modo::sse::Broadcaster::<String, modo::sse::Event>::new(
+        128,
+        modo::sse::SseConfig::default(),
+    );
+    registry.add(broadcaster);
+
+    // Geolocation
+    let geo_locator = modo::GeoLocator::from_config(&config.modo.geolocation)?;
+    registry.add(geo_locator.clone());
+
+    // Job enqueuer (uses job DB)
+    let job_enqueuer = modo::job::Enqueuer::new(&job_pool);
+    registry.add(job_enqueuer);
+
+    // --- Cancellation token (for rate limiter cleanup) ---
+
+    let cancel = CancellationToken::new();
+
+    // --- Rate limiter ---
+
+    let rate_limit_layer = modo::middleware::rate_limit(&config.modo.rate_limit, cancel.clone());
+
+    // --- Router ---
+
+    let app = routes::router(registry)
+        .merge(engine.static_service())
+        .layer(modo::TemplateContextLayer::new(engine))
+        .layer(modo::session::layer(
+            session_store,
+            cookie_config,
+            &cookie_key,
+        ))
+        .layer(modo::FlashLayer::new(cookie_config, &cookie_key))
+        .layer(modo::GeoLayer::new(geo_locator))
+        .layer(modo::ClientIpLayer::new())
+        .layer(rate_limit_layer);
+
+    // --- Background workers ---
+
+    // Job worker needs its own registry with the job DB's WritePool
+    let mut job_registry = modo::service::Registry::new();
+    job_registry.add(modo::db::WritePool::new((*job_pool).clone()));
+    job_registry.add(read_pool.clone());
+
+    let worker = modo::job::Worker::builder(&config.modo.job, &job_registry)
+        .register("example_job", jobs::example::handle)
+        .start()
+        .await;
+
+    // Cron scheduler
+    let scheduler = modo::cron::Scheduler::builder(&job_registry)
+        .job("@hourly", jobs::example::scheduled)
+        .start()
+        .await;
+
+    // --- Server ---
 
     let managed_read = modo::db::managed(read_pool);
     let managed_write = modo::db::managed(write_pool);
+    let managed_jobs = modo::db::managed(job_pool);
     let server = modo::server::http(app, &config.modo.server).await?;
-    modo::run!(server, managed_read, managed_write).await
+
+    modo::run!(
+        server,
+        worker,
+        scheduler,
+        managed_read,
+        managed_write,
+        managed_jobs
+    )
+    .await
+}
 ```
 
 ### Config YAML example (`config/development.yaml`)
 
-Representative example with database + session + email + storage + job. Top-level fields come from `modo::Config` (via flatten); `job_database` is on `AppConfig`:
+Representative example with all modules enabled. All fields come from `modo::Config` (via flatten on `AppConfig`):
 
 ```yaml
 server:
@@ -331,14 +494,15 @@ tracing:
 
 cookie:
   secret: ${COOKIE_SECRET:change-me-in-production-at-least-64-bytes-long-secret-key-here!!}
+  secure: false
 
 session:
-  ttl_secs: 86400
+  session_ttl_secs: 86400
   cookie_name: sid
 
 rate_limit:
-  requests_per_second: 10
-  burst: 20
+  per_second: 10
+  burst_size: 20
 
 trusted_proxies:
   - "127.0.0.1/8"
@@ -353,18 +517,46 @@ job:
     - name: default
       concurrency: 4
 
+# Only if auth selected:
+jwt:
+  secret: ${JWT_SECRET:change-me-in-production-at-least-64-bytes-long-jwt-secret-key-here!!!!!}
+
+oauth:
+  github:
+    client_id: ${GITHUB_CLIENT_ID:}
+    client_secret: ${GITHUB_CLIENT_SECRET:}
+    redirect_uri: http://localhost:8080/auth/github/callback
+
 # Only if email selected:
 email:
-  from: "MyApp <noreply@example.com>"
-  smtp_host: ${SMTP_HOST:localhost}
-  smtp_port: ${SMTP_PORT:1025}
+  templates_path: emails
+  default_from_name: MyApp
+  default_from_email: noreply@example.com
+  smtp:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+
+# Only if templates selected:
+template:
+  templates_path: templates
+  static_path: static
+  static_url_prefix: /static
 
 # Only if storage selected:
 storage:
+  bucket: uploads
   endpoint: ${S3_ENDPOINT:http://localhost:9000}
   access_key: ${S3_ACCESS_KEY:admin}
   secret_key: ${S3_SECRET_KEY:admin123}
   region: ${S3_REGION:us-east-1}
+
+# Only if dns selected:
+dns:
+  nameserver: "8.8.8.8"
+
+# Only if geolocation selected:
+geolocation:
+  mmdb_path: data/GeoLite2-City.mmdb
 ```
 
 Secrets use `${VAR:default}` env var substitution. Development defaults match docker-compose service credentials. Production configs use `${VAR}` without defaults (fail-fast on missing secrets).

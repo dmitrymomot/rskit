@@ -4,5 +4,4 @@ use serde::Deserialize;
 pub struct AppConfig {
     #[serde(flatten)]
     pub modo: modo::Config,
-    pub job_database: modo::db::Config,
 }

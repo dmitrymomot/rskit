@@ -20,7 +20,12 @@ async fn main() -> Result<()> {
     modo::db::migrate("migrations/app", &write_pool).await?;
 
     // Job DB — separate single pool
-    let job_pool = modo::db::connect(&config.job_database).await?;
+    let job_db_config = config
+        .modo
+        .job_database
+        .as_ref()
+        .expect("job_database config is required");
+    let job_pool = modo::db::connect(job_db_config).await?;
     modo::db::migrate("migrations/jobs", &job_pool).await?;
 
     // --- Service registry ---
@@ -47,18 +52,8 @@ async fn main() -> Result<()> {
         .build()?;
     registry.add(engine.clone());
 
-    // Storage
-    let mut bucket_config = modo::BucketConfig::default();
-    bucket_config.bucket = "uploads".to_string();
-    bucket_config.endpoint =
-        std::env::var("S3_ENDPOINT").unwrap_or_else(|_| "http://localhost:9000".to_string());
-    bucket_config.access_key =
-        std::env::var("S3_ACCESS_KEY").unwrap_or_else(|_| "admin".to_string());
-    bucket_config.secret_key =
-        std::env::var("S3_SECRET_KEY").unwrap_or_else(|_| "admin123".to_string());
-    bucket_config.region =
-        Some(std::env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".to_string()));
-    let storage = modo::Storage::new(&bucket_config)?;
+    // Storage (config from modo::Config)
+    let storage = modo::Storage::new(&config.modo.storage)?;
     registry.add(storage);
 
     // Email
@@ -69,17 +64,13 @@ async fn main() -> Result<()> {
     let webhook_sender = modo::WebhookSender::default_client();
     registry.add(webhook_sender);
 
-    // DNS verification
-    let domain_verifier = modo::DomainVerifier::from_config(&modo::DnsConfig::new("8.8.8.8"))?;
+    // DNS verification (config from modo::Config)
+    let domain_verifier = modo::DomainVerifier::from_config(&config.modo.dns)?;
     registry.add(domain_verifier);
 
-    // JWT
-    let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
-        "change-me-in-production-at-least-64-bytes-long-jwt-secret-key-here!!!!!".to_string()
-    });
-    let jwt_config = modo::JwtConfig::new(&jwt_secret);
-    let jwt_encoder = modo::JwtEncoder::from_config(&jwt_config);
-    let jwt_decoder = modo::JwtDecoder::from_config(&jwt_config);
+    // JWT (config from modo::Config)
+    let jwt_encoder = modo::JwtEncoder::from_config(&config.modo.jwt);
+    let jwt_decoder = modo::JwtDecoder::from_config(&config.modo.jwt);
     registry.add(jwt_encoder);
     registry.add(jwt_decoder);
 
