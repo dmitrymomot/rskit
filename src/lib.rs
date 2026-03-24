@@ -5,6 +5,7 @@ pub mod db;
 pub mod encoding;
 pub mod error;
 pub mod extractor;
+pub mod flash;
 pub mod id;
 pub mod middleware;
 pub mod runtime;
