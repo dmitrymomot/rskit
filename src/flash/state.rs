@@ -4,9 +4,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
+/// A single flash message carrying a severity level and a text body.
+///
+/// Serializes to/from JSON for cookie storage.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlashEntry {
+    /// Severity level such as `"success"`, `"error"`, `"warning"`, or `"info"`.
     pub level: String,
+    /// Human-readable message text.
     pub message: String,
 }
 

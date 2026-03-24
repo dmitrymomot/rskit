@@ -7,34 +7,47 @@ use crate::Error;
 
 use super::state::{FlashEntry, FlashState};
 
+/// Axum extractor for reading and writing flash messages within a request.
+///
+/// Requires [`FlashLayer`](crate::flash::FlashLayer) to be applied to the router.
+/// Extraction fails with `500 Internal Server Error` if the middleware is absent.
 pub struct Flash {
     state: Arc<FlashState>,
 }
 
 impl Flash {
+    /// Queue a flash message with an arbitrary severity level.
+    ///
+    /// The message is stored in a signed cookie on the response and becomes
+    /// available to the next request via [`Flash::messages`].
     pub fn set(&self, level: &str, message: &str) {
         self.state.push(level, message);
     }
 
+    /// Queue a flash message with level `"success"`.
     pub fn success(&self, message: &str) {
         self.set("success", message);
     }
 
+    /// Queue a flash message with level `"error"`.
     pub fn error(&self, message: &str) {
         self.set("error", message);
     }
 
+    /// Queue a flash message with level `"warning"`.
     pub fn warning(&self, message: &str) {
         self.set("warning", message);
     }
 
+    /// Queue a flash message with level `"info"`.
     pub fn info(&self, message: &str) {
         self.set("info", message);
     }
 
-    /// Read incoming flash messages and mark as read.
-    /// After calling this, the middleware will clear the flash cookie on response.
-    /// Returns the same data on repeated calls within the same request.
+    /// Read incoming flash messages and mark them as consumed.
+    ///
+    /// After calling this, the middleware clears the flash cookie on the response.
+    /// Calling this multiple times within the same request returns the same data.
     pub fn messages(&self) -> Vec<FlashEntry> {
         self.state.mark_read();
         self.state.incoming.clone()

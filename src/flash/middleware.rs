@@ -17,6 +17,19 @@ const MAX_AGE_SECS: i64 = 300;
 
 // --- Layer ---
 
+/// Tower [`Layer`] that enables cookie-based flash messages for a router.
+///
+/// On each request the layer reads the signed `flash` cookie and populates
+/// the [`Flash`](crate::Flash) extractor. On response it either writes a new
+/// signed cookie (when messages were queued) or removes the existing one (when
+/// messages were consumed via [`Flash::messages`](crate::Flash::messages)).
+///
+/// # Cookie details
+///
+/// - Name: `flash`
+/// - Signed with HMAC using the application [`Key`]
+/// - `Max-Age`: 300 seconds (5 minutes)
+/// - Path, `Secure`, `HttpOnly`, and `SameSite` attributes come from [`CookieConfig`]
 pub struct FlashLayer {
     key: Key,
     config: CookieConfig,
@@ -32,6 +45,7 @@ impl Clone for FlashLayer {
 }
 
 impl FlashLayer {
+    /// Create a new `FlashLayer` from a cookie configuration and signing key.
     pub fn new(config: &CookieConfig, key: &Key) -> Self {
         Self {
             key: key.clone(),
@@ -54,6 +68,7 @@ impl<S> Layer<S> for FlashLayer {
 
 // --- Service ---
 
+/// Tower [`Service`] produced by [`FlashLayer`].
 pub struct FlashMiddleware<S> {
     inner: S,
     key: Key,
