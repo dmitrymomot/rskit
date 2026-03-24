@@ -4,6 +4,18 @@
 
 A `cargo modo new <project-name>` subcommand built into the modo crate that interactively scaffolds new modo v2 applications. Generates real, idiomatic modo code — not generic boilerplate.
 
+## Prerequisites
+
+Before implementing the CLI, `modo::Config` must be extended to include all module configs that are currently missing:
+
+- `storage` — bucket/S3 config (feature-gated under `storage`)
+- `dns` — DNS resolver config (feature-gated under `dns`)
+- `jwt` — JWT signing/validation config (feature-gated under `auth`)
+- `webhooks` — webhook sender config (feature-gated under `webhooks`)
+- `job_database` — separate DB config for the job queue (always available)
+
+Once complete, `modo::Config` covers every module. Generated apps use `modo::Config` directly — no custom wrapper struct needed.
+
 ## Binary Setup
 
 - **Binary target:** `[[bin]] name = "cargo-modo"` in the existing `Cargo.toml`
@@ -75,10 +87,10 @@ Note: selecting `session` or `flash` implies `cookie` config (signed cookie secr
 
 ### Step 3 — database mode (single select)
 
-- Single pool (simpler, works with `:memory:`)
+- Single pool
 - Read/write split (separate reader + writer pools)
 
-This applies to the app database. The job database is always a separate single pool.
+This applies to the app database only. The job database is always a separate single pool. Note: `:memory:` is not offered — databases are always file-based (`:memory:` is for tests only).
 
 ### Step 4 — tooling (multi-select checkbox)
 
@@ -113,7 +125,6 @@ myapp/
 │       └── 001_jobs.sql
 ├── src/
 │   ├── main.rs
-│   ├── config.rs          ← app config struct (embeds modo::Config)
 │   ├── routes.rs
 │   ├── handlers/
 │   │   ├── mod.rs
@@ -137,15 +148,15 @@ myapp/
 | Feature / Module | Generated Files / Code |
 |------------------|----------------------|
 | `templates` | `templates/base.html`, `templates/home.html`; home handler renders template; `TemplateContextLayer` in middleware |
-| `auth` | Auth config sections in YAML; example protected route in `routes.rs`; password/JWT/OAuth setup code in `main.rs` |
+| `auth` | Auth config sections in YAML (oauth, jwt); example protected route in `routes.rs`; password/JWT/OAuth setup code in `main.rs` |
 | `sse` | SSE `Broadcaster` setup in `main.rs`; example SSE route in `routes.rs` |
-| `email` | `emails/welcome.md`; email sender setup in `main.rs`; Mailpit in `docker-compose.yml`; SMTP config in YAML |
-| `storage` | Storage client setup in `main.rs`; RustFS in `docker-compose.yml`; storage/bucket config in YAML |
-| `webhooks` | `WebhookSender` setup in `main.rs`; webhook config in YAML |
-| `dns` | `DomainVerifier` setup in `main.rs`; DNS config in YAML |
+| `email` | `emails/welcome.md`; email sender setup in `main.rs`; Mailpit in `docker-compose.yml`; email config in YAML |
+| `storage` | Storage client setup in `main.rs`; RustFS + bucket-init in `docker-compose.yml`; storage config in YAML |
+| `webhooks` | `WebhookSender` setup in `main.rs`; webhooks config in YAML |
+| `dns` | `DomainVerifier` setup in `main.rs`; dns config in YAML |
 | `geolocation` | `GeoLocator` setup in `main.rs`; `GeoLayer` in middleware; geolocation config in YAML with MaxMind DB path |
 | `sentry` | Sentry DSN in `.env.example`; `sentry:` subsection under `tracing:` in YAML |
-| `job` / `cron` | `src/jobs/` with example job; separate job DB pool + migration in `main.rs`; `migrations/jobs/001_jobs.sql`; job config in YAML |
+| `job` / `cron` | `src/jobs/` with example job; separate job DB pool + migration in `main.rs`; `migrations/jobs/001_jobs.sql`; job + job_database config in YAML |
 | `session` | `SessionLayer` in middleware; session config in YAML; session table in `migrations/app/001_initial.sql`; `cookie` config with secret placeholder |
 | `tenant` | `TenantLayer` in middleware; tenant setup in `main.rs` |
 | `rbac` | Role extractor + guard examples in `routes.rs` |
@@ -160,47 +171,11 @@ myapp/
 
 ### Database architecture
 
-**App database** — the main application database. Mode (single pool vs read/write split) is chosen by the user. Migrations live in `migrations/app/`.
+**App database** (`data/app.db`) — the main application database. Always file-based. Mode (single pool vs read/write split) is chosen by the user. Migrations live in `migrations/app/`.
 
-**Job database** — always a separate single pool (`data/jobs.db`). Keeps job queue writes from contending with app queries. Migrations live in `migrations/jobs/`. Only generated when `job` is selected.
+**Job database** (`data/jobs.db`) — always a separate single pool. Keeps job queue writes from contending with app queries. Migrations live in `migrations/jobs/`. Only generated when `job` is selected.
 
-The config YAML has two database sections when `job` is selected:
-
-```yaml
-database:
-  path: data/app.db
-
-job_database:
-  path: data/jobs.db
-```
-
-This requires the generated app to use a custom config struct (see next section).
-
-### App config struct (`src/config.rs`)
-
-The generated app defines its own config struct that embeds `modo::Config` via `#[serde(flatten)]`:
-
-```rust
-use serde::Deserialize;
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct AppConfig {
-    #[serde(flatten)]
-    pub modo: modo::Config,
-
-    // Added when job is selected:
-    pub job_database: modo::db::Config,
-
-    // Added for modules not covered by modo::Config
-    // (storage, webhooks, dns, sse, jwt — these don't have
-    // top-level fields on modo::Config):
-    // pub storage: modo::storage::StorageConfig,
-    // pub webhooks: modo::webhook::WebhookConfig,
-    // etc.
-}
-```
-
-This lets the YAML have all config in one file while keeping modo's `Config` as the core.
+Both use `modo::Config` fields directly — `config.database` for the app DB, `config.job_database` for the job DB.
 
 ### Migration content
 
@@ -219,33 +194,65 @@ The scaffold generates a `GET /health` handler that returns `200 OK` with `{"sta
 
 Only generated when at least one service is needed:
 
-- **RustFS** (port 9000, console 9001) — if `storage` selected
-- **Mailpit** (SMTP 1025, UI 8025) — if `email` selected
+**RustFS** (port 9000, console 9001) — if `storage` selected. Includes a bucket-init sidecar using `minio/mc`:
+
+```yaml
+rustfs:
+  image: rustfs/rustfs:latest
+  ports:
+    - "9000:9000"
+    - "9001:9001"
+  environment:
+    RUSTFS_ACCESS_KEY: admin
+    RUSTFS_SECRET_KEY: admin123
+  volumes:
+    - rustfs_data:/data
+
+rustfs-bucket-init:
+  image: minio/mc:latest
+  depends_on:
+    - rustfs
+  entrypoint: >
+    /bin/sh -c "
+    sleep 3;
+    mc alias set rustfs http://rustfs:9000 admin admin123;
+    mc mb --ignore-existing rustfs/uploads;
+    mc anonymous set download rustfs/uploads;
+    exit 0;
+    "
+```
+
+**Mailpit** (SMTP 1025, UI 8025) — if `email` selected:
+
+```yaml
+mailpit:
+  image: axllent/mailpit:latest
+  ports:
+    - "1025:1025"
+    - "8025:8025"
+```
 
 ## Bootstrap Code Pattern (`main.rs`)
 
-Generated code follows the exact modo bootstrap pattern. The scaffold generates one of two variants — only the selected variant appears in the output (no commented-out alternatives).
+Generated code follows the exact modo bootstrap pattern. Uses `modo::Config` directly — no custom config wrapper. The scaffold generates one of two variants — only the selected variant appears in the output (no commented-out alternatives).
 
 ### Single pool variant
 
 ```rust
-use modo::Result;
+use modo::{Config, Result};
 use modo::axum::Router;
 
-mod config;
 mod handlers;
 mod routes;
 // mod jobs;  ← if job selected
 
-use config::AppConfig;
-
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config: AppConfig = modo::config::load("config/")?;
-    let _guard = modo::tracing::init(&config.modo.tracing)?;
+    let config: Config = modo::config::load("config/")?;
+    let _guard = modo::tracing::init(&config.tracing)?;
 
-    // App DB — single pool
-    let pool = modo::db::connect(&config.modo.database).await?;
+    // App DB — single pool, always file-based
+    let pool = modo::db::connect(&config.database).await?;
     modo::db::migrate("migrations/app", &pool).await?;
 
     let mut registry = modo::service::Registry::new();
@@ -254,6 +261,7 @@ async fn main() -> Result<()> {
     // Job DB — separate pool (only if job selected)
     // let job_pool = modo::db::connect(&config.job_database).await?;
     // modo::db::migrate("migrations/jobs", &job_pool).await?;
+    // registry.add(job_pool.clone());
 
     // Conditional: template engine, storage, email, etc.
 
@@ -262,7 +270,7 @@ async fn main() -> Result<()> {
 
     // Conditional: worker start if job selected
     let managed = modo::db::managed(pool);
-    let server = modo::server::http(app, &config.modo.server).await?;
+    let server = modo::server::http(app, &config.server).await?;
     modo::run!(server, managed).await
 }
 ```
@@ -271,7 +279,7 @@ async fn main() -> Result<()> {
 
 ```rust
     // App DB — read/write split
-    let (read_pool, write_pool) = modo::db::connect_rw(&config.modo.database).await?;
+    let (read_pool, write_pool) = modo::db::connect_rw(&config.database).await?;
     modo::db::migrate("migrations/app", &write_pool).await?;
 
     let mut registry = modo::service::Registry::new();
@@ -282,13 +290,13 @@ async fn main() -> Result<()> {
 
     let managed_read = modo::db::managed(read_pool);
     let managed_write = modo::db::managed(write_pool);
-    let server = modo::server::http(app, &config.modo.server).await?;
+    let server = modo::server::http(app, &config.server).await?;
     modo::run!(server, managed_read, managed_write).await
 ```
 
 ### Config YAML example (`config/development.yaml`)
 
-Representative example with database + session + email + storage:
+Representative example with database + session + email + storage + job. All config fields come from `modo::Config`:
 
 ```yaml
 server:
@@ -326,19 +334,21 @@ job:
     - name: default
       concurrency: 4
 
-# Only if email selected (feature-gated on modo::Config):
+# Only if email selected:
 email:
   from: "MyApp <noreply@example.com>"
   smtp_host: ${SMTP_HOST:localhost}
   smtp_port: ${SMTP_PORT:1025}
 
-# Only if storage selected (on AppConfig, not modo::Config):
+# Only if storage selected:
 storage:
   endpoint: ${S3_ENDPOINT:http://localhost:9000}
-  access_key: ${S3_ACCESS_KEY:minioadmin}
-  secret_key: ${S3_SECRET_KEY:minioadmin}
+  access_key: ${S3_ACCESS_KEY:admin}
+  secret_key: ${S3_SECRET_KEY:admin123}
   region: ${S3_REGION:us-east-1}
 ```
+
+Secrets use `${VAR:default}` env var substitution. Development defaults match docker-compose service credentials. Production configs use `${VAR}` without defaults (fail-fast on missing secrets).
 
 ## Binary Source Layout
 
@@ -351,7 +361,6 @@ src/bin/cargo-modo/
     ├── mod.rs       — only mod imports and re-exports
     ├── cargo_toml.rs
     ├── main_rs.rs
-    ├── config_rs.rs
     ├── routes_rs.rs
     ├── config_yaml.rs
     ├── justfile.rs
