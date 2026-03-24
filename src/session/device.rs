@@ -1,9 +1,17 @@
+//! User-agent parsing helpers for device classification.
+
+/// Derive a human-readable device name from the `User-Agent` string.
+///
+/// Returns a string such as `"Chrome on macOS"` or `"Safari on iPhone"`.
 pub fn parse_device_name(user_agent: &str) -> String {
     let browser = parse_browser(user_agent);
     let os = parse_os(user_agent);
     format!("{browser} on {os}")
 }
 
+/// Classify the device type from the `User-Agent` string.
+///
+/// Returns one of `"tablet"`, `"mobile"`, or `"desktop"`.
 pub fn parse_device_type(user_agent: &str) -> String {
     let ua = user_agent.to_lowercase();
     if ua.contains("tablet") || ua.contains("ipad") {

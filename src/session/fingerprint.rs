@@ -1,6 +1,17 @@
+//! Browser fingerprinting for session hijacking detection.
+
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
 
+/// Compute a SHA-256 fingerprint from three request headers.
+///
+/// The headers are concatenated with null-byte separators before hashing to
+/// prevent boundary confusion. Returns the fingerprint as a 64-character
+/// lowercase hex string.
+///
+/// Used by [`super::middleware::SessionLayer`] to detect potential session
+/// hijacking when [`super::config::SessionConfig::validate_fingerprint`] is
+/// `true`.
 pub fn compute_fingerprint(
     user_agent: &str,
     accept_language: &str,

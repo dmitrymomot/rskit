@@ -8,21 +8,38 @@ use super::config::SessionConfig;
 use super::meta::SessionMeta;
 use super::token::SessionToken;
 
+/// A snapshot of a session row as returned from the database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionData {
+    /// Unique session identifier (ULID).
     pub id: String,
+    /// The authenticated user's identifier.
     pub user_id: String,
+    /// IP address recorded at login.
     pub ip_address: String,
+    /// Raw `User-Agent` header recorded at login.
     pub user_agent: String,
+    /// Human-readable device name derived from the user agent (e.g. `"Chrome on macOS"`).
     pub device_name: String,
+    /// Device category: `"desktop"`, `"mobile"`, or `"tablet"`.
     pub device_type: String,
+    /// SHA-256 fingerprint of the browser environment used to detect session hijacking.
     pub fingerprint: String,
+    /// Arbitrary JSON data attached to the session.
     pub data: serde_json::Value,
+    /// When the session was created.
     pub created_at: DateTime<Utc>,
+    /// When the session was last touched.
     pub last_active_at: DateTime<Utc>,
+    /// When the session expires.
     pub expires_at: DateTime<Utc>,
 }
 
+/// Low-level SQLite-backed session store.
+///
+/// Wraps a read pool and a write pool and exposes async methods for all
+/// session CRUD operations. Consumed by [`super::middleware::SessionLayer`]
+/// and available to handlers via [`super::extractor::Session`].
 #[derive(Clone)]
 pub struct Store {
     reader: InnerPool,
@@ -31,6 +48,11 @@ pub struct Store {
 }
 
 impl Store {
+    /// Create a store using a single pool for both reads and writes.
+    ///
+    /// Use this when the database connection already combines both roles
+    /// (e.g. a local SQLite file or an in-memory pool shared via
+    /// `ReadPool::new()` / `WritePool::new()`).
     pub fn new(pool: &(impl Reader + Writer), config: SessionConfig) -> Self {
         Self {
             reader: pool.read_pool().clone(),
@@ -39,6 +61,7 @@ impl Store {
         }
     }
 
+    /// Create a store with separate read and write pools.
     pub fn new_rw(reader: &impl Reader, writer: &impl Writer, config: SessionConfig) -> Self {
         Self {
             reader: reader.read_pool().clone(),
@@ -47,10 +70,14 @@ impl Store {
         }
     }
 
+    /// Return the session configuration for this store.
     pub fn config(&self) -> &SessionConfig {
         &self.config
     }
 
+    /// Look up an active (non-expired) session by its token hash.
+    ///
+    /// Returns `None` if no matching session exists or the session has expired.
     pub async fn read_by_token(&self, token: &SessionToken) -> Result<Option<SessionData>> {
         let hash = token.hash();
         let now = Utc::now().to_rfc3339();
@@ -68,6 +95,9 @@ impl Store {
         row.map(row_to_session_data).transpose()
     }
 
+    /// Look up a session by its ULID identifier (ignores expiry).
+    ///
+    /// Returns `None` if no session with that ID exists.
     pub async fn read(&self, id: &str) -> Result<Option<SessionData>> {
         let row = sqlx::query_as::<_, SessionRow>(
             "SELECT id, user_id, ip_address, user_agent, device_name, device_type, \
@@ -82,6 +112,7 @@ impl Store {
         row.map(row_to_session_data).transpose()
     }
 
+    /// List all active (non-expired) sessions for a user, ordered by most recently active.
     pub async fn list_for_user(&self, user_id: &str) -> Result<Vec<SessionData>> {
         let now = Utc::now().to_rfc3339();
         let rows = sqlx::query_as::<_, SessionRow>(
@@ -99,6 +130,14 @@ impl Store {
         rows.into_iter().map(row_to_session_data).collect()
     }
 
+    /// Create a new session for the given user.
+    ///
+    /// Runs inside a transaction. After inserting, enforces the
+    /// `max_sessions_per_user` limit by evicting the oldest session(s) when
+    /// the limit is exceeded.
+    ///
+    /// Returns the newly-created `SessionData` and the raw `SessionToken` that
+    /// must be placed in the cookie.
     pub async fn create(
         &self,
         meta: &SessionMeta,
@@ -168,6 +207,7 @@ impl Store {
         Ok((session_data, token))
     }
 
+    /// Delete a session by its ULID identifier.
     pub async fn destroy(&self, id: &str) -> Result<()> {
         sqlx::query("DELETE FROM modo_sessions WHERE id = ?")
             .bind(id)
@@ -177,6 +217,7 @@ impl Store {
         Ok(())
     }
 
+    /// Delete all sessions belonging to a user.
     pub async fn destroy_all_for_user(&self, user_id: &str) -> Result<()> {
         sqlx::query("DELETE FROM modo_sessions WHERE user_id = ?")
             .bind(user_id)
@@ -186,6 +227,9 @@ impl Store {
         Ok(())
     }
 
+    /// Delete all sessions for a user except the one with the given ID.
+    ///
+    /// Used to implement "log out other devices".
     pub async fn destroy_all_except(&self, user_id: &str, keep_id: &str) -> Result<()> {
         sqlx::query("DELETE FROM modo_sessions WHERE user_id = ? AND id != ?")
             .bind(user_id)
@@ -196,6 +240,10 @@ impl Store {
         Ok(())
     }
 
+    /// Issue a new token for an existing session, invalidating the old one.
+    ///
+    /// Returns the new [`SessionToken`]. The middleware will write this token
+    /// to the session cookie on the response.
     pub async fn rotate_token(&self, id: &str) -> Result<SessionToken> {
         let new_token = SessionToken::generate();
         let new_hash = new_token.hash();
@@ -208,6 +256,10 @@ impl Store {
         Ok(new_token)
     }
 
+    /// Persist the session's JSON data and update `last_active_at` / `expires_at`.
+    ///
+    /// Called by the middleware at the end of a request when the session was
+    /// marked dirty.
     pub async fn flush(
         &self,
         id: &str,
@@ -230,6 +282,10 @@ impl Store {
         Ok(())
     }
 
+    /// Update `last_active_at` and `expires_at` without changing session data.
+    ///
+    /// Called by the middleware when the touch interval has elapsed but the
+    /// session data is not dirty.
     pub async fn touch(
         &self,
         id: &str,
@@ -246,6 +302,10 @@ impl Store {
         Ok(())
     }
 
+    /// Delete all sessions whose `expires_at` is in the past.
+    ///
+    /// Returns the number of rows deleted. Schedule this periodically (e.g.
+    /// via a cron job) to keep the table small.
     pub async fn cleanup_expired(&self) -> Result<u64> {
         let now = Utc::now().to_rfc3339();
         let result = sqlx::query("DELETE FROM modo_sessions WHERE expires_at < ?")

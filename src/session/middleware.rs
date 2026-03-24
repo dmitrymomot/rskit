@@ -20,6 +20,18 @@ use super::token::SessionToken;
 
 // --- Layer ---
 
+/// Tower [`Layer`] that installs the session middleware into the request pipeline.
+///
+/// Construct with [`layer`] rather than directly. Apply before route handlers
+/// with `Router::layer(session_layer)`.
+///
+/// The middleware reads the signed session cookie, loads the session from the
+/// database, validates the browser fingerprint (when configured), and inserts
+/// an `Arc<SessionState>` into the request extensions so the [`super::extractor::Session`]
+/// extractor can access it.
+///
+/// On the response path it flushes dirty session data, touches the expiry
+/// timestamp, and sets or clears the session cookie as needed.
 #[derive(Clone)]
 pub struct SessionLayer {
     store: Arc<Store>,
@@ -27,6 +39,22 @@ pub struct SessionLayer {
     key: Key,
 }
 
+/// Create a [`SessionLayer`] from a [`Store`], [`CookieConfig`], and signing [`Key`].
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use modo::session::{self, SessionConfig, Store};
+/// use modo::cookie::{CookieConfig, key_from_config};
+///
+/// # async fn example(pool: impl modo::db::Reader + modo::db::Writer) -> modo::Result<()> {
+/// let store = Store::new(&pool, SessionConfig::default());
+/// let cookie_config: CookieConfig = todo!("load from config");
+/// let key = key_from_config(&cookie_config)?;
+/// let session_layer = session::layer(store, &cookie_config, &key);
+/// # Ok(())
+/// # }
+/// ```
 pub fn layer(store: Store, cookie_config: &CookieConfig, key: &Key) -> SessionLayer {
     SessionLayer {
         store: Arc::new(store),
@@ -50,6 +78,9 @@ impl<S> Layer<S> for SessionLayer {
 
 // --- Service ---
 
+/// Tower [`Service`] that manages the session lifecycle for each request.
+///
+/// Produced by [`SessionLayer`]; not constructed directly.
 #[derive(Clone)]
 pub struct SessionMiddleware<S> {
     inner: S,
