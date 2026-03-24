@@ -11,6 +11,11 @@ use tower::{Layer, Service};
 use super::traits::{HasTenantId, TenantResolver, TenantStrategy};
 
 /// Creates a tenant middleware layer from a strategy and resolver.
+///
+/// This is the primary entry point for wiring tenant resolution into a router.
+/// The returned [`TenantLayer`] should be applied with `.layer()` for all
+/// strategies except [`crate::tenant::PathParamStrategy`], which requires
+/// `.route_layer()`.
 pub fn middleware<S, R>(strategy: S, resolver: R) -> TenantLayer<S, R>
 where
     S: TenantStrategy,
@@ -19,7 +24,11 @@ where
     TenantLayer::new(strategy, resolver)
 }
 
-/// Tower layer that produces `TenantMiddleware` services.
+/// Tower [`Layer`] that wraps an inner service with tenant resolution.
+///
+/// Produced by [`middleware`]. Apply to a router with `.layer()` for all
+/// strategies except [`crate::tenant::PathParamStrategy`], which requires
+/// `.route_layer()`.
 pub struct TenantLayer<S, R> {
     strategy: Arc<S>,
     resolver: Arc<R>,
@@ -35,6 +44,7 @@ impl<S, R> Clone for TenantLayer<S, R> {
 }
 
 impl<S, R> TenantLayer<S, R> {
+    /// Creates a new `TenantLayer` wrapping the given strategy and resolver.
     pub fn new(strategy: S, resolver: R) -> Self {
         Self {
             strategy: Arc::new(strategy),
@@ -59,7 +69,16 @@ where
     }
 }
 
-/// Tower service that resolves tenants from requests.
+/// Tower [`Service`] that resolves the tenant on every request.
+///
+/// On each request this service:
+/// 1. Calls the [`TenantStrategy`] to extract a [`crate::tenant::TenantId`].
+/// 2. Calls the [`TenantResolver`] to obtain the concrete tenant value.
+/// 3. Records `tenant_id` in the current tracing span.
+/// 4. Inserts the resolved tenant as `Arc<T>` into request extensions.
+///
+/// Errors at either step are converted to HTTP responses via [`IntoResponse`]
+/// and returned immediately without calling the inner service.
 pub struct TenantMiddleware<Svc, S, R> {
     inner: Svc,
     strategy: Arc<S>,
