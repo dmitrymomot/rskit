@@ -1,7 +1,6 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use std::task::{Context, Poll};
 
 use axum::body::Body;
@@ -115,7 +114,7 @@ where
                         "flash_messages",
                         minijinja::Value::from_function(
                             move |_args: &[minijinja::Value]| -> Result<minijinja::Value, minijinja::Error> {
-                                state.read.store(true, Ordering::Release);
+                                state.mark_read();
                                 let entries = state.incoming_as_template_value();
                                 Ok(minijinja::Value::from_serialize(&entries))
                             },
@@ -334,7 +333,7 @@ mod tests {
             "flash_messages",
             minijinja::Value::from_function(
                 move |_args: &[minijinja::Value]| -> Result<minijinja::Value, minijinja::Error> {
-                    state.read.store(true, std::sync::atomic::Ordering::Release);
+                    state.mark_read();
                     let entries = state.incoming_as_template_value();
                     Ok(minijinja::Value::from_serialize(&entries))
                 },
