@@ -58,7 +58,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 13 (RBAC):** DONE — `src/rbac/` module with `RoleExtractor` trait, `Role` extractor, RBAC middleware, `require_role()` / `require_authenticated()` guard layers (22 unit + 8 integration tests)
 - **Plan 14 (JWT):** DONE — `src/auth/jwt/` module with `JwtEncoder`/`JwtDecoder`, `Claims<T>`, `HmacSigner` (HS256), `JwtLayer<T>` middleware, pluggable `TokenSource`, optional `Revocation` trait, `Bearer` extractor. Feature-gated under `auth` (73 unit + 13 integration tests)
 - **Plan 15 (Webhook Delivery):** DONE — `src/webhook/` module with `WebhookSender<C>`, `HttpClient` trait, `HyperClient`, `WebhookSecret`, Standard Webhooks signing. Feature-gated under `webhooks`
-- **Plan 16 (Flash Messages):** Cookie-based (signed), read-once-and-clear. `FlashMessage` extractor + `set_flash()`. Template function `flash("key")`. No session dependency
+- **Plan 16 (Flash Messages):** IN PROGRESS — spec and plan written, ready for implementation. `Flash` extractor with `flash.success()` / `flash.set()` / `flash.messages()`. Template function `flash_messages()`. Cookie-based (signed), read-once-and-clear. No session dependency
 - **Plan 17 (Storage ACL + Upload from URL):** Extend `src/storage/` — `ACL::Private` / `ACL::PublicRead` on upload, `put_from_url()` with auto content-type detection from response headers
 - **Plan 18 (DNS Verification):** TXT record ownership check + CNAME verification for custom domain routing
 - **Plan 19 (Geolocation):** MaxMind GeoLite2 `.mmdb` reader, `GeoLocator` service with `lookup(ip) -> Location`. Feature-gated
