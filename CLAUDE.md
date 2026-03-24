@@ -59,7 +59,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 14 (JWT):** DONE — `src/auth/jwt/` module with `JwtEncoder`/`JwtDecoder`, `Claims<T>`, `HmacSigner` (HS256), `JwtLayer<T>` middleware, pluggable `TokenSource`, optional `Revocation` trait, `Bearer` extractor. Feature-gated under `auth` (73 unit + 13 integration tests)
 - **Plan 15 (Webhook Delivery):** DONE — `src/webhook/` module with `WebhookSender<C>`, `HttpClient` trait, `HyperClient`, `WebhookSecret`, Standard Webhooks signing. Feature-gated under `webhooks`
 - **Plan 16 (Flash Messages):** DONE — `src/flash/` module with `Flash` extractor (`flash.success()` / `flash.set()` / `flash.messages()`), `FlashLayer` middleware, `flash_messages()` template function. Cookie-based (signed), read-once-and-clear. No session dependency. Always-available (no feature gate)
-- **Plan 17 (Storage ACL + Upload from URL):** SPEC + PLAN READY — spec and plan written, ready for implementation. `Acl::Private` / `Acl::PublicRead` on `PutOptions`, `x-amz-acl` S3 header, `PutFromUrlInput`, `put_from_url()` / `put_from_url_with()` with streaming fetch and 30s timeout. Feature-gated under `storage`
+- **Plan 17 (Storage ACL + Upload from URL):** DONE — `src/storage/` extended with `Acl` enum on `PutOptions`, `x-amz-acl` S3 header, `PutFromUrlInput`, `put_from_url()` / `put_from_url_with()` with streaming fetch and 30s timeout. Feature-gated under `storage`
 - **Plan 18 (DNS Verification):** SPEC + PLAN READY — `DomainVerifier` with `check_txt()`, `check_cname()`, `verify_domain()`, `generate_verification_token()`. Uses `simple-dns` 0.11 for packet parsing, raw UDP transport. Feature-gated under `dns`
 - **Plan 19 (Client IP + Geolocation):** SPEC + PLAN READY — `src/ip/` shared module (always available) with `ClientIp` extractor + `ClientIpLayer` middleware; `src/geolocation/` with `GeoLocator` service, `Location` struct, `GeoLayer` middleware. Session refactored to use shared `ClientIp`. Feature-gated under `geolocation`
 
@@ -136,6 +136,9 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `http_body` is a transitive dep (via hyper/axum) — use `http_body_util::BodyExt` for `.frame()`, no need to add `http-body` to Cargo.toml
 - `pub(crate)` functions can't be tested from `tests/*.rs` — HTTP server tests for internal functions must be unit tests in the source file
 - `x-amz-acl` header may be silently ignored by S3-compatible providers (RustFS/MinIO) if ACLs are disabled at server level
+- `put_from_url()` does not follow redirects (SSRF prevention) — callers must provide the final URL
+- `put_from_url()` has a hard-coded 30s timeout — wraps the fetch in `tokio::time::timeout`
+- `put_from_url()` on memory backend returns `Error::internal` — it's inherently a network operation, use unit tests in `fetch.rs` for HTTP server tests
 
 ### Rate Limiting
 
