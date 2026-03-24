@@ -8,7 +8,7 @@ repository = "https://github.com/dmitrymomot/modo"
 
 [features]
 default = []
-full = ["templates", "sse", "auth", "sentry", "email", "storage", "webhooks"]
+full = ["templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns"]
 sentry = ["dep:sentry", "dep:sentry-tracing"]
 templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
 sse = ["dep:futures-util"]
@@ -19,6 +19,8 @@ storage = ["dep:hmac", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:h
 storage-test = ["storage"]
 webhooks = ["dep:hmac", "dep:base64", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
 webhooks-test = ["webhooks"]
+dns = ["dep:simple-dns"]
+dns-test = ["dns"]
 test-helpers = []
 
 [dependencies]
@@ -83,6 +85,9 @@ unic-langid = { version = "0.9", optional = true }
 
 # SSE (optional, gated by "sse" feature)
 futures-util = { version = "0.3", optional = true }
+
+# DNS (optional, gated by "dns" feature)
+simple-dns = { version = "0.11", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
