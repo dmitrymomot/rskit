@@ -80,8 +80,7 @@ fn build_router(oauth_cfg: &OAuthConfig, cookie_cfg: &CookieConfig) -> Router {
 ### Login handler
 
 ```rust
-use axum::extract::State;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use modo::auth::oauth::Google;
 use modo::extractor::Service;
 

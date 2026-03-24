@@ -46,7 +46,13 @@ Construct services from config:
 ```rust
 use modo::auth::jwt::{JwtConfig, JwtEncoder, JwtDecoder};
 
-let config: JwtConfig = /* loaded from YAML */;
+let config = JwtConfig {
+    secret: "my-secret".into(),
+    default_expiry: Some(3600),
+    leeway: 0,
+    issuer: None,
+    audience: None,
+};
 let encoder = JwtEncoder::from_config(&config);
 let decoder = JwtDecoder::from_config(&config);
 // Or share the same key material:
@@ -66,6 +72,13 @@ use modo::id;
 #[derive(Clone, Serialize, Deserialize)]
 struct AppClaims { role: String }
 
+let config = JwtConfig {
+    secret: "my-secret".into(),
+    default_expiry: Some(3600),
+    leeway: 0,
+    issuer: None,
+    audience: None,
+};
 let encoder = JwtEncoder::from_config(&config);
 
 let claims = Claims::new(AppClaims { role: "admin".into() })
@@ -80,9 +93,21 @@ let token: String = encoder.encode(&claims).unwrap();
 ### Decoding tokens
 
 ```rust
-use modo::auth::jwt::{Claims, JwtDecoder};
+use modo::auth::jwt::{Claims, JwtConfig, JwtDecoder};
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct AppClaims { role: String }
+
+let config = JwtConfig {
+    secret: "my-secret".into(),
+    default_expiry: Some(3600),
+    leeway: 0,
+    issuer: None,
+    audience: None,
+};
 let decoder = JwtDecoder::from_config(&config);
+
+let token: String = /* JWT string received from the client */;
 let claims: Claims<AppClaims> = decoder.decode(&token).unwrap();
 println!("{}", claims.subject().unwrap_or("?"));
 ```
@@ -91,11 +116,23 @@ println!("{}", claims.subject().unwrap_or("?"));
 
 ```rust
 use axum::{Router, routing::get};
-use modo::auth::jwt::{Claims, JwtDecoder, JwtLayer};
+use modo::auth::jwt::{Claims, JwtConfig, JwtDecoder, JwtLayer};
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct AppClaims { role: String }
 
 async fn me_handler(claims: Claims<AppClaims>) -> String {
     format!("hello {}", claims.subject().unwrap_or("?"))
 }
+
+let config = JwtConfig {
+    secret: "my-secret".into(),
+    default_expiry: Some(3600),
+    leeway: 0,
+    issuer: None,
+    audience: None,
+};
+let decoder = JwtDecoder::from_config(&config);
 
 let app: Router = Router::new()
     .route("/me", get(me_handler))
@@ -105,6 +142,11 @@ let app: Router = Router::new()
 ### Optional authentication
 
 ```rust
+use modo::auth::jwt::Claims;
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct AppClaims { role: String }
+
 async fn feed_handler(claims: Option<Claims<AppClaims>>) -> String {
     match claims {
         Some(c) => format!("auth:{}", c.custom.role),
@@ -117,13 +159,27 @@ async fn feed_handler(claims: Option<Claims<AppClaims>>) -> String {
 
 ```rust
 use std::sync::Arc;
-use modo::auth::jwt::{JwtLayer, BearerSource, QuerySource, CookieSource, TokenSource};
+use modo::auth::jwt::{
+    JwtConfig, JwtDecoder, JwtLayer, BearerSource, QuerySource, CookieSource, TokenSource,
+};
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct AppClaims { role: String }
+
+let config = JwtConfig {
+    secret: "my-secret".into(),
+    default_expiry: Some(3600),
+    leeway: 0,
+    issuer: None,
+    audience: None,
+};
+let decoder = JwtDecoder::from_config(&config);
 
 let layer = JwtLayer::<AppClaims>::new(decoder)
     .with_sources(vec![
         Arc::new(BearerSource) as Arc<dyn TokenSource>,
-        Arc::new(QuerySource("token")),
-        Arc::new(CookieSource("jwt")),
+        Arc::new(QuerySource("token")) as Arc<dyn TokenSource>,
+        Arc::new(CookieSource("jwt")) as Arc<dyn TokenSource>,
     ]);
 ```
 
@@ -132,7 +188,7 @@ let layer = JwtLayer::<AppClaims>::new(decoder)
 ```rust
 use std::pin::Pin;
 use std::sync::Arc;
-use modo::auth::jwt::{JwtLayer, Revocation};
+use modo::auth::jwt::{JwtConfig, JwtDecoder, JwtLayer, Revocation};
 use modo::Result;
 
 struct MyRevocationStore;
@@ -146,7 +202,16 @@ impl Revocation for MyRevocationStore {
     }
 }
 
-let layer = JwtLayer::<AppClaims>::new(decoder)
+let config = JwtConfig {
+    secret: "my-secret".into(),
+    default_expiry: Some(3600),
+    leeway: 0,
+    issuer: None,
+    audience: None,
+};
+let decoder = JwtDecoder::from_config(&config);
+
+let layer = JwtLayer::<()>::new(decoder)
     .with_revocation(Arc::new(MyRevocationStore));
 ```
 
@@ -159,10 +224,10 @@ A backend error causes a fail-closed `401`.
 use modo::auth::jwt::JwtError;
 
 // Before IntoResponse (e.g. in a guard):
-if let Some(&JwtError::Expired) = err.source_as::<JwtError>() { /* ... */ }
+// if let Some(&JwtError::Expired) = err.source_as::<JwtError>() { /* ... */ }
 
 // After IntoResponse (e.g. in a custom error handler):
-if err.error_code() == Some("jwt:expired") { /* ... */ }
+// if err.error_code() == Some("jwt:expired") { /* ... */ }
 ```
 
 All error codes are prefixed `jwt:` — see `JwtError::code()` for the full list.
