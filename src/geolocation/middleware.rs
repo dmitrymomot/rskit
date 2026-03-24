@@ -10,10 +10,13 @@ use crate::ip::ClientIp;
 use super::locator::GeoLocator;
 
 /// Tower layer that performs geolocation lookup and inserts
-/// [`Location`] into request extensions.
+/// [`Location`](super::Location) into request extensions.
 ///
-/// Requires [`ClientIpLayer`](crate::ip::ClientIpLayer) to run first
-/// so that [`ClientIp`] is available in extensions.
+/// Apply this layer after [`ClientIpLayer`](crate::ip::ClientIpLayer) so that
+/// [`ClientIp`] is already present in extensions when `GeoLayer` runs.
+/// If `ClientIp` is absent the request passes through without modification.
+///
+/// Requires the `geolocation` feature.
 pub struct GeoLayer {
     locator: GeoLocator,
 }
@@ -27,6 +30,7 @@ impl Clone for GeoLayer {
 }
 
 impl GeoLayer {
+    /// Create a new `GeoLayer` backed by `locator`.
     pub fn new(locator: GeoLocator) -> Self {
         Self { locator }
     }
@@ -43,6 +47,7 @@ impl<S> Layer<S> for GeoLayer {
     }
 }
 
+/// Tower service produced by [`GeoLayer`].
 pub struct GeoMiddleware<S> {
     inner: S,
     locator: GeoLocator,
