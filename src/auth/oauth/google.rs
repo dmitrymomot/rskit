@@ -15,6 +15,13 @@ const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const USERINFO_URL: &str = "https://www.googleapis.com/oauth2/v2/userinfo";
 const DEFAULT_SCOPES: &[&str] = &["openid", "email", "profile"];
 
+/// OAuth 2.0 provider implementation for Google.
+///
+/// Implements the Authorization Code flow with PKCE (S256). Default scopes are
+/// `openid`, `email`, and `profile`. Override them via
+/// [`OAuthProviderConfig::scopes`](super::OAuthProviderConfig::scopes).
+///
+/// Requires the `auth` feature.
 pub struct Google {
     config: OAuthProviderConfig,
     cookie_config: CookieConfig,
@@ -22,6 +29,10 @@ pub struct Google {
 }
 
 impl Google {
+    /// Creates a new `Google` provider from the given configuration.
+    ///
+    /// `cookie_config` and `key` are used to sign the `_oauth_state` cookie that carries the
+    /// PKCE verifier and state nonce across the redirect.
     pub fn new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key) -> Self {
         Self {
             config: config.clone(),

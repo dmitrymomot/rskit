@@ -16,6 +16,17 @@ const USER_URL: &str = "https://api.github.com/user";
 const EMAILS_URL: &str = "https://api.github.com/user/emails";
 const DEFAULT_SCOPES: &[&str] = &["user:email", "read:user"];
 
+/// OAuth 2.0 provider implementation for GitHub.
+///
+/// Implements the Authorization Code flow with PKCE (S256). Default scopes are
+/// `user:email` and `read:user`. Override them via
+/// [`OAuthProviderConfig::scopes`](super::OAuthProviderConfig::scopes).
+///
+/// The primary verified email is fetched from the GitHub `/user/emails` endpoint and used to
+/// populate [`UserProfile::email`](super::UserProfile::email) and
+/// [`UserProfile::email_verified`](super::UserProfile::email_verified).
+///
+/// Requires the `auth` feature.
 pub struct GitHub {
     config: OAuthProviderConfig,
     cookie_config: CookieConfig,
@@ -23,6 +34,10 @@ pub struct GitHub {
 }
 
 impl GitHub {
+    /// Creates a new `GitHub` provider from the given configuration.
+    ///
+    /// `cookie_config` and `key` are used to sign the `_oauth_state` cookie that carries the
+    /// PKCE verifier and state nonce across the redirect.
     pub fn new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key) -> Self {
         Self {
             config: config.clone(),

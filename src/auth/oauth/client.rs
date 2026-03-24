@@ -1,3 +1,9 @@
+//! Internal HTTP helpers used by provider implementations.
+//!
+//! Both functions build a fresh hyper HTTPS client per call. They are intentionally
+//! simple — no connection pooling, no retry logic. OAuth token exchanges are
+//! low-frequency operations that do not need pooling.
+
 use http::Uri;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;

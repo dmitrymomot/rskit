@@ -11,6 +11,16 @@ use crate::service::AppState;
 const OAUTH_COOKIE_NAME: &str = "_oauth_state";
 const OAUTH_COOKIE_MAX_AGE_SECS: i64 = 300;
 
+/// OAuth 2.0 state extracted from the signed `_oauth_state` cookie.
+///
+/// This is an axum extractor. Add it as a handler parameter on your callback route to
+/// automatically parse and verify the state cookie that was set by [`AuthorizationRequest`].
+///
+/// Requires a [`Key`](axum_extra::extract::cookie::Key) to be registered in the
+/// [`Registry`](crate::service::Registry) so that the cookie signature can be verified.
+///
+/// Returns [`crate::Error::bad_request`] if the cookie is missing, tampered with, or
+/// structurally invalid.
 pub struct OAuthState {
     state_nonce: String,
     pkce_verifier: String,
@@ -88,6 +98,12 @@ where
     }
 }
 
+/// An authorization redirect that also sets the `_oauth_state` cookie.
+///
+/// Returned by [`OAuthProvider::authorize_url`](super::OAuthProvider::authorize_url).
+/// Implements [`axum::response::IntoResponse`]: returning it from a handler issues an HTTP
+/// `303 See Other` redirect to the provider's authorization endpoint and attaches the signed
+/// state cookie.
 pub struct AuthorizationRequest {
     pub(crate) redirect_url: String,
     pub(crate) set_cookie_header: String,
