@@ -1,466 +1,583 @@
 # modo Conventions Reference
 
-## Documentation
-
-- **modo (umbrella crate):** https://docs.rs/modo
-
-The `modo` crate is the umbrella re-export that application code depends on. It re-exports types from internal sub-crates (`modo-macros`, `modo-db`, `modo-jobs`, etc.) so you rarely import sub-crates directly. When in doubt, check the modo docs.rs page for the canonical public API surface. All macro attributes (`#[handler]`, `#[module]`, `#[view]`, etc.) are also re-exported through modo, so the only time you import a sub-crate directly is when using `modo_db`, `modo_jobs`, or similar standalone crate macros.
-
----
-
 ## File Organization
 
-`mod.rs` has exactly one purpose in modo: it is the module import and re-export hub. No handler logic, view logic, task logic, or business code belongs there.
-
-Rules:
-- `mod.rs` — only `mod` declarations and `pub use` re-exports
-- `handlers.rs` (or `handlers/`) — all `#[handler]`-annotated functions
-- `views.rs` (or `views/`) — all `#[view]`-annotated structs and template helpers
-- Tasks, jobs, and other domain code each go in their own files
+`mod.rs` and `lib.rs` are ONLY for `mod` imports and re-exports. All implementation code goes in separate files.
 
 ```
 src/
-  users/
-    mod.rs        ← ONLY: mod handlers; mod views; pub use ...
-    handlers.rs   ← all #[handler] fns for this module
-    views.rs      ← all #[view] structs for this module
-    tasks.rs      ← background task logic
+  error/
+    mod.rs          # mod core; mod convert; mod http_error; pub use ...
+    core.rs         # Error struct, Result alias, constructors
+    convert.rs      # From impls for std/third-party errors
+    http_error.rs   # HttpError enum
+  extractor/
+    mod.rs          # mod json; mod form; ... pub use ...
+    json.rs         # JsonRequest<T>
+    form.rs         # FormRequest<T>
+    query.rs        # Query<T>
+    service.rs      # Service<T>
+    multipart.rs    # MultipartRequest<T>, UploadedFile, Files
+    upload_validator.rs  # UploadValidator
 ```
 
-This rule is enforced by convention across the entire codebase. Violating it causes confusion about where code lives and makes the `mod.rs` hard to scan.
+`lib.rs` re-exports key types at crate root for convenience:
+
+```rust
+pub use error::{Error, Result};
+pub use extractor::Service;
+pub use sanitize::Sanitize;
+pub use validate::{Validate, ValidationError, Validator};
+```
+
+External crates re-exported for user convenience:
+
+```rust
+pub use axum;
+pub use serde;
+pub use serde_json;
+pub use sqlx;
+pub use tokio;
+```
 
 ---
 
 ## Error Handling
 
-### Result Type Aliases
+**Module:** `src/error/`
+**Re-exports:** `modo::Error`, `modo::Result<T>`
 
-Three result aliases cover all handler scenarios. Each defaults its error type to `modo::Error` but accepts a custom error as a second type parameter.
-
-```rust
-// Generic handler — use when returning non-JSON, non-template responses
-pub type HandlerResult<T, E = Error> = Result<T, E>;
-
-// JSON API handler — wraps the Ok value in axum::Json automatically
-pub type JsonResult<T, E = Error> = Result<axum::Json<T>, E>;
-
-// Template handler — returns ViewResponse (requires "templates" feature)
-pub type ViewResult<E = Error> = Result<crate::templates::ViewResponse, E>;
-```
-
-### When to Use Which
-
-| Scenario | Return type |
-|---|---|
-| JSON REST API endpoint | `JsonResult<T>` |
-| HTMX or server-rendered HTML | `ViewResult` |
-| Response with custom status, redirect, stream | `HandlerResult<impl IntoResponse>` |
-| Handler with a custom domain error type | `JsonResult<T, MyError>` |
-
-### The `Error` Type
-
-`modo::Error` is a structured HTTP error carrying status code, machine-readable code string, human-readable message, and an optional details map:
+### `Error`
 
 ```rust
 pub struct Error {
     status: StatusCode,
-    code: String,
     message: String,
-    details: HashMap<String, serde_json::Value>,
-    source: Option<Arc<dyn std::error::Error + Send + Sync>>,
+    source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    error_code: Option<&'static str>,
+    details: Option<serde_json::Value>,
+    lagged: bool,
 }
 ```
 
-Construction methods:
+**Constructors:**
 
 ```rust
-// From HttpError variant (most common)
-HttpError::NotFound.into()
+// Generic
+Error::new(status: StatusCode, message: impl Into<String>) -> Self
+Error::with_source(status: StatusCode, message: impl Into<String>, source: impl Error + Send + Sync + 'static) -> Self
 
-// HttpError variant with custom message
-HttpError::Forbidden.with_message("You do not own this resource")
-
-// Convenience for 500
-Error::internal("database connection failed")
-
-// Full builder
-Error::new(StatusCode::UNPROCESSABLE_ENTITY, "validation_failed", "Email is invalid")
-    .detail("field", json!("email"))
-
-// From anyhow — maps to 500
-Error::from(anyhow_error)
+// Named status codes
+Error::bad_request(msg: impl Into<String>) -> Self       // 400
+Error::unauthorized(msg: impl Into<String>) -> Self      // 401
+Error::forbidden(msg: impl Into<String>) -> Self         // 403
+Error::not_found(msg: impl Into<String>) -> Self         // 404
+Error::conflict(msg: impl Into<String>) -> Self          // 409
+Error::payload_too_large(msg: impl Into<String>) -> Self // 413
+Error::unprocessable_entity(msg: impl Into<String>) -> Self // 422
+Error::too_many_requests(msg: impl Into<String>) -> Self // 429
+Error::internal(msg: impl Into<String>) -> Self          // 500
+Error::bad_gateway(msg: impl Into<String>) -> Self       // 502
+Error::gateway_timeout(msg: impl Into<String>) -> Self   // 504
+Error::lagged(skipped: u64) -> Self                      // 500, SSE-specific
 ```
 
-### `HttpError` Variants
+**Builder methods:**
 
-`HttpError` is a `Copy` enum covering all standard 4xx and 5xx codes. Every variant implements `IntoResponse` and converts to `Error` via `From`. Key variants:
-
-```
-BadRequest, Unauthorized, Forbidden, NotFound, Conflict,
-UnprocessableEntity, TooManyRequests, InternalServerError,
-ServiceUnavailable, GatewayTimeout
+```rust
+fn chain(self, source: impl Error + Send + Sync + 'static) -> Self  // attach source error
+fn with_code(self, code: &'static str) -> Self                       // attach error identity code
+fn with_details(self, details: serde_json::Value) -> Self            // attach structured JSON payload
 ```
 
-See `modo::HttpError` for the full list of variants.
+**Accessors:**
 
-### JSON Error Response Shape
+```rust
+fn status(&self) -> StatusCode
+fn message(&self) -> &str
+fn details(&self) -> Option<&serde_json::Value>
+fn error_code(&self) -> Option<&str>
+fn source_as<T: Error + 'static>(&self) -> Option<&T>  // downcast source
+fn is_lagged(&self) -> bool
+```
 
-The default JSON response for a 4xx error:
+**`IntoResponse` output format:**
 
 ```json
-{
-  "error": "not_found",
-  "message": "Not found",
-  "status": 404,
-  "details": { ... }
+{ "error": { "status": 404, "message": "user not found" } }
+```
+
+With details:
+
+```json
+{ "error": { "status": 422, "message": "validation failed", "details": { ... } } }
+```
+
+A copy of the error (without `source`) is stored in response extensions for middleware inspection.
+
+**Usage pattern:**
+
+```rust
+use modo::{Error, Result};
+
+async fn handler() -> Result<Json<User>> {
+    let user = find_user(id)
+        .map_err(|e| Error::not_found("user not found").chain(e))?;
+    Ok(Json(user))
 }
 ```
 
-For 5xx errors, `default_response()` always returns the generic `InternalServerError` shape — the actual message is logged server-side but not exposed to the client.
-
-### Custom Error Handlers via `#[error_handler]`
-
-Register one global error handler using the `#[error_handler]` proc macro. It receives the `Error` and an `ErrorContext` (method, URI, headers) and returns a `Response`. The handler is collected via `inventory` and applied automatically through `error_handler_middleware`.
+**Error identity pattern (for matching after response conversion):**
 
 ```rust
-use modo::{Error, ErrorContext};
-use axum::response::Response;
+Error::unauthorized("unauthorized")
+    .chain(JwtError::Expired)
+    .with_code("jwt:expired")
+// Before response: source_as::<JwtError>()
+// After response:  error_code() == Some("jwt:expired")
+```
 
-#[modo::error_handler]
-fn my_error_handler(err: Error, ctx: &ErrorContext) -> Response {
-    if ctx.accepts_html() {
-        // Return an HTML error page
-        render_error_page(err.status_code(), err.message_str()).into_response()
-    } else {
-        // Fall back to default JSON rendering
-        err.default_response()
+### Gotchas
+
+- `with_source(status, msg, source)` is a 3-arg constructor. The builder method is `chain(source)` (1 arg). Do not confuse them.
+- `Clone` drops `source` (can't clone `Box<dyn Error>`). `error_code`, `details`, and all other fields are preserved.
+- `IntoResponse` also drops `source`. Use `error_code` to preserve identity through the response pipeline.
+- Adding fields to `Error` requires updating ALL struct literal sites (including `IntoResponse` and `Clone` impls).
+- Guard/middleware errors must use `Error::into_response()` -- never construct raw HTTP responses.
+
+### `HttpError`
+
+Lightweight copy-able enum of common HTTP statuses. Converts into `Error` via `From<HttpError>`.
+
+```rust
+let err: Error = HttpError::NotFound.into();
+assert_eq!(err.message(), "Not Found");
+```
+
+Variants: `BadRequest`, `Unauthorized`, `Forbidden`, `NotFound`, `MethodNotAllowed`, `Conflict`, `Gone`, `UnprocessableEntity`, `TooManyRequests`, `PayloadTooLarge`, `InternalServerError`, `BadGateway`, `ServiceUnavailable`, `GatewayTimeout`.
+
+### Auto-conversions (`From` impls)
+
+| Source type | Maps to |
+|---|---|
+| `std::io::Error` | 500 "IO error" |
+| `serde_json::Error` | 400 "JSON error" |
+| `serde_yaml_ng::Error` | 500 "YAML error" |
+| `ValidationError` | 422 "validation failed" (with details) |
+
+---
+
+## Extractors
+
+**Module:** `src/extractor/`
+
+All extractors except `Path` and `Service<T>` require `T: Sanitize`. They call `sanitize()` automatically after deserialization.
+
+### `Service<T>`
+
+Retrieves a service from the `Registry`. Inner value is `Arc<T>`. Returns 500 if not registered.
+
+```rust
+pub struct Service<T>(pub Arc<T>);
+// Bounds: T: Send + Sync + 'static
+```
+
+```rust
+async fn handler(Service(db): Service<Pool>) {
+    // db is Arc<Pool>
+}
+```
+
+### `JsonRequest<T>`
+
+Deserializes JSON body, then sanitizes.
+
+```rust
+pub struct JsonRequest<T>(pub T);
+// Bounds: T: DeserializeOwned + Sanitize
+// Rejection: 400 "invalid JSON: ..."
+```
+
+```rust
+async fn create(JsonRequest(body): JsonRequest<CreateItem>) { ... }
+```
+
+### `FormRequest<T>`
+
+Deserializes URL-encoded form body, then sanitizes.
+
+```rust
+pub struct FormRequest<T>(pub T);
+// Bounds: T: DeserializeOwned + Sanitize
+// Rejection: 400 "invalid form data: ..."
+```
+
+```rust
+async fn login(FormRequest(form): FormRequest<LoginForm>) { ... }
+```
+
+### `Query<T>`
+
+Deserializes URL query string, then sanitizes.
+
+```rust
+pub struct Query<T>(pub T);
+// Bounds: T: DeserializeOwned + Sanitize
+// Rejection: 400 "invalid query: ..."
+```
+
+```rust
+async fn search(Query(params): Query<SearchParams>) { ... }
+```
+
+### `Path<T>`
+
+Re-exported directly from `axum::extract::Path`. No sanitization.
+
+```rust
+pub use axum::extract::Path;
+```
+
+### `MultipartRequest<T>`
+
+Splits `multipart/form-data` into text fields (deserialized + sanitized into `T`) and file fields (collected into `Files`).
+
+```rust
+pub struct MultipartRequest<T>(pub T, pub Files);
+// Bounds: T: DeserializeOwned + Sanitize
+// Rejection: 400 "invalid multipart request: ..."
+```
+
+```rust
+async fn upload(MultipartRequest(form, mut files): MultipartRequest<ProfileForm>) {
+    let avatar = files.file("avatar"); // Option<UploadedFile>
+}
+```
+
+### `UploadedFile`
+
+```rust
+pub struct UploadedFile {
+    pub name: String,          // original filename
+    pub content_type: String,  // MIME type (default: "application/octet-stream")
+    pub size: usize,           // bytes
+    pub data: bytes::Bytes,    // raw file content
+}
+
+fn extension(&self) -> Option<String>           // lowercase, without dot
+fn validate(&self) -> UploadValidator<'_>       // start fluent validation
+async fn from_field(field: Field) -> Result<Self>  // low-level, prefer MultipartRequest
+```
+
+### `Files`
+
+```rust
+pub struct Files(HashMap<String, Vec<UploadedFile>>);
+
+fn from_map(map: HashMap<String, Vec<UploadedFile>>) -> Self
+fn get(&self, name: &str) -> Option<&UploadedFile>       // borrow first file
+fn file(&mut self, name: &str) -> Option<UploadedFile>   // take first file
+fn files(&mut self, name: &str) -> Vec<UploadedFile>     // take all files for field
+```
+
+### `UploadValidator`
+
+Fluent validation for uploaded files. Obtained via `UploadedFile::validate()`.
+
+```rust
+fn max_size(self, max: usize) -> Self       // reject if file > max bytes
+fn accept(self, pattern: &str) -> Self      // reject if content type doesn't match
+fn check(self) -> Result<()>                // finalize; 422 error with all violations
+```
+
+Pattern formats: `"image/png"` (exact), `"image/*"` (wildcard subtype), `"*/*"` (any).
+
+```rust
+file.validate()
+    .max_size(5 * 1024 * 1024)   // 5MB
+    .accept("image/*")
+    .check()?;
+```
+
+---
+
+## Sanitize
+
+**Module:** `src/sanitize/`
+**Re-export:** `modo::Sanitize`
+
+### `Sanitize` trait
+
+```rust
+pub trait Sanitize {
+    fn sanitize(&mut self);
+}
+```
+
+Called automatically by `JsonRequest`, `FormRequest`, `Query`, and `MultipartRequest` after deserialization.
+
+```rust
+use modo::sanitize::{Sanitize, trim, normalize_email};
+
+#[derive(Deserialize)]
+struct SignupInput {
+    username: String,
+    email: String,
+}
+
+impl Sanitize for SignupInput {
+    fn sanitize(&mut self) {
+        trim(&mut self.username);
+        normalize_email(&mut self.email);
     }
 }
 ```
 
-`ErrorContext` helpers:
-- `ctx.accepts_html()` — true when `Accept` contains `text/html`
-- `ctx.is_htmx()` — true when `HX-Request` header is present
+### Helper functions
 
-The `error_handler_middleware` is only wired into the stack when at least one `ErrorHandlerRegistration` is found via `inventory::iter`. If no `#[error_handler]` is defined, the default `Error::default_response()` is used directly.
+All operate in-place on `&mut String`:
+
+```rust
+fn trim(s: &mut String)                        // trim leading/trailing whitespace
+fn trim_lowercase(s: &mut String)              // trim + lowercase
+fn collapse_whitespace(s: &mut String)         // consecutive whitespace -> single space
+fn strip_html(s: &mut String)                  // remove tags, decode entities, strip script/style
+fn truncate(s: &mut String, max_chars: usize)  // limit to N Unicode scalar values
+fn normalize_email(s: &mut String)             // trim + lowercase + strip +tag
+```
+
+`normalize_email` example: `"  User+Tag@Example.COM  "` becomes `"user@example.com"`.
 
 ---
 
-## Middleware Stacking Order
+## Validate
 
-Middleware in modo is applied in three scopes. When reading execution order, the scope hierarchy is:
+**Module:** `src/validate/`
+**Re-exports:** `modo::Validate`, `modo::ValidationError`, `modo::Validator`
 
-```
-Global (outermost) → Module → Handler (innermost)
-```
-
-A request enters Global middleware first, then Module middleware for its route, then Handler-level middleware, and finally reaches the handler. Responses traverse the stack in reverse.
-
-### Framework-Level Stack
-
-`AppBuilder::run()` assembles the full middleware stack. The comment in `app.rs` gives the exact order (outermost to innermost):
-
-```
-CORS
-  Maintenance
-    Catch Panic
-      Request ID
-        Sentry Hub              ← (sentry feature only)
-          Sentry Request ID Tag ← (sentry feature only)
-            Sentry HTTP         ← (sentry feature only)
-              Sensitive Headers
-                Tracing
-                  Client IP
-                    Timeout
-                      Trailing Slash
-                        Compression
-                          Body Limit
-                            Security Headers
-                              Error Handler
-                                Rate Limiter
-                                  i18n
-                                    Template Context
-                                      Request ID Injector
-                                        User Global Layers  ← AppBuilder::layer()
-                                          Render Layer
-                                            Module Middleware
-                                              Handler Middleware (innermost)
-```
-
-See `AppBuilder::run()` in `modo/src/app.rs` for the exact assembly order.
-
-### AppBuilder API
+### `Validate` trait
 
 ```rust
-#[modo::main]
-async fn main(app: modo::app::AppBuilder, config: AppConfig) {
-    app
-        // Register a service accessible via Service<T> extractor
-        .service(my_db_pool)
-        // Register a service that also participates in graceful shutdown
-        .managed_service(my_job_queue)
-        // Add a global Tower layer (applied outside module/handler middleware)
-        .layer(my_auth_layer)
-        // Configure CORS
-        .cors(CorsConfig::permissive())
-        // Override HTTP settings
-        .timeout(30)
-        .body_limit("10mb")
-        .compression(true)
-        // Register a shutdown hook (runs after HTTP draining)
-        .on_shutdown(|| async { cleanup().await })
-        // Add a readiness check exposed at /_ready
-        .readiness_check(|| async { db_ping().await.map_err(Into::into) })
-        .run()
-        .await
-        .unwrap();
+pub trait Validate {
+    fn validate(&self) -> Result<(), ValidationError>;
 }
 ```
 
-### Module-Level Middleware
-
-Declared on the `#[module]` attribute. Applied to all routes within the module's prefix:
+### `Validator` (builder)
 
 ```rust
-#[modo::module(prefix = "/api/v1", middleware = [require_auth])]
-mod api_v1 {
-    #[modo::handler(GET, "/users")]
-    async fn list_users() -> &'static str { "users" }
+Validator::new()
+    .field("name", &input.name, |f| f.required().min_length(2).max_length(100))
+    .field("email", &input.email, |f| f.required().email())
+    .field("age", &input.age, |f| f.range(18..=120))
+    .check()   // -> Result<(), ValidationError>
+```
+
+All fields are validated (no short-circuit). Errors are collected per-field.
+
+### `FieldValidator` rules
+
+**String rules** (available when `T: AsRef<str>`):
+
+```rust
+fn required(self) -> Self                       // non-empty after trim
+fn min_length(self, min: usize) -> Self
+fn max_length(self, max: usize) -> Self
+fn email(self) -> Self                          // structural check: local@domain.tld
+fn url(self) -> Self                            // starts with http(s)://, no spaces
+fn one_of(self, options: &[&str]) -> Self
+fn matches_regex(self, pattern: &str) -> Self
+fn custom(self, predicate: impl FnOnce(&str) -> bool, message: &str) -> Self
+```
+
+**Numeric rules** (available when `T: PartialOrd + Display`):
+
+```rust
+fn range(self, range: RangeInclusive<T>) -> Self
+```
+
+### `ValidationError`
+
+```rust
+pub struct ValidationError {
+    fields: HashMap<String, Vec<String>>,
 }
+
+fn new(fields: HashMap<String, Vec<String>>) -> Self
+fn is_empty(&self) -> bool
+fn field_errors(&self, field: &str) -> &[String]
+fn fields(&self) -> &HashMap<String, Vec<String>>
 ```
 
-### Handler-Level Middleware
-
-Declared via a separate `#[middleware(...)]` attribute on the handler function. Applied only to that specific route:
+Converts into `Error` automatically (HTTP 422) with the field map as `details`:
 
 ```rust
-#[modo::handler(GET, "/users/{id}")]
-#[middleware(rate_limit_strict)]
-async fn get_user(id: String, /* ... */) -> JsonResult<UserResponse> { /* ... */ }
+// In a handler:
+input.validate()?;  // propagates as 422 with per-field errors
 ```
-
-### Stacking Rules
-
-- Multiple middleware on the same scope are applied **last-declared = innermost**. Note: this is the inverse of axum's raw `.layer()` where the last call wraps outermost. The macro achieves this by reversing the declaration order before applying layers.
-- `AppBuilder::layer()` inserts global layers between the framework infrastructure stack and the template/module layers. Multiple calls to `.layer()` stack the same way: last call = outermost of the user layers.
-- Template layers (`RenderLayer`, `TemplateContextLayer`) are auto-registered when `TemplateEngine` is present as a service — no manual `.layer()` call needed.
 
 ---
 
-## API vs Web Error Handling
+## Service Registry
 
-### JSON API Handlers
+**Module:** `src/service/`
 
-Return `JsonResult<T>` and use `HttpError` variants or `Error::internal()` for failures:
+### `Registry`
+
+Mutable builder used at startup. Internally `HashMap<TypeId, Arc<dyn Any + Send + Sync>>`.
 
 ```rust
-#[modo::handler(GET, "/users/{id}")]
-async fn get_user(
-    id: String,
-    Service(db): Service<DatabaseService>,
-) -> JsonResult<UserResponse> {
-    let user = db.find_user(&id).await
-        .map_err(|e| Error::internal(e.to_string()))?;
-    let user = user.ok_or(HttpError::NotFound)?;
-    Ok(Json(UserResponse::from(user)))
-}
+fn new() -> Self
+fn add<T: Send + Sync + 'static>(&mut self, service: T)   // register by type; replaces if exists
+fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> // lookup for startup validation
+fn into_state(self) -> AppState                            // freeze into immutable state
 ```
 
-Key points:
-- `JsonResult<T>` wraps the `Ok` value in `axum::Json` — return `Ok(Json(value))` not `Ok(value)`
-- Use `modo::Json`, not `modo::axum::Json` (they are the same type, but the re-export path matters for imports)
-- `?` on `Error` works because `Error` implements `IntoResponse`
-- `HttpError::NotFound` converts to `Error` via `From<HttpError>` and then to a 404 JSON response
+### `AppState`
 
-### Web / Template Handlers
-
-Return `ViewResult<>` for server-rendered pages:
+Immutable, cheaply cloneable (wraps `Arc<HashMap<...>>`). Passed to `Router::with_state()`.
 
 ```rust
-#[modo::handler(GET, "/dashboard")]
-async fn dashboard(
-    view: ViewRenderer,
-    Service(db): Service<DatabaseService>,
-) -> ViewResult {
-    let data = db.fetch_summary().await
-        .map_err(|e| Error::internal(e.to_string()))?;
-    view.render(DashboardPage { summary: data })
-}
+fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>>
 ```
 
-Key points:
-- HTMX requests (`HX-Request` header present) receive a partial template render, always HTTP 200
-- Non-200 status codes skip HTMX rendering — errors returned from handlers do not attempt to render a template
-- Use `#[error_handler]` with `ctx.is_htmx()` to return HTMX-compatible error fragments
-
-### Content Negotiation in Error Handlers
-
-A single `#[error_handler]` can serve both JSON and HTML clients:
+### Startup flow
 
 ```rust
-#[modo::error_handler]
-fn handle_error(err: Error, ctx: &ErrorContext) -> Response {
-    if ctx.is_htmx() {
-        // Return HTMX-compatible HTML fragment, always 200
-        (StatusCode::OK, Html(format!("<div class='error'>{}</div>", err.message_str())))
-            .into_response()
-    } else if ctx.accepts_html() {
-        // Full-page HTML error response
-        render_error_page(err).into_response()
-    } else {
-        // Default structured JSON
-        err.default_response()
-    }
+let mut registry = Registry::new();
+registry.add(db_pool);
+registry.add(email_client);
+
+let state: AppState = registry.into_state();
+let app = Router::new()
+    .route("/", get(handler))
+    .with_state(state);
+```
+
+In handlers, use `Service<T>` extractor:
+
+```rust
+async fn handler(Service(pool): Service<Pool>) {
+    // pool is Arc<Pool>
 }
 ```
 
 ---
 
-## Common Multi-Module Workflows
+## IDs
 
-| Workflow | Reference files to read (in order) |
-|---|---|
-| Authenticated CRUD API | `conventions.md` → `database.md` → `handlers.md` → `auth-sessions.md` |
-| Web form with validation | `conventions.md` → `handlers.md` → `templates-htmx.md` |
-| Background email on user action | `handlers.md` → `jobs.md` → `email.md` |
-| File upload with auth | `auth-sessions.md` → `upload.md` → `handlers.md` |
-| Multi-tenant web app | `tenant.md` → `database.md` → `templates-htmx.md` |
-| HTMX live dashboard | `templates-htmx.md` → `auth-sessions.md` |
-| Full-stack feature (entity → API → job → email) | `conventions.md` → `database.md` → `handlers.md` → `jobs.md` → `email.md` |
+**Module:** `src/id/`
+Always available, no feature flag.
+
+### `id::ulid() -> String`
+
+26-character ULID. Crockford base32, uppercase. 48-bit ms timestamp + 80-bit random.
+
+```rust
+let pk = modo::id::ulid();
+// "01HQ3Y5KZXN9E4P7BVTG2WJMRS"  (26 chars)
+```
+
+Time-sortable: IDs generated later sort lexicographically after earlier ones.
+
+### `id::short() -> String`
+
+13-character base36 ID. Lowercase `0-9a-z`. 42-bit ms timestamp + 22-bit random.
+
+```rust
+let code = modo::id::short();
+// "3f9kz7a2xnp01"  (13 chars)
+```
+
+Suitable for user-visible codes, slugs, short URLs.
+
+### Gotchas
+
+- No UUIDs anywhere. Use `ulid()` for primary keys, `short()` for user-facing codes.
 
 ---
 
-## Gotchas
+## Encoding
 
-### inventory Linking in Tests
+**Module:** `src/encoding/`
+Always available, no feature flag.
 
-`inventory` registrations from library crates may not link when running unit tests. If `inventory::iter` returns nothing in a test that expects registrations, force the linker to include the registration with a wildcard import:
+### `encoding::base32`
 
-```rust
-// In your test file or test module
-use crate::entity::my_entity as _;
-```
-
-This is only needed in test binaries. The main binary links correctly.
-
-### SeaORM ExprTrait Conflicts with Ord
-
-SeaORM's `ExprTrait` adds `.max()` and `.min()` methods to expression types, which conflicts with `Ord::max` and `Ord::min`. When you see ambiguity errors, use the fully qualified syntax:
+RFC 4648 base32, alphabet `A-Z 2-7`, no padding.
 
 ```rust
-// Wrong — ambiguous when ExprTrait is in scope
-let x = a.max(b);
-
-// Correct
-let x = Ord::max(a, b);
+fn encode(bytes: &[u8]) -> String
+fn decode(encoded: &str) -> modo::Result<Vec<u8>>
 ```
 
-### HTMX 200-Only Rendering
-
-The template render layer only renders HTMX responses when the HTTP status is 200. If a handler returns a non-200 status (e.g., a redirect or an error), the HTMX partial template will not be rendered. Design HTMX error flows through `#[error_handler]` returning 200 with an error fragment, not through non-200 handler returns.
-
-### Alphabetical Re-exports in lib.rs
-
-All `pub use` re-exports in `modo/src/lib.rs` must be sorted alphabetically. `cargo fmt` enforces this ordering. If you add a new re-export and `cargo fmt` reorders it, that is correct behavior.
-
-Current public re-exports (from `lib.rs`):
-- `axum::Json` — the canonical JSON responder (re-exported as `modo::Json`)
-- `AppBuilder`, `AppState`, `ServiceRegistry`
-- `AppConfig`, `HttpConfig`, `RateLimitConfig`, `SecurityHeadersConfig`, `ServerConfig`, `TrailingSlash`
-- `CookieConfig`, `CookieManager`, `CookieOptions`, `SameSite`
-- `CorsConfig`
-- `CsrfConfig`, `CsrfToken` (behind `#[cfg(feature = "csrf")]`)
-- `Error`, `ErrorContext`, `ErrorHandlerFn`, `ErrorHandlerRegistration`, `HandlerResult`, `HttpError`, `JsonResult`
-- `ViewResult` (behind `#[cfg(feature = "templates")]`)
-- `Service`
-- `I18n`, `I18nConfig` (behind `#[cfg(feature = "i18n")]`)
-- `ClientIp`, `OptionalRateLimitInfo`, `RateLimitInfo`
-- `RequestId`
-- `Method`
-- `Sanitize`, `Validate`
-- `SentryConfig`, `SentryConfigProvider` (behind `#[cfg(feature = "sentry")]`)
-- `GracefulShutdown`, `ShutdownPhase`
-- `TemplateConfig`, `TemplateContext`, `TemplateEngine`, `ViewRender`, `ViewRenderer`, `ViewResponse` (behind `#[cfg(feature = "templates")]`)
-
-### Use `modo::Json` for Responses, `modo::extractor::JsonReq` for Requests
-
-`modo::Json` re-exports `axum::Json` — use it for **response** wrapping (e.g. `Ok(Json(value))`).
-`modo::extractor::JsonReq<T>` is the **request** extractor with auto-sanitization and validation.
-`modo::extractor::FormReq<T>` is the form **request** extractor with auto-sanitization.
-`modo::extractor::QueryReq<T>` re-exports `axum::extract::Query<T>` for query parameter extraction.
-
-### ULID Session IDs — Never UUID
-
-Session IDs are ULID strings throughout the framework. Never introduce UUID for session or entity identifiers. ULID is re-exported from modo: `use modo::ulid`.
-
-### Feature Flag Syntax
-
-Optional dependencies must use the `dep:name` syntax in `Cargo.toml`:
-
-```toml
-[dependencies]
-some-crate = { version = "...", optional = true }
-
-[features]
-my-feature = ["dep:some-crate"]
-```
-
-In Rust source, gate code with `#[cfg(feature = "my-feature")]`. Proc macros cannot inspect `cfg` flags at expansion time — generated code must emit both branches explicitly:
+Decode is case-insensitive. Returns `Error::bad_request` on invalid characters.
 
 ```rust
-// In proc macro output — emit both branches
-#[cfg(feature = "templates")]
-{ /* template path */ }
-#[cfg(not(feature = "templates"))]
-{ /* non-template path */ }
+use modo::encoding::base32;
+
+let encoded = base32::encode(b"foobar");   // "MZXW6YTBOI"
+let decoded = base32::decode("MZXW6YTBOI")?;  // b"foobar"
+let decoded = base32::decode("mzxw6ytboi")?;  // also works
 ```
 
-### `just test` Does Not Use `--all-features`
+### `encoding::base64url`
 
-`just test` runs tests without `--all-features`. Feature-gated code requires targeted test invocations:
-
-```bash
-cargo test -p modo_auth --features session
-```
-
-`just lint` does use `--all-features`, so lint passes even when test doesn't cover feature-gated paths.
-
-### Email Registration in Web Projects
-
-When using `modo-email` in a web application, the mailer is registered as a jobs service — not as an app service:
+RFC 4648 base64url, alphabet `A-Za-z0-9-_`, no padding. URL/cookie-safe.
 
 ```rust
-// Correct: register on the jobs builder
-let jobs = modo_jobs::new(&db, &config.jobs)
-    .service(db.clone())
-    .service(email_service)   // ← on jobs, NOT app
-    .run()
-    .await?;
-
-// Register jobs as a managed service for graceful shutdown
-app.managed_service(jobs)
+fn encode(bytes: &[u8]) -> String
+fn decode(encoded: &str) -> modo::Result<Vec<u8>>
 ```
 
-Do not call `.service(email)` on the `AppBuilder`. The app enqueues `SendEmailPayload`; the job worker handles delivery.
+Returns `Error::bad_request` on invalid characters.
 
-### Cron Jobs Are In-Memory Only
+```rust
+use modo::encoding::base64url;
 
-Cron jobs defined with `modo_jobs` are scheduled in memory and are not persisted to the database. On restart, all cron schedules are re-registered from code. Do not design workflows that depend on cron state surviving a restart.
+let encoded = base64url::encode(b"Hello");   // "SGVsbG8"
+let decoded = base64url::decode("SGVsbG8")?; // b"Hello"
+```
+
+### Gotchas
+
+- These are modo's own implementations, NOT the `base64` crate. The `base64` crate is used separately for standard base64 in the webhooks feature.
+- No padding characters are produced or accepted by either codec.
 
 ---
 
-## docs.rs Quick Reference
+## Cache
 
-| Type / Trait | Link |
-|---|---|
-| `AppBuilder` | https://docs.rs/modo/latest/modo/app/struct.AppBuilder.html |
-| `AppState` | https://docs.rs/modo/latest/modo/app/struct.AppState.html |
-| `ServiceRegistry` | https://docs.rs/modo/latest/modo/app/struct.ServiceRegistry.html |
-| `Error` | https://docs.rs/modo/latest/modo/error/struct.Error.html |
-| `HttpError` | https://docs.rs/modo/latest/modo/error/enum.HttpError.html |
-| `HandlerResult` | https://docs.rs/modo/latest/modo/error/type.HandlerResult.html |
-| `JsonResult` | https://docs.rs/modo/latest/modo/error/type.JsonResult.html |
-| `ViewResult` | https://docs.rs/modo/latest/modo/error/type.ViewResult.html |
-| `ErrorContext` | https://docs.rs/modo/latest/modo/error/struct.ErrorContext.html |
-| `ErrorHandlerFn` | https://docs.rs/modo/latest/modo/error/type.ErrorHandlerFn.html |
-| `GracefulShutdown` | https://docs.rs/modo/latest/modo/shutdown/trait.GracefulShutdown.html |
+**Module:** `src/cache/`
+Always available, no feature flag.
+
+### `LruCache<K, V>`
+
+Fixed-capacity least-recently-used cache. Backed by `HashMap` + `VecDeque`.
+
+**Bounds:** `K: Eq + Hash + Clone`
+
+```rust
+fn new(capacity: NonZeroUsize) -> Self
+fn get(&mut self, key: &K) -> Option<&V>    // moves key to most-recently-used
+fn put(&mut self, key: K, value: V)         // inserts or updates; evicts LRU if full
+```
+
+```rust
+use std::num::NonZeroUsize;
+use modo::cache::LruCache;
+
+let mut cache = LruCache::new(NonZeroUsize::new(100).unwrap());
+cache.put("session_abc", session_data);
+
+if let Some(data) = cache.get(&"session_abc") {
+    // data is &SessionData; key moved to most-recently-used
+}
+```
+
+### Gotchas
+
+- `get` takes `&mut self` because it updates recency order. Even read-only lookups need exclusive access.
+- NOT `Sync`. Wrap in `std::sync::RwLock` or `std::sync::Mutex` for multi-threaded use. Because `get` needs `&mut self`, even `RwLock` requires a write lock for reads.
+- O(n) recency update (linear scan of VecDeque). Fine for caches up to a few thousand entries.
+- Use `std::sync::RwLock` (not tokio) for all sync-only state -- never hold across `.await`.

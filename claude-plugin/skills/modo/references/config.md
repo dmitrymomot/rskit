@@ -1,473 +1,331 @@
-# modo Config Reference
+# Config Reference
 
-## Documentation
+## Overview
 
-- **modo (umbrella crate):** https://docs.rs/modo
+modo loads YAML config files with environment-variable substitution. The config system lives in `src/config/` and is always available (no feature gate).
 
-The `AppConfig` and all config structs are re-exported through the `modo` crate. When checking field types or defaults, use the docs.rs page for `modo::config` as the canonical reference.
+Key types: `modo::Config` (top-level struct), `modo::config::load()` (loader function).
 
----
+## YAML Loading
 
-## Config Loading
+### File Resolution
 
-modo loads configuration from YAML files stored in a `config/` directory at the project root. The file to load is selected by the `MODO_ENV` environment variable.
+`config::load(config_dir)` resolves the file as `{config_dir}/{APP_ENV}.yaml`.
 
-### File path resolution
+- `APP_ENV` env var selects the environment name
+- Defaults to `"development"` when `APP_ENV` is unset
+- Common values: `development`, `production`, `test`
 
+```rust
+use modo::config::load;
+use modo::Config;
+
+// Reads config/development.yaml (or whatever APP_ENV resolves to)
+let config: Config = load("config/").unwrap();
 ```
-config/{MODO_ENV}.yaml
+
+### Environment Helpers
+
+```rust
+use modo::config::{env, is_dev, is_prod, is_test};
+
+let name: String = env();    // "development", "production", "test", etc.
+let _: bool = is_dev();      // true when APP_ENV == "development" or unset
+let _: bool = is_prod();     // true when APP_ENV == "production"
+let _: bool = is_test();     // true when APP_ENV == "test"
 ```
 
-If `MODO_ENV` is not set, it defaults to `development`, so `config/development.yaml` is loaded.
+### Generic Deserialization
 
-### Recognized MODO_ENV values
+`load()` is generic over `T: DeserializeOwned`. You can load into `modo::Config` directly or into your own struct that embeds it with `#[serde(flatten)]`:
 
-| `MODO_ENV` value | Resolves to |
+```rust
+#[derive(Deserialize)]
+struct AppConfig {
+    #[serde(flatten)]
+    pub modo: modo::Config,
+    pub my_api_key: String,
+}
+
+let config: AppConfig = modo::config::load("config/").unwrap();
+```
+
+## Env Var Substitution
+
+Before YAML parsing, all `${...}` placeholders are replaced from the process environment.
+
+| Syntax | Behavior |
 |---|---|
-| `development` or `dev` | `Environment::Development` |
-| `production` or `prod` | `Environment::Production` |
-| `test` | `Environment::Test` |
-| anything else | `Environment::Custom(s)` |
+| `${VAR}` | Replaced with the value of `VAR`. **Error if unset.** |
+| `${VAR:default}` | Replaced with the value of `VAR`, or `default` if unset. |
 
-The `Environment` enum is stored in `ServerConfig::environment` but is marked `#[serde(skip)]` — it is populated at runtime by `detect_env()`, not from the YAML file.
+The substitution function is also available standalone:
 
-### Load functions
+```rust
+use modo::config::substitute::substitute_env_vars;
 
-Three functions are available for loading config:
-
-- `modo::config::load::<T>()` — loads `.env` via `dotenvy`, detects `MODO_ENV`, reads the YAML file, substitutes env vars, and deserializes. Returns `ConfigError` if the file is missing or parse fails.
-- `modo::config::load_for_env::<T>(env: &str)` — same as `load` but takes an explicit environment name. Useful for testing specific environment configs.
-- `modo::config::load_or_default::<T>()` — same as `load` but returns `T::default()` if the config directory or specific file is missing. Treats `DirectoryNotFound` and `FileRead` errors as "use defaults" rather than failures.
-
-All three require `T: DeserializeOwned`. In most apps, `T` is `AppConfig`.
-
-### Config directory requirement
-
-The `config/` directory must exist at the process working directory when using `load` or `load_for_env`. `load_or_default` bypasses this requirement. If the directory does not exist and you call `load`, you get `ConfigError::DirectoryNotFound`.
-
----
-
-## Environment Variable Interpolation
-
-Before YAML parsing, all environment variable references in the raw file text are substituted. This substitution applies to every string value in the YAML file.
-
-### Syntax
-
-```yaml
-# Substitute from env var — expands to empty string if unset
-port: ${PORT}
-
-# Substitute with fallback default if env var is unset or empty
-secret_key: ${SECRET_KEY:-my-dev-secret}
-
-# Escape to produce a literal ${...} in the output
-password_pattern: \${NOT_A_VAR}
+let result = substitute_env_vars("host: ${DB_HOST:localhost}").unwrap();
 ```
 
-Rules:
-- `${VAR}` — replaced with the environment variable value, or empty string if unset.
-- `${VAR:-default}` — replaced with the env var value, or `default` if the var is unset or empty.
-- `\${VAR}` — produces the literal text `${VAR}` without substitution.
-- Variable names must be non-empty and contain only ASCII alphanumeric characters and underscores. Variables with hyphens like `${my-var}` are passed through literally.
-- No nested `${...}` and no multiline defaults.
+**Errors:**
+- Unclosed `${...` (missing `}`) returns an error.
+- `${VAR}` without a default returns an error when `VAR` is not set.
 
-### Practical example
+### YAML Example
 
 ```yaml
 server:
-  port: ${PORT:-3000}
-  secret_key: ${SECRET_KEY:-dev-only-insecure-key}
+  host: ${HOST:0.0.0.0}
+  port: ${PORT:8080}
 
 database:
-  sqlite:
-    path: ${DATABASE_URL:-data/app.db}
+  path: ${DATABASE_PATH:data/app.db}
+
+cookie:
+  secret: ${COOKIE_SECRET}
 ```
 
-This pattern makes development configs work without a `.env` file while production uses real secrets from the environment.
+## Config Struct
 
----
+`modo::Config` — top-level framework config. All fields use `#[serde(default)]`, so any section can be omitted.
 
-## Config Sections
+Source: `src/config/modo.rs`
 
-### AppConfig (top-level)
+### Always-Available Fields
 
-`AppConfig` is the root type passed to `AppBuilder::config()`. It aggregates all section structs.
+| Field | Type | YAML key | Description |
+|---|---|---|---|
+| `server` | `server::Config` | `server` | HTTP bind address and shutdown |
+| `database` | `db::SqliteConfig` | `database` | SQLite connection pool |
+| `tracing` | `tracing::Config` | `tracing` | Log level, format, optional Sentry |
+| `cookie` | `Option<cookie::CookieConfig>` | `cookie` | Signed cookie secret and attributes. `None` disables signed/private cookies |
+| `security_headers` | `middleware::SecurityHeadersConfig` | `security_headers` | HTTP security response headers |
+| `cors` | `middleware::CorsConfig` | `cors` | CORS policy |
+| `csrf` | `middleware::CsrfConfig` | `csrf` | CSRF protection |
+| `rate_limit` | `middleware::RateLimitConfig` | `rate_limit` | Token-bucket rate limiting |
+| `session` | `session::SessionConfig` | `session` | Session TTL, cookie, fingerprint |
+| `job` | `job::JobConfig` | `job` | Background job queue |
+| `trusted_proxies` | `Vec<String>` | `trusted_proxies` | CIDR ranges for `ClientIpLayer` |
 
-```rust
-pub struct AppConfig {
-    pub server: ServerConfig,
-    pub cookies: CookieConfig,
-    // feature-gated sections below
-}
-```
+### Feature-Gated Fields
 
-YAML key names correspond directly to struct field names. All sections use `#[serde(default)]`, so any absent section gets its defaults.
+| Field | Type | YAML key | Feature |
+|---|---|---|---|
+| `oauth` | `auth::oauth::OAuthConfig` | `oauth` | `auth` |
+| `email` | `email::EmailConfig` | `email` | `email` |
+| `template` | `template::TemplateConfig` | `template` | `templates` |
+| `geolocation` | `geolocation::GeolocationConfig` | `geolocation` | `geolocation` |
 
----
+## Sub-Config Details
 
-### server
-
-Type: `ServerConfig`
-
-Controls the HTTP server, middleware stack, and health check endpoints.
+### `server::Config`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `port` | `u16` | `3000` | TCP port to listen on |
-| `host` | `String` | `"0.0.0.0"` | Bind address |
-| `secret_key` | `String` | `""` | Key for signing and encrypting cookies. Empty generates a random key per restart — sessions will not survive restarts. Set in production. |
-| `log_level` | `String` | `"info"` | Log level filter: `trace`, `debug`, `info`, `warn`, `error` |
-| `trusted_proxies` | `Vec<String>` | `[]` | CIDR ranges for trusted proxy IP extraction (e.g. `["10.0.0.0/8"]`) |
-| `shutdown_timeout_secs` | `u64` | `30` | Graceful shutdown timeout in seconds |
-| `hook_timeout_secs` | `u64` | `5` | Per-hook timeout in seconds during graceful shutdown. Each `on_shutdown` callback is capped to this duration. |
-| `cors` | `Option<CorsYamlConfig>` | `None` | CORS policy. Absent = no CORS middleware applied |
-| `liveness_path` | `String` | `"/_live"` | Path for the liveness health check endpoint |
-| `readiness_path` | `String` | `"/_ready"` | Path for the readiness health check endpoint |
-| `http` | `HttpConfig` | see below | HTTP-level middleware settings |
-| `security_headers` | `SecurityHeadersConfig` | see below | Security response header settings |
-| `rate_limit` | `Option<RateLimitConfig>` | `None` | Global IP-based rate limit. Absent = disabled |
-| `static_files` | `Option<StaticConfig>` | `None` | Static file serving (feature `static-fs` or `static-embed` required) |
-| `show_banner` | `bool` | `true` | Show startup banner with version, environment, and route info |
-| `environment` | `Environment` | (from env) | Runtime environment — populated by `detect_env()`, not from YAML (`#[serde(skip)]`) |
+| `host` | `String` | `"localhost"` | Network interface to bind |
+| `port` | `u16` | `8080` | TCP port |
+| `shutdown_timeout_secs` | `u64` | `30` | Graceful shutdown timeout |
 
-#### server.http
-
-Type: `HttpConfig`
+### `db::SqliteConfig`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `timeout` | `Option<u64>` | `None` | Request timeout in seconds. `None` disables the timeout |
-| `body_limit` | `Option<String>` | `Some("2mb")` | Max request body size: `"2mb"`, `"512kb"`, `"1gb"`, or bare bytes. `None` = unlimited |
-| `compression` | `bool` | `false` | Enable response compression (`CompressionLayer`) |
-| `catch_panic` | `bool` | `true` | Convert handler panics into HTTP 500 responses |
-| `trailing_slash` | `TrailingSlash` | `none` | Trailing slash policy: `none`, `strip`, `add` |
-| `maintenance` | `bool` | `false` | Return 503 for all requests when enabled |
-| `maintenance_message` | `Option<String>` | `None` | Custom maintenance mode response message |
-| `sensitive_headers` | `bool` | `true` | Redact `Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization` from logs |
+| `path` | `String` | `"data/app.db"` | SQLite file path. `":memory:"` for in-memory |
+| `max_connections` | `u32` | `10` | Pool max connections |
+| `min_connections` | `u32` | `1` | Pool min idle connections |
+| `acquire_timeout_secs` | `u64` | `30` | Connection acquire timeout |
+| `idle_timeout_secs` | `u64` | `600` | Idle connection timeout |
+| `max_lifetime_secs` | `u64` | `1800` | Max connection lifetime |
+| `journal_mode` | `JournalMode` | `WAL` | PRAGMA journal_mode |
+| `synchronous` | `SynchronousMode` | `NORMAL` | PRAGMA synchronous |
+| `foreign_keys` | `bool` | `true` | PRAGMA foreign_keys |
+| `busy_timeout` | `u64` | `5000` | PRAGMA busy_timeout (ms) |
+| `cache_size` | `i64` | `-2000` | PRAGMA cache_size (negative = KiB) |
+| `mmap_size` | `Option<u64>` | `None` | PRAGMA mmap_size (bytes) |
+| `temp_store` | `Option<TempStore>` | `None` | PRAGMA temp_store |
+| `wal_autocheckpoint` | `Option<u32>` | `None` | PRAGMA wal_autocheckpoint |
+| `reader` | `PoolOverrides` | see below | Reader pool overrides for `connect_rw` |
+| `writer` | `PoolOverrides` | see below | Writer pool overrides for `connect_rw` |
 
-`TrailingSlash` values (snake_case in YAML):
-- `none` — no modification (default)
-- `strip` — redirect trailing-slash URLs to non-trailing-slash
-- `add` — redirect non-trailing-slash URLs to trailing-slash
+**Reader defaults:** `busy_timeout=1000`, `cache_size=-16000` (16 MB), `mmap_size=256 MiB`.
+**Writer defaults:** `max_connections=1`, `busy_timeout=2000`, `cache_size=-16000`, `mmap_size=256 MiB`.
 
-#### server.security_headers
+**Enums:** `JournalMode` values: `DELETE`, `TRUNCATE`, `PERSIST`, `MEMORY`, `WAL`, `OFF`. `SynchronousMode` values: `OFF`, `NORMAL`, `FULL`, `EXTRA`. `TempStore` values: `DEFAULT`, `FILE`, `MEMORY`. All serialize as UPPERCASE in YAML.
 
-Type: `SecurityHeadersConfig`
-
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `enabled` | `bool` | `true` | Enable the security headers middleware |
-| `x_content_type_options` | `Option<String>` | `"nosniff"` | Value for `X-Content-Type-Options` |
-| `x_frame_options` | `Option<String>` | `"DENY"` | Value for `X-Frame-Options` |
-| `referrer_policy` | `Option<String>` | `"strict-origin-when-cross-origin"` | Value for `Referrer-Policy` |
-| `permissions_policy` | `Option<String>` | `"camera=(), microphone=(), geolocation=()"` | Value for `Permissions-Policy` |
-| `content_security_policy` | `Option<String>` | `"default-src 'self'"` | Value for `Content-Security-Policy` |
-| `hsts` | `bool` | `true` | Enable `Strict-Transport-Security` header |
-| `hsts_max_age` | `u64` | `31536000` | HSTS max-age in seconds (default is one year) |
-
-The restrictive default CSP (`default-src 'self'`) blocks inline scripts and external resources. Override it for apps using CDN assets or HTMX:
-
-```yaml
-server:
-  security_headers:
-    content_security_policy: "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'"
-```
-
-#### server.rate_limit
-
-Type: `RateLimitConfig` (token-bucket, applied globally by IP)
+### `tracing::Config`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `requests` | `u32` | `100` | Max requests per window |
-| `window_secs` | `u64` | `60` | Window duration in seconds |
+| `level` | `String` | `"info"` | Min log level (overridden by `RUST_LOG` env var) |
+| `format` | `String` | `"pretty"` | `"pretty"`, `"json"`, or compact (any other value) |
+| `sentry` | `Option<SentryConfig>` | `None` | Sentry settings (requires `sentry` feature) |
 
-Rate limiting is disabled by default. To enable it, add a `rate_limit` section under `server`:
+**`SentryConfig`** (feature-gated under `sentry`): `dsn: String`, `environment: String`, `sample_rate: f32` (default `1.0`), `traces_sample_rate: f32` (default `0.1`).
 
-```yaml
-server:
-  rate_limit:
-    requests: 200
-    window_secs: 60
-```
-
-#### server.cors
-
-Type: `CorsYamlConfig`
+### `cookie::CookieConfig`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `origins` | `Vec<String>` | `[]` | Allowed origins. Empty list = mirror request origin |
-| `credentials` | `bool` | `false` | Allow `Access-Control-Allow-Credentials` |
-| `max_age_secs` | `Option<u64>` | `3600` | Preflight cache duration |
+| `secret` | `String` | (required) | HMAC signing secret, at least 64 characters |
+| `secure` | `bool` | `true` | Set `Secure` attribute. `false` for local HTTP dev |
+| `http_only` | `bool` | `true` | Set `HttpOnly` attribute |
+| `same_site` | `String` | `"lax"` | `"lax"`, `"strict"`, or `"none"` |
 
-When `origins` is empty, the CORS layer mirrors the request `Origin` header back (permissive but avoids `*`). When non-empty, only the listed origins are allowed.
-
-#### server.static_files
-
-Type: `StaticConfig` (requires feature `static-fs` or `static-embed`)
+### `middleware::SecurityHeadersConfig`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `dir` | `String` | `"static"` | Filesystem directory to serve from (`static-fs` only) |
-| `prefix` | `String` | `"/static"` | URL prefix where files are mounted. Must start with `/` |
-| `cache_control` | `Option<String>` | `None` | `Cache-Control` header value. `None` = backend default (1h for `static-fs`, immutable for `static-embed`) |
+| `x_content_type_options` | `bool` | `true` | Adds `X-Content-Type-Options: nosniff` |
+| `x_frame_options` | `String` | `"DENY"` | `X-Frame-Options` header value |
+| `referrer_policy` | `String` | `"strict-origin-when-cross-origin"` | `Referrer-Policy` header value |
+| `hsts_max_age` | `Option<u64>` | `None` | `Strict-Transport-Security: max-age=<value>` |
+| `content_security_policy` | `Option<String>` | `None` | `Content-Security-Policy` header value |
+| `permissions_policy` | `Option<String>` | `None` | `Permissions-Policy` header value |
 
----
-
-### cookies
-
-Type: `CookieConfig`
-
-Global cookie defaults applied to all cookies set by the framework (sessions, CSRF, language preference, etc.).
+### `middleware::CorsConfig`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `domain` | `Option<String>` | `None` | Cookie domain attribute. `None` = omit domain |
-| `path` | `String` | `"/"` | Cookie path scope |
-| `secure` | `bool` | `true` | Require HTTPS (`Secure` flag) |
-| `http_only` | `bool` | `true` | Prevent JavaScript access (`HttpOnly` flag) |
-| `same_site` | `SameSite` | `lax` | SameSite policy: `strict`, `lax`, `none` |
-| `max_age` | `Option<u64>` | `None` | Cookie max age in seconds. `None` = session cookie |
+| `origins` | `Vec<String>` | `[]` | Allowed origins. Empty = allow any (`*`) |
+| `methods` | `Vec<String>` | `["GET","POST","PUT","DELETE","PATCH"]` | Allowed methods |
+| `headers` | `Vec<String>` | `["Content-Type","Authorization"]` | Allowed headers |
+| `max_age_secs` | `u64` | `86400` | `Access-Control-Max-Age` |
+| `allow_credentials` | `bool` | `true` | Allow credentials. Forced to `false` when `origins` is empty |
 
----
-
-### templates
-
-Type: `TemplateConfig` — requires feature `templates`
+### `middleware::CsrfConfig`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `path` | `String` | `"templates"` | Directory containing Jinja2 template files |
-| `strict` | `bool` | `true` | Treat access to undefined template variables as an error |
+| `cookie_name` | `String` | `"_csrf"` | CSRF cookie name |
+| `header_name` | `String` | `"X-CSRF-Token"` | Header carrying the CSRF token |
+| `field_name` | `String` | `"_csrf_token"` | Form field name (config compat, not read by middleware) |
+| `ttl_secs` | `u64` | `21600` | Cookie TTL (6 hours) |
+| `exempt_methods` | `Vec<String>` | `["GET","HEAD","OPTIONS"]` | Methods exempt from CSRF |
 
----
-
-### i18n
-
-Type: `I18nConfig` — requires feature `i18n`
-
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `path` | `String` | `"locales"` | Directory containing translation files |
-| `default_lang` | `String` | `"en"` | Language code used when no preference is detected |
-| `cookie_name` | `String` | `"lang"` | Cookie name used to persist the user's language choice |
-| `query_param` | `String` | `"lang"` | URL query parameter used to detect language preference |
-
----
-
-### csrf
-
-Type: `CsrfConfig` — requires feature `csrf`
+### `middleware::RateLimitConfig`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `cookie_name` | `String` | `"_csrf"` | Cookie name for storing the CSRF token |
-| `field_name` | `String` | `"_csrf_token"` | Form field name for the CSRF token |
-| `header_name` | `String` | `"x-csrf-token"` | HTTP header name for the CSRF token |
-| `cookie_max_age` | `u64` | `86400` | CSRF cookie max age in seconds (24 hours) |
-| `token_length` | `usize` | `32` | Length of the generated CSRF token in bytes |
-| `secure` | `bool` | `true` | Set `Secure` flag on the CSRF cookie |
-| `max_body_bytes` | `usize` | `1048576` | Max request body to read when extracting CSRF token (1 MiB) |
+| `per_second` | `u64` | `1` | Token replenish rate (tokens/sec) |
+| `burst_size` | `u32` | `10` | Max burst tokens |
+| `use_headers` | `bool` | `true` | Include `x-ratelimit-*` headers |
+| `cleanup_interval_secs` | `u64` | `60` | Purge interval for expired entries |
+| `max_keys` | `usize` | `10000` | Max tracked keys. `0` = unlimited |
 
-Cookie name, field name, and header name are validated — they must contain only alphanumeric characters, hyphens, and underscores.
-
----
-
-### sse
-
-Type: `SseConfig` — requires feature `sse`
+### `session::SessionConfig`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `keep_alive_interval_secs` | `u64` | `15` | Keep-alive comment interval in seconds. Prevents proxy and browser timeouts on idle SSE connections |
+| `session_ttl_secs` | `u64` | `2592000` | Session lifetime (30 days) |
+| `cookie_name` | `String` | `"_session"` | Session cookie name |
+| `validate_fingerprint` | `bool` | `true` | Reject mismatched browser fingerprints |
+| `touch_interval_secs` | `u64` | `300` | Min interval between `last_active_at` updates (5 min) |
+| `max_sessions_per_user` | `usize` | `10` | Max concurrent sessions per user. Must be > 0 |
 
----
-
-### sentry
-
-Type: `SentryConfig` — requires feature `sentry`. Wrapped in `Option` — absent section means Sentry is disabled.
+### `job::JobConfig`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `dsn` | `String` | `""` | Sentry DSN. Empty string disables Sentry |
-| `environment` | `String` | `"development"` | Environment tag sent to Sentry |
-| `traces_sample_rate` | `f32` | `0.0` | Fraction of transactions to send (0.0–1.0) |
+| `poll_interval_secs` | `u64` | `1` | DB poll interval |
+| `stale_threshold_secs` | `u64` | `600` | Stale job threshold (10 min) |
+| `stale_reaper_interval_secs` | `u64` | `60` | Stale reaper frequency |
+| `drain_timeout_secs` | `u64` | `30` | Shutdown drain timeout |
+| `queues` | `Vec<QueueConfig>` | `[{name:"default", concurrency:4}]` | Queue definitions |
+| `cleanup` | `Option<CleanupConfig>` | enabled | Periodic cleanup. `None` to disable |
 
-Example YAML:
-```yaml
-sentry:
-  dsn: ${SENTRY_DSN}
-  environment: production
-  traces_sample_rate: 0.2
-```
+**`QueueConfig`:** `name: String`, `concurrency: u32` (default `4`).
+**`CleanupConfig`:** `interval_secs: u64` (default `3600`), `retention_secs: u64` (default `259200` / 72h).
 
----
+### `auth::oauth::OAuthConfig` (feature: `auth`)
 
-## Feature-Gated Fields
+| Field | Type | Description |
+|---|---|---|
+| `google` | `Option<OAuthProviderConfig>` | Google OAuth settings |
+| `github` | `Option<OAuthProviderConfig>` | GitHub OAuth settings |
 
-Several sections in `AppConfig` and `ServerConfig` are guarded by feature flags. Fields that do not exist when the feature is disabled are simply absent from the struct.
+**`OAuthProviderConfig`:** `client_id: String`, `client_secret: String`, `redirect_uri: String`, `scopes: Vec<String>` (default empty, uses provider defaults).
 
-```rust
-// AppConfig — feature-gated sections
-#[cfg(feature = "templates")]
-pub templates: crate::templates::TemplateConfig,
+### `email::EmailConfig` (feature: `email`)
 
-#[cfg(feature = "i18n")]
-pub i18n: crate::i18n::I18nConfig,
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `templates_path` | `String` | `"emails"` | Email template directory |
+| `layouts_path` | `String` | `"emails/layouts"` | HTML layout directory |
+| `default_from_name` | `String` | `""` | Default sender display name |
+| `default_from_email` | `String` | `""` | Default sender email |
+| `default_reply_to` | `Option<String>` | `None` | Default Reply-To |
+| `default_locale` | `String` | `"en"` | Fallback locale |
+| `cache_templates` | `bool` | `true` | LRU cache for templates |
+| `template_cache_size` | `usize` | `100` | Cache capacity |
+| `smtp` | `SmtpConfig` | see below | SMTP settings |
 
-#[cfg(feature = "csrf")]
-pub csrf: crate::csrf::CsrfConfig,
+**`SmtpConfig`:** `host: String` (`"localhost"`), `port: u16` (`587`), `username: Option<String>`, `password: Option<String>`, `security: SmtpSecurity` (`starttls`). Security values: `starttls`, `tls`, `none` (lowercase in YAML).
 
-#[cfg(feature = "sentry")]
-pub sentry: Option<crate::sentry::SentryConfig>,
+### `template::TemplateConfig` (feature: `templates`)
 
-#[cfg(feature = "sse")]
-pub sse: crate::sse::SseConfig,
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `templates_path` | `String` | `"templates"` | MiniJinja template directory |
+| `static_path` | `String` | `"static"` | Static asset directory |
+| `static_url_prefix` | `String` | `"/assets"` | URL prefix for static assets |
+| `locales_path` | `String` | `"locales"` | Locale YAML directory |
+| `default_locale` | `String` | `"en"` | Fallback locale |
+| `locale_cookie` | `String` | `"lang"` | Cookie for locale resolution |
+| `locale_query_param` | `String` | `"lang"` | Query param for locale resolution |
 
-// ServerConfig — feature-gated field
-#[cfg(any(feature = "static-fs", feature = "static-embed"))]
-pub static_files: Option<crate::static_files::StaticConfig>,
-```
+### `geolocation::GeolocationConfig` (feature: `geolocation`)
 
-When adding a feature-gated config field to a custom config struct:
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `mmdb_path` | `String` | `""` | Path to MaxMind `.mmdb` file. Empty = error |
 
-1. Gate the field with `#[cfg(feature = "...")]` in the struct definition.
-2. Add the same gate in the `Default` impl — do not leave the field present in `Default` but absent from the struct, or vice versa.
-3. If you implement a custom `from_env()` or builder method, add the same gate there.
+## Feature Flags
 
-Proc macros cannot inspect `cfg` flags at expansion time. If you generate code that reads config fields, emit both `#[cfg(feature = "x")]` and `#[cfg(not(feature = "x"))]` branches rather than relying on conditional compilation to drop the read silently.
+Defined in `Cargo.toml`. Default is empty (no optional features enabled).
 
----
+| Feature | What it enables | Dependencies |
+|---|---|---|
+| `full` | All optional features below | (meta) |
+| `auth` | OAuth 2.0 (Google, GitHub), JWT, Argon2 password hashing | `argon2`, `hmac`, `sha1`, `subtle`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util` |
+| `templates` | MiniJinja template engine with i18n | `minijinja`, `minijinja-contrib`, `intl_pluralrules`, `unic-langid` |
+| `sse` | Server-Sent Events broadcaster | `futures-util` |
+| `email` | SMTP email delivery with Markdown-to-HTML | `lettre`, `pulldown-cmark` |
+| `storage` | S3-compatible object storage | `hmac`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util` |
+| `webhooks` | Webhook delivery with Standard Webhooks signing | `hmac`, `base64`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util` |
+| `dns` | DNS domain verification (TXT, CNAME) | `simple-dns` |
+| `geolocation` | MaxMind GeoIP2 geolocation | `maxminddb` |
+| `sentry` | Sentry error reporting via tracing | `sentry`, `sentry-tracing` |
+| `test-helpers` | `modo::testing` module for test utilities | (none) |
 
-## Integration Patterns
+### Test Feature Flags
 
-### Wiring config into AppBuilder
+These activate the parent feature for integration tests:
 
-The `#[modo::main]` macro loads config automatically and passes it to `AppBuilder::config()`. The `run()` method on `AppBuilder` then extracts relevant sections and wires them into the middleware stack and service registry:
-
-```rust
-#[modo::main]
-async fn main(app: modo::app::AppBuilder, config: AppConfig) {
-    app.config(config).run().await.unwrap();
-}
-```
-
-Inside `AppBuilder::run()`, config sections are consumed as follows:
-
-| Config section | What happens |
+| Feature | Activates |
 |---|---|
-| `server` | Used to configure binding address, log level, cookie key, and all middleware layers |
-| `cookies` | Auto-registered as `CookieConfig` service — accessible via `Service<CookieConfig>` extractor |
-| `templates` | Auto-wires `TemplateEngine` service, applies `RenderLayer` and `TemplateContextLayer` (feature `templates`) |
-| `i18n` | Auto-wires `TranslationStore` service and `i18n` middleware (feature `i18n`) |
-| `csrf` | Auto-registers `CsrfConfig` as a service (feature `csrf`) |
-| `sse` | Auto-registers `SseConfig` as a service (feature `sse`) |
-| `server.cors` | Converted from `CorsYamlConfig` to `CorsConfig` and applied as outermost middleware |
-| `server.static_files` | Mounts static file service at the configured prefix (features `static-fs` or `static-embed`) |
-| `server.rate_limit` | Creates in-memory token bucket limiter applied globally by IP |
-
-### Builder method overrides
-
-All `server.http` fields and most `server` fields have corresponding `AppBuilder` methods that override the YAML config at runtime. Overrides take precedence over the loaded file:
-
-```rust
-app.config(config)
-   .timeout(30)          // overrides server.http.timeout
-   .body_limit("4mb")    // overrides server.http.body_limit
-   .compression(true)    // overrides server.http.compression
-   .maintenance(false)   // overrides server.http.maintenance
-   .no_rate_limit()      // disables rate limiting regardless of YAML
-   .run()
-   .await
-```
-
-This lets you toggle behaviour programmatically (e.g., enable maintenance mode from a feature flag) while keeping the base config in YAML.
-
-### Accessing config in handlers
-
-`ServerConfig` is stored on `AppState` and accessible in handlers via state extraction. Feature-specific config structs (`CookieConfig`, `CsrfConfig`, `SseConfig`) are stored in the service registry and accessible via the `Service<T>` extractor:
-
-```rust
-use modo::{Service, handler};
-use modo::cookies::CookieConfig;
-
-#[handler(GET, "/config")]
-async fn my_handler(Service(cookie_cfg): Service<CookieConfig>) {
-    // use cookie_cfg.domain, cookie_cfg.secure, etc.
-}
-```
-
-### Custom config sections
-
-You can extend `AppConfig` by defining your own struct and adding it alongside the standard sections. Load it with `modo::config::load::<MyConfig>()` at startup and register it as a service:
-
-```rust
-#[derive(Deserialize, Default)]
-struct MyConfig {
-    #[serde(flatten)]
-    pub app: AppConfig,
-    pub feature_flags: FeatureFlagsConfig,
-}
-
-#[modo::main]
-async fn main(app: AppBuilder, config: MyConfig) {
-    app.config(config.app)
-       .service(config.feature_flags)
-       .run()
-       .await
-       .unwrap();
-}
-```
-
-The `feature_flags` key in `config/development.yaml` then deserializes into `FeatureFlagsConfig`.
-
----
+| `email-test` | `email` |
+| `storage-test` | `storage` |
+| `webhooks-test` | `webhooks` |
+| `dns-test` | `dns` |
 
 ## Gotchas
 
-**Empty `secret_key` generates a random key per restart.** A warning is logged at startup. Sessions and signed cookies from previous processes will be invalid after restart. Always set a stable `secret_key` in production.
+1. **`trusted_proxies` is top-level** -- it is a field on `Config` directly, not nested under `session` or any other section. It holds `Vec<String>` of CIDR ranges parsed into `Vec<IpNet>` at startup for `ClientIpLayer`.
 
-**`MODO_ENV` and dotenvy ordering.** `load()` calls `dotenvy::dotenv()` first, so `.env` values — including `MODO_ENV` — are available for file path selection and `${VAR}` interpolation in the YAML. However, `load_for_env()` does NOT call dotenvy — if you use it directly, only process-level env vars are available for `${VAR}` interpolation.
+2. **YAML crate is `serde_yaml_ng`** -- modo uses `serde_yaml_ng` (not the deprecated `serde_yaml`). These are different crates with different APIs.
 
-**Config directory must exist relative to the process working directory.** When running with `cargo run`, the working directory is the workspace root. For tests run with `cargo test`, the working directory may differ. Use `load_or_default` in test contexts or set up the `config/` directory appropriately.
+3. **`cookie` section is `Option`** -- unlike other sections, `cookie` is `Option<CookieConfig>`. Omitting it entirely disables signed/private cookies. The `secret` field inside has no default and is required when the section is present.
 
-**Feature flags: use `dep:name` for optional dependency syntax in `Cargo.toml`.** When gating a config field on an optional dependency feature, declare `optional = true` and reference it as `dep:the-crate` in feature definitions. Inside Rust code, use `#[cfg(feature = "the-crate")]`.
+4. **All other sections default** -- every field on `Config` (except `cookie`) uses `#[serde(default)]`, so an empty YAML file produces a valid config with all defaults.
 
-**`Default` and feature-gated code must match.** If a struct field is feature-gated with `#[cfg(feature = "x")]`, the `Default` impl must have the same gate on that field's initialization. A field that exists in the struct but is missing from `Default` causes a compile error. A field initialized in `Default` but absent from the struct also causes a compile error.
+5. **`.env` loading is the app's responsibility** -- modo only does YAML config with `${VAR}` substitution. Loading `.env` files (via `dotenvy` or similar) must happen before calling `config::load()`.
 
-**YAML interpolation applies to the raw bytes before parsing.** This means if a default value contains YAML special characters (`:`, `{`, `}`), they will be interpreted as YAML after substitution. Wrap values in quotes in your YAML where needed:
+6. **`load()` is not async** -- it reads the file synchronously with `std::fs::read_to_string`. Call it at startup before entering the async runtime's hot path.
 
-```yaml
-server:
-  secret_key: "${SECRET_KEY:-my:colon:secret}"
-```
+7. **Database config type alias** -- `db::Config` is a type alias for `db::SqliteConfig`. Both names work.
 
-**`static_files.prefix` must start with `/`.** `AppBuilder::run()` validates this at startup and returns an error if the prefix does not start with a slash.
+8. **Feature-gated fields disappear** -- when a feature is not enabled, its config field does not exist on `Config`. Unknown YAML keys are silently ignored by serde, so the YAML can contain sections for disabled features without error.
 
-**The `environment` field is not deserialized from YAML.** It is marked `#[serde(skip)]` and populated at runtime via `detect_env()`. Any `environment:` key in your YAML file is silently ignored.
+9. **`max_sessions_per_user` must be > 0** -- deserialization fails if set to `0` (custom deserializer rejects it to prevent locking out all users).
 
----
-
-## Quick Reference: Key Types
-
-| Type | Module path | docs.rs |
-|---|---|---|
-| `AppConfig` | `modo::AppConfig` | https://docs.rs/modo |
-| `ServerConfig` | `modo::ServerConfig` | https://docs.rs/modo |
-| `HttpConfig` | `modo::HttpConfig` | https://docs.rs/modo |
-| `SecurityHeadersConfig` | `modo::SecurityHeadersConfig` | https://docs.rs/modo |
-| `RateLimitConfig` | `modo::RateLimitConfig` | https://docs.rs/modo |
-| `TrailingSlash` | `modo::TrailingSlash` | https://docs.rs/modo |
-| `Environment` | `modo::config::Environment` | https://docs.rs/modo |
-| `ConfigError` | `modo::config::ConfigError` | https://docs.rs/modo |
-| `CookieConfig` | `modo::cookies::CookieConfig` | https://docs.rs/modo |
-| `CorsYamlConfig` | `modo::cors::CorsYamlConfig` | https://docs.rs/modo |
-| `CorsConfig` | `modo::cors::CorsConfig` | https://docs.rs/modo |
-| `TemplateConfig` | `modo::templates::TemplateConfig` | https://docs.rs/modo |
-| `I18nConfig` | `modo::i18n::I18nConfig` | https://docs.rs/modo |
-| `CsrfConfig` | `modo::csrf::CsrfConfig` | https://docs.rs/modo |
-| `SentryConfig` | `modo::sentry::SentryConfig` | https://docs.rs/modo |
-| `SseConfig` | `modo::sse::SseConfig` | https://docs.rs/modo |
-| `StaticConfig` | `modo::static_files::StaticConfig` (`pub(crate)` — access via `AppConfig.server.static_files`) | https://docs.rs/modo |
-| `parse_size` | `modo::config::parse_size` | https://docs.rs/modo |
+10. **`connect()` forces `max_connections=1` for `:memory:`** -- `connect_rw()` rejects `:memory:` entirely.

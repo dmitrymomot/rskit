@@ -22,7 +22,7 @@ Review this conversation. Look for:
 - Source files you should have read but didn't
 - Claims you made that turned out to be wrong
 - Sections you forgot to update
-- New crate features you overlooked
+- New feature flags or modules you overlooked
 
 $ARGUMENTS
 

@@ -1,70 +1,38 @@
 ---
 name: modo-dev
 description: >
-    This skill should be used when the user is building an application with the
-    modo Rust web framework, asks about modo handlers, modules, middleware,
-    database entities, migrations, jobs, email, sessions, authentication,
-    templates, HTMX, SSE, uploads, multi-tenancy, configuration, or testing
-    patterns. Also use when the user references modo macros like #[handler],
-    #[module], #[main], #[entity], #[job], #[view], #[error_handler],
-    #[template_function], #[template_filter], #[modo_db::migration], t!(),
-    #[derive(Sanitize)], #[derive(Validate)], or #[derive(FromMultipart)].
+    Use when the user is building an application with the modo Rust web
+    framework. Covers handlers, routing, middleware, database (raw sqlx),
+    sessions, auth (OAuth, JWT), RBAC, templates, SSE, jobs, cron, email,
+    storage, webhooks, DNS verification, geolocation, multi-tenancy, flash
+    messages, configuration, and testing. modo v2 is a single crate with
+    zero proc macros — handlers are plain async fn, routes use axum Router
+    directly, services are wired explicitly.
 ---
 
 ## Hard Rules
 
-These two rules are non-negotiable and apply to every task regardless of
-apparent simplicity or how clear the request seems.
-
 **Requirement-gathering gate.** Before writing any code, use AskUserQuestion to
-clarify what the user wants to build — endpoint, entity, job, auth flow, upload
-handler, etc. Understand the specifics: field types, relations, validation rules,
-which modules are involved, and how errors should be surfaced to the caller.
+clarify what the user wants to build. Understand the specifics: field types,
+validation rules, which modules are involved, and how errors should surface.
 After gathering answers, describe the planned approach in plain language and wait
-for explicit approval. Do not skip this step, not even for a two-line handler.
+for explicit approval. Do not skip this step.
 
-**Use built-in functionality first.** Always prefer modo's built-in macros,
-extractors, middleware, config helpers, and error types over manual
-implementations or third-party crates. Concretely: use `#[entity]` not
-handwritten SeaORM model boilerplate; use `HandlerResult<T>` (or `JsonResult<T>`
-for JSON endpoints) not custom error enums; use `modo::Json` not `axum::Json`;
-use `#[derive(Sanitize)]` and `#[derive(Validate)]` for input processing; use
-the session and auth middleware provided by modo rather than rolling custom
-token logic. Only reach for a manual or external approach when no built-in
-equivalent exists, and call that choice out explicitly in the plan.
+**Use built-in functionality first.** Prefer modo's built-in extractors,
+middleware, error types, and service patterns over manual implementations or
+third-party crates. Use `modo::Error` not custom error enums; use `Service<T>`
+for dependency injection; use `JsonRequest<T>` / `FormRequest<T>` for validated
+request bodies; use the session and auth middleware provided by modo. Only reach
+for external crates when no built-in equivalent exists, and call that choice out
+explicitly in the plan.
 
-## Assumed Starting Point
+## Key Design Principles
 
-> **Version target:** These reference docs are written against **modo 0.2.x**
-> and **SeaORM v2 RC**. If the project uses a different version, verify API
-> signatures against the actual source before generating code.
-
-The project has been scaffolded by `modo-cli` with all required feature modules
-enabled (database, jobs, email, sessions, uploads, templates, etc.). The
-workspace compiles cleanly. The developer is adding or modifying a feature
-inside this existing project.
-
-## Macro Cheat Sheet
-
-All macros listed below have been verified against the proc-macro source files
-(`modo-macros`, `modo-db-macros`, `modo-jobs-macros`, `modo-upload-macros`).
-
-| Macro | Crate | Purpose |
-|---|---|---|
-| `#[handler(METHOD, "/path")]` | modo-macros | Route registration; supports partial path-param extraction; handler-level middleware uses a separate `#[middleware(...)]` attribute on the function |
-| `#[module(prefix = "/path")]` | modo-macros | Groups handlers under a URL prefix; optional `middleware = [...]` for module-scoped middleware |
-| `#[main]` / `#[main(static_assets = "path/")]` | modo-macros | App bootstrap, Tokio runtime, tracing init; optional embedded static assets via `rust_embed` |
-| `#[error_handler]` | modo-macros | Registers a sync `fn(modo::Error, &modo::ErrorContext) -> Response` as the app-wide error handler |
-| `#[view("tmpl.html")]` / `#[view("tmpl.html", htmx = "partial.html")]` | modo-macros | Derives `IntoResponse` via MiniJinja; HTMX requests render the partial when provided |
-| `#[template_function]` / `#[template_function(name = "fn_name")]` | modo-macros | Registers a custom MiniJinja global function via `inventory` |
-| `#[template_filter]` / `#[template_filter(name = "filter_name")]` | modo-macros | Registers a custom MiniJinja filter via `inventory` |
-| `t!(i18n, "key")` / `t!(i18n, "key", name = expr)` | modo-macros | i18n translation lookup; adding `count =` switches to plural form |
-| `#[derive(Sanitize)]` | modo-macros | Input sanitization; use `#[clean(trim, lowercase, ...)]` on fields |
-| `#[derive(Validate)]` | modo-macros | Input validation; use `#[validate(required, email, min_length = N, ...)]` on fields |
-| `#[modo_db::entity(table = "name")]` | modo-db-macros | Declares a SeaORM entity with auto-registration; struct-level options: `timestamps`, `soft_delete`, `index(columns = [...])`, `framework`; optional `group` |
-| `#[modo_db::migration(version = N, description = "text")]` | modo-db-macros | Versioned escape-hatch SQL migration; async fn accepting `&sea_orm::DatabaseConnection`; optional `group` |
-| `#[job(queue = "name")]` / `#[job(cron = "* * * * * *")]` | modo-jobs-macros | Defines a background job or in-memory cron job; additional args: `priority`, `max_attempts`, `timeout` |
-| `#[derive(FromMultipart)]` | modo-upload-macros | Parses `multipart/form-data` into a struct; use `#[upload(max_size, accept, min_count, max_count)]` on file fields |
+- **Single crate** — `cargo add modo`, feature-flag optional modules
+- **Zero proc macros** — handlers are plain `async fn`
+- **Explicit wiring** — routes, services, and middleware composed in `main()`
+- **Raw sqlx** — no ORM, no generated models, just SQL
+- **axum Router** — routes use `axum::Router` directly, no auto-registration
 
 ## Topic Index
 
@@ -73,30 +41,33 @@ All paths are relative to the `references/` directory inside this skill folder.
 
 | Task | Read |
 |---|---|
-| File organization, error patterns, custom error handlers, gotchas | `references/conventions.md` |
-| Handlers, routing, modules, middleware, rate limiting, CORS, security headers, static files | `references/handlers.md` |
-| Entities, migrations, queries, pagination | `references/database.md` |
+| File organization, error handling, extractors, response types, service registry, IDs | `references/conventions.md` |
+| YAML config, env var substitution, feature flags | `references/config.md` |
+| Database: raw sqlx, Pool/ReadPool/WritePool, Reader/Writer traits | `references/database.md` |
+| Handlers, routing, axum Router, middleware (rate limit, CORS, tracing) | `references/handlers.md` |
+| Sessions, cookies, flash messages | `references/sessions.md` |
+| OAuth2, JWT, password hashing, RBAC | `references/auth.md` |
 | Background jobs, cron scheduling | `references/jobs.md` |
-| Email templates, transports | `references/email.md` |
-| Authentication, sessions, password hashing | `references/auth-sessions.md` |
-| Templates, HTMX, SSE, CSRF, i18n | `references/templates-htmx.md` |
-| File uploads, multipart, storage backends | `references/upload.md` |
-| Multi-tenancy resolver patterns | `references/tenant.md` |
-| YAML config, env interpolation, feature flags | `references/config.md` |
-| Testing middleware, cookies, inventory | `references/testing.md` |
+| Multi-tenancy (subdomain, header, path, custom) | `references/tenant.md` |
+| MiniJinja templates, i18n, HTMX support | `references/templates.md` |
+| Server-Sent Events broadcasting | `references/sse.md` |
+| Email rendering, SMTP transport | `references/email.md` |
+| S3-compatible object storage, ACL, upload-from-URL | `references/storage.md` |
+| Outbound webhook delivery with Standard Webhooks signing | `references/webhooks.md` |
+| DNS TXT/CNAME verification | `references/dns.md` |
+| MaxMind GeoIP2 location lookup | `references/geolocation.md` |
+| Test helpers (TestDb, TestApp, etc.) | `references/testing.md` |
 
 ## Common Multi-Module Workflows
 
-For tasks that span multiple topics, read the listed reference files in the
-given order before writing any code. Never skip a file in the chain — each
-one builds context that the next depends on.
+Read the listed reference files in order before writing any code.
 
 | Workflow | Reference files to read (in order) |
 |---|---|
-| Authenticated CRUD API | `conventions.md` → `database.md` → `handlers.md` → `auth-sessions.md` |
-| Web form with validation | `conventions.md` → `handlers.md` → `templates-htmx.md` |
+| Authenticated CRUD API | `conventions.md` → `database.md` → `handlers.md` → `auth.md` |
+| Web form with validation | `conventions.md` → `handlers.md` → `templates.md` |
 | Background email on user action | `handlers.md` → `jobs.md` → `email.md` |
-| File upload with auth | `auth-sessions.md` → `upload.md` → `handlers.md` |
-| Multi-tenant web app | `tenant.md` → `database.md` → `templates-htmx.md` |
-| HTMX live dashboard | `templates-htmx.md` → `auth-sessions.md` |
-| Full-stack feature (entity → API → job → email) | `conventions.md` → `database.md` → `handlers.md` → `jobs.md` → `email.md` |
+| File upload with auth | `auth.md` → `storage.md` → `handlers.md` |
+| Multi-tenant web app | `tenant.md` → `database.md` → `templates.md` |
+| JWT-protected API | `conventions.md` → `handlers.md` → `auth.md` |
+| Full-stack feature (DB → API → job → email) | `conventions.md` → `database.md` → `handlers.md` → `jobs.md` → `email.md` |

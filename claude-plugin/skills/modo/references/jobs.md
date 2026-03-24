@@ -1,519 +1,297 @@
-# Background Jobs Reference
+# Background Jobs & Cron Scheduling
 
-The `modo-jobs` crate provides persistent, database-backed background job processing.
-Jobs are defined with the `#[job]` attribute macro, enqueued via the `JobQueue` extractor
-in HTTP handlers, and executed by a runner that polls the database on configurable intervals.
-Cron jobs run in-memory on a schedule but are not persisted to the database.
+## Modules
 
----
+- `modo::job` -- durable SQLite-backed job queue (always available, no feature gate)
+- `modo::cron` -- in-process cron scheduler (always available, no feature gate)
 
-## Documentation
-
-- modo-jobs crate: https://docs.rs/modo-jobs
-- modo-jobs-macros crate: https://docs.rs/modo-jobs-macros
+Both modules are re-exported at the crate root as `pub mod job` and `pub mod cron`.
 
 ---
 
-## Job Definition
+## Job System
 
-Use the `#[job]` attribute from `modo_jobs` to annotate an `async` function.
+### Database Table
 
-The macro generates:
-- A unit struct `<FnName>Job` (PascalCase of the function name) implementing `JobHandler`.
-- A `JOB_NAME` constant on the struct set to the function name string.
-- `enqueue` and `enqueue_at` associated functions on the struct (omitted for cron jobs).
-- An `inventory` registration entry — no explicit startup call is needed.
+Jobs are stored in the `modo_jobs` table. The framework does **not** ship migrations -- the end-application owns its schema. You must create the table yourself with at minimum these columns: `id`, `name`, `queue`, `payload`, `payload_hash`, `status`, `attempt`, `run_at`, `started_at`, `completed_at`, `failed_at`, `error_message`, `created_at`, `updated_at`.
 
-### Attribute Parameters
+### Defining a Job Handler
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `queue` | string | `"default"` | Target queue name. Must match a configured queue in `JobsConfig`. |
-| `priority` | integer | `0` | Higher values run first within the same queue. |
-| `max_attempts` | integer | `3` | Retry limit before the job is marked `dead`. |
-| `timeout` | string (`"Xs"`, `"Xm"`, `"Xh"`) | `"5m"` | Per-execution timeout. |
-| `cron` | string (cron expression) | — | Recurring in-memory schedule. Mutually exclusive with `queue`, `priority`, and `max_attempts`. |
+A job handler is a plain `async fn` returning `modo::Result<()>`. Arguments must implement `FromJobContext`. Up to 12 arguments are supported.
 
-### Function Signature Rules
-
-- The function must be `async`.
-- Return type must be `Result<(), modo::Error>` or any alias thereof (e.g. `HandlerResult<()>`).
-- At most one plain parameter is treated as the **payload** (deserialized from JSON).
-- Use `Service<T>` to inject a registered service into the job handler.
-- Use `Db` to inject the database pool.
-- Multiple payload parameters are a compile error.
-
-### Payload-based job
+Built-in extractors:
+- `Payload<T>` -- deserializes the JSON payload into `T` (requires `T: DeserializeOwned`)
+- `Service<T>` -- retrieves a service from the registry snapshot
+- `Meta` -- job metadata (id, name, queue, attempt, max_attempts, deadline)
 
 ```rust
-use modo_jobs::job;
-use modo::HandlerResult;
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize)]
-struct WelcomePayload {
-    email: String,
-}
-
-#[job(queue = "default", max_attempts = 5, timeout = "30s")]
-async fn send_welcome(payload: WelcomePayload) -> HandlerResult<()> {
-    tracing::info!(email = %payload.email, "Sending welcome email");
-    Ok(())
-}
-// Generates: SendWelcomeJob with SendWelcomeJob::enqueue and SendWelcomeJob::enqueue_at
-```
-
-### Job with service injection
-
-```rust
-use modo_jobs::job;
-use modo::HandlerResult;
-use modo::extractor::Service;
-
-#[job(queue = "mailer", timeout = "1m")]
-async fn send_report(
-    payload: ReportPayload,
-    Service(mailer): Service<MyMailer>,
-) -> HandlerResult<()> {
-    mailer.send(payload.to, payload.subject).await?;
-    Ok(())
-}
-```
-
-### Job with database access
-
-```rust
-use modo_jobs::job;
-use modo::HandlerResult;
-use modo_db::extractor::Db;
-
-#[job(queue = "default")]
-async fn sync_user(payload: SyncPayload, Db(db): Db) -> HandlerResult<()> {
-    // use db (DbPool) directly
-    Ok(())
-}
-```
-
-### Cron job (no payload, no queue)
-
-```rust
-#[job(cron = "0 */1 * * * *", timeout = "30s")]
-async fn heartbeat() -> HandlerResult<()> {
-    tracing::info!("heartbeat tick");
-    Ok(())
-}
-```
-
-Cron expressions use the `cron` crate's six-field format: `second minute hour day month weekday`.
-The `cron` attribute is mutually exclusive with `queue`, `priority`, and `max_attempts` — specifying
-both is a compile error.
-
----
-
-## Enqueuing Jobs
-
-`JobQueue` is an Axum extractor that implements `FromRequestParts<AppState>`. It resolves from
-the `JobsHandle` registered as a managed service. Add it as a parameter to any handler.
-
-```rust
-use modo::extractor::JsonReq;
-use modo::{Json, JsonResult};
-use modo_jobs::JobQueue;
-use crate::jobs::SayHelloJob;
-use crate::payloads::GreetingPayload;
-use serde_json::{Value, json};
-
-#[modo::handler(POST, "/jobs/greet")]
-async fn enqueue_greet(queue: JobQueue, input: JsonReq<GreetingPayload>) -> JsonResult<Value> {
-    let job_id = SayHelloJob::enqueue(&queue, &input).await?;
-    Ok(Json(json!({ "job_id": job_id.to_string() })))
-}
-```
-
-### Enqueue for future execution
-
-Use `enqueue_at` to schedule a job to run no earlier than a specific UTC timestamp:
-
-```rust
-#[modo::handler(POST, "/jobs/remind")]
-async fn enqueue_remind(queue: JobQueue, input: JsonReq<ReminderPayload>) -> JsonResult<Value> {
-    let run_at = chrono::Utc::now() + chrono::Duration::seconds(10);
-    let job_id = RemindJob::enqueue_at(&queue, &input, run_at).await?;
-    Ok(Json(json!({ "job_id": job_id.to_string(), "run_at": run_at.to_rfc3339() })))
-}
-```
-
-### Cancel a pending job
-
-```rust
-queue.cancel(&job_id).await?;
-```
-
-Only jobs in the `Pending` state can be cancelled. Returns an error if the job is not found
-or is not in the `Pending` state.
-
-### JobId
-
-`JobId` is a ULID-backed string identifier returned by `enqueue` and `enqueue_at`.
-
-```rust
-let job_id: JobId = SayHelloJob::enqueue(&queue, &payload).await?;
-println!("{}", job_id); // prints ULID string
-```
-
----
-
-## Configuration
-
-Add `JobsConfig` to your app config struct and deserialize it from YAML.
-
-```rust
-use modo_db::DatabaseConfig;
-use modo_jobs::JobsConfig;
+use modo::job::{Payload, Meta};
+use modo::Service;
 use serde::Deserialize;
 
-#[derive(Default, Deserialize)]
-pub struct Config {
-    #[serde(flatten)]
-    pub core: modo::config::AppConfig,
-    pub database: DatabaseConfig,
-    #[serde(default)]
-    pub jobs: JobsConfig,
+#[derive(Deserialize)]
+struct SendEmail { to: String, subject: String }
+
+async fn send_email_job(
+    payload: Payload<SendEmail>,
+    meta: Meta,
+    mailer: Service<MyMailer>,
+) -> modo::Result<()> {
+    tracing::info!(job_id = %meta.id, attempt = meta.attempt, "sending email");
+    mailer.send(&payload.to, &payload.subject).await
 }
 ```
 
-### JobsConfig fields
+`Payload<T>` implements `Deref<Target = T>`, so fields are accessible directly.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `poll_interval_secs` | `u64` | `1` | How often each queue polls for new jobs. |
-| `stale_threshold_secs` | `u64` | `600` | Jobs locked longer than this are re-queued. |
-| `stale_reaper_interval_secs` | `u64` | `60` | How often the stale reaper checks for stale jobs. |
-| `drain_timeout_secs` | `u64` | `30` | Max time to wait for in-flight jobs at shutdown. |
-| `queues` | `Vec<QueueConfig>` | `[{name: "default", concurrency: 4}]` | Per-queue configuration. |
-| `cleanup` | `CleanupConfig` | see below | Automatic cleanup of finished jobs. |
-| `max_payload_bytes` | `Option<usize>` | `None` (unlimited) | Optional cap on serialized payload size. |
-| `max_queue_depth` | `Option<usize>` | `None` (unlimited) | Optional cap on pending jobs per queue. When set, `enqueue()` returns 503 if the queue is full. |
+### Enqueuing Jobs
 
-### QueueConfig fields
+`Enqueuer` writes rows into `modo_jobs`. Construct with a `WritePool`:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | `String` | Queue name (must match `#[job(queue = "...")]`). |
-| `concurrency` | `usize` | Maximum concurrent jobs on this queue. Must be > 0. |
+```rust
+use modo::job::{Enqueuer, EnqueueOptions};
 
-### CleanupConfig fields
+let enqueuer = Enqueuer::new(&write_pool);
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `interval_secs` | `u64` | `3600` | How often the cleanup task runs. |
-| `retention_secs` | `u64` | `86400` | Jobs older than this are eligible for deletion. |
-| `statuses` | `Vec<JobState>` | `[Completed, Dead, Cancelled]` | Which states to clean up. |
+// Immediate execution on the "default" queue
+let job_id = enqueuer.enqueue("send_email", &payload).await?;
 
-Example YAML:
+// Delayed execution
+let job_id = enqueuer.enqueue_at("send_email", &payload, run_at).await?;
+
+// Full control (custom queue + schedule)
+let job_id = enqueuer.enqueue_with("send_email", &payload, EnqueueOptions {
+    queue: "emails".to_string(),
+    run_at: Some(run_at),
+}).await?;
+```
+
+#### Idempotent Enqueue
+
+`enqueue_unique` / `enqueue_unique_with` deduplicate on a SHA-256 hash of `name + "\0" + payload_json`. If a pending or running job with the same hash exists, the existing job's ID is returned instead of inserting a duplicate.
+
+```rust
+use modo::job::EnqueueResult;
+
+match enqueuer.enqueue_unique("send_email", &payload).await? {
+    EnqueueResult::Created(id) => { /* new job */ }
+    EnqueueResult::Duplicate(id) => { /* already queued */ }
+}
+```
+
+Uniqueness relies on a partial unique index on `payload_hash` where `status IN ('pending', 'running')`. Since SQLite does not support `ON CONFLICT` with partial unique indexes, the code catches `is_unique_violation()` and falls back to a `SELECT`.
+
+#### Cancelling Jobs
+
+```rust
+let cancelled: bool = enqueuer.cancel("job-id").await?;
+```
+
+Only cancels jobs still in `pending` status. Returns `false` if the job was not found or already past pending.
+
+### Worker Configuration
+
+`JobConfig` deserializes from YAML under the `job` key. All fields have defaults:
+
+| Field | Default | Description |
+|---|---|---|
+| `poll_interval_secs` | `1` | How often the worker polls for new jobs |
+| `stale_threshold_secs` | `600` (10 min) | Jobs stuck in `running` beyond this are reaped |
+| `stale_reaper_interval_secs` | `60` (1 min) | How often the stale reaper runs |
+| `drain_timeout_secs` | `30` | Max wait for in-flight jobs during shutdown |
+| `queues` | one `"default"` queue, concurrency 4 | List of `QueueConfig` entries |
+| `cleanup` | enabled, 1h interval, 72h retention | Optional `CleanupConfig` |
+
+#### Queue Config
 
 ```yaml
-jobs:
-  poll_interval_secs: 1
-  stale_threshold_secs: 600
-  stale_reaper_interval_secs: 60
-  drain_timeout_secs: 30
+job:
   queues:
     - name: default
       concurrency: 4
-    - name: email
+    - name: emails
       concurrency: 2
+    - name: critical
+      concurrency: 8
+```
+
+Each queue gets its own `Semaphore` with the specified concurrency limit. **Priority is handled by separate queues with different concurrency**, not by a numeric priority field.
+
+#### Cleanup Config
+
+```yaml
+job:
   cleanup:
-    interval_secs: 3600
-    retention_secs: 86400
-    statuses: [completed, dead, cancelled]
+    interval_secs: 3600     # run cleanup every hour
+    retention_secs: 259200   # delete terminal jobs older than 72h
 ```
 
----
+Terminal statuses: `completed`, `dead`, `cancelled`. Set `cleanup: ~` (null) to disable.
 
-## Starting the Runner
-
-Call `modo_jobs::new()` to create a `JobsBuilder`, register services, and call `.run()`.
-Register the resulting `JobsHandle` as a managed service so the framework calls graceful
-shutdown on it.
+### Building and Starting a Worker
 
 ```rust
-#[modo::main]
-async fn main(
-    app: modo::app::AppBuilder,
-    config: Config,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let db = modo_db::connect(&config.database).await?;
-    modo_db::sync_and_migrate(&db).await?;
+use modo::job::{Worker, JobOptions};
 
-    let jobs = modo_jobs::new(&db, &config.jobs)
-        .service(db.clone())
-        .run()
-        .await?;
-
-    app.config(config.core)
-        .managed_service(db)
-        .managed_service(jobs)
-        .run()
-        .await
-}
+let worker = Worker::builder(&job_config, &registry)
+    .register("send_email", send_email_job)
+    .register_with("process_payment", process_payment_job, JobOptions {
+        max_attempts: 5,
+        timeout_secs: 60,
+    })
+    .start()
+    .await;
 ```
 
-`JobsBuilder::service<T>` registers any `Send + Sync + 'static` value into a `ServiceRegistry`
-that is passed to every job handler via `JobContext`. Call `.service()` as many times as needed
-before calling `.run()`.
+`Worker::builder` panics if `WritePool` is not in the registry.
 
-`JobsBuilder::run()` starts per-queue poll loops, a stale reaper, a cleanup task, and the
-cron scheduler — all as separate Tokio tasks. It returns an error if configuration validation
-fails or if a registered job references a queue that is not in `config.queues`.
-
----
-
-## Retry and Exponential Backoff
-
-When a job handler returns an `Err(_)` or times out, the runner checks `attempts` against
-`max_attempts`:
-
-- If `attempts < max_attempts`: the job is rescheduled to `Pending` with exponential backoff.
-- If `attempts >= max_attempts`: the job is marked `Dead` and will not be retried.
-
-The backoff formula is:
-
-```
-backoff_secs = min(5 * 2^(attempt - 1), 3600)
-```
-
-| Attempt | Delay |
-|---------|-------|
-| 1st retry | 5 s |
-| 2nd retry | 10 s |
-| 3rd retry | 20 s |
-| 4th retry | 40 s |
-| ... | doubles each time |
-| cap | 3600 s (1 hour) |
-
-The `last_error` field on the `Job` entity stores the error message from the most recent
-failed attempt.
-
-Configure `max_attempts` on the job itself:
+`Worker` implements `Task` for integration with the `run!` macro:
 
 ```rust
-#[job(queue = "default", max_attempts = 5)]
-async fn flaky_task(payload: TaskPayload) -> HandlerResult<()> {
-    // ...
-}
+modo::run!(server, worker, scheduler);
 ```
 
-The default is 3. Set `max_attempts = 1` to disable retries entirely.
+### Per-Handler Options (`JobOptions`)
 
----
+| Field | Default | Description |
+|---|---|---|
+| `max_attempts` | `3` | Attempts before the job is marked `dead` |
+| `timeout_secs` | `300` (5 min) | Per-execution timeout; exceeded = failure |
 
-## Job State Machine
+### Retries and Exponential Backoff
 
-`JobState` tracks the lifecycle of every job in the `modo_jobs` table.
+On failure (handler error or timeout), if `attempt < max_attempts`, the job is reset to `pending` with a delayed `run_at`:
 
-| State | Meaning |
-|-------|---------|
-| `Pending` | Waiting to be picked up by a worker. |
-| `Running` | Currently executing on a worker. |
-| `Completed` | Finished successfully. |
-| `Dead` | Exhausted all retry attempts without success. |
-| `Cancelled` | Cancelled before execution via `JobQueue::cancel`. |
+```
+delay_secs = min(5 * 2^(attempt - 1), 3600)
+```
 
-States are stored as lowercase strings in the database (`"pending"`, `"running"`, etc.).
-The `JobState` enum implements `Display`, `FromStr`, and `Serialize`/`Deserialize`.
+Backoff progression: 5s, 10s, 20s, 40s, 80s, ... capped at 1 hour.
+
+When `attempt >= max_attempts`, the job moves to `dead` status.
+
+### Job Statuses
+
+| Status | Meaning |
+|---|---|
+| `pending` | Waiting to be picked up |
+| `running` | Currently executing |
+| `completed` | Finished successfully |
+| `dead` | Exhausted all retries |
+| `cancelled` | Cancelled via `Enqueuer::cancel` |
+
+`Status::is_terminal()` returns `true` for `completed`, `dead`, and `cancelled`.
+
+### Background Loops
+
+`Worker::start()` spawns three tasks:
+
+1. **Poll loop** -- claims pending jobs, dispatches to handlers with timeouts
+2. **Stale reaper** -- resets `running` jobs whose `started_at` exceeds `stale_threshold_secs` back to `pending`
+3. **Cleanup loop** (optional) -- deletes terminal jobs older than `retention_secs`
 
 ---
 
 ## Cron Scheduling
 
-Cron jobs are declared with `#[job(cron = "...")]`. They run entirely in-memory — no record
-is written to the `modo_jobs` table for individual executions.
+### Defining a Cron Handler
+
+Same pattern as job handlers: plain `async fn` returning `modo::Result<()>`, up to 12 arguments.
+
+Built-in extractors (via `FromCronContext`):
+- `Service<T>` -- service from the registry snapshot
+- `cron::Meta` -- metadata: `name` (handler type name), `deadline`, `tick` (scheduled `DateTime<Utc>`)
 
 ```rust
-#[job(cron = "0 */5 * * * *", timeout = "1m")]
-async fn cleanup_expired_sessions() -> HandlerResult<()> {
-    tracing::info!("Cleaning up expired sessions");
-    Ok(())
+use modo::cron::Meta;
+use modo::Service;
+
+async fn cleanup_expired(
+    meta: Meta,
+    db: Service<MyDbService>,
+) -> modo::Result<()> {
+    tracing::info!(tick = %meta.tick, "running cleanup");
+    db.delete_expired().await
 }
 ```
 
-The cron expression uses six fields: `second minute hour day month weekday`.
+Note: cron handlers do **not** have `Payload<T>` -- there is no payload to deserialize.
 
-**Execution semantics:**
-- One Tokio task is spawned per cron job at startup.
-- At most one instance of each cron job runs at a time.
-- If the handler takes longer than the interval between ticks, the next tick is skipped rather
-  than firing concurrently.
-- Each execution receives a fresh `JobContext` with `attempt = 1` and `payload_json = "null"`.
-- If a cron job fails five consecutive times, a warning is logged.
-- Cron tasks respect the `CancellationToken` and stop cleanly on shutdown.
+### Schedule Formats
 
-**Cron jobs support the same parameter injection as regular jobs** (`Service<T>`, `Db`, etc.).
-The macro generates the same extraction code for all job types. The cron runner creates a fresh
-`JobContext` with all registered services for each execution, so `Service<T>` and `Db` work
-identically in cron job function signatures.
+Three formats are accepted:
 
----
-
-## Graceful Shutdown
-
-`JobsHandle` implements `modo::GracefulShutdown` at the `Drain` shutdown phase. Registering
-it via `app.managed_service(jobs)` is all that is required — the framework calls
-`JobsHandle::shutdown()` automatically.
-
-Shutdown sequence:
-1. `CancellationToken` is cancelled, signalling all poll loops, the stale reaper, the cleanup
-   task, and all cron tasks to stop accepting new work.
-2. The runner waits up to `drain_timeout_secs` for all in-flight jobs to finish by acquiring
-   all semaphore permits for each queue.
-3. If the drain timeout expires before all jobs complete, a warning is logged and the process
-   proceeds with shutdown regardless.
-
-To get the cancellation token for custom use:
-
-```rust
-let token = jobs.cancel_token();
+**Standard cron expressions** -- 5-field or 6-field (with leading seconds):
+```
+*/5 * * * *        # every 5 minutes (5-field)
+0 30 9 * * *       # daily at 09:30:00 (6-field with seconds)
 ```
 
----
+**Named aliases**:
+- `@yearly` / `@annually`
+- `@monthly`
+- `@weekly`
+- `@daily` / `@midnight`
+- `@hourly`
 
-## Integration Patterns
-
-### Accessing the database in a job
-
-Register the `DbPool` as a service and use the `Db` extractor:
-
-```rust
-// In main:
-let jobs = modo_jobs::new(&db, &config.jobs)
-    .service(db.clone())
-    .run()
-    .await?;
-
-// In job definition:
-#[job(queue = "default")]
-async fn process_record(payload: RecordPayload, Db(db): Db) -> HandlerResult<()> {
-    let pool = db.clone(); // Arc<DbPool>
-    // query using SeaORM via pool.connection()
-    Ok(())
-}
+**Interval syntax** -- `@every <duration>` with `h`, `m`, `s` units:
+```
+@every 5m
+@every 1h30m
+@every 30s
 ```
 
-### Accessing a custom service (e.g. Mailer)
+Invalid expressions panic at scheduler build time (not at runtime).
+
+### Building and Starting a Scheduler
 
 ```rust
-// In main:
-let mailer = MyMailer::new(&config.mailer);
-let jobs = modo_jobs::new(&db, &config.jobs)
-    .service(db.clone())
-    .service(mailer)
-    .run()
-    .await?;
+use modo::cron::{Scheduler, CronOptions};
 
-// In job definition:
-#[job(queue = "mailer")]
-async fn send_notification(
-    payload: NotificationPayload,
-    Service(mailer): Service<MyMailer>,
-) -> HandlerResult<()> {
-    mailer.send(&payload.to, &payload.body).await?;
-    Ok(())
-}
+let scheduler = Scheduler::builder(&registry)
+    .job("@daily", cleanup_expired)
+    .job("*/5 * * * *", heartbeat)
+    .job_with("@every 30s", intensive_task, CronOptions {
+        timeout_secs: 25,
+    })
+    .start()
+    .await;
 ```
 
-### Enqueuing from outside HTTP handlers
+`Scheduler` implements `Task` for `run!` macro integration. Shutdown waits up to 30 seconds for in-flight executions.
 
-`JobsHandle` derefs to `JobQueue`, so you can call enqueue methods directly on the handle:
+### Per-Job Options (`CronOptions`)
 
-```rust
-let job_id = SayHelloJob::enqueue(&*jobs, &payload).await?;
-```
+| Field | Default | Description |
+|---|---|---|
+| `timeout_secs` | `300` (5 min) | Max execution time per tick |
 
-Or pass the `JobsHandle` (or a cloned `JobQueue`) wherever needed.
+### Overlap Protection
 
-### Email integration (modo-email)
+If a previous execution is still running when the next tick fires, the tick is **skipped** with a warning log. There is no queue -- missed ticks are lost.
 
-The mailer is registered as a jobs service (`.service(email)` on the jobs builder), not on
-the app. The app enqueues a `SendEmailPayload`; the job worker sends the email.
+### Job Name
 
-```rust
-// Register mailer as a jobs service:
-let jobs = modo_jobs::new(&db, &config.jobs)
-    .service(db.clone())
-    .service(mailer)  // mailer is a jobs service, NOT an app service
-    .run()
-    .await?;
-
-// In the send-email job:
-#[job(queue = "email")]
-async fn send_email(
-    payload: SendEmailPayload,
-    Service(mailer): Service<Mailer>,
-) -> HandlerResult<()> {
-    mailer.send(&SendEmail::from(payload)).await?;
-    Ok(())
-}
-```
+The cron `Meta.name` field is set to the fully qualified Rust type name of the handler function (`std::any::type_name::<H>()`), not a user-provided string.
 
 ---
 
 ## Gotchas
 
-**Cron jobs are not persisted.** Individual cron executions never appear in the `modo_jobs`
-table. If the process restarts between ticks, the cron schedule resets from the next upcoming
-time rather than catching up on missed ticks.
+- **No embedded migrations**: Both `job` and `cron` modules are DB-backed (job) or in-memory (cron). The `modo_jobs` table must be created by the end-application's migration. The framework does not ship DDL.
 
-**Queue names must be configured.** Every job whose `queue` parameter does not match a name in
-`config.queues` causes `JobsBuilder::run()` to return an error at startup. Cron jobs bypass
-this check.
+- **999 bind params limit (SQLite)**: The worker poll loop builds a dynamic `IN (?, ?, ...)` clause for all registered handler names. SQLite has a 999 bind parameter limit per statement, so a single worker can support a maximum of roughly 900 registered handlers.
 
-**`inventory` registration in tests.** Jobs are registered via `inventory::submit!` at link
-time. In test binaries, the linker may not include the library object file unless there is a
-direct reference to it. Force inclusion with:
+- **croner 6-field support**: `croner::Cron::new()` defaults to 5-field expressions. The framework calls `.with_seconds_optional()` so both 5-field and 6-field (seconds-prefixed) expressions work. If you use `croner` directly elsewhere, remember to call `.with_seconds_optional()` for 6-field support.
 
-```rust
-use crate::jobs::SendWelcomeJob as _;
-```
+- **`WritePool` required**: `Worker::builder()` panics if `WritePool` is not registered in the `Registry`.
 
-The force-include must reference the generated struct name (`<FnName>Job` in PascalCase), not
-the original function name. This applies whenever `cargo test` fails to discover jobs that
-work in normal builds.
+- **Registry snapshot is frozen**: Both `Worker` and `Scheduler` capture a `RegistrySnapshot` at build time. Services added to the `Registry` after building are not visible to handlers.
 
-**Payload size limit.** If `max_payload_bytes` is set in `JobsConfig`, `enqueue` returns an
-error when the serialized payload exceeds that limit. The default is `None` (unlimited).
+- **Cron overlap skips ticks**: If a cron handler runs longer than the interval between ticks, subsequent ticks are skipped (not queued). Use a shorter interval or increase `timeout_secs` accordingly.
 
-**`max_attempts` is per-job, not per-queue.** Each `#[job]` declaration sets its own
-`max_attempts`. There is no global override in `JobsConfig`.
+- **Exponential backoff formula**: `min(5 * 2^(attempt-1), 3600)` seconds. Attempt is 1-based. The cap is 1 hour.
 
-**Stale job reaping.** Jobs locked longer than `stale_threshold_secs` (default 600 s) are
-reset to `Pending` and their attempt counter is decremented. This handles crashed workers.
-The reaper runs every `stale_reaper_interval_secs` seconds (default 60).
+- **Idempotent enqueue uses SHA-256**: Uniqueness key is `sha256(name + "\0" + payload_json)`. Different JSON serialization order of the same logical payload produces different hashes.
 
-**Cron expressions are validated at compile time.** A malformed cron expression in
-`#[job(cron = "...")]` is a **compile error** — the macro validates the expression during
-expansion. The runtime panic path in `start_cron_jobs` is a defensive fallback only reachable
-if a `JobRegistration` is constructed manually with an invalid `cron` field.
-
-**`JobQueue` requires `JobsHandle` to be registered.** If `JobsHandle` is not in the service
-registry, the `JobQueue` extractor returns a 500 error with the message:
-`"job queue not configured — start the job runner and register JobsHandle as a service"`
-
----
-
-## Key Types Quick Reference
-
-| Type | Crate | Description |
-|------|-------|-------------|
-| `JobsConfig` | `modo_jobs::config` | Top-level configuration (queues, timeouts, cleanup). |
-| `QueueConfig` | `modo_jobs::config` | Per-queue name and concurrency. |
-| `CleanupConfig` | `modo_jobs::config` | Cleanup interval, retention, and target states. |
-| `JobsBuilder` | `modo_jobs::runner` | Builder returned by `modo_jobs::new()`. |
-| `JobsHandle` | `modo_jobs::runner` | Live handle returned by `JobsBuilder::run()`. Derefs to `JobQueue`. |
-| `JobQueue` | `modo_jobs::queue` | Enqueue / cancel operations. Axum extractor. |
-| `JobId` | `modo_jobs::types` | ULID-backed job identifier. |
-| `JobState` | `modo_jobs::types` | `Pending`, `Running`, `Completed`, `Dead`, `Cancelled`. |
-| `JobContext` | `modo_jobs::handler` | Runtime context passed to a job handler. |
-| `JobHandler` | `modo_jobs::handler` | Trait implemented by the `#[job]` macro. |
-| `JobHandlerDyn` | `modo_jobs::handler` | Object-safe bridge for `Box<dyn JobHandlerDyn>`. |
-| `JobRegistration` | `modo_jobs::handler` | Inventory entry created by `#[job]`. |
+- **Named aliases expand to 6-field cron**: Aliases like `@daily` internally expand to `"0 0 0 * * *"` (6-field with seconds), not 5-field.

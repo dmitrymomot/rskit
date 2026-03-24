@@ -1,711 +1,412 @@
-# Handlers Reference
+# Handlers, Routing, Middleware, and Server
 
-Handlers are the core building block of a modo application. They are plain async functions
-annotated with `#[modo::handler]` and discovered at compile time via `inventory`. No manual
-route registration is required — attach the attribute and the route appears.
+## Plain Async Function Handlers
 
-## Documentation
-
-- modo crate: https://docs.rs/modo
-- modo-macros crate: https://docs.rs/modo-macros
-
----
-
-## Handler Registration
-
-The `#[modo::handler(METHOD, "/path")]` attribute registers an async function as an HTTP route.
-Registration happens at compile time; the route is submitted to the `inventory` collector and
-wired automatically when `AppBuilder::run()` is called.
+Handlers in modo are plain `async fn` -- no macros, no attribute annotations, no signature rewriting. Any async function that satisfies axum's `Handler` trait works directly:
 
 ```rust
-#[modo::handler(GET, "/")]
-async fn index() -> &'static str {
-    "Hello, modo!"
+use axum::Json;
+use modo::Service;
+
+// A handler is just an async function.
+async fn list_items(Service(db): Service<DbPool>) -> Json<Vec<Item>> {
+    let items = db.fetch_all().await;
+    Json(items)
+}
+
+async fn get_item(
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Service(db): Service<DbPool>,
+) -> modo::Result<Json<Item>> {
+    let item = db.find(&id).await.map_err(|_| modo::Error::not_found())?;
+    Ok(Json(item))
 }
 ```
 
-Supported HTTP methods (case-insensitive in the attribute, normalized to uppercase):
+Extractors are function parameters. modo provides:
 
-| Attribute token | HTTP method |
-|----------------|-------------|
-| `GET`          | GET         |
-| `POST`         | POST        |
-| `PUT`          | PUT         |
-| `PATCH`        | PATCH       |
-| `DELETE`       | DELETE      |
-| `HEAD`         | HEAD        |
-| `OPTIONS`      | OPTIONS     |
+- `Service<T>` -- retrieves `Arc<T>` from the service registry
+- `modo::extractor::JsonRequest<T>` / `modo::extractor::FormRequest<T>` -- deserialize + sanitize request bodies (`T: Sanitize`)
+- `axum::extract::Path<T>` / `axum::extract::Query<T>` -- path and query parameters
+- `ClientIp` -- resolved client IP (requires `ClientIpLayer`)
+- `Session` -- session data
+- `Flash` -- flash messages
+- `Role` -- RBAC role (requires RBAC middleware)
 
-### Return Types
+Return types: `Json<T>`, `Html<String>`, `axum::response::Redirect`, `axum::response::Response`, or `modo::Result<T>` for fallible handlers.
 
-Handlers may return any type that implements `axum::response::IntoResponse`. Common patterns:
+Error constructors: `Error::not_found()`, `Error::bad_request()`, `Error::internal()`, `Error::unauthorized()`, `Error::forbidden()`, `Error::too_many_requests()`.
+
+## Routing with axum::Router
+
+Routes use `axum::Router` directly. modo re-exports axum as `modo::axum`.
 
 ```rust
-// Plain string
-#[modo::handler(GET, "/ping")]
-async fn ping() -> &'static str { "pong" }
+use modo::axum::{Router, routing::{get, post, put, delete}};
+use modo::service::{Registry, AppState};
 
-// Fallible result with HTTP error
-#[modo::handler(GET, "/item/{id}")]
-async fn get_item(id: String) -> Result<String, modo::HttpError> {
-    Err(modo::HttpError::NotFound)
-}
+let mut registry = Registry::new();
+registry.add(my_db_pool);
+registry.add(my_email_client);
+let state: AppState = registry.into_state();
 
-// HandlerResult<T> — shorthand for Result<T, modo::Error>
-#[modo::handler(GET, "/item/{id}")]
-async fn get_item(id: String) -> modo::HandlerResult<String> {
-    Ok(format!("item {id}"))
-}
+let app = Router::new()
+    .route("/items", get(list_items).post(create_item))
+    .route("/items/{id}", get(get_item).put(update_item).delete(delete_item))
+    .with_state(state);
+```
 
-// JsonResult<T> — shorthand for Result<modo::Json<T>, modo::Error>
-#[modo::handler(GET, "/items")]
-async fn list_items() -> modo::JsonResult<Vec<String>> {
-    Ok(modo::Json(vec!["a".into(), "b".into()]))
+The service registry (`Registry`) is a `HashMap<TypeId, Arc<dyn Any>>`. Call `.add(value)` to insert, then `.into_state()` to freeze into `AppState`. Inside handlers, `Service<T>` extracts the registered value.
+
+## Middleware
+
+All middleware functions return Tower-compatible layers. Apply them with `.layer()` on the router.
+
+### Recommended Layer Order
+
+Outermost (applied first to request, last to response) to innermost:
+
+```rust
+use modo::middleware;
+use tokio_util::sync::CancellationToken;
+
+let cancel = CancellationToken::new();
+
+let app = Router::new()
+    .route("/", get(handler))
+    .with_state(state)
+    .layer(middleware::error_handler(render_error))
+    .layer(middleware::tracing())
+    .layer(middleware::request_id())
+    .layer(middleware::catch_panic())
+    .layer(middleware::compression())
+    .layer(middleware::cors(&cors_config))
+    .layer(middleware::security_headers(&sec_config))
+    .layer(middleware::rate_limit(&rl_config, cancel.clone()))
+    .layer(ClientIpLayer::new());
+```
+
+### Rate Limiting
+
+Token-bucket algorithm. Each key gets `burst_size` tokens; tokens replenish at `per_second` rate. Exhausted buckets receive `429 Too Many Requests`.
+
+**Configuration (`RateLimitConfig`):**
+
+```rust
+use modo::middleware::RateLimitConfig;
+
+let config = RateLimitConfig {
+    per_second: 1,          // token replenish rate
+    burst_size: 10,         // max tokens per key
+    use_headers: true,      // include x-ratelimit-* headers
+    cleanup_interval_secs: 60,
+    max_keys: 10_000,       // 0 = unlimited
+};
+```
+
+**IP-based rate limiting (`rate_limit`):**
+
+```rust
+use modo::middleware::{rate_limit, RateLimitConfig};
+use tokio_util::sync::CancellationToken;
+
+let cancel = CancellationToken::new();
+let layer = rate_limit(&config, cancel.clone());
+```
+
+Requires the server to expose `ConnectInfo<SocketAddr>` (modo's `server::http()` calls `into_make_service()` which does NOT set this up -- use `into_make_service_with_connect_info::<SocketAddr>()` if you need `PeerIpKeyExtractor`).
+
+**Custom key extraction (`rate_limit_with`):**
+
+```rust
+use modo::middleware::{rate_limit_with, KeyExtractor, GlobalKeyExtractor, RateLimitConfig};
+
+// Global shared bucket (all requests share one limit)
+let layer = rate_limit_with(&config, GlobalKeyExtractor, cancel.clone());
+```
+
+Implement `KeyExtractor` for custom keys:
+
+```rust
+use modo::middleware::KeyExtractor;
+use http::Request;
+
+#[derive(Clone)]
+struct ApiKeyExtractor;
+
+impl KeyExtractor for ApiKeyExtractor {
+    fn extract<B>(&self, req: &Request<B>) -> Option<String> {
+        req.headers()
+            .get("x-api-key")
+            .and_then(|v| v.to_str().ok())
+            .map(String::from)
+    }
 }
 ```
 
-Use `modo::Json` (not `modo::axum::Json`) for JSON responses. `modo::HandlerResult<T>` and
-`modo::JsonResult<T>` both accept an optional second type parameter for a custom error type.
+Both `rate_limit()` and `rate_limit_with()` spawn a background cleanup task. The `CancellationToken` must be cancelled during shutdown to stop it.
 
----
+Response headers when `use_headers` is true: `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`. Rejected responses also include `retry-after`.
 
-## Modules
+Built-in extractors:
+- `PeerIpKeyExtractor` -- keys by peer socket IP (needs `ConnectInfo<SocketAddr>`)
+- `GlobalKeyExtractor` -- single shared bucket for all requests
 
-`#[modo::module(prefix = "/api")]` groups handlers under a shared URL prefix and optional
-module-level middleware. Place it on a `mod` block containing `#[modo::handler]` functions.
+### Tracing
+
+Creates an `http_request` span per request with `method`, `uri`, `version`, and an empty `tenant_id` field (filled later by tenant middleware).
 
 ```rust
-#[modo::module(prefix = "/api/v1")]
-mod api {
-    #[modo::handler(GET, "/users")]
-    async fn list_users() -> &'static str { "users" }
-
-    #[modo::handler(POST, "/users")]
-    async fn create_user() -> &'static str { "created" }
-}
+let layer = modo::middleware::tracing();
 ```
 
-The module macro rewrites each inner `#[handler]` attribute to inject `module = "api"` so the
-router knows which prefix applies. The final mounted paths become `/api/v1/users`, etc.
+Built on `tower_http::trace::TraceLayer` with a custom `ModoMakeSpan`.
 
-Module-level middleware applies to all routes in the module:
+### CORS
+
+**Static origins (`cors`):**
 
 ```rust
-#[modo::module(prefix = "/admin", middleware = [require_admin])]
-mod admin {
-    #[modo::handler(GET, "/dashboard")]
-    async fn dashboard() -> &'static str { "admin" }
-}
+use modo::middleware::{cors, CorsConfig};
+
+let config = CorsConfig {
+    origins: vec!["https://example.com".into()],
+    methods: vec!["GET".into(), "POST".into(), "PUT".into(), "DELETE".into(), "PATCH".into()],
+    headers: vec!["Content-Type".into(), "Authorization".into()],
+    max_age_secs: 86400,
+    allow_credentials: true,
+};
+let layer = cors(&config);
 ```
 
-Both `prefix` and `middleware` are named arguments. `prefix` is required; `middleware` is
-optional and takes a bracket-enclosed comma-separated list.
+When `origins` is empty, allows any origin (`*`) and forces `allow_credentials` to `false` (CORS spec requirement).
 
----
-
-## Path Parameters
-
-Path parameters are declared with `{name}` syntax in the route path. The macro extracts them
-automatically — declare only the parameters you need in the function signature; undeclared
-parameters default to `String` and are ignored via the `..` destructuring pattern generated
-inside the proc macro.
+**Dynamic origins (`cors_with`):**
 
 ```rust
-// Extract only `id`; any other path params would be ignored
-#[modo::handler(GET, "/users/{id}")]
-async fn get_user(id: String) -> String {
-    format!("user {id}")
-}
+use modo::middleware::{cors_with, subdomains, urls, CorsConfig};
 
-// Declare a typed path param
-#[modo::handler(DELETE, "/todos/{id}")]
-async fn delete_todo(id: String) -> modo::JsonResult<serde_json::Value> {
-    Ok(modo::Json(serde_json::json!({"deleted": id})))
-}
+// Match any subdomain of example.com
+let layer = cors_with(&config, subdomains("example.com"));
 
-// Partial extraction: only declare params you need
-#[modo::handler(GET, "/org/{org_id}/repo/{repo_id}/file/{name}")]
-async fn get_file(name: String) -> String {
-    // org_id and repo_id are present in the struct but ignored via `..`
-    format!("file: {name}")
-}
+// Match exact URL list
+let layer = cors_with(&config, urls(&["https://app.example.com".into()]));
 ```
 
-The macro generates a private `__HandlerNamePathParams` struct with all path parameters as
-fields, using the declared type for named params and `String` for the rest. The handler
-receives only the fields it declared.
+Built-in predicates:
+- `subdomains(domain)` -- matches the domain and any subdomain (both http and https)
+- `urls(origins)` -- exact-match against a list of origin strings
 
-Wildcard path parameters use `{*name}` syntax in the route path and capture the rest of the
-URL segment.
+### Compression
 
----
-
-## Extractors
-
-Extractors appear as function parameters and are resolved by axum before the handler body runs.
-
-### Query Parameters
-
-Use `modo::extractor::QueryReq<T>` (re-export of `axum::extract::Query<T>`):
+Gzip, deflate, brotli, zstd based on `Accept-Encoding`:
 
 ```rust
-use modo::extractor::QueryReq;
-
-#[derive(serde::Deserialize)]
-struct Pagination {
-    page: Option<u32>,
-    per_page: Option<u32>,
-}
-
-#[modo::handler(GET, "/items")]
-async fn list_items(QueryReq(pagination): QueryReq<Pagination>) -> String {
-    format!("page {:?}", pagination.page)
-}
-```
-
-### JSON Body
-
-Two JSON types are available:
-
-- `modo::Json<T>` (re-export of `axum::Json<T>`) — JSON **response** wrapper, no sanitization or validation.
-- `modo::extractor::JsonReq<T>` — JSON **request** extractor that auto-sanitizes if `#[derive(Sanitize)]` is present on `T`, and exposes `.validate()` if `#[derive(Validate)]` is present.
-
-Use `JsonReq<T>` for request extraction and `Json<T>` for responses:
-
-```rust
-use modo::extractor::JsonReq;
-use modo::{Json, JsonResult};
-
-#[modo::handler(POST, "/users")]
-async fn create_user(body: JsonReq<CreateUser>) -> JsonResult<User> {
-    body.validate()?;
-    // body.0 gives the inner T; or use Deref: body.email
-    Ok(Json(User { /* ... */ }))
-}
-```
-
-### Form Data
-
-`modo::extractor::FormReq<T>` deserializes `application/x-www-form-urlencoded`, auto-sanitizes,
-and provides `.validate()`:
-
-```rust
-use modo::extractor::FormReq;
-
-#[modo::handler(POST, "/contact")]
-async fn contact(form: FormReq<ContactForm>) -> modo::HandlerResult<&'static str> {
-    form.validate()?;
-    Ok("submitted")
-}
+let layer = modo::middleware::compression();
 ```
 
 ### Request ID
 
-`modo::RequestId` extracts the per-request ULID injected by the request ID middleware. The ID
-is read from or generated for the `X-Request-ID` header and propagated to the response:
+Sets and propagates `x-request-id` header. Preserves incoming value; generates a ULID if absent:
 
 ```rust
-#[modo::handler(GET, "/")]
-async fn index(request_id: modo::RequestId) -> String {
-    format!("request: {request_id}")
-}
+let layer = modo::middleware::request_id();
 ```
 
-`RequestId` implements `Display` and exposes `.as_str() -> &str`.
+### Catch Panic
 
-### Client IP
-
-`modo::middleware::ClientIp` provides the resolved client IP address, accounting for trusted
-proxy headers (`CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`). It is populated by the
-`client_ip_middleware` which reads trusted proxy CIDRs from the service registry:
+Converts handler panics into 500 responses. Stores a `modo::Error` in response extensions for `error_handler` to intercept:
 
 ```rust
-use modo::middleware::ClientIp;
+let layer = modo::middleware::catch_panic();
+```
 
-#[modo::handler(GET, "/whoami")]
-async fn whoami(ClientIp(ip): ClientIp) -> String {
+### Error Handler
+
+Centralised error-response rendering. Intercepts any response that has a `modo::Error` in its extensions (set by `Error::into_response()`, `catch_panic`, `csrf`, `rate_limit`, etc.):
+
+```rust
+use modo::middleware::error_handler;
+
+async fn render_error(err: modo::Error, parts: http::request::Parts) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    (err.status(), err.message().to_string()).into_response()
+}
+
+let layer = error_handler(render_error);
+```
+
+The handler receives the error and the original request `Parts` (method, URI, headers, extensions).
+
+### Security Headers
+
+Adds security response headers:
+
+```rust
+use modo::middleware::{security_headers, SecurityHeadersConfig};
+
+let config = SecurityHeadersConfig {
+    x_content_type_options: true,       // X-Content-Type-Options: nosniff
+    x_frame_options: "DENY".into(),
+    referrer_policy: "strict-origin-when-cross-origin".into(),
+    hsts_max_age: Some(31536000),       // Strict-Transport-Security
+    content_security_policy: None,
+    permissions_policy: None,
+};
+let layer = security_headers(&config);
+```
+
+### CSRF
+
+Double-submit signed-cookie pattern. Exempt methods (GET, HEAD, OPTIONS by default) generate a token; unsafe methods must echo the token via the configured header:
+
+```rust
+use modo::middleware::{csrf, CsrfConfig};
+use modo::cookie::Key;
+
+let config = CsrfConfig {
+    cookie_name: "_csrf".into(),
+    header_name: "X-CSRF-Token".into(),
+    field_name: "_csrf_token".into(),
+    ttl_secs: 21600,
+    exempt_methods: vec!["GET".into(), "HEAD".into(), "OPTIONS".into()],
+};
+let key = Key::generate();
+let layer = csrf(&config, &key);
+```
+
+The `CsrfToken` type is inserted into request/response extensions for handler/template access.
+
+## ClientIp Extraction
+
+### ClientIp Extractor
+
+`ClientIp` is an axum extractor that reads the resolved IP from request extensions (inserted by `ClientIpLayer`):
+
+```rust
+use modo::ClientIp;
+
+async fn handler(ClientIp(ip): ClientIp) -> String {
     ip.to_string()
 }
 ```
 
-`ClientIp` wraps `std::net::IpAddr` and implements `FromRequestParts<AppState>`.
+Returns `Error::internal` if `ClientIpLayer` is not applied.
 
-### Rate Limit Info
+### ClientIpLayer
 
-`modo::middleware::RateLimitInfo` extracts rate limiting state injected into request extensions
-by the rate limit middleware. Use it when you need to surface `X-RateLimit-*` values manually
-or make decisions based on remaining quota:
+Tower layer that resolves the real client IP on every request.
 
-```rust
-use modo::middleware::RateLimitInfo;
-
-#[modo::handler(GET, "/api/data")]
-async fn get_data(rate: RateLimitInfo) -> String {
-    format!("{}/{} remaining", rate.remaining, rate.limit)
-}
-```
-
-Fields: `remaining: u32`, `limit: u32`, `reset_secs: u64`.
-
-### Service Extractor
-
-`modo::Service<T>` retrieves a registered service from the `ServiceRegistry` by
-type. Returns `500 Internal Server Error` if the service is not registered. The inner `Arc<T>`
-is accessible via `Deref` or by destructuring:
+Resolution order:
+1. If `trusted_proxies` is non-empty and the connecting IP is NOT in any trusted range, return the connecting IP directly (ignore proxy headers).
+2. `X-Forwarded-For` header -- first valid IP.
+3. `X-Real-IP` header -- valid IP.
+4. `ConnectInfo<SocketAddr>` as fallback.
+5. `127.0.0.1` if nothing is available.
 
 ```rust
-use modo::Service;
+use modo::ClientIpLayer;
 
-#[modo::handler(GET, "/status")]
-async fn status(Service(cache): Service<MyCache>) -> String {
-    cache.stats()
-}
+// No trusted proxies -- headers trusted unconditionally
+let layer = ClientIpLayer::new();
+
+// With trusted proxy CIDR ranges
+let trusted: Vec<ipnet::IpNet> = vec!["10.0.0.0/8".parse().unwrap()];
+let layer = ClientIpLayer::with_trusted_proxies(trusted);
 ```
 
-Register services in `main` via `app.service(my_value)` or `app.managed_service(my_value)`.
+The `trusted_proxies` field is a top-level config value (not under `session`), parsed into `Vec<IpNet>` at startup.
 
----
+## Server Configuration and Graceful Shutdown
 
-## Validation and Sanitization
-
-### `#[derive(Validate)]`
-
-Generates `impl modo::validate::Validate` with per-field rules. Call `.validate()` after
-extracting to return a structured `400 Bad Request` on failure.
-
-Field attribute: `#[validate(rule1, rule2, ...)]`
-
-Available rules:
-
-| Rule | Usage | Notes |
-|------|-------|-------|
-| `required` | `#[validate(required)]` | `None` or empty `String` fails |
-| `min_length` | `#[validate(min_length = 5)]` | String length |
-| `max_length` | `#[validate(max_length = 255)]` | String length |
-| `email` | `#[validate(email)]` | Checks for `@` and `.` after `@` |
-| `min` | `#[validate(min = 0)]` | Numeric minimum |
-| `max` | `#[validate(max = 100)]` | Numeric maximum |
-| `custom` | `#[validate(custom = "my_fn")]` | `fn(&T) -> Result<(), String>` |
-
-Custom per-rule message: add `(message = "...")` after the rule value:
+### Config
 
 ```rust
-#[derive(serde::Deserialize, modo::Validate)]
-struct SignupForm {
-    #[validate(required(message = "Email is required"), email(message = "Invalid email"))]
-    email: String,
+use modo::server::Config;
 
-    #[validate(required, min_length = 8, max_length = 72)]
-    password: String,
-
-    #[validate(min = 18, max = 120)]
-    age: u32,
-}
+// Defaults: host="localhost", port=8080, shutdown_timeout_secs=30
+let config = Config::default();
 ```
 
-Field-level message (applied once across all rules for the field):
-
-```rust
-#[validate(required, email, message = "Provide a valid email")]
-email: String,
-```
-
-### `#[derive(Sanitize)]`
-
-Generates `impl modo::sanitize::Sanitize` and auto-registers it. Sanitization runs
-automatically when data is extracted via `modo::extractor::JsonReq<T>` or `modo::extractor::FormReq<T>`.
-
-Field attribute: `#[clean(rule1, rule2, ...)]`
-
-Available rules:
-
-| Rule | Effect |
-|------|--------|
-| `trim` | Remove leading/trailing whitespace |
-| `lowercase` | Convert to lowercase |
-| `uppercase` | Convert to uppercase |
-| `strip_html_tags` | Remove HTML tags |
-| `collapse_whitespace` | Replace multiple spaces with one |
-| `truncate = N` | Truncate to N characters |
-| `normalize_email` | Lowercase + strip `+tag` from local part (e.g. `user+tag@ex.com` → `user@ex.com`) |
-| `custom = "fn_path"` | `fn(String) -> String` |
-
-```rust
-#[derive(serde::Deserialize, modo::Sanitize, modo::Validate)]
-struct ContactForm {
-    #[clean(trim, normalize_email)]
-    #[validate(required, email)]
-    email: String,
-
-    #[clean(trim, strip_html_tags, truncate = 1000)]
-    #[validate(required, min_length = 5, max_length = 1000)]
-    message: String,
-}
-```
-
-`Sanitize` only applies to named-field structs.
-
----
-
-## Middleware
-
-### Stacking Order
-
-Global (outermost) → Module → Handler (innermost). A request passes through global middleware
-first, then module middleware if the route belongs to a module, then handler middleware.
-
-### Per-Handler Middleware
-
-Use `#[middleware(fn_name)]` on the handler function. Bare paths are wrapped with
-`axum::middleware::from_fn`; paths with arguments are called as layer factories:
-
-```rust
-#[modo::handler(GET, "/protected")]
-#[middleware(require_auth)]
-async fn protected() -> &'static str {
-    "secret"
-}
-
-// Multiple middleware, applied outermost-first (last-declared = innermost)
-#[modo::handler(POST, "/admin/action")]
-#[middleware(require_auth, require_role("admin"))]
-async fn admin_action() -> &'static str {
-    "done"
-}
-```
-
-### Module-Level Middleware
-
-Pass `middleware = [...]` to `#[modo::module]`:
-
-```rust
-#[modo::module(prefix = "/api", middleware = [cors_layer, rate_limit_fn])]
-mod api {
-    // all routes here inherit the middleware
-}
-```
-
-### Global Middleware via AppBuilder
-
-```rust
-app.layer(my_tower_layer)
-   .cors(CorsConfig::with_origins(&["https://app.example.com"]))
-   .rate_limit(RateLimitConfig { requests: 100, window_secs: 60 })
-   .security_headers(SecurityHeadersConfig::default())
-   .trailing_slash(TrailingSlash::Strip)
-```
-
-### CORS — `CorsConfig`
-
-```rust
-use modo::cors::{CorsConfig, CorsOrigins};
-
-// Mirror request origin (default — permissive but not *)
-let cors = CorsConfig::permissive();
-
-// Fixed origin list
-let cors = CorsConfig::with_origins(&["https://example.com", "https://app.example.com"]);
-
-// Custom predicate
-let cors = CorsConfig::with_custom_check(|origin| origin.ends_with(".example.com"));
-
-// Fields
-pub struct CorsConfig {
-    pub origins: CorsOrigins,     // Any | List | Custom | Mirror
-    pub credentials: bool,        // default: false
-    pub max_age_secs: Option<u64>, // default: Some(3600)
-}
-```
-
-CORS can also be set in YAML under `server.cors`:
-
+YAML:
 ```yaml
 server:
-  cors:
-    origins: ["https://example.com"]
-    credentials: false
-    max_age_secs: 3600
+  host: 0.0.0.0
+  port: ${PORT:8080}
+  shutdown_timeout_secs: 30
 ```
 
-### Rate Limiting — `RateLimitConfig`
+### Starting the Server
 
-Token-bucket rate limiting, applied globally by IP. Configured via `AppBuilder::rate_limit` or
-under `server.rate_limit` in YAML:
+`modo::server::http()` binds a TCP listener and returns an `HttpServer` handle that implements `Task`:
 
 ```rust
-use modo::config::RateLimitConfig;
+use modo::server::{Config, http};
 
-app.rate_limit(RateLimitConfig {
-    requests: 200,
-    window_secs: 60,
-})
-```
-
-```yaml
-server:
-  rate_limit:
-    requests: 100
-    window_secs: 60
-```
-
-Default: 100 requests per 60-second window. The middleware automatically sets
-`x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`, and `retry-after` headers.
-
-### Security Headers — `SecurityHeadersConfig`
-
-Configured via `AppBuilder::security_headers` or `server.security_headers` in YAML. Defaults
-enable `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-`Referrer-Policy: strict-origin-when-cross-origin`,
-`Content-Security-Policy: default-src 'self'`, and HSTS (production only):
-
-```rust
-use modo::config::SecurityHeadersConfig;
-
-app.security_headers(SecurityHeadersConfig {
-    enabled: true,
-    content_security_policy: Some("default-src 'self'; script-src 'nonce-...'".into()),
-    ..Default::default()
-})
-```
-
-```rust
-pub struct SecurityHeadersConfig {
-    pub enabled: bool,
-    pub x_content_type_options: Option<String>,
-    pub x_frame_options: Option<String>,
-    pub referrer_policy: Option<String>,
-    pub permissions_policy: Option<String>,
-    pub content_security_policy: Option<String>,
-    pub hsts: bool,          // only applied in Production environment
-    pub hsts_max_age: u64,   // default: 31_536_000
-}
-```
-
-### Trailing Slash — `TrailingSlash`
-
-```rust
-use modo::config::TrailingSlash;
-
-app.trailing_slash(TrailingSlash::Strip)   // redirect /foo/ → /foo
-// or
-app.trailing_slash(TrailingSlash::Add)     // redirect /foo → /foo/
-// or
-app.trailing_slash(TrailingSlash::None)    // default: no modification
-```
-
-Configured in YAML under `server.http.trailing_slash` with values `none`, `strip`, or `add`.
-
-### Catch Panic
-
-Enabled by default (`catch_panic: true`). Converts handler panics into `500 Internal Server
-Error` JSON responses and logs the panic message. Disable via `app.catch_panic(false)` or
-`server.http.catch_panic: false` in YAML.
-
-### Maintenance Mode
-
-When enabled, all routes except `/_live` and `/_ready` return `503 Service Unavailable`.
-Configure via `app.maintenance(true)` or `server.http.maintenance: true` in YAML. Set a custom
-message with `server.http.maintenance_message`.
-
----
-
-## Static Files
-
-Two mutually exclusive features control static file serving:
-
-| Feature | Use case | Cache |
-|---------|----------|-------|
-| `static-fs` | Development — serves from a filesystem directory | `max-age=3600` |
-| `static-embed` | Production — embeds files at compile time via `rust-embed` | `max-age=31536000, immutable` + ETag/304 |
-
-### `static-fs` (Development)
-
-Enable the feature in `Cargo.toml`:
-
-```toml
-[dependencies]
-modo = { version = "...", features = ["static-fs"] }
-```
-
-Configure in YAML (defaults shown):
-
-```yaml
-server:
-  static_files:
-    dir: "static"           # filesystem directory to serve
-    prefix: "/static"       # URL prefix
-    cache_control: null     # optional override, default: "max-age=3600"
-```
-
-`StaticConfig` fields: `dir: String`, `prefix: String`, `cache_control: Option<String>`.
-
-### `static-embed` (Production)
-
-Enable the feature:
-
-```toml
-[dependencies]
-modo = { version = "...", features = ["static-embed"] }
-```
-
-Use the `static_assets` argument in `#[modo::main]` to embed a directory at compile time:
-
-```rust
-#[modo::main(static_assets = "static/")]
-async fn main(
-    app: modo::AppBuilder,
-    config: modo::AppConfig,
-) -> Result<(), Box<dyn std::error::Error>> {
-    app.config(config).run().await
-}
-```
-
-The macro generates a `#[derive(rust_embed::Embed)] struct __ModoStaticAssets` with the folder
-set to the provided path, then calls `app.embed_static_files::<__ModoStaticAssets>()`. The
-default folder when `static_assets` is omitted is `"static/"`.
-
-The embedded backend adds SHA-256-based ETags and returns `304 Not Modified` when
-`If-None-Match` matches. Cache-Control defaults to `max-age=31536000, immutable`.
-
-The URL prefix under which static files are served comes from `server.static_files.prefix` in the
-config (default `/static`).
-
----
-
-## Health Check Endpoints
-
-`AppBuilder::run()` automatically mounts:
-
-- `GET /_live` — liveness probe, always `200 OK`
-- `GET /_ready` — readiness probe, runs all registered checks
-
-Register async readiness checks:
-
-```rust
-app.readiness_check(|| async {
-    db_ping().await.map_err(|e| Box::new(e) as _)
-})
-```
-
-The liveness and readiness paths can be configured via `server.liveness_path` and
-`server.readiness_path` in YAML (defaults: `/_live`, `/_ready`).
-
----
-
-## Integration Patterns
-
-### Static Files + Templates
-
-When both `templates` and `static-embed` (or `static-fs`) features are enabled, register
-static files before calling `run()`. The template engine is auto-registered as a service when
-`modo-templates` is wired in; no manual `.layer()` call is needed for template rendering.
-
-For embedded assets in production:
-
-```rust
-#[modo::main(static_assets = "static/")]
-async fn main(
-    app: modo::AppBuilder,
-    config: modo::AppConfig,
-) -> Result<(), Box<dyn std::error::Error>> {
-    app.config(config).run().await
-}
-```
-
-### JSON API with Validation
-
-```rust
-use modo::extractor::JsonReq;
-use modo::{Json, JsonResult};
-
-#[derive(serde::Deserialize, modo::Sanitize, modo::Validate)]
-struct CreateTodo {
-    #[clean(trim)]
-    #[validate(required, min_length = 1, max_length = 255)]
-    title: String,
+#[tokio::main]
+async fn main() -> modo::Result<()> {
+    let config = Config::default();
+    let app = modo::axum::Router::new()
+        .route("/", modo::axum::routing::get(health))
+        .with_state(state);
+    let server = http(app, &config).await?;
+    modo::run!(server).await
 }
 
-#[modo::handler(POST, "/todos")]
-async fn create_todo(input: JsonReq<CreateTodo>) -> JsonResult<TodoResponse> {
-    input.validate()?;
-    // ...
-    Ok(Json(TodoResponse { /* ... */ }))
-}
+async fn health() -> &'static str { "ok" }
 ```
 
-### Grouped API Module with Rate Limit
+### Graceful Shutdown
+
+The `run!` macro orchestrates shutdown:
+
+1. Waits for `SIGINT` (Ctrl+C) or `SIGTERM`.
+2. Calls `Task::shutdown()` on each task in declaration order.
+3. `HttpServer::shutdown()` signals the server to stop accepting connections, then waits up to `shutdown_timeout_secs` for in-flight requests to drain.
 
 ```rust
-#[modo::module(prefix = "/api/v1", middleware = [api_rate_limit_layer])]
-mod api_v1 {
-    #[modo::handler(GET, "/users")]
-    async fn list_users() -> modo::JsonResult<Vec<User>> { /* ... */ }
-
-    #[modo::handler(GET, "/users/{id}")]
-    async fn get_user(id: String) -> modo::JsonResult<User> { /* ... */ }
-}
+// Multiple tasks shut down in order
+modo::run!(worker, server).await
 ```
 
----
+Implement `Task` for custom services:
+
+```rust
+use modo::runtime::Task;
+
+struct MyWorker { /* ... */ }
+
+impl Task for MyWorker {
+    async fn shutdown(self) -> modo::Result<()> {
+        // cleanup logic
+        Ok(())
+    }
+}
+```
 
 ## Gotchas
 
-- **`modo::Json` vs `modo::extractor::JsonReq`**: `modo::Json` is `axum::Json` — it is the **response** wrapper with no sanitization.
-  Use `modo::extractor::JsonReq<T>` for request extraction with auto-sanitization. `modo::extractor::FormReq<T>` similarly auto-sanitizes forms.
+**Handler functions inside `#[tokio::test]` closures do not satisfy axum's `Handler` bounds.** Define test handler functions at module level (outside the test function):
 
-- **Path param partial extraction**: Declare only the params you need in the function
-  signature. The macro generates a struct with all params; missing ones default to `String`
-  and are discarded via `..`. You do not need `axum::extract::Path` manually.
+```rust
+// WRONG -- won't compile
+#[tokio::test]
+async fn test_route() {
+    async fn handler() -> &'static str { "ok" }  // not a valid Handler
+    let app = Router::new().route("/", get(handler));
+}
 
-- **Middleware stacking order**: Global layers (via `app.layer(...)`) are outermost. Module
-  middleware wraps the module router. Handler middleware (via `#[middleware(...)]`) is innermost
-  via `route_layer`. A request encounters global → module → handler layers in that order.
+// CORRECT
+async fn handler() -> &'static str { "ok" }
 
-- **`inventory` linking in tests**: Handlers registered via `inventory::submit!` may not link
-  in integration tests without a direct use. Force linking with `use crate::handlers::my_handler as _;`
-  if routes disappear in tests.
+#[tokio::test]
+async fn test_route() {
+    let app = Router::new().route("/", get(handler));
+}
+```
 
-- **`static-embed` requires the feature**: `#[modo::main(static_assets = "...")]` is a
-  compile error if the `static-embed` feature is not enabled.
+**`Router::layer()` bounds require `+ Sync`.** Both the layer `L` and its produced service `L::Service` must be `Send + Sync`, and the error type must be `Into<Infallible>` (not `Into<Box<dyn Error>>`).
 
-- **`#[derive(Sanitize)]` auto-registers globally**: The macro submits a `SanitizerRegistration`
-  to `inventory`. This means sanitization applies automatically via `modo::extractor::JsonReq` and
-  `modo::extractor::FormReq` without any explicit call in the handler.
+**`PathParamStrategy` requires `.route_layer()` not `.layer()`.** Path parameters only exist after route matching, so layers that depend on them must be applied with `route_layer()`.
 
-- **`TrailingSlash::Strip`/`Add` issues 301 redirects**: This means POST bodies are lost on
-  redirect. Prefer consistent URL shapes in your API rather than relying on redirect normalization.
-
-- **`RateLimitInfo` extractor requires the middleware**: Extracting `RateLimitInfo` in a
-  handler fails with a 500 if the rate limit middleware is not configured. Use
-  `OptionalRateLimitInfo` (from `modo::middleware`) when the middleware may not be present —
-  `Option<RateLimitInfo>` does NOT work because `RateLimitInfo`'s rejection type is not `Infallible`.
-
----
-
-## Key Type Reference
-
-| Type | Crate path |
-|------|-----------|
-| `AppBuilder` | `modo::AppBuilder` |
-| `AppState` | `modo::AppState` |
-| `ServiceRegistry` | `modo::ServiceRegistry` |
-| `CorsConfig` | `modo::cors::CorsConfig` |
-| `CorsOrigins` | `modo::cors::CorsOrigins` |
-| `RateLimitConfig` | `modo::config::RateLimitConfig` |
-| `RateLimitInfo` | `modo::middleware::RateLimitInfo` |
-| `OptionalRateLimitInfo` | `modo::middleware::OptionalRateLimitInfo` |
-| `SecurityHeadersConfig` | `modo::config::SecurityHeadersConfig` |
-| `TrailingSlash` | `modo::config::TrailingSlash` |
-| `HttpConfig` | `modo::config::HttpConfig` |
-| `StaticConfig` | `modo::static_files::StaticConfig` (`pub(crate)` — access via `AppConfig.server.static_files`) |
-| `ClientIp` | `modo::middleware::ClientIp` |
-| `RequestId` | `modo::RequestId` |
-| `Service<T>` | `modo::Service` |
-| `Json<T>` (response) | `modo::Json` |
-| `JsonReq<T>` (request, sanitizing) | `modo::extractor::JsonReq` |
-| `FormReq<T>` (request, sanitizing) | `modo::extractor::FormReq` |
-| `QueryReq<T>` (request) | `modo::extractor::QueryReq` |
-| `PathReq<T>` (request) | `modo::extractor::PathReq` |
-| `HandlerResult<T>` | `modo::HandlerResult` |
-| `ViewResult` | `modo::ViewResult` (requires `templates` feature) |
-| `JsonResult<T>` | `modo::JsonResult` |
+**`server::http()` uses `into_make_service()` (not `into_make_service_with_connect_info`).** `PeerIpKeyExtractor` for rate limiting requires `ConnectInfo<SocketAddr>`, which is only available when the server is started with `into_make_service_with_connect_info::<SocketAddr>()`. If you use modo's built-in `server::http()`, prefer `ClientIpLayer` + a custom `KeyExtractor` that reads `ClientIp` from extensions instead.

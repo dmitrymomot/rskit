@@ -1,707 +1,475 @@
-# Testing Reference
+# Test Helpers
 
-This reference covers testing patterns across all modo crates. Every pattern shown here is derived
-from the actual test files in the repository.
+Feature-gated under `test-helpers`. Enable in dev-dependencies:
 
-## Documentation
+```toml
+[dev-dependencies]
+modo = { path = ".", features = ["test-helpers"] }
+```
 
-- modo: https://docs.rs/modo
-- modo-db: https://docs.rs/modo-db
-- modo-session: https://docs.rs/modo-session
-- modo-auth: https://docs.rs/modo-auth
-- modo-jobs: https://docs.rs/modo-jobs
-- modo-upload: https://docs.rs/modo-upload
-- axum test utilities: https://docs.rs/axum
-- tower ServiceExt: https://docs.rs/tower/latest/tower/trait.ServiceExt.html
+Source: `src/testing/` module. Re-exported as `modo::testing`.
+
+## Public API
+
+```
+modo::testing::TestDb
+modo::testing::TestApp
+modo::testing::TestAppBuilder
+modo::testing::TestRequestBuilder
+modo::testing::TestResponse
+modo::testing::TestSession
+```
 
 ---
 
-## Test Commands
+## TestDb
 
-```bash
-# Run all workspace tests (no --all-features)
-just test
-# equivalent to:
-cargo test --workspace --all-targets
+In-memory SQLite database for tests. Opens a single `:memory:` connection and
+exposes it as `Pool`, `ReadPool`, and `WritePool` that all share the **same**
+underlying connection (required because SQLite in-memory DBs are
+connection-scoped).
 
-# Run full CI check: fmt-check + lint + test
-just check
-
-# Lint (uses --all-features)
-just lint
-# equivalent to:
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-
-# Run feature-gated tests for a specific crate
-cargo test -p modo --features templates
-cargo test -p modo --features i18n
-cargo test -p modo --features sse
-```
-
-### Critical difference: `just test` vs `just lint`
-
-`just test` runs `cargo test --workspace --all-targets` — **without** `--all-features`. This means
-any code guarded by a feature flag is excluded from the standard test run. `just lint` uses
-`--all-features`, so it covers feature-gated code during linting.
-
-Consequence: if you write tests for feature-gated code, you must run them explicitly:
-
-```bash
-# This WILL NOT run tests gated on #![cfg(feature = "templates")]
-just test
-
-# This WILL run them
-cargo test -p modo --features templates
-```
-
-Tests that exist inside `#![cfg(feature = "...")]` files (like `templates_e2e.rs`,
-`i18n_integration.rs`) are silently skipped by `just test`.
-
----
-
-## Tower Middleware Testing with `.oneshot()`
-
-The standard pattern for testing Tower middleware and handlers is to build a bare
-`axum::Router`, attach middleware with `.layer()`, and drive it with `tower::ServiceExt::oneshot()`.
-No running server or bound TCP port is required.
-
-**Minimal example — testing a middleware that injects an extension:**
+### Construction
 
 ```rust
-use axum::Router;
-use axum::body::Body;
-use axum::http::{Request, StatusCode};
-use axum::routing::get;
-use modo::request_id::{RequestId, request_id_middleware};
-use tower::ServiceExt;
+let db = TestDb::new().await;
+```
 
-fn build_test_router() -> Router {
-    Router::new()
-        .route(
-            "/echo",
-            get(|req_id: axum::Extension<RequestId>| async move { req_id.0.to_string() }),
-        )
-        .layer(axum::middleware::from_fn(request_id_middleware))
+Panics if the database cannot be opened.
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `exec` | `async fn exec(self, sql: &str) -> Self` | Execute raw SQL. Panics on failure. Returns self for chaining. |
+| `migrate` | `async fn migrate(self, path: &str) -> Self` | Run all `.sql` migrations in `path` directory. Panics on failure. Returns self for chaining. |
+| `pool` | `fn pool(&self) -> Pool` | Cloned `Pool` newtype. |
+| `read_pool` | `fn read_pool(&self) -> ReadPool` | `ReadPool` sharing the same connection. |
+| `write_pool` | `fn write_pool(&self) -> WritePool` | `WritePool` sharing the same connection. |
+
+### Chaining pattern
+
+```rust
+let db = TestDb::new()
+    .await
+    .exec("CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+    .await
+    .exec("INSERT INTO users (id, name) VALUES ('1', 'Alice')")
+    .await;
+```
+
+### Using migrations
+
+```rust
+let db = TestDb::new()
+    .await
+    .migrate("tests/fixtures/migrations")
+    .await;
+```
+
+### Registering pools with TestApp
+
+```rust
+let db = TestDb::new().await.exec("CREATE TABLE ...").await;
+
+let app = TestApp::builder()
+    .service(db.pool())       // handlers extract via Service<Pool>
+    .route("/items", get(list_items))
+    .build();
+```
+
+For read/write split in handlers that use `Service<ReadPool>` / `Service<WritePool>`:
+
+```rust
+let app = TestApp::builder()
+    .service(db.read_pool())
+    .service(db.write_pool())
+    .route("/items", get(list_items).post(create_item))
+    .build();
+```
+
+---
+
+## TestApp
+
+Assembled test application. Sends requests in-process via Tower `oneshot` --
+no real HTTP server.
+
+### Construction
+
+**Builder pattern** (most common):
+
+```rust
+let app = TestApp::builder()
+    .service("world".to_string())   // register a service
+    .route("/", get(hello))          // add a route
+    .layer(some_middleware)           // apply middleware
+    .merge(sub_router)               // merge a sub-router
+    .build();
+```
+
+**From existing Router** (when you already have a finalized `Router`):
+
+```rust
+let router = axum::Router::new().route("/", get(hello));
+let app = TestApp::from_router(router);
+```
+
+### TestAppBuilder methods
+
+| Method | Description |
+|---|---|
+| `service<T>(val: T)` | Register a value extractable via `modo::extractor::Service<T>`. |
+| `route(path, method_router)` | Add a route. The `method_router` uses `AppState`. |
+| `layer(layer)` | Apply a Tower middleware layer. |
+| `merge(router)` | Merge a `Router<AppState>` into the test router. |
+| `build()` | Finalize: binds the registry as state, returns `TestApp`. |
+
+### Request methods on TestApp
+
+| Method | HTTP verb |
+|---|---|
+| `get(uri)` | GET |
+| `post(uri)` | POST |
+| `put(uri)` | PUT |
+| `patch(uri)` | PATCH |
+| `delete(uri)` | DELETE |
+| `options(uri)` | OPTIONS |
+| `request(method, uri)` | Arbitrary method |
+
+All return a `TestRequestBuilder`.
+
+---
+
+## TestRequestBuilder
+
+Builder for an in-process HTTP request. Obtained from `TestApp` method helpers.
+
+### Methods
+
+| Method | Description |
+|---|---|
+| `header(key, value)` | Append a header. |
+| `json(&T)` | Serialize body as JSON, set `content-type: application/json`. Replaces any prior content-type. |
+| `form(&T)` | URL-encode body, set `content-type: application/x-www-form-urlencoded`. Replaces any prior content-type. |
+| `body(impl Into<Vec<u8>>)` | Set raw byte body. |
+| `send().await` | Dispatch the request via `oneshot`, return `TestResponse`. |
+
+### Examples
+
+```rust
+// JSON POST
+let res = app.post("/echo")
+    .json(&serde_json::json!({"key": "value"}))
+    .send()
+    .await;
+
+// Form POST
+let mut form = std::collections::HashMap::new();
+form.insert("name", "Alice");
+let res = app.post("/form").form(&form).send().await;
+
+// Custom header
+let res = app.get("/protected")
+    .header("authorization", "Bearer token123")
+    .send()
+    .await;
+
+// Raw body
+let res = app.post("/upload").body(b"raw bytes".to_vec()).send().await;
+```
+
+---
+
+## TestResponse
+
+Captured response from an in-process request.
+
+### Methods
+
+| Method | Return | Description |
+|---|---|---|
+| `status()` | `u16` | HTTP status code as integer. |
+| `header(name)` | `Option<&str>` | First value of header, or `None`. |
+| `header_all(name)` | `Vec<&str>` | All values for a multi-value header (e.g., `set-cookie`). |
+| `text()` | `&str` | Body as UTF-8 string. Panics if invalid UTF-8. |
+| `json<T: DeserializeOwned>()` | `T` | Deserialize body as JSON. Panics on failure. |
+| `bytes()` | `&[u8]` | Raw body bytes. |
+
+### Examples
+
+```rust
+let res = app.get("/users").send().await;
+assert_eq!(res.status(), 200);
+assert_eq!(res.header("content-type"), Some("application/json"));
+
+let users: Vec<User> = res.json();
+assert_eq!(users.len(), 1);
+```
+
+---
+
+## TestSession
+
+Session infrastructure for integration tests. Creates an in-memory
+`modo_sessions` table, derives a signing key, and provides helpers for
+authenticating test users.
+
+### Construction
+
+**Default config:**
+
+```rust
+let db = TestDb::new().await;
+let session = TestSession::new(&db).await;
+```
+
+Uses a test-suitable `CookieConfig` (insecure, lax same-site, 64-char secret).
+Creates the `modo_sessions` table automatically.
+
+**Custom config:**
+
+```rust
+let session_config = SessionConfig {
+    cookie_name: "my_sess".to_string(),
+    session_ttl_secs: 60,
+    validate_fingerprint: false,
+    ..Default::default()
+};
+let cookie_config = CookieConfig {
+    secret: "b".repeat(64),
+    secure: false,
+    http_only: true,
+    same_site: "lax".to_string(),
+};
+let session = TestSession::with_config(&db, session_config, cookie_config).await;
+```
+
+### Methods
+
+| Method | Description |
+|---|---|
+| `authenticate(user_id).await` | Create a session, return signed cookie string (e.g., `"_session=<signed>"`). |
+| `authenticate_with(user_id, data).await` | Same, with custom JSON session data. |
+| `layer()` | Return a `SessionLayer` to apply to `TestAppBuilder`. |
+
+### Full pattern
+
+```rust
+let db = TestDb::new().await;
+let session = TestSession::new(&db).await;
+
+let app = TestApp::builder()
+    .route("/me", get(whoami))
+    .layer(session.layer())    // attach session middleware
+    .build();
+
+// Unauthenticated
+let res = app.get("/me").send().await;
+assert_eq!(res.text(), "anonymous");
+
+// Authenticated
+let cookie = session.authenticate("user-42").await;
+let res = app.get("/me").header("cookie", &cookie).send().await;
+assert_eq!(res.text(), "user-42");
+```
+
+### With custom session data
+
+```rust
+let cookie = session
+    .authenticate_with("user-1", serde_json::json!({"role": "admin"}))
+    .await;
+```
+
+### Multiple users
+
+```rust
+let cookie_a = session.authenticate("alice").await;
+let cookie_b = session.authenticate("bob").await;
+
+let res_a = app.get("/me").header("cookie", &cookie_a).send().await;
+let res_b = app.get("/me").header("cookie", &cookie_b).send().await;
+assert_eq!(res_a.text(), "alice");
+assert_eq!(res_b.text(), "bob");
+```
+
+---
+
+## Full integration test example
+
+Combines `TestDb`, `TestSession`, and `TestApp` with database-backed handlers:
+
+```rust
+#![cfg(feature = "test-helpers")]
+
+use axum::Json;
+use axum::routing::get;
+use modo::db::Pool;
+use modo::session::Session;
+use modo::testing::{TestApp, TestDb, TestSession};
+
+async fn create_user(
+    _session: Session,
+    modo::extractor::Service(pool): modo::extractor::Service<Pool>,
+    modo::extractor::JsonRequest(input): modo::extractor::JsonRequest<User>,
+) -> modo::Result<Json<User>> {
+    sqlx::query("INSERT INTO users (id, name) VALUES (?, ?)")
+        .bind(&input.id)
+        .bind(&input.name)
+        .execute(&**pool)
+        .await
+        .map_err(|e| modo::Error::internal(e.to_string()))?;
+    Ok(Json(input))
 }
 
 #[tokio::test]
-async fn test_generates_request_id() {
-    let app = build_test_router();
-
-    let response = app
-        .oneshot(Request::builder().uri("/echo").body(Body::empty()).unwrap())
+async fn test_full_app_with_db_and_session() {
+    let db = TestDb::new()
         .await
-        .unwrap();
+        .exec("CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+        .await;
+    let session = TestSession::new(&db).await;
 
-    assert_eq!(response.status(), StatusCode::OK);
+    let app = TestApp::builder()
+        .service(db.pool())
+        .route("/users", get(list_users).post(create_user))
+        .layer(session.layer())
+        .build();
 
-    let header = response
-        .headers()
-        .get("x-request-id")
-        .expect("x-request-id header missing");
-    let id = header.to_str().unwrap();
-    assert_eq!(id.len(), 26); // ULID is 26 chars
-    assert!(id.chars().all(|c| c.is_ascii_alphanumeric()));
+    let cookie = session.authenticate("user-1").await;
+    let res = app.post("/users")
+        .header("cookie", &cookie)
+        .json(&serde_json::json!({"id": "1", "name": "Alice"}))
+        .send()
+        .await;
+    assert_eq!(res.status(), 200);
 }
 ```
-
-**Source:** `modo/tests/request_id.rs`
-
-### Key rules for `.oneshot()` tests
-
-- Import `tower::ServiceExt` — `oneshot()` is provided by that trait.
-- The router is consumed by `.oneshot()`. Each test call needs a fresh router instance
-  (or clone one before calling `oneshot`).
-- No `AppState` is needed when testing isolated middleware. Add state only when the handler
-  or middleware actually reads from it.
-- `axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap()` reads the full
-  response body as bytes.
-
-**Simple handler without state:**
-
-```rust
-use axum::Router;
-use axum::body::Body;
-use axum::http::{Request, StatusCode};
-use axum::routing::get;
-use modo::health;
-use tower::ServiceExt;
-
-#[tokio::test]
-async fn test_liveness_200() {
-    let app = Router::new().route("/_live", get(health::liveness_handler));
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/_live")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    assert_eq!(&body[..], b"ok");
-}
-```
-
-**Source:** `modo/tests/health.rs`
 
 ---
 
-## Testing with AppState
+## Testing feature-gated modules
 
-When a handler or middleware requires `AppState` (e.g. session middleware, auth middleware,
-or anything that reads `ServiceRegistry`), construct a minimal `AppState` directly and call
-`.with_state(state)` on the router.
+Feature-gated modules (auth, storage, webhooks, dns, geolocation, etc.) require
+specific patterns.
 
-```rust
-use axum::Router;
-use axum::routing::get;
-use modo::{AppState, ServiceRegistry};
-use modo::ServerConfig;
-
-fn build_app(store: SessionStore) -> Router {
-    let services = ServiceRegistry::new()
-        .with(UserProviderService::new(TestProvider))
-        .with(store.clone());
-
-    let state = AppState {
-        services,
-        server_config: ServerConfig::default(),
-        cookie_key: axum_extra::extract::cookie::Key::generate(),
-    };
-
-    Router::new()
-        .route("/auth", get(auth_handler))
-        .route("/optional", get(optional_handler))
-        .layer(modo_session::layer(store))
-        .with_state(state)
-}
-
-#[tokio::test]
-async fn auth_valid_session_returns_user() {
-    let db = setup_db().await;
-    let store = SessionStore::new(&db, SessionConfig::default(), Default::default());
-    let app = build_app(store.clone());
-
-    let cookie = create_session(&store, "user-1").await;
-    let resp = app
-        .oneshot(request_with_cookie("/auth", &cookie))
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), 200);
-
-    let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
-    assert_eq!(&body[..], b"Alice");
-}
-```
-
-**Source:** `modo-auth/tests/integration.rs`
-
-### `AppState` struct fields
-
-```rust
-pub struct AppState {
-    pub services: ServiceRegistry,
-    pub server_config: ServerConfig,
-    pub cookie_key: axum_extra::extract::cookie::Key,
-}
-```
-
-Use `ServiceRegistry::new().with(svc)` to register services into the registry.
-Use `Key::generate()` in tests — no need for a stable key unless you are testing
-cookie signing round-trips across requests.
-
----
-
-## Cookie Attribute Testing
-
-To test that response cookies carry specific attributes (domain, path, secure, HttpOnly,
-SameSite), read the raw `Set-Cookie` header from the response.
-
-The `CookieConfig` struct controls what attributes cookies carry:
-
-```rust
-pub struct CookieConfig {
-    pub domain: Option<String>,
-    pub path: String,
-    pub secure: bool,
-    pub http_only: bool,
-    pub same_site: SameSite,  // Strict | Lax | None
-    pub max_age: Option<u64>,
-}
-```
-
-**Pattern — assert that a Set-Cookie header contains expected attributes:**
-
-```rust
-let resp = app
-    .oneshot(Request::get("/?lang=es").body(Body::empty()).unwrap())
-    .await
-    .unwrap();
-
-let (parts, body) = resp.into_parts();
-let set_cookie = parts
-    .headers
-    .get("Set-Cookie")
-    .expect("should set cookie")
-    .to_str()
-    .unwrap()
-    .to_string();
-assert!(set_cookie.starts_with("lang=es"));
-```
-
-**Source:** `modo/tests/i18n_integration.rs`
-
-To test that a custom `CookieConfig` (e.g. a specific domain) is applied, create a
-`ServiceRegistry` that includes it and pass it through `AppState`. Then fire a request and assert
-the `Set-Cookie` header value.
-
-The `CookieConfig` default: `path = "/"`, `secure = true`, `http_only = true`,
-`same_site = Lax`, `domain = None`.
-
----
-
-## In-Memory Database for Integration Tests
-
-`modo-session`, `modo-auth`, and `modo-jobs` tests all use `sqlite::memory:` to spin up a full
-schema without needing an external database. The pattern:
-
-1. Connect to `sqlite::memory:`.
-2. Locate the entity registration via `inventory::iter::<EntityRegistration>()`.
-3. Build the schema using SeaORM's `Schema` builder.
-4. Run any extra SQL (composite indexes, etc.) from `reg.extra_sql`.
-
-```rust
-use modo_db::sea_orm::{ConnectionTrait, Schema};
-use modo_db::{DatabaseConfig, DbPool};
-
-async fn setup_db() -> DbPool {
-    let config = DatabaseConfig {
-        url: "sqlite::memory:".to_string(),
-        max_connections: 1,
-        min_connections: 1,
-    };
-    let db = modo_db::connect(&config).await.expect("Failed to connect");
-
-    let schema = Schema::new(db.connection().get_database_backend());
-    let mut builder = schema.builder();
-    let reg = modo_db::inventory::iter::<modo_db::EntityRegistration>()
-        .find(|r| r.table_name == "modo_sessions")
-        .expect("modo_sessions entity not registered");
-    builder = (reg.register_fn)(builder);
-    builder
-        .sync(db.connection())
-        .await
-        .expect("Schema sync failed");
-    for sql in reg.extra_sql {
-        db.connection()
-            .execute_unprepared(sql)
-            .await
-            .expect("Extra SQL failed");
-    }
-    db
-}
-```
-
-**Source:** `modo-session/tests/integration.rs`, `modo-auth/tests/integration.rs`
-
-For `modo-jobs` tests that work directly with the raw SeaORM `DatabaseConnection` (not `DbPool`):
-
-```rust
-use modo_db::sea_orm::{Database, Schema};
-
-async fn setup_db() -> modo_db::sea_orm::DatabaseConnection {
-    let db = Database::connect("sqlite::memory:")
-        .await
-        .expect("Failed to connect");
-
-    let schema = Schema::new(db.get_database_backend());
-    let mut builder = schema.builder();
-    let reg = inventory::iter::<modo_db::EntityRegistration>()
-        .find(|r| r.table_name == "modo_jobs")
-        .unwrap();
-    builder = (reg.register_fn)(builder);
-    builder.sync(&db).await.expect("Schema sync failed");
-    for sql in reg.extra_sql {
-        db.execute_unprepared(sql).await.expect("Extra SQL failed");
-    }
-    db
-}
-```
-
-**Source:** `modo-jobs/tests/runner.rs`, `modo-jobs/tests/queue.rs`
-
----
-
-## Inventory Force-Linking
-
-`inventory` registration from library crates may not link when running tests in a separate test
-binary. If `inventory::iter::<SomeType>()` returns an empty iterator in a test but works in
-production, the linker has discarded the registration.
-
-**Fix:** Force the registration to link by importing the entity module as a side effect:
-
-```rust
-use crate::entity::foo as _;
-```
-
-This is a Rust linker requirement — the symbol must be reachable from the test binary's
-dependency graph. The wildcard import `as _` keeps the symbol linked without introducing
-name conflicts.
-
-**In test files:** When using `inventory::iter::<EntityRegistration>()` to verify registrations,
-declare the entity types in the same test file (not in a separate library). The entity macro
-`#[modo_db::entity]` calls `inventory::submit!` at compile time, and the registration is
-included in the binary that defines the type. This is why `modo-db/tests/entity_macro.rs`
-defines all test entity structs in the test file itself rather than importing them.
-
-```rust
-// In the test file — entity defined here, so registration is present
-#[modo_db::entity(table = "test_users")]
-pub struct TestUser {
-    #[entity(primary_key)]
-    pub id: i32,
-    pub email: String,
-}
-
-#[test]
-fn test_basic_entity_registers() {
-    let registrations: Vec<&EntityRegistration> = inventory::iter::<EntityRegistration>().collect();
-    let tables: Vec<&str> = registrations.iter().map(|r| r.table_name).collect();
-    assert!(tables.contains(&"test_users"));
-}
-```
-
-**Source:** `modo-db/tests/entity_macro.rs`
-
----
-
-## Feature-Gated Tests
-
-Files that test optional features must declare the feature guard at the top:
-
-```rust
-#![cfg(feature = "templates")]
-// or
-#![cfg(feature = "i18n")]
-```
-
-These tests are excluded from `just test` (no `--all-features`). Run them explicitly:
+### Running tests
 
 ```bash
-cargo test -p modo --features templates
-cargo test -p modo --features i18n
-cargo test -p modo --features sse
+cargo test --features test-helpers       # test-helpers module
+cargo test --features auth               # auth module
+cargo test --features storage-test       # storage module
+cargo test --features webhooks           # webhooks module
+cargo test --features dns                # dns module
+cargo test --features geolocation        # geolocation module
 ```
 
-**Feature-gated test files in the modo crate:**
+### Integration test file guard
 
-| File | Feature required |
-|------|-----------------|
-| `tests/templates_e2e.rs` | `templates` |
-| `tests/templates_context_layer.rs` | `templates` |
-| `tests/templates_render_layer.rs` | `templates` |
-| `tests/templates_view_macro.rs` | `templates` |
-| `tests/templates_view_render_macro.rs` | `templates` |
-| `tests/templates_view_render_trait.rs` | `templates` |
-| `tests/templates_view_renderer.rs` | `templates` |
-| `tests/templates_view_response.rs` | `templates` |
-| `tests/templates_context_merge.rs` | `templates` |
-| `tests/i18n_integration.rs` | `i18n` |
-| `tests/i18n_template_integration.rs` | `i18n` + `templates` |
-| `tests/sse_broadcast.rs` | `sse` |
-| `tests/sse_channel.rs` | `sse` |
-| `tests/sse_config.rs` | `sse` |
-| `tests/sse_event.rs` | `sse` |
-| `tests/sse_last_event_id.rs` | `sse` |
-| `tests/sse_response.rs` | `sse` |
-| `tests/sse_stream_ext.rs` | `sse` |
+Every integration test file for a feature-gated module must start with a
+`#![cfg(feature = "X")]` inner attribute:
+
+```rust
+#![cfg(feature = "auth")]
+
+use modo::auth::jwt::{JwtEncoder, HmacSigner};
+// ...
+```
+
+This is required because integration tests in `tests/*.rs` are external crate
+consumers -- there is no `#[cfg(test)]` for them.
+
+### Clippy for feature-gated test code
+
+```bash
+cargo clippy --features auth --tests -- -D warnings
+```
+
+The `--tests` flag is needed or clippy skips test code entirely.
 
 ---
 
-## Testing Patterns by Crate
+## Test fixtures
 
-### modo (core framework)
+| Path | Purpose |
+|---|---|
+| `tests/fixtures/migrations/` | SQL migration files used by `TestDb::migrate()` tests. |
+| `tests/fixtures/GeoIP2-City-Test.mmdb` | MaxMind test database for geolocation tests. |
 
-Tests live in `modo/tests/`. Most use `Router::new().route(...).layer(mw).oneshot(request)`.
+Migration files are plain `.sql`, ordered by filename prefix:
 
-**Extracting an `Extension<T>` in a test handler:**
-
-```rust
-get(|req_id: axum::Extension<RequestId>| async move { req_id.0.to_string() })
-```
-
-**Reading response body:**
-
-```rust
-let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-    .await
-    .unwrap();
-assert_eq!(&body[..], b"expected bytes");
-```
-
-**Checking JSON response shape:**
-
-```rust
-let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-    .await
-    .unwrap();
-let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-assert_eq!(json["status"], 404);
-assert_eq!(json["error"], "not_found");
-assert_eq!(json["message"], "Not found");
-```
-
-**Source:** `modo/tests/integration.rs`, `modo/tests/error_handling.rs`
-
-**Inventory-based route testing:** The integration test builds a minimal router by iterating
-`inventory::iter::<RouteRegistration>()` and filtering by path prefix. This avoids loading
-all registered routes and allows focused testing:
-
-```rust
-fn build_test_router() -> axum::Router {
-    let state = AppState {
-        services: Default::default(),
-        server_config: ServerConfig::default(),
-        cookie_key: axum_extra::extract::cookie::Key::generate(),
-    };
-
-    let mut router = axum::Router::new();
-    for reg in inventory::iter::<RouteRegistration> {
-        if reg.path.starts_with("/test") {
-            let method_router = (reg.handler)();
-            router = router.route(reg.path, method_router);
-        }
-    }
-    router
-        .fallback(|| async { HttpError::NotFound.into_response() })
-        .with_state(state)
-}
-```
-
-**Source:** `modo/tests/integration.rs`
-
-### modo-db
-
-Tests in `modo-db/tests/` cover the entity macro, migration macro, and pool types.
-
-**Trait bound assertions (compile-time tests):**
-
-```rust
-#[test]
-fn test_dbpool_is_send_sync() {
-    fn assert_send<T: Send>() {}
-    fn assert_sync<T: Sync>() {}
-    assert_send::<DbPool>();
-    assert_sync::<DbPool>();
-}
-```
-
-This pattern verifies `Send + Sync` bounds without constructing a value. If the bound is not
-satisfied, the test fails to compile.
-
-**Source:** `modo-db/tests/pool.rs`
-
-**Entity registration verification:**
-
-```rust
-#[test]
-fn test_basic_entity_registers() {
-    let registrations: Vec<&EntityRegistration> = inventory::iter::<EntityRegistration>().collect();
-    let tables: Vec<&str> = registrations.iter().map(|r| r.table_name).collect();
-    assert!(
-        tables.contains(&"test_users"),
-        "test_users not registered. Found: {tables:?}"
-    );
-}
-```
-
-**Source:** `modo-db/tests/entity_macro.rs`
-
-### modo-session
-
-Tests use `sqlite::memory:` with the schema setup pattern above. Sessions are created via
-`SessionStore::create()` and tokens are passed through the `Cookie:` request header.
-
-The session token in a cookie header is: `{config.cookie_name}={token.as_hex()}`.
-
-```rust
-async fn create_session(store: &SessionStore, user_id: &str) -> String {
-    let meta = test_meta();
-    let (_session, token) = store.create(&meta, user_id, None).await.unwrap();
-    format!(
-        "{}={}",
-        SessionConfig::default().cookie_name,
-        token.as_hex()
-    )
-}
-
-fn request_with_cookie(uri: &str, cookie: &str) -> Request<axum::body::Body> {
-    Request::builder()
-        .uri(uri)
-        .header("cookie", cookie)
-        .header("user-agent", "Mozilla/5.0 ...")
-        .header("accept-language", "en-US")
-        .header("accept-encoding", "gzip")
-        .body(axum::body::Body::empty())
-        .unwrap()
-}
-```
-
-**Source:** `modo-auth/tests/integration.rs`
-
-### modo-auth
-
-Tests combine `modo-session` and a custom `UserProvider` implementation. Define a concrete user
-type, implement `UserProvider` for a test struct (using `match` on known IDs), wire everything
-into `AppState`, and drive requests through `.oneshot()`.
-
-```rust
-struct TestProvider;
-
-impl UserProvider for TestProvider {
-    type User = TestUser;
-
-    async fn find_by_id(&self, id: &str) -> Result<Option<Self::User>, modo::Error> {
-        match id {
-            "user-1" => Ok(Some(TestUser { name: "Alice".into() })),
-            "error-user" => Err(modo::Error::internal("db error")),
-            _ => Ok(None),
-        }
-    }
-}
-```
-
-**Source:** `modo-auth/tests/integration.rs`
-
-### modo-jobs
-
-Tests use `sqlite::memory:` and insert jobs directly via SeaORM `ActiveModel`. The runner
-functions (`claim_next`, `mark_completed`, `schedule_retry`, `handle_failure`) are called
-directly rather than through the full `JobRunner`.
-
-**Source:** `modo-jobs/tests/runner.rs`, `modo-jobs/tests/queue.rs`
-
----
-
-## Template Engine in Tests
-
-The `modo/tests/common/mod.rs` helper creates a temporary directory, writes template files,
-and returns a configured `TemplateEngine`:
-
-```rust
-pub fn setup_engine(templates: &[(&str, &str)]) -> (TempDir, TemplateEngine) {
-    let dir = TempDir::new().unwrap();
-    for (name, content) in templates {
-        let path = dir.path().join(name);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-        }
-        let mut f = std::fs::File::create(path).unwrap();
-        f.write_all(content.as_bytes()).unwrap();
-    }
-    let config = TemplateConfig {
-        path: dir.path().to_string_lossy().to_string(),
-        ..Default::default()
-    };
-    let eng = engine(&config).unwrap();
-    (dir, eng)
-}
-```
-
-The `TempDir` guard must be kept alive for the duration of the test — dropping it deletes
-the directory. The end-to-end tests (`templates_e2e.rs`) use `std::env::temp_dir()` directly
-and call `fs::remove_dir_all` manually at the end.
-
-**Source:** `modo/tests/common/mod.rs`, `modo/tests/templates_e2e.rs`
-
----
-
-## Validation Testing
-
-The `#[derive(modo::Validate)]` macro generates a `validate()` method. Tests call it directly,
-inspect the returned error shape, and assert field-level messages.
-
-```rust
-#[derive(serde::Deserialize, modo::Validate)]
-struct RequiredString {
-    #[validate(required)]
-    name: String,
-}
-
-#[test]
-fn required_string_empty_fails() {
-    let v = RequiredString { name: String::new() };
-    let err = v.validate().unwrap_err();
-    assert_eq!(err.status_code(), axum::http::StatusCode::BAD_REQUEST);
-    assert_eq!(err.code(), "validation_error");
-    let msgs = err.details().get("name").unwrap().as_array().unwrap();
-    assert_eq!(msgs[0], "is required");
-}
-```
-
-Validation errors always have `status = 400`, `code = "validation_error"`,
-`message = "Validation failed"`. Field errors live in `details["field_name"]` as a JSON array.
-
-**Source:** `modo/tests/validation.rs`
+- `20260101000000_create_items.sql` -- creates `items` table
+- `20260101000100_add_status.sql` -- adds `status` column
 
 ---
 
 ## Gotchas
 
-**`just test` silently skips feature-gated tests.** Any test file starting with
-`#![cfg(feature = "...")]` is excluded from `just test`. This has caused situations where test
-coverage appears complete but feature code is untested. Always run feature-specific tests
-explicitly after writing feature-gated code.
+### Handler functions must be module-level
 
-**`inventory` registrations may not link in test binaries.** When testing code that depends on
-`inventory::iter` returning items registered in a library crate, the linker may eliminate the
-registration if there is no direct reference to it. Force linking by importing the defining
-module with `use crate::entity::foo as _;` in the test file, or define the types in the test
-file directly.
-
-**`.oneshot()` consumes the router.** Each `oneshot` call moves the router. If you need
-multiple requests in one test, either clone the router before each call or rebuild it:
+Handler functions defined inside `#[tokio::test]` closures do not satisfy axum's
+`Handler` trait bounds. Always define test handlers as module-level `async fn`:
 
 ```rust
-let app = build_test_router();
-let app2 = build_test_router(); // or app.clone() if AppState: Clone
+// CORRECT: module-level handler
+async fn hello() -> &'static str { "hello" }
 
-app.oneshot(req1).await.unwrap();
-app2.oneshot(req2).await.unwrap();
+#[tokio::test]
+async fn test_hello() {
+    let app = TestApp::builder().route("/", get(hello)).build();
+    let res = app.get("/").send().await;
+    assert_eq!(res.text(), "hello");
+}
 ```
 
-**SQLite in-memory databases are per-connection.** `sqlite::memory:` creates a fresh database
-each time a connection is opened. Each `setup_db()` call produces an independent, empty database.
-This is intentional for test isolation.
+### `std::env::set_var` is unsafe in Rust 2024
 
-**Session middleware requires `user-agent`, `accept-language`, and `accept-encoding` headers.**
-`SessionMeta::from_headers` reads these to populate session metadata. Omitting them in test
-requests will not cause a panic but the metadata fields will be empty strings. The auth
-integration tests include all three headers in helper functions.
+Tests that modify environment variables must wrap calls in `unsafe {}`:
 
-**`tokio::test` attribute is required for async tests.** All async test functions must use
-`#[tokio::test]`. The `tokio` dev-dependency in modo crates includes `features = ["full", "test-util"]`.
+```rust
+unsafe { std::env::set_var("MY_VAR", "value") };
+// ... test logic ...
+unsafe { std::env::remove_var("MY_VAR") };
+```
 
----
+### Use `serial_test` for env var tests
 
-## Quick Reference
+Tests that modify environment variables must be annotated with `#[serial]` to
+prevent races. Clean up env vars **before** assertions (panics skip cleanup):
 
-| Task | Pattern |
-|------|---------|
-| Test middleware without state | `Router::new().route(...).layer(mw).oneshot(req)` |
-| Test handler with services | Build `ServiceRegistry`, create `AppState`, `.with_state(state)` |
-| Read response body | `axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()` |
-| Assert JSON shape | `serde_json::from_slice::<serde_json::Value>(&body).unwrap()` |
-| In-memory DB setup | `DatabaseConfig { url: "sqlite::memory:".to_string(), .. }` |
-| Schema from entity registration | `inventory::iter::<EntityRegistration>().find(...)` |
-| Assert Set-Cookie header | `resp.headers().get("Set-Cookie").unwrap().to_str().unwrap()` |
-| Run feature-gated tests | `cargo test -p modo --features <feature>` |
-| Force inventory link | `use crate::entity::foo as _;` |
-| Assert trait bounds | `fn assert_send<T: Send>() {} assert_send::<MyType>();` |
+```rust
+use serial_test::serial;
+
+#[test]
+#[serial]
+fn test_env_substitution() {
+    unsafe { std::env::set_var("TEST_HOST", "localhost") };
+    let result = substitute_env_vars("host: ${TEST_HOST}").unwrap();
+    // Clean up BEFORE assert -- panic skips remaining code
+    unsafe { std::env::remove_var("TEST_HOST") };
+    assert_eq!(result, "host: localhost");
+}
+```
+
+### Types without Debug
+
+Pool newtypes (`Pool`, `ReadPool`, `WritePool`), `Storage`, and `Buckets` do not
+implement `Debug`. In tests, use `.err().unwrap()` instead of `.unwrap_err()`:
+
+```rust
+let result = some_operation().await;
+assert!(result.is_err());
+let err = result.err().unwrap(); // not .unwrap_err()
+```
+
+### No self-referencing dev-dependencies
+
+Feature-gated tests use `#![cfg(feature = "X")]` guards and run via
+`cargo test --features X`. Do not add the crate as its own dev-dependency for
+feature-gated tests.
+
+### `Cargo.lock` is gitignored
+
+modo is a library crate. `Cargo.lock` is in `.gitignore` -- do not stage it in
+commits.
