@@ -9,14 +9,12 @@ use hyper_util::client::legacy::connect::HttpConnector;
 
 use crate::error::{Error, Result};
 
-#[allow(dead_code)]
 pub(crate) struct FetchResult {
     pub data: Bytes,
     pub content_type: String,
 }
 
 /// Validate that a URL uses http or https scheme.
-#[allow(dead_code)]
 fn validate_url(url: &str) -> Result<Uri> {
     let uri: Uri = url
         .parse()
@@ -35,7 +33,6 @@ fn validate_url(url: &str) -> Result<Uri> {
 /// Streams the response body and aborts if `max_size` is exceeded.
 /// Returns the body bytes and content type from the response.
 /// Hard-coded 30s timeout. No redirect following.
-#[allow(dead_code)]
 pub(crate) async fn fetch_url(
     client: &Client<HttpsConnector<HttpConnector>, Full<Bytes>>,
     url: &str,

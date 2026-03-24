@@ -8,6 +8,7 @@ use crate::error::{Error, Result};
 use super::backend::BackendKind;
 use super::client::RemoteBackend;
 use super::config::BucketConfig;
+use super::fetch::fetch_url;
 use super::options::PutOptions;
 use super::path::{generate_key, validate_path};
 
@@ -40,6 +41,16 @@ impl PutInput {
             Some(ext.to_ascii_lowercase())
         }
     }
+}
+
+/// Input for `Storage::put_from_url()` and `Storage::put_from_url_with()`.
+pub struct PutFromUrlInput {
+    /// Source URL to fetch from (must be http or https).
+    pub url: String,
+    /// Storage prefix (e.g., `"avatars/"`).
+    pub prefix: String,
+    /// Optional filename hint — used to extract extension. `None` produces extensionless keys.
+    pub filename: Option<String>,
 }
 
 pub(crate) struct StorageInner {
@@ -213,6 +224,38 @@ impl Storage {
             BackendKind::Memory(b) => b.exists(key).await,
         }
         .map_err(|e| Error::internal(format!("failed to check existence: {e}")))
+    }
+
+    /// Fetch a file from a URL and upload it. Returns the generated S3 key.
+    pub async fn put_from_url(&self, input: &PutFromUrlInput) -> Result<String> {
+        self.put_from_url_inner(input, &PutOptions::default()).await
+    }
+
+    /// Fetch a file from a URL and upload it with custom options. Returns the generated S3 key.
+    pub async fn put_from_url_with(
+        &self,
+        input: &PutFromUrlInput,
+        opts: PutOptions,
+    ) -> Result<String> {
+        self.put_from_url_inner(input, &opts).await
+    }
+
+    async fn put_from_url_inner(
+        &self,
+        input: &PutFromUrlInput,
+        opts: &PutOptions,
+    ) -> Result<String> {
+        let client = self.inner.backend.http_client()?;
+        let fetched = fetch_url(client, &input.url, self.inner.max_file_size).await?;
+
+        let put_input = PutInput {
+            data: fetched.data,
+            prefix: input.prefix.clone(),
+            filename: input.filename.clone(),
+            content_type: fetched.content_type,
+        };
+
+        self.put_inner(&put_input, opts).await
     }
 }
 
@@ -431,5 +474,17 @@ mod tests {
             content_type: "text/plain".into(),
         };
         assert!(storage.put(&input).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn put_from_url_memory_backend_returns_error() {
+        let storage = Storage::memory();
+        let input = PutFromUrlInput {
+            url: "https://example.com/file.jpg".into(),
+            prefix: "downloads/".into(),
+            filename: Some("file.jpg".into()),
+        };
+        let err = storage.put_from_url(&input).await.err().unwrap();
+        assert_eq!(err.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
     }
 }

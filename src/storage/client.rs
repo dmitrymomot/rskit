@@ -361,6 +361,15 @@ impl RemoteBackend {
         Ok(presign_url(&params))
     }
 
+    pub(crate) fn client(
+        &self,
+    ) -> &Client<
+        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+        Full<Bytes>,
+    > {
+        &self.client
+    }
+
     fn url_and_host(&self, key: &str) -> (String, String) {
         build_url_and_host(
             &self.endpoint,
