@@ -65,11 +65,12 @@ fn setup() -> (TempDir, Router) {
     std::fs::write(static_dir.join("app.css"), "body { color: red; }").unwrap();
 
     // Build engine
-    let config = TemplateConfig {
-        templates_path: tpl_dir.to_str().unwrap().into(),
-        locales_path: dir.path().join("locales").to_str().unwrap().into(),
-        static_path: dir.path().join("static").to_str().unwrap().into(),
-        ..TemplateConfig::default()
+    let config = {
+        let mut c = TemplateConfig::default();
+        c.templates_path = tpl_dir.to_str().unwrap().into();
+        c.locales_path = dir.path().join("locales").to_str().unwrap().into();
+        c.static_path = dir.path().join("static").to_str().unwrap().into();
+        c
     };
     let engine = Engine::builder().config(config).build().unwrap();
 

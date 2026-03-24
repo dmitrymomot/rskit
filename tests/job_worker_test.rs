@@ -32,9 +32,10 @@ CREATE UNIQUE INDEX idx_modo_jobs_payload_hash
     WHERE payload_hash IS NOT NULL AND status IN ('pending', 'running')";
 
 async fn setup() -> (Registry, db::Pool) {
-    let config = db::SqliteConfig {
-        path: ":memory:".to_string(),
-        ..Default::default()
+    let config = {
+        let mut c = db::SqliteConfig::default();
+        c.path = ":memory:".to_string();
+        c
     };
     let pool = db::connect(&config).await.unwrap();
     sqlx::query(CREATE_TABLE).execute(&*pool).await.unwrap();
@@ -48,17 +49,19 @@ async fn setup() -> (Registry, db::Pool) {
 }
 
 fn fast_config() -> job::JobConfig {
-    job::JobConfig {
-        poll_interval_secs: 0,
-        stale_threshold_secs: 2,
-        stale_reaper_interval_secs: 1,
-        drain_timeout_secs: 5,
-        queues: vec![job::QueueConfig {
-            name: "default".to_string(),
-            concurrency: 2,
-        }],
-        cleanup: None,
-    }
+    let mut c = job::JobConfig::default();
+    c.poll_interval_secs = 0;
+    c.stale_threshold_secs = 2;
+    c.stale_reaper_interval_secs = 1;
+    c.drain_timeout_secs = 5;
+    c.queues = vec![{
+        let mut q = job::QueueConfig::default();
+        q.name = "default".to_string();
+        q.concurrency = 2;
+        q
+    }];
+    c.cleanup = None;
+    c
 }
 
 async fn counting_handler(
@@ -216,16 +219,20 @@ async fn reaper_resets_stale_running_jobs() {
     .await
     .unwrap();
 
-    let config = job::JobConfig {
-        poll_interval_secs: 0,
-        stale_threshold_secs: 1,
-        stale_reaper_interval_secs: 1,
-        drain_timeout_secs: 5,
-        queues: vec![job::QueueConfig {
-            name: "default".to_string(),
-            concurrency: 2,
-        }],
-        cleanup: None,
+    let config = {
+        let mut c = job::JobConfig::default();
+        c.poll_interval_secs = 0;
+        c.stale_threshold_secs = 1;
+        c.stale_reaper_interval_secs = 1;
+        c.drain_timeout_secs = 5;
+        c.queues = vec![{
+            let mut q = job::QueueConfig::default();
+            q.name = "default".to_string();
+            q.concurrency = 2;
+            q
+        }];
+        c.cleanup = None;
+        c
     };
 
     let worker = Worker::builder(&config, &registry)
@@ -269,19 +276,25 @@ async fn cleanup_removes_old_terminal_jobs() {
         .await
         .unwrap();
 
-    let config = job::JobConfig {
-        poll_interval_secs: 60, // high interval — we don't need the poll loop
-        stale_threshold_secs: 600,
-        stale_reaper_interval_secs: 600,
-        drain_timeout_secs: 5,
-        queues: vec![job::QueueConfig {
-            name: "default".to_string(),
-            concurrency: 2,
-        }],
-        cleanup: Some(job::CleanupConfig {
-            interval_secs: 1,
-            retention_secs: 1,
-        }),
+    let config = {
+        let mut c = job::JobConfig::default();
+        c.poll_interval_secs = 60; // high interval — we don't need the poll loop
+        c.stale_threshold_secs = 600;
+        c.stale_reaper_interval_secs = 600;
+        c.drain_timeout_secs = 5;
+        c.queues = vec![{
+            let mut q = job::QueueConfig::default();
+            q.name = "default".to_string();
+            q.concurrency = 2;
+            q
+        }];
+        c.cleanup = Some({
+            let mut cc = job::CleanupConfig::default();
+            cc.interval_secs = 1;
+            cc.retention_secs = 1;
+            cc
+        });
+        c
     };
 
     async fn noop_handler(_payload: Payload<serde_json::Value>) -> Result<()> {

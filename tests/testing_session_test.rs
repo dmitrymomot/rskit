@@ -91,15 +91,15 @@ async fn test_authenticate_with_custom_data() {
 async fn test_with_custom_cookie_name() {
     let db = TestDb::new().await;
 
-    let session_config = SessionConfig {
-        cookie_name: "my_sess".to_string(),
-        ..Default::default()
+    let session_config = {
+        let mut c = SessionConfig::default();
+        c.cookie_name = "my_sess".to_string();
+        c
     };
-    let cookie_config = CookieConfig {
-        secret: "b".repeat(64),
-        secure: false,
-        http_only: true,
-        same_site: "lax".to_string(),
+    let cookie_config = {
+        let mut c = CookieConfig::new("b".repeat(64));
+        c.secure = false;
+        c
     };
 
     let session = TestSession::with_config(&db, session_config, cookie_config).await;
@@ -115,17 +115,18 @@ async fn test_with_custom_cookie_name() {
 async fn test_with_custom_config_still_authenticates() {
     let db = TestDb::new().await;
 
-    let session_config = SessionConfig {
-        cookie_name: "custom_session".to_string(),
-        session_ttl_secs: 60,
-        validate_fingerprint: false,
-        ..Default::default()
+    let session_config = {
+        let mut c = SessionConfig::default();
+        c.cookie_name = "custom_session".to_string();
+        c.session_ttl_secs = 60;
+        c.validate_fingerprint = false;
+        c
     };
-    let cookie_config = CookieConfig {
-        secret: "c".repeat(64),
-        secure: false,
-        http_only: true,
-        same_site: "strict".to_string(),
+    let cookie_config = {
+        let mut c = CookieConfig::new("c".repeat(64));
+        c.secure = false;
+        c.same_site = "strict".to_string();
+        c
     };
 
     let session = TestSession::with_config(&db, session_config, cookie_config).await;

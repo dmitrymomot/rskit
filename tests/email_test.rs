@@ -4,16 +4,15 @@ use modo::email::{EmailConfig, Mailer, SendEmail};
 use std::collections::HashMap;
 
 fn test_config(dir: &std::path::Path) -> EmailConfig {
-    EmailConfig {
-        templates_path: dir.to_str().unwrap().into(),
-        layouts_path: dir.join("layouts").to_str().unwrap().into(),
-        default_from_name: "TestApp".into(),
-        default_from_email: "noreply@test.com".into(),
-        default_reply_to: Some("support@test.com".into()),
-        default_locale: "en".into(),
-        cache_templates: false,
-        ..EmailConfig::default()
-    }
+    let mut c = EmailConfig::default();
+    c.templates_path = dir.to_str().unwrap().into();
+    c.layouts_path = dir.join("layouts").to_str().unwrap().into();
+    c.default_from_name = "TestApp".into();
+    c.default_from_email = "noreply@test.com".into();
+    c.default_reply_to = Some("support@test.com".into());
+    c.default_locale = "en".into();
+    c.cache_templates = false;
+    c
 }
 
 fn write_template(dir: &std::path::Path, locale: &str, name: &str, content: &str) {
@@ -192,16 +191,17 @@ fn render_with_cache_enabled() {
         "---\nsubject: Cached!\n---\nBody",
     );
 
-    let config = EmailConfig {
-        templates_path: dir.path().to_str().unwrap().into(),
-        layouts_path: dir.path().join("layouts").to_str().unwrap().into(),
-        default_from_name: "TestApp".into(),
-        default_from_email: "noreply@test.com".into(),
-        default_reply_to: None,
-        default_locale: "en".into(),
-        cache_templates: true,
-        template_cache_size: 10,
-        ..EmailConfig::default()
+    let config = {
+        let mut c = EmailConfig::default();
+        c.templates_path = dir.path().to_str().unwrap().into();
+        c.layouts_path = dir.path().join("layouts").to_str().unwrap().into();
+        c.default_from_name = "TestApp".into();
+        c.default_from_email = "noreply@test.com".into();
+        c.default_reply_to = None;
+        c.default_locale = "en".into();
+        c.cache_templates = true;
+        c.template_cache_size = 10;
+        c
     };
     let stub = lettre::transport::stub::AsyncStubTransport::new_ok();
     let mailer = Mailer::with_stub_transport(&config, stub).unwrap();

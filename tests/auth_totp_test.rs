@@ -49,11 +49,10 @@ fn from_base32_invalid() {
 // Secret: "12345678901234567890" (ASCII bytes)
 // https://www.rfc-editor.org/rfc/rfc6238.html#appendix-B
 fn rfc_totp() -> Totp {
-    let config = TotpConfig {
-        digits: 8,
-        step_secs: 30,
-        window: 0,
-    };
+    let mut config = TotpConfig::default();
+    config.digits = 8;
+    config.step_secs = 30;
+    config.window = 0;
     Totp::new(b"12345678901234567890".to_vec(), &config)
 }
 
@@ -95,11 +94,10 @@ fn rfc6238_test_vector_20000000000() {
 
 #[test]
 fn verify_at_correct_code() {
-    let config = TotpConfig {
-        digits: 6,
-        step_secs: 30,
-        window: 0,
-    };
+    let mut config = TotpConfig::default();
+    config.digits = 6;
+    config.step_secs = 30;
+    config.window = 0;
     let secret = Totp::generate_secret();
     let totp = Totp::from_base32(&secret, &config).unwrap();
     let timestamp = 1234567890u64;
@@ -109,11 +107,10 @@ fn verify_at_correct_code() {
 
 #[test]
 fn verify_at_wrong_code() {
-    let config = TotpConfig {
-        digits: 6,
-        step_secs: 30,
-        window: 0,
-    };
+    let mut config = TotpConfig::default();
+    config.digits = 6;
+    config.step_secs = 30;
+    config.window = 0;
     let secret = Totp::generate_secret();
     let totp = Totp::from_base32(&secret, &config).unwrap();
     assert!(!totp.verify_at("000000", 1234567890));
@@ -121,11 +118,10 @@ fn verify_at_wrong_code() {
 
 #[test]
 fn verify_window_allows_adjacent_steps() {
-    let config = TotpConfig {
-        digits: 6,
-        step_secs: 30,
-        window: 1,
-    };
+    let mut config = TotpConfig::default();
+    config.digits = 6;
+    config.step_secs = 30;
+    config.window = 1;
     let secret = Totp::generate_secret();
     let totp = Totp::from_base32(&secret, &config).unwrap();
     let timestamp = 1000u64;
@@ -139,11 +135,10 @@ fn verify_window_allows_adjacent_steps() {
 
 #[test]
 fn verify_window_rejects_beyond_window() {
-    let config = TotpConfig {
-        digits: 6,
-        step_secs: 30,
-        window: 1,
-    };
+    let mut config = TotpConfig::default();
+    config.digits = 6;
+    config.step_secs = 30;
+    config.window = 1;
     let secret = Totp::generate_secret();
     let totp = Totp::from_base32(&secret, &config).unwrap();
     let timestamp = 1000u64;
@@ -169,11 +164,10 @@ fn otpauth_uri_format() {
 fn generate_at_zero_pads() {
     // Use a known secret and find a timestamp that produces a code with leading zeros
     // The RFC test vector at t=1111111109 produces "07081804" (leading zero)
-    let config = TotpConfig {
-        digits: 8,
-        step_secs: 30,
-        window: 0,
-    };
+    let mut config = TotpConfig::default();
+    config.digits = 8;
+    config.step_secs = 30;
+    config.window = 0;
     let totp = Totp::new(b"12345678901234567890".to_vec(), &config);
     let code = totp.generate_at(1111111109);
     assert_eq!(code.len(), 8);

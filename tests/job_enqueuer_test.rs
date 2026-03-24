@@ -27,9 +27,10 @@ CREATE UNIQUE INDEX idx_modo_jobs_payload_hash
     WHERE payload_hash IS NOT NULL AND status IN ('pending', 'running')";
 
 async fn setup() -> (Enqueuer, db::Pool) {
-    let config = db::SqliteConfig {
-        path: ":memory:".to_string(),
-        ..Default::default()
+    let config = {
+        let mut c = db::SqliteConfig::default();
+        c.path = ":memory:".to_string();
+        c
     };
     let pool = db::connect(&config).await.unwrap();
     sqlx::query(CREATE_TABLE).execute(&*pool).await.unwrap();

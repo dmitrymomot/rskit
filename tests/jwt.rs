@@ -22,13 +22,7 @@ struct TestClaims {
 }
 
 fn test_config() -> JwtConfig {
-    JwtConfig {
-        secret: "integration-test-secret-key-long-enough!".into(),
-        default_expiry: None,
-        leeway: 0,
-        issuer: None,
-        audience: None,
-    }
+    JwtConfig::new("integration-test-secret-key-long-enough!")
 }
 
 fn now_secs() -> u64 {

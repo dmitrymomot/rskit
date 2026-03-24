@@ -20,9 +20,10 @@ async fn test_cors_allows_configured_origin() {
         "ok"
     }
 
-    let config = modo::middleware::CorsConfig {
-        origins: vec!["https://example.com".to_string()],
-        ..Default::default()
+    let config = {
+        let mut c = modo::middleware::CorsConfig::default();
+        c.origins = vec!["https://example.com".to_string()];
+        c
     };
     let app = Router::new()
         .route("/", get(handler))
@@ -84,9 +85,10 @@ async fn test_cors_rejects_unlisted_origin() {
         "ok"
     }
 
-    let config = modo::middleware::CorsConfig {
-        origins: vec!["https://example.com".to_string()],
-        ..Default::default()
+    let config = {
+        let mut c = modo::middleware::CorsConfig::default();
+        c.origins = vec!["https://example.com".to_string()];
+        c
     };
     let app = Router::new()
         .route("/", get(handler))
@@ -116,9 +118,10 @@ async fn test_cors_with_predicate() {
         "ok"
     }
 
-    let config = modo::middleware::CorsConfig {
-        origins: vec!["https://example.com".to_string()],
-        ..Default::default()
+    let config = {
+        let mut c = modo::middleware::CorsConfig::default();
+        c.origins = vec!["https://example.com".to_string()];
+        c
     };
     let predicate = modo::middleware::urls(&config.origins);
     let app = Router::new()
@@ -361,9 +364,10 @@ async fn test_security_headers_hsts() {
         "ok"
     }
 
-    let config = modo::middleware::SecurityHeadersConfig {
-        hsts_max_age: Some(31536000),
-        ..Default::default()
+    let config = {
+        let mut c = modo::middleware::SecurityHeadersConfig::default();
+        c.hsts_max_age = Some(31536000);
+        c
     };
     let app = Router::new()
         .route("/", get(handler))
@@ -387,10 +391,11 @@ async fn test_security_headers_csp_and_permissions() {
         "ok"
     }
 
-    let config = modo::middleware::SecurityHeadersConfig {
-        content_security_policy: Some("default-src 'self'".to_string()),
-        permissions_policy: Some("geolocation=()".to_string()),
-        ..Default::default()
+    let config = {
+        let mut c = modo::middleware::SecurityHeadersConfig::default();
+        c.content_security_policy = Some("default-src 'self'".to_string());
+        c.permissions_policy = Some("geolocation=()".to_string());
+        c
     };
     let app = Router::new()
         .route("/", get(handler))
@@ -418,9 +423,10 @@ async fn test_security_headers_disabled_x_content_type_options() {
         "ok"
     }
 
-    let config = modo::middleware::SecurityHeadersConfig {
-        x_content_type_options: false,
-        ..Default::default()
+    let config = {
+        let mut c = modo::middleware::SecurityHeadersConfig::default();
+        c.x_content_type_options = false;
+        c
     };
     let app = Router::new()
         .route("/", get(handler))
@@ -640,12 +646,14 @@ async fn test_rate_limit_allows_within_burst() {
         "ok"
     }
 
-    let config = modo::middleware::RateLimitConfig {
-        per_second: 1,
-        burst_size: 5,
-        use_headers: true,
-        cleanup_interval_secs: 60,
-        max_keys: 10_000,
+    let config = {
+        let mut c = modo::middleware::RateLimitConfig::default();
+        c.per_second = 1;
+        c.burst_size = 5;
+        c.use_headers = true;
+        c.cleanup_interval_secs = 60;
+        c.max_keys = 10_000;
+        c
     };
     // Use GlobalKeyExtractor because oneshot tests lack ConnectInfo<SocketAddr>
     let app = Router::new()
@@ -672,12 +680,14 @@ async fn test_rate_limit_includes_headers() {
         "ok"
     }
 
-    let config = modo::middleware::RateLimitConfig {
-        per_second: 1,
-        burst_size: 5,
-        use_headers: true,
-        cleanup_interval_secs: 60,
-        max_keys: 10_000,
+    let config = {
+        let mut c = modo::middleware::RateLimitConfig::default();
+        c.per_second = 1;
+        c.burst_size = 5;
+        c.use_headers = true;
+        c.cleanup_interval_secs = 60;
+        c.max_keys = 10_000;
+        c
     };
     let app = Router::new()
         .route("/", get(handler))
@@ -711,12 +721,14 @@ async fn test_rate_limit_rejects_over_burst() {
         "ok"
     }
 
-    let config = modo::middleware::RateLimitConfig {
-        per_second: 1,
-        burst_size: 2,
-        use_headers: true,
-        cleanup_interval_secs: 60,
-        max_keys: 10_000,
+    let config = {
+        let mut c = modo::middleware::RateLimitConfig::default();
+        c.per_second = 1;
+        c.burst_size = 2;
+        c.use_headers = true;
+        c.cleanup_interval_secs = 60;
+        c.max_keys = 10_000;
+        c
     };
     let app = Router::new()
         .route("/", get(handler))

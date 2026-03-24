@@ -3,12 +3,10 @@
 use modo::auth::password::{self, PasswordConfig};
 
 fn fast_config() -> PasswordConfig {
-    PasswordConfig {
-        memory_cost_kib: 64,
-        time_cost: 1,
-        parallelism: 1,
-        output_len: 32,
-    }
+    let mut c = PasswordConfig::default();
+    c.memory_cost_kib = 64;
+    c.time_cost = 1;
+    c
 }
 
 #[tokio::test]

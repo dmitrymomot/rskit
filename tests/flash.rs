@@ -7,12 +7,9 @@ use modo::flash::{Flash, FlashLayer};
 use tower::ServiceExt;
 
 fn test_config() -> CookieConfig {
-    CookieConfig {
-        secret: "b".repeat(64),
-        secure: false,
-        http_only: true,
-        same_site: "lax".into(),
-    }
+    let mut c = CookieConfig::new("b".repeat(64));
+    c.secure = false;
+    c
 }
 
 fn extract_flash_cookie(resp: &http::Response<Body>) -> Option<String> {

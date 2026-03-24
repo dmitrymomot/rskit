@@ -9,18 +9,16 @@ use modo::session::{Session, SessionConfig, Store};
 use tower::ServiceExt;
 
 fn test_cookie_config() -> CookieConfig {
-    CookieConfig {
-        secret: "a".repeat(64),
-        secure: false,
-        http_only: true,
-        same_site: "lax".to_string(),
-    }
+    let mut c = CookieConfig::new("a".repeat(64));
+    c.secure = false;
+    c
 }
 
 async fn setup_store() -> (Store, modo::db::Pool) {
-    let db_config = modo::db::SqliteConfig {
-        path: ":memory:".to_string(),
-        ..Default::default()
+    let db_config = {
+        let mut c = modo::db::SqliteConfig::default();
+        c.path = ":memory:".to_string();
+        c
     };
     let pool = modo::db::connect(&db_config).await.unwrap();
 

@@ -8,11 +8,14 @@ use modo::storage::{Acl, Buckets, PutInput, PutOptions, Storage};
 #[tokio::test]
 async fn full_round_trip() {
     let storage = Storage::memory();
-    let input = PutInput {
-        data: bytes::Bytes::from("fake image data"),
-        prefix: "avatars/".into(),
-        filename: Some("photo.jpg".into()),
-        content_type: "image/jpeg".into(),
+    let input = {
+        let mut i = PutInput::new(
+            bytes::Bytes::from("fake image data"),
+            "avatars/",
+            "image/jpeg",
+        );
+        i.filename = Some("photo.jpg".into());
+        i
     };
 
     // Put
@@ -44,11 +47,10 @@ async fn full_round_trip() {
 async fn multi_bucket_isolation() {
     let buckets = Buckets::memory(&["public", "private"]);
 
-    let input = PutInput {
-        data: bytes::Bytes::from("pdf data"),
-        prefix: "docs/".into(),
-        filename: Some("doc.pdf".into()),
-        content_type: "application/pdf".into(),
+    let input = {
+        let mut i = PutInput::new(bytes::Bytes::from("pdf data"), "docs/", "application/pdf");
+        i.filename = Some("doc.pdf".into());
+        i
     };
 
     let pub_store = buckets.get("public").unwrap();
@@ -63,23 +65,20 @@ async fn multi_bucket_isolation() {
 #[tokio::test]
 async fn put_with_options() {
     let storage = Storage::memory();
-    let input = PutInput {
-        data: bytes::Bytes::from("a,b,c"),
-        prefix: "exports/".into(),
-        filename: Some("report.csv".into()),
-        content_type: "text/csv".into(),
+    let input = {
+        let mut i = PutInput::new(bytes::Bytes::from("a,b,c"), "exports/", "text/csv");
+        i.filename = Some("report.csv".into());
+        i
     };
 
     let key = storage
-        .put_with(
-            &input,
-            PutOptions {
-                content_disposition: Some("attachment".into()),
-                cache_control: Some("no-cache".into()),
-                content_type: Some("text/plain".into()),
-                ..Default::default()
-            },
-        )
+        .put_with(&input, {
+            let mut o = PutOptions::default();
+            o.content_disposition = Some("attachment".into());
+            o.cache_control = Some("no-cache".into());
+            o.content_type = Some("text/plain".into());
+            o
+        })
         .await
         .unwrap();
 
@@ -110,11 +109,14 @@ async fn delete_prefix_removes_multiple() {
     let storage = Storage::memory();
     let mut keys = Vec::new();
     for i in 0..3 {
-        let input = PutInput {
-            data: bytes::Bytes::from(format!("data-{i}")),
-            prefix: "cleanup/".into(),
-            filename: Some(format!("file{i}.txt")),
-            content_type: "text/plain".into(),
+        let input = {
+            let mut inp = PutInput::new(
+                bytes::Bytes::from(format!("data-{i}")),
+                "cleanup/",
+                "text/plain",
+            );
+            inp.filename = Some(format!("file{i}.txt"));
+            inp
         };
         keys.push(storage.put(&input).await.unwrap());
     }
@@ -135,21 +137,18 @@ async fn delete_prefix_empty_is_noop() {
 #[tokio::test]
 async fn put_with_acl_public_read() {
     let storage = Storage::memory();
-    let input = PutInput {
-        data: bytes::Bytes::from("public data"),
-        prefix: "public/".into(),
-        filename: Some("image.png".into()),
-        content_type: "image/png".into(),
+    let input = {
+        let mut i = PutInput::new(bytes::Bytes::from("public data"), "public/", "image/png");
+        i.filename = Some("image.png".into());
+        i
     };
 
     let key = storage
-        .put_with(
-            &input,
-            PutOptions {
-                acl: Some(Acl::PublicRead),
-                ..Default::default()
-            },
-        )
+        .put_with(&input, {
+            let mut o = PutOptions::default();
+            o.acl = Some(Acl::PublicRead);
+            o
+        })
         .await
         .unwrap();
 
@@ -159,21 +158,22 @@ async fn put_with_acl_public_read() {
 #[tokio::test]
 async fn put_with_acl_private() {
     let storage = Storage::memory();
-    let input = PutInput {
-        data: bytes::Bytes::from("private data"),
-        prefix: "private/".into(),
-        filename: Some("doc.pdf".into()),
-        content_type: "application/pdf".into(),
+    let input = {
+        let mut i = PutInput::new(
+            bytes::Bytes::from("private data"),
+            "private/",
+            "application/pdf",
+        );
+        i.filename = Some("doc.pdf".into());
+        i
     };
 
     let key = storage
-        .put_with(
-            &input,
-            PutOptions {
-                acl: Some(Acl::Private),
-                ..Default::default()
-            },
-        )
+        .put_with(&input, {
+            let mut o = PutOptions::default();
+            o.acl = Some(Acl::Private);
+            o
+        })
         .await
         .unwrap();
 

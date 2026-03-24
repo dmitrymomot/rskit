@@ -63,7 +63,11 @@ async fn scheduler_skips_overlapping_runs() {
     registry.add(counter.clone());
 
     let scheduler = Scheduler::builder(&registry)
-        .job_with("@every 1s", slow_job, CronOptions { timeout_secs: 30 })
+        .job_with("@every 1s", slow_job, {
+            let mut o = CronOptions::default();
+            o.timeout_secs = 30;
+            o
+        })
         .start()
         .await;
 
@@ -82,7 +86,11 @@ async fn scheduler_timeout_cancels_job() {
     registry.add(counter.clone());
 
     let scheduler = Scheduler::builder(&registry)
-        .job_with("@every 1s", slow_job, CronOptions { timeout_secs: 1 })
+        .job_with("@every 1s", slow_job, {
+            let mut o = CronOptions::default();
+            o.timeout_secs = 1;
+            o
+        })
         .start()
         .await;
 

@@ -35,24 +35,16 @@ secret: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 #[test]
 fn test_key_from_config_success() {
-    let config = modo::cookie::CookieConfig {
-        secret: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-        secure: true,
-        http_only: true,
-        same_site: "lax".to_string(),
-    };
+    let config = modo::cookie::CookieConfig::new(
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    );
     let key = modo::cookie::key_from_config(&config);
     assert!(key.is_ok());
 }
 
 #[test]
 fn test_key_from_config_too_short() {
-    let config = modo::cookie::CookieConfig {
-        secret: "tooshort".to_string(),
-        secure: true,
-        http_only: true,
-        same_site: "lax".to_string(),
-    };
+    let config = modo::cookie::CookieConfig::new("tooshort");
     let key = modo::cookie::key_from_config(&config);
     assert!(key.is_err());
 }

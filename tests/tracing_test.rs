@@ -29,9 +29,10 @@ fn test_tracing_init_idempotent() {
 #[test]
 #[serial]
 fn test_tracing_init_json_format() {
-    let config = modo::tracing::Config {
-        format: "json".to_string(),
-        ..Default::default()
+    let config = {
+        let mut c = modo::tracing::Config::default();
+        c.format = "json".to_string();
+        c
     };
     let result = modo::tracing::init(&config);
     assert!(result.is_ok());
@@ -40,9 +41,10 @@ fn test_tracing_init_json_format() {
 #[test]
 #[serial]
 fn test_tracing_init_unknown_format_fallback() {
-    let config = modo::tracing::Config {
-        format: "unknown".to_string(),
-        ..Default::default()
+    let config = {
+        let mut c = modo::tracing::Config::default();
+        c.format = "unknown".to_string();
+        c
     };
     let result = modo::tracing::init(&config);
     assert!(result.is_ok());

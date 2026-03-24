@@ -3,9 +3,10 @@ use modo::session::meta::SessionMeta;
 use modo::session::{SessionConfig, Store};
 
 async fn setup_store() -> Store {
-    let config = db::SqliteConfig {
-        path: ":memory:".to_string(),
-        ..Default::default()
+    let config = {
+        let mut c = db::SqliteConfig::default();
+        c.path = ":memory:".to_string();
+        c
     };
     let pool = db::connect(&config).await.unwrap();
 
@@ -192,13 +193,15 @@ async fn test_touch_updates_timestamps() {
 
 #[tokio::test]
 async fn test_lru_eviction() {
-    let config = SessionConfig {
-        max_sessions_per_user: 2,
-        ..Default::default()
+    let config = {
+        let mut c = SessionConfig::default();
+        c.max_sessions_per_user = 2;
+        c
     };
-    let db_config = db::SqliteConfig {
-        path: ":memory:".to_string(),
-        ..Default::default()
+    let db_config = {
+        let mut c = db::SqliteConfig::default();
+        c.path = ":memory:".to_string();
+        c
     };
     let pool = db::connect(&db_config).await.unwrap();
     sqlx::query(
@@ -260,9 +263,10 @@ async fn test_list_for_user_ordered_by_last_active() {
 
 #[tokio::test]
 async fn test_cleanup_expired_deletes_rows() {
-    let config = db::SqliteConfig {
-        path: ":memory:".to_string(),
-        ..Default::default()
+    let config = {
+        let mut c = db::SqliteConfig::default();
+        c.path = ":memory:".to_string();
+        c
     };
     let pool = db::connect(&config).await.unwrap();
     sqlx::query(
@@ -308,9 +312,10 @@ async fn test_cleanup_expired_deletes_rows() {
 
 #[tokio::test]
 async fn test_max_sessions_per_user_one() {
-    let config = db::SqliteConfig {
-        path: ":memory:".to_string(),
-        ..Default::default()
+    let config = {
+        let mut c = db::SqliteConfig::default();
+        c.path = ":memory:".to_string();
+        c
     };
     let pool = db::connect(&config).await.unwrap();
     sqlx::query(
@@ -335,9 +340,10 @@ async fn test_max_sessions_per_user_one() {
         .await
         .unwrap();
 
-    let session_config = SessionConfig {
-        max_sessions_per_user: 1,
-        ..Default::default()
+    let session_config = {
+        let mut c = SessionConfig::default();
+        c.max_sessions_per_user = 1;
+        c
     };
     let store = Store::new(&pool, session_config);
     let meta = test_meta();
@@ -352,9 +358,10 @@ async fn test_max_sessions_per_user_one() {
 
 #[tokio::test]
 async fn test_list_for_user_excludes_expired() {
-    let config = db::SqliteConfig {
-        path: ":memory:".to_string(),
-        ..Default::default()
+    let config = {
+        let mut c = db::SqliteConfig::default();
+        c.path = ":memory:".to_string();
+        c
     };
     let pool = db::connect(&config).await.unwrap();
     sqlx::query(
@@ -397,9 +404,10 @@ async fn test_list_for_user_excludes_expired() {
 
 #[tokio::test]
 async fn test_read_by_token_returns_none_for_expired() {
-    let config = db::SqliteConfig {
-        path: ":memory:".to_string(),
-        ..Default::default()
+    let config = {
+        let mut c = db::SqliteConfig::default();
+        c.path = ":memory:".to_string();
+        c
     };
     let pool = db::connect(&config).await.unwrap();
     sqlx::query(

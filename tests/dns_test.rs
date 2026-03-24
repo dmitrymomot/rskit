@@ -4,22 +4,15 @@ use modo::dns::{DnsConfig, DomainVerifier, generate_verification_token};
 
 /// Helper to create a verifier pointing at Google's public DNS.
 fn test_verifier() -> DomainVerifier {
-    let config = DnsConfig {
-        nameserver: "8.8.8.8:53".into(),
-        txt_prefix: "_modo-verify".into(),
-        timeout_ms: 5000,
-    };
+    let config = DnsConfig::new("8.8.8.8:53");
     DomainVerifier::from_config(&config).unwrap()
 }
 
 #[tokio::test]
 #[ignore] // requires network access — run with: cargo test --features dns -- --ignored
 async fn check_txt_against_real_dns() {
-    let config = DnsConfig {
-        nameserver: "8.8.8.8:53".into(),
-        txt_prefix: "_dmarc".into(),
-        timeout_ms: 5000,
-    };
+    let mut config = DnsConfig::new("8.8.8.8:53");
+    config.txt_prefix = "_dmarc".into();
     let v = DomainVerifier::from_config(&config).unwrap();
     let result = v.check_txt("google.com", "nonexistent-token-xyz").await;
     assert!(result.is_ok());
@@ -50,11 +43,8 @@ async fn nonexistent_domain_returns_false() {
 #[tokio::test]
 #[ignore] // requires network access — takes 1s due to timeout
 async fn timeout_with_unreachable_nameserver() {
-    let config = DnsConfig {
-        nameserver: "192.0.2.1:53".into(),
-        txt_prefix: "_modo-verify".into(),
-        timeout_ms: 1000,
-    };
+    let mut config = DnsConfig::new("192.0.2.1:53");
+    config.timeout_ms = 1000;
     let v = DomainVerifier::from_config(&config).unwrap();
     let result = v.check_txt("example.com", "token").await;
     assert!(result.is_err());

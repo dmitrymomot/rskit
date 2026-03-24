@@ -11,10 +11,12 @@ async fn test_server_starts_and_stops() {
     use modo::runtime::Task;
     use modo::service::{AppState, Registry};
 
-    let config = modo::server::Config {
-        host: "127.0.0.1".to_string(),
-        port: 0,
-        shutdown_timeout_secs: 5,
+    let config = {
+        let mut c = modo::server::Config::default();
+        c.host = "127.0.0.1".to_string();
+        c.port = 0;
+        c.shutdown_timeout_secs = 5;
+        c
     };
 
     let state: AppState = Registry::new().into_state();
@@ -29,10 +31,12 @@ async fn test_server_starts_and_stops() {
 
 #[tokio::test]
 async fn test_server_binding_failure() {
-    let config = modo::server::Config {
-        host: "999.999.999.999".to_string(),
-        port: 0,
-        shutdown_timeout_secs: 5,
+    let config = {
+        let mut c = modo::server::Config::default();
+        c.host = "999.999.999.999".to_string();
+        c.port = 0;
+        c.shutdown_timeout_secs = 5;
+        c
     };
 
     let router = axum::Router::new();
@@ -56,10 +60,12 @@ fn test_server_config_deserialize_partial() {
 
 #[test]
 fn test_server_config_custom_values() {
-    let config = modo::server::Config {
-        host: "0.0.0.0".to_string(),
-        port: 9090,
-        shutdown_timeout_secs: 60,
+    let config = {
+        let mut c = modo::server::Config::default();
+        c.host = "0.0.0.0".to_string();
+        c.port = 9090;
+        c.shutdown_timeout_secs = 60;
+        c
     };
     assert_eq!(config.host, "0.0.0.0");
     assert_eq!(config.port, 9090);

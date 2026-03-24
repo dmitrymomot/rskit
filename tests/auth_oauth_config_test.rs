@@ -60,14 +60,12 @@ fn callback_params_deserializes() {
 
 #[test]
 fn user_profile_serializes() {
-    let profile = modo::auth::oauth::UserProfile {
-        provider: "google".to_string(),
-        provider_user_id: "123".to_string(),
-        email: "user@example.com".to_string(),
-        email_verified: true,
-        name: Some("Test User".to_string()),
-        avatar_url: None,
-        raw: serde_json::json!({"locale": "en"}),
+    let profile = {
+        let mut p = modo::auth::oauth::UserProfile::new("google", "123", "user@example.com");
+        p.email_verified = true;
+        p.name = Some("Test User".to_string());
+        p.raw = serde_json::json!({"locale": "en"});
+        p
     };
     let json = serde_json::to_string(&profile).unwrap();
     assert!(json.contains("\"email_verified\":true"));
