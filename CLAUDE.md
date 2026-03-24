@@ -39,7 +39,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Error handling: `modo::Error` with status + message + optional source; `modo::Result<T>` alias; `?` everywhere
 - Error constructors: `Error::not_found()`, `Error::bad_request()`, `Error::internal()`, etc.
 - Response types: `Json<T>`, `Html<String>`, `Redirect`, `Response`
-- Service registry: `Registry` is `HashMap<TypeId, Arc<dyn Any>>` — `.add(value)` inserts, `Service<T>` extracts
+- Service registry: `Registry` is `HashMap<TypeId, Arc<dyn Any + Send + Sync>>` — `.add(value)` inserts, `Service<T>` extracts
 - Config: YAML with `${VAR}` / `${VAR:default}` env var substitution, loaded per `APP_ENV`
 - Database: `Pool`, `ReadPool`, `WritePool` newtypes; `Reader`/`Writer` traits; `connect()` / `connect_rw()` for pools
 - Database: `connect()` forces `max_connections=1` for `:memory:` — `connect_rw()` rejects `:memory:` entirely; for in-memory tests use one `Pool` and wrap via `ReadPool::new()`/`WritePool::new()` to share the same underlying connection
