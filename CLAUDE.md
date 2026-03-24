@@ -82,14 +82,14 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `Error`'s `Clone` and `IntoResponse` both drop `source` (can't clone `Box<dyn Error>`) — use `error_code: Option<&'static str>` field to preserve error identity through the response pipeline
 - `Error::with_source(status, msg, source)` is a constructor (3 args) — the builder-style method is `chain(source)` (1 arg); don't confuse them
 - Error identity pattern: `Error::unauthorized("unauthorized").chain(JwtError::Expired).with_code(JwtError::Expired.code())` — `source_as::<T>()` for pre-response, `error_code()` for post-response
-- `Arc<Inner>` pattern (Engine, Broadcaster, Storage) — never double-wrap in `Arc`
+- `Arc<Inner>` pattern (Engine, Broadcaster, Storage, GeoLocator) — `Inner` struct and field must be private (not `pub(crate)`); never double-wrap in `Arc`
 - Conditionally-used items: `#[cfg_attr(not(any(test, feature = "X-test")), allow(dead_code))]`; modules imported behind `cfg` need `pub(crate) mod`
 - Feature-gated modules accessed by integration tests (`tests/*.rs`) must use `pub mod` not `pub(crate) mod` — integration tests are external crate consumers
 - `Cargo.lock` is gitignored (library crate) — don't stage it in commits
 
 ### Rust 2024 / Tooling
 
-- Rust 2024 prelude includes `Future` — no `use std::future::Future` needed for RPITIT traits
+- Rust 2024 prelude includes `Future` — no `use std::future::Future` needed anywhere (RPITIT, `Pin<Box<dyn Future>>`, etc.)
 - `std::env::set_var` / `remove_var` are `unsafe` — tests must wrap in `unsafe {}` blocks
 - Config tests that modify env vars must use `serial_test` to avoid races
 - Tests that modify env vars must clean up BEFORE assertions — panics skip cleanup
