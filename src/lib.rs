@@ -39,6 +39,9 @@ pub mod storage;
 #[cfg(feature = "webhooks")]
 pub mod webhook;
 
+#[cfg(feature = "dns")]
+pub mod dns;
+
 #[cfg(feature = "test-helpers")]
 pub mod testing;
 
