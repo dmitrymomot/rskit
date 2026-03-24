@@ -3,7 +3,7 @@ name = "modo"
 version = "0.1.0"
 edition = "2024"
 description = "Rust web framework for small monolithic apps"
-license = "MIT"
+license = "Apache-2.0"
 repository = "https://github.com/dmitrymomot/modo"
 
 [features]
@@ -12,7 +12,16 @@ full = ["templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "d
 sentry = ["dep:sentry", "dep:sentry-tracing"]
 templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
 sse = ["dep:futures-util"]
-auth = ["dep:argon2", "dep:hmac", "dep:sha1", "dep:subtle", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
+auth = [
+  "dep:argon2",
+  "dep:hmac",
+  "dep:sha1",
+  "dep:subtle",
+  "dep:hyper",
+  "dep:hyper-rustls",
+  "dep:hyper-util",
+  "dep:http-body-util",
+]
 email = ["dep:lettre", "dep:pulldown-cmark"]
 email-test = ["email"]
 storage = ["dep:hmac", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
@@ -31,13 +40,28 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 croner = "2"
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["compression-full", "catch-panic", "trace", "cors", "request-id", "set-header", "sensitive-headers", "fs"] }
+tower-http = { version = "0.6", features = [
+  "compression-full",
+  "catch-panic",
+  "trace",
+  "cors",
+  "request-id",
+  "set-header",
+  "sensitive-headers",
+  "fs",
+] }
 
 axum-extra = { version = "0.12", features = ["cookie-signed", "cookie-private", "multipart"] }
 cookie = { version = "0.18", features = ["signed"] }
 
 # Database
-sqlx = { version = "0.8", features = ["runtime-tokio", "chrono", "migrate", "derive", "sqlite"], default-features = false }
+sqlx = { version = "0.8", features = [
+  "runtime-tokio",
+  "chrono",
+  "migrate",
+  "derive",
+  "sqlite",
+], default-features = false }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -61,7 +85,13 @@ regex = "1"
 sha2 = "0.10"
 ipnet = "2"
 bytes = "1"
-sentry = { version = "0.38", optional = true, default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
+sentry = { version = "0.38", optional = true, default-features = false, features = [
+  "backtrace",
+  "contexts",
+  "panic",
+  "reqwest",
+  "rustls",
+] }
 sentry-tracing = { version = "0.38", optional = true }
 
 # Auth (optional, gated by "auth" feature)
@@ -70,13 +100,27 @@ hmac = { version = "0.12", optional = true }
 sha1 = { version = "0.10", optional = true }
 subtle = { version = "2", optional = true }
 hyper = { version = "1", optional = true }
-hyper-rustls = { version = "0.27", optional = true, default-features = false, features = ["ring", "http1", "tls12", "logging", "webpki-roots"] }
+hyper-rustls = { version = "0.27", optional = true, default-features = false, features = [
+  "ring",
+  "http1",
+  "tls12",
+  "logging",
+  "webpki-roots",
+] }
 hyper-util = { version = "0.1", optional = true, features = ["client-legacy", "http1", "tokio"] }
 http-body-util = { version = "0.1", optional = true }
 base64 = { version = "0.22", optional = true }
 
 # Email (optional, gated by "email" feature)
-lettre = { version = "0.11", optional = true, default-features = false, features = ["smtp-transport", "tokio1", "builder", "hostname", "tokio1-rustls", "ring", "webpki-roots"] }
+lettre = { version = "0.11", optional = true, default-features = false, features = [
+  "smtp-transport",
+  "tokio1",
+  "builder",
+  "hostname",
+  "tokio1-rustls",
+  "ring",
+  "webpki-roots",
+] }
 pulldown-cmark = { version = "0.12", optional = true }
 # Templates (optional, gated by "templates" feature)
 minijinja = { version = "2", optional = true, features = ["loader"] }
