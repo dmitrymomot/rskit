@@ -4,7 +4,34 @@ use crate::error::Result;
 
 use super::context::{CronContext, FromCronContext};
 
+/// A type-erased async function that can be used as a cron job handler.
+///
+/// Implemented automatically for any `async fn` whose arguments all implement
+/// [`FromCronContext`]. Up to 12 handler arguments are supported. A
+/// zero-argument handler is also supported.
+///
+/// Handlers must be `Clone + Send + 'static` so the scheduler can invoke them
+/// across multiple ticks.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use modo::cron::Meta;
+/// use modo::Result;
+///
+/// // Zero-argument handler
+/// async fn heartbeat() -> Result<()> {
+///     Ok(())
+/// }
+///
+/// // Handler that receives job metadata
+/// async fn with_meta(meta: Meta) -> Result<()> {
+///     tracing::info!(job = %meta.name, tick = %meta.tick, "tick");
+///     Ok(())
+/// }
+/// ```
 pub trait CronHandler<Args>: Clone + Send + 'static {
+    /// Invoke the handler with the given execution context.
     fn call(self, ctx: CronContext) -> impl Future<Output = Result<()>> + Send;
 }
 

@@ -6,12 +6,25 @@ use crate::service::RegistrySnapshot;
 
 use super::meta::Meta;
 
+/// Execution context passed to every cron handler invocation.
+///
+/// Carries a snapshot of the service registry and the job metadata for the
+/// current tick. Use [`FromCronContext`] to extract individual values from the
+/// context as handler arguments.
 pub struct CronContext {
     pub(crate) registry: Arc<RegistrySnapshot>,
     pub(crate) meta: Meta,
 }
 
+/// Extracts a value from a [`CronContext`].
+///
+/// Implement this trait to make a type usable as a cron handler argument.
+/// Built-in implementations are provided for [`Service<T>`] and [`Meta`].
 pub trait FromCronContext: Sized {
+    /// Attempt to extract `Self` from the given context.
+    ///
+    /// Returns an error if the required data is not present (e.g. a service
+    /// was not registered before the scheduler was built).
     fn from_cron_context(ctx: &CronContext) -> Result<Self>;
 }
 
