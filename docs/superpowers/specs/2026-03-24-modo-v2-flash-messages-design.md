@@ -66,6 +66,11 @@ impl Flash {
     pub fn error(&self, message: &str);
     pub fn warning(&self, message: &str);
     pub fn info(&self, message: &str);
+
+    /// Read incoming flash messages and mark as read.
+    /// Sets the read flag so middleware clears the cookie on response.
+    /// Returns the same data on repeated calls. Works without templates.
+    pub fn messages(&self) -> Vec<FlashEntry>;
 }
 ```
 
