@@ -32,6 +32,12 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Verify build
+        if: steps.version.outputs.changed == 'true'
+        run: |
+          cargo clippy --all-features --tests -- -D warnings
+          cargo test --all-features
+
       - name: Publish modo
         if: steps.version.outputs.changed == 'true'
         env:

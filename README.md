@@ -84,8 +84,9 @@ modo = { version = "0.1", features = ["full"] }
 ### Minimal example
 
 ```rust
-use modo::{Config, Result, server};
+use modo::{Config, Result};
 use modo::axum::{Router, routing::get};
+use modo::runtime::Task;
 
 async fn hello() -> &'static str {
     "Hello, modo!"
@@ -93,12 +94,13 @@ async fn hello() -> &'static str {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = Config::load()?;
+    let config: Config = modo::config::load("config/")?;
 
     let app = Router::new()
         .route("/", get(hello));
 
-    server::run(app, &config).await
+    let server = modo::server::http(app, &config.server).await?;
+    modo::run!(server).await
 }
 ```
 
