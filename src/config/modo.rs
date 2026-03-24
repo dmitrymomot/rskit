@@ -24,4 +24,7 @@ pub struct Config {
     #[cfg(feature = "templates")]
     #[serde(default)]
     pub template: crate::template::TemplateConfig,
+    #[cfg(feature = "geolocation")]
+    #[serde(default)]
+    pub geolocation: crate::geolocation::GeolocationConfig,
 }

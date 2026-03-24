@@ -43,6 +43,9 @@ pub mod webhook;
 #[cfg(feature = "dns")]
 pub mod dns;
 
+#[cfg(feature = "geolocation")]
+pub mod geolocation;
+
 #[cfg(feature = "test-helpers")]
 pub mod testing;
 
@@ -85,6 +88,9 @@ pub use webhook::{
 
 #[cfg(feature = "dns")]
 pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};
+
+#[cfg(feature = "geolocation")]
+pub use geolocation::{GeolocationConfig, Location};
 
 // Re-exports for user convenience
 pub use axum;
