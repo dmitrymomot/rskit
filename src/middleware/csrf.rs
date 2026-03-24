@@ -15,6 +15,7 @@ use tower::{Layer, Service};
 /// Uses the double-submit cookie pattern: a signed HttpOnly cookie holds the
 /// token, and the client must echo the same token back via the configured
 /// header on state-changing requests.
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct CsrfConfig {
@@ -211,7 +212,13 @@ where
             let verified = cookie_value
                 .and_then(|signed| self.verify_token(&signed))
                 .zip(submitted_token)
-                .is_some_and(|(cookie_token, header_token)| cookie_token == header_token);
+                .is_some_and(|(cookie_token, header_token)| {
+                    use subtle::ConstantTimeEq;
+                    cookie_token
+                        .as_bytes()
+                        .ct_eq(header_token.as_bytes())
+                        .into()
+                });
 
             if verified {
                 Box::pin(async move { inner.call(request).await })
