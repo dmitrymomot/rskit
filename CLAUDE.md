@@ -59,7 +59,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 14 (JWT):** DONE — `src/auth/jwt/` module with `JwtEncoder`/`JwtDecoder`, `Claims<T>`, `HmacSigner` (HS256), `JwtLayer<T>` middleware, pluggable `TokenSource`, optional `Revocation` trait, `Bearer` extractor. Feature-gated under `auth` (73 unit + 13 integration tests)
 - **Plan 15 (Webhook Delivery):** DONE — `src/webhook/` module with `WebhookSender<C>`, `HttpClient` trait, `HyperClient`, `WebhookSecret`, Standard Webhooks signing. Feature-gated under `webhooks`
 - **Plan 16 (Flash Messages):** IN PROGRESS — spec and plan written, ready for implementation. `Flash` extractor with `flash.success()` / `flash.set()` / `flash.messages()`. Template function `flash_messages()`. Cookie-based (signed), read-once-and-clear. No session dependency
-- **Plan 17 (Storage ACL + Upload from URL):** Extend `src/storage/` — `ACL::Private` / `ACL::PublicRead` on upload, `put_from_url()` with auto content-type detection from response headers
+- **Plan 17 (Storage ACL + Upload from URL):** IN PROGRESS — spec and plan written, ready for implementation. `Acl::Private` / `Acl::PublicRead` on `PutOptions`, `x-amz-acl` S3 header, `PutFromUrlInput`, `put_from_url()` / `put_from_url_with()` with streaming fetch and 30s timeout. Feature-gated under `storage`
 - **Plan 18 (DNS Verification):** TXT record ownership check + CNAME verification for custom domain routing
 - **Plan 19 (Geolocation):** MaxMind GeoLite2 `.mmdb` reader, `GeoLocator` service with `lookup(ip) -> Location`. Feature-gated
 
@@ -129,6 +129,10 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - S3 keys: always URI-encode with `uri_encode(key, false)` — omitting breaks keys with spaces/`+`
 - `delete_prefix()` is O(n) network calls — not for large prefixes
 - Hand-parsed XML for ListObjectsV2 — switch to `quick-xml` if parsing breaks
+- Streaming body reads: use `BodyExt::frame()` loop from `http_body_util`, NOT `body.collect().await` — collect buffers everything, defeating mid-stream abort on size limit
+- `http_body` is a transitive dep (via hyper/axum) — use `http_body_util::BodyExt` for `.frame()`, no need to add `http-body` to Cargo.toml
+- `pub(crate)` functions can't be tested from `tests/*.rs` — HTTP server tests for internal functions must be unit tests in the source file
+- `x-amz-acl` header may be silently ignored by S3-compatible providers (RustFS/MinIO) if ACLs are disabled at server level
 
 ### Rate Limiting
 
