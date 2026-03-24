@@ -1,19 +1,22 @@
 use http::HeaderMap;
-use modo::session::meta::{SessionMeta, extract_client_ip, header_str};
+use modo::ip::extract_client_ip;
+use modo::session::meta::{SessionMeta, header_str};
 use std::net::IpAddr;
 
 #[test]
 fn extract_ip_from_xff() {
     let mut headers = HeaderMap::new();
     headers.insert("x-forwarded-for", "1.2.3.4, 5.6.7.8".parse().unwrap());
-    assert_eq!(extract_client_ip(&headers, &[], None), "1.2.3.4");
+    let expected: IpAddr = "1.2.3.4".parse().unwrap();
+    assert_eq!(extract_client_ip(&headers, &[], None), expected);
 }
 
 #[test]
 fn extract_ip_from_x_real_ip() {
     let mut headers = HeaderMap::new();
     headers.insert("x-real-ip", "9.8.7.6".parse().unwrap());
-    assert_eq!(extract_client_ip(&headers, &[], None), "9.8.7.6");
+    let expected: IpAddr = "9.8.7.6".parse().unwrap();
+    assert_eq!(extract_client_ip(&headers, &[], None), expected);
 }
 
 #[test]
@@ -21,20 +24,22 @@ fn extract_ip_prefers_xff() {
     let mut headers = HeaderMap::new();
     headers.insert("x-forwarded-for", "1.2.3.4".parse().unwrap());
     headers.insert("x-real-ip", "9.8.7.6".parse().unwrap());
-    assert_eq!(extract_client_ip(&headers, &[], None), "1.2.3.4");
+    let expected: IpAddr = "1.2.3.4".parse().unwrap();
+    assert_eq!(extract_client_ip(&headers, &[], None), expected);
 }
 
 #[test]
-fn extract_ip_falls_back_to_unknown() {
+fn extract_ip_falls_back_to_localhost() {
     let headers = HeaderMap::new();
-    assert_eq!(extract_client_ip(&headers, &[], None), "unknown");
+    let expected: IpAddr = "127.0.0.1".parse().unwrap();
+    assert_eq!(extract_client_ip(&headers, &[], None), expected);
 }
 
 #[test]
 fn extract_ip_falls_back_to_connect_ip() {
     let headers = HeaderMap::new();
     let ip: IpAddr = "192.168.1.1".parse().unwrap();
-    assert_eq!(extract_client_ip(&headers, &[], Some(ip)), "192.168.1.1");
+    assert_eq!(extract_client_ip(&headers, &[], Some(ip)), ip);
 }
 
 #[test]
@@ -42,10 +47,10 @@ fn untrusted_source_ignores_xff() {
     let mut headers = HeaderMap::new();
     headers.insert("x-forwarded-for", "1.2.3.4".parse().unwrap());
     let untrusted: IpAddr = "203.0.113.5".parse().unwrap();
-    let trusted = vec!["10.0.0.0/24".to_string()];
+    let trusted: Vec<ipnet::IpNet> = vec!["10.0.0.0/24".parse().unwrap()];
     assert_eq!(
         extract_client_ip(&headers, &trusted, Some(untrusted)),
-        "203.0.113.5"
+        untrusted,
     );
 }
 
@@ -54,10 +59,11 @@ fn trusted_proxy_uses_xff() {
     let mut headers = HeaderMap::new();
     headers.insert("x-forwarded-for", "8.8.8.8".parse().unwrap());
     let trusted_ip: IpAddr = "10.0.0.1".parse().unwrap();
-    let trusted = vec!["10.0.0.0/24".to_string()];
+    let trusted: Vec<ipnet::IpNet> = vec!["10.0.0.0/24".parse().unwrap()];
+    let expected: IpAddr = "8.8.8.8".parse().unwrap();
     assert_eq!(
         extract_client_ip(&headers, &trusted, Some(trusted_ip)),
-        "8.8.8.8"
+        expected,
     );
 }
 

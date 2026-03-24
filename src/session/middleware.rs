@@ -11,9 +11,10 @@ use http::{HeaderValue, Request, Response};
 use tower::{Layer, Service};
 
 use crate::cookie::{CookieConfig, Key};
+use crate::ip::ClientIp;
 
 use super::extractor::{SessionAction, SessionState};
-use super::meta::{SessionMeta, extract_client_ip, header_str};
+use super::meta::{SessionMeta, header_str};
 use super::store::Store;
 use super::token::SessionToken;
 
@@ -84,14 +85,21 @@ where
             let cookie_name = &config.cookie_name;
 
             // 1. Extract client IP
-            let connect_ip = request
+            let ip = request
                 .extensions()
-                .get::<ConnectInfo<std::net::SocketAddr>>()
-                .map(|ci| ci.0.ip());
+                .get::<ClientIp>()
+                .map(|c| c.0.to_string())
+                .unwrap_or_else(|| {
+                    // Fallback: no ClientIpLayer applied — use ConnectInfo directly
+                    request
+                        .extensions()
+                        .get::<ConnectInfo<std::net::SocketAddr>>()
+                        .map(|ci| ci.0.ip().to_string())
+                        .unwrap_or_else(|| "unknown".to_string())
+                });
             let headers = request.headers();
 
             // 2. Build SessionMeta
-            let ip = extract_client_ip(headers, &config.trusted_proxies, connect_ip);
             let ua = header_str(headers, "user-agent");
             let accept_lang = header_str(headers, "accept-language");
             let accept_enc = header_str(headers, "accept-encoding");

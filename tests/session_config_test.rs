@@ -8,7 +8,6 @@ fn test_default_values() {
     assert!(config.validate_fingerprint);
     assert_eq!(config.touch_interval_secs, 300);
     assert_eq!(config.max_sessions_per_user, 10);
-    assert!(config.trusted_proxies.is_empty());
 }
 
 #[test]
@@ -45,16 +44,4 @@ max_sessions_per_user: 1
 "#;
     let config: SessionConfig = serde_yaml_ng::from_str(yaml).unwrap();
     assert_eq!(config.max_sessions_per_user, 1);
-}
-
-#[test]
-fn test_trusted_proxies_deserialization() {
-    let yaml = r#"
-trusted_proxies:
-  - "10.0.0.0/8"
-  - "172.16.0.0/12"
-"#;
-    let config: SessionConfig = serde_yaml_ng::from_str(yaml).unwrap();
-    assert_eq!(config.trusted_proxies.len(), 2);
-    assert_eq!(config.trusted_proxies[0], "10.0.0.0/8");
 }

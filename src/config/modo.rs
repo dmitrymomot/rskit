@@ -13,6 +13,8 @@ pub struct Config {
     pub rate_limit: crate::middleware::RateLimitConfig,
     pub session: crate::session::SessionConfig,
     pub job: crate::job::JobConfig,
+    #[serde(default)]
+    pub trusted_proxies: Vec<String>,
     #[cfg(feature = "auth")]
     #[serde(default)]
     pub oauth: crate::auth::oauth::OAuthConfig,

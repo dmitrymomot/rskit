@@ -22,7 +22,6 @@ pub struct SessionConfig {
     pub touch_interval_secs: u64,
     #[serde(deserialize_with = "deserialize_nonzero_usize")]
     pub max_sessions_per_user: usize,
-    pub trusted_proxies: Vec<String>,
 }
 
 impl Default for SessionConfig {
@@ -33,7 +32,6 @@ impl Default for SessionConfig {
             validate_fingerprint: true,
             touch_interval_secs: 300,
             max_sessions_per_user: 10,
-            trusted_proxies: Vec::new(),
         }
     }
 }
