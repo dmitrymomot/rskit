@@ -32,9 +32,11 @@ impl Schedule {
     }
 
     fn parse_cron(expr: &str) -> Self {
-        let cron = croner::Cron::new(expr)
-            .with_seconds_optional()
-            .parse()
+        let parser = croner::parser::CronParser::builder()
+            .seconds(croner::parser::Seconds::Optional)
+            .build();
+        let cron = parser
+            .parse(expr)
             .unwrap_or_else(|e| panic!("invalid cron expression '{expr}': {e}"));
         Self::Cron(Box::new(cron))
     }
