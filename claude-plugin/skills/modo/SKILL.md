@@ -46,7 +46,7 @@ All paths are relative to the `references/` directory inside this skill folder.
 | Database: raw sqlx, Pool/ReadPool/WritePool, Reader/Writer traits | `references/database.md` |
 | Handlers, routing, axum Router, middleware (rate limit, CORS, tracing) | `references/handlers.md` |
 | Sessions, cookies, flash messages | `references/sessions.md` |
-| OAuth2, JWT, password hashing, RBAC | `references/auth.md` |
+| OAuth2, JWT, password hashing, OTP, TOTP, backup codes, RBAC | `references/auth.md` |
 | Background jobs, cron scheduling | `references/jobs.md` |
 | Multi-tenancy (subdomain, header, path, custom) | `references/tenant.md` |
 | MiniJinja templates, i18n, HTMX support | `references/templates.md` |

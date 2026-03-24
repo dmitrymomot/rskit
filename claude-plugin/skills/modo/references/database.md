@@ -137,7 +137,7 @@ Loaded from YAML. Key defaults:
 | `busy_timeout` | `5000` ms |
 | `cache_size` | `-2000` (2 MB) |
 
-`reader` and `writer` fields hold `PoolOverrides` for `connect_rw()`. Writer defaults: `max_connections=1`, `busy_timeout=2000`. Reader defaults: `busy_timeout=1000`, `cache_size=-16000` (16 MB), `mmap_size=256 MiB`.
+`reader` and `writer` fields hold `PoolOverrides` for `connect_rw()`. Reader defaults: `busy_timeout=1000`, `cache_size=-16000` (16 MB), `mmap_size=256 MiB`. Writer defaults: `max_connections=1`, `busy_timeout=2000`, `cache_size=-16000` (16 MB), `mmap_size=256 MiB`.
 
 ## Registry Integration
 

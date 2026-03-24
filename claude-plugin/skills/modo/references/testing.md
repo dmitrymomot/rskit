@@ -249,6 +249,7 @@ let session = TestSession::with_config(&db, session_config, cookie_config).await
 
 | Method | Description |
 |---|---|
+| `with_config(&db, session_config, cookie_config).await` | Create with custom `SessionConfig` and `CookieConfig`. |
 | `authenticate(user_id).await` | Create a session, return signed cookie string (e.g., `"_session=<signed>"`). |
 | `authenticate_with(user_id, data).await` | Same, with custom JSON session data. |
 | `layer()` | Return a `SessionLayer` to apply to `TestAppBuilder`. |

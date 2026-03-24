@@ -1,6 +1,6 @@
-# Auth Reference (OAuth2, JWT, RBAC)
+# Auth Reference (OAuth2, JWT, Password, TOTP, RBAC)
 
-OAuth2 and JWT are feature-gated under `auth`. RBAC is always available (no feature gate).
+OAuth2, JWT, password hashing, OTP, TOTP, and backup codes are feature-gated under `auth`. RBAC is always available (no feature gate).
 
 ---
 
@@ -103,6 +103,118 @@ pub use auth::oauth::{
     AuthorizationRequest, CallbackParams, GitHub, Google, OAuthConfig,
     OAuthProvider, OAuthProviderConfig, OAuthState, UserProfile,
 };
+```
+
+---
+
+## Password Hashing
+
+**Module:** `modo::auth::password` (feature-gated under `auth`)
+
+Argon2id password hashing and verification. Runs on a blocking thread via `tokio::task::spawn_blocking` to avoid starving the async runtime.
+
+### PasswordConfig
+
+```rust
+#[derive(Debug, Clone, Deserialize)]
+pub struct PasswordConfig {
+    pub memory_cost_kib: u32,  // default: 19456 (19 MiB)
+    pub time_cost: u32,        // default: 2
+    pub parallelism: u32,      // default: 1
+    pub output_len: usize,     // default: 32
+}
+```
+
+Defaults follow OWASP recommendations.
+
+### Functions
+
+```rust
+// Hash a password, returns PHC-formatted string (embeds algorithm, params, salt, hash)
+pub async fn hash(password: &str, config: &PasswordConfig) -> Result<String>
+
+// Verify a password against a PHC-formatted hash; returns true if match, false if not
+// Only errors on malformed hash string, never on wrong password
+pub async fn verify(password: &str, hash: &str) -> Result<bool>
+```
+
+Re-exported: `PasswordConfig` from `modo::auth::PasswordConfig`.
+
+---
+
+## OTP (One-Time Passwords)
+
+**Module:** `modo::auth::otp` (feature-gated under `auth`)
+
+Numeric one-time password generation and constant-time verification.
+
+### Functions
+
+```rust
+// Generate a numeric OTP of `length` digits. Returns (plaintext_code, sha256_hex_hash).
+// Store only the hash; send the plaintext to the user.
+pub fn generate(length: usize) -> (String, String)
+
+// Verify a code against a SHA-256 hex hash. Constant-time comparison.
+pub fn verify(code: &str, hash: &str) -> bool
+```
+
+---
+
+## TOTP (Time-Based OTP)
+
+**Module:** `modo::auth::totp` (feature-gated under `auth`)
+
+RFC 6238 TOTP authenticator compatible with Google Authenticator, Authy, etc.
+
+### TotpConfig
+
+```rust
+#[derive(Debug, Clone, Deserialize)]
+pub struct TotpConfig {
+    pub digits: u32,      // default: 6
+    pub step_secs: u64,   // default: 30
+    pub window: u32,      // default: 1 (±1 step tolerance)
+}
+```
+
+### Totp
+
+```rust
+Totp::new(secret: Vec<u8>, config: &TotpConfig) -> Self
+Totp::from_base32(encoded: &str, config: &TotpConfig) -> Result<Self>
+Totp::generate_secret() -> String  // 20-byte random, base32-encoded
+```
+
+Methods:
+- `generate() -> String` -- current TOTP code using system clock
+- `generate_at(timestamp: u64) -> String` -- code for a specific Unix timestamp
+- `verify(code: &str) -> bool` -- verify against current time with window tolerance
+- `verify_at(code: &str, timestamp: u64) -> bool` -- verify against specific timestamp
+- `otpauth_uri(issuer: &str, account: &str) -> String` -- `otpauth://totp/` URI for QR provisioning
+
+Verification uses constant-time comparison.
+
+Re-exported: `Totp`, `TotpConfig` from `modo::auth::{Totp, TotpConfig}`.
+
+---
+
+## Backup Recovery Codes
+
+**Module:** `modo::auth::backup` (feature-gated under `auth`)
+
+One-time backup recovery codes formatted as `xxxx-xxxx` (8 lowercase alphanumeric characters).
+
+### Functions
+
+```rust
+// Generate `count` backup codes. Returns Vec<(plaintext_code, sha256_hex_hash)>.
+// Store only the hashes; display plaintext once.
+pub fn generate(count: usize) -> Vec<(String, String)>
+
+// Verify a code against a SHA-256 hex hash. Strips hyphens and lowercases before comparison.
+// Constant-time comparison.
+pub fn verify(code: &str, hash: &str) -> bool
 ```
 
 ---
