@@ -5,6 +5,24 @@ use crate::error::{Error, Result};
 use super::config::SqliteConfig;
 use super::pool::{Pool, ReadPool, WritePool};
 
+/// Opens a single SQLite connection pool from `config`.
+///
+/// All configured PRAGMAs (`journal_mode`, `synchronous`, `foreign_keys`,
+/// `busy_timeout`, `cache_size`, and optionally `mmap_size`, `temp_store`,
+/// `wal_autocheckpoint`) are applied on every new connection via
+/// `after_connect`.
+///
+/// The database file and any missing parent directories are created
+/// automatically when `path` is not `":memory:"`.
+///
+/// For `":memory:"` databases with `max_connections > 1`, this function logs a
+/// warning and forces `max_connections = 1` because each SQLite connection to
+/// `:memory:` gets its own isolated database instance.
+///
+/// # Errors
+///
+/// Returns [`crate::Error::internal`] if the pool cannot be created or if the
+/// database directory cannot be created.
 pub async fn connect(config: &SqliteConfig) -> Result<Pool> {
     let url = build_url(&config.path, false)?;
 
@@ -25,6 +43,23 @@ pub async fn connect(config: &SqliteConfig) -> Result<Pool> {
     Ok(Pool::new(pool))
 }
 
+/// Opens separate read and write SQLite connection pools from `config`.
+///
+/// The read pool uses `config.reader` overrides (defaulting to many
+/// connections, lower busy timeout, and large cache). The write pool uses
+/// `config.writer` overrides (defaulting to `max_connections = 1` to
+/// serialize writes).
+///
+/// All configured PRAGMAs are applied on every new connection for both pools.
+///
+/// # Errors
+///
+/// Returns [`crate::Error::internal`] if `config.path` is `":memory:"` —
+/// in-memory databases cannot be shared across separate connection pools.
+/// Use [`connect`] and wrap via [`ReadPool::new`] / [`WritePool::new`] to
+/// share a single in-memory pool in tests.
+///
+/// Also returns [`crate::Error::internal`] if either pool cannot be created.
 pub async fn connect_rw(config: &SqliteConfig) -> Result<(ReadPool, WritePool)> {
     if config.path == ":memory:" {
         return Err(Error::internal(

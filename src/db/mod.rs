@@ -1,3 +1,37 @@
+//! SQLite database layer for modo.
+//!
+//! This module provides connection pooling, migration support, and type-safe
+//! pool wrappers built on top of [`sqlx`]. It supports two connection modes:
+//!
+//! - **Single pool** ([`connect`]) — one [`Pool`] for both reads and writes.
+//!   Use this for simple apps or in-memory databases.
+//! - **Read/write split** ([`connect_rw`]) — separate [`ReadPool`] and
+//!   [`WritePool`] for workloads that benefit from concurrent readers and a
+//!   single serialized writer. Not supported for `:memory:` databases.
+//!
+//! # Quick start
+//!
+//! ```ignore
+//! use modo::db::{self, SqliteConfig};
+//!
+//! let config = SqliteConfig {
+//!     path: "data/app.db".to_string(),
+//!     ..Default::default()
+//! };
+//! let pool = db::connect(&config).await?;
+//! db::migrate("migrations", &pool).await?;
+//! ```
+//!
+//! # Graceful shutdown
+//!
+//! Wrap a pool in [`ManagedPool`] via [`managed`] to integrate with the
+//! `run!` macro shutdown sequence:
+//!
+//! ```ignore
+//! let managed = db::managed(pool.clone());
+//! run!(server, managed);
+//! ```
+
 mod config;
 mod connect;
 mod error;
@@ -12,4 +46,5 @@ pub use managed::{ManagedPool, managed};
 pub use migrate::migrate;
 pub use pool::{InnerPool, Pool, ReadPool, Reader, WritePool, Writer};
 
+/// Type alias for [`SqliteConfig`].
 pub type Config = SqliteConfig;
