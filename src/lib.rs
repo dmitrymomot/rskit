@@ -81,6 +81,9 @@ pub use webhook::{
     HttpClient, HyperClient, SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender,
 };
 
+#[cfg(feature = "dns")]
+pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};
+
 // Re-exports for user convenience
 pub use axum;
 pub use serde;
