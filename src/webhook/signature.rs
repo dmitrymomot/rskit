@@ -10,7 +10,7 @@ use crate::error::{Error, Result};
 
 type HmacSha256 = Hmac<Sha256>;
 
-/// HMAC-SHA256 of arbitrary content, returned as standard base64.
+/// Compute HMAC-SHA256 of `content` using `secret`, returned as standard base64.
 pub fn sign(secret: &WebhookSecret, content: &[u8]) -> String {
     let mut mac =
         HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
@@ -18,8 +18,10 @@ pub fn sign(secret: &WebhookSecret, content: &[u8]) -> String {
     BASE64.encode(mac.finalize().into_bytes())
 }
 
-/// Constant-time verify via `hmac::Mac::verify_slice`.
-/// Decodes the base64 signature and compares against HMAC-SHA256 of content.
+/// Verify a base64-encoded HMAC-SHA256 signature against `content` using `secret`.
+///
+/// Uses constant-time comparison. Returns `false` if `signature` is not valid
+/// base64 or does not match.
 pub fn verify(secret: &WebhookSecret, content: &[u8], signature: &str) -> bool {
     let sig_bytes = match BASE64.decode(signature) {
         Ok(b) => b,
@@ -31,18 +33,24 @@ pub fn verify(secret: &WebhookSecret, content: &[u8], signature: &str) -> bool {
     mac.verify_slice(&sig_bytes).is_ok()
 }
 
-/// Headers produced by signing a webhook payload.
+/// The three Standard Webhooks headers produced by [`sign_headers`].
 pub struct SignedHeaders {
+    /// Value for the `webhook-id` header.
     pub webhook_id: String,
+    /// Value for the `webhook-timestamp` header (Unix seconds).
     pub webhook_timestamp: i64,
+    /// Value for the `webhook-signature` header (`v1,<base64>` entries separated by spaces).
     pub webhook_signature: String,
 }
 
-/// Assemble Standard Webhooks signed content and sign with each secret.
-/// Returns headers ready to set on the request.
+/// Build Standard Webhooks signed content and sign it with every secret in `secrets`.
+///
+/// Each secret produces one `v1,<base64>` entry; multiple entries are joined with
+/// a space, which supports key rotation on both sender and receiver sides.
 ///
 /// # Panics
-/// Panics if `secrets` is empty. Callers must validate before calling.
+///
+/// Panics if `secrets` is empty. `WebhookSender::send` validates this before calling.
 pub fn sign_headers(
     secrets: &[&WebhookSecret],
     id: &str,
@@ -64,9 +72,12 @@ pub fn sign_headers(
     }
 }
 
-/// Parse Standard Webhooks headers and verify the signature.
-/// Tries each `v1,` signature in the header against each secret.
-/// Validates timestamp is within `tolerance` of now.
+/// Parse Standard Webhooks headers from an incoming request and verify the signature.
+///
+/// Reads `webhook-id`, `webhook-timestamp`, and `webhook-signature` from `headers`.
+/// Validates that the timestamp is within `tolerance` of now (replay protection),
+/// then tries every `v1,` signature entry against every secret.
+/// Returns `Ok(())` as soon as one combination matches.
 pub fn verify_headers(
     secrets: &[&WebhookSecret],
     headers: &http::HeaderMap,

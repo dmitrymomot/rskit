@@ -14,6 +14,10 @@ struct WebhookSenderInner<C: HttpClient> {
     user_agent: String,
 }
 
+/// High-level webhook sender that signs and delivers payloads using the
+/// Standard Webhooks protocol.
+///
+/// Clone-cheap: the inner state is wrapped in `Arc`.
 pub struct WebhookSender<C: HttpClient> {
     inner: Arc<WebhookSenderInner<C>>,
 }

@@ -9,6 +9,10 @@ use crate::error::{Error, Result};
 
 const PREFIX: &str = "whsec_";
 
+/// A webhook signing secret stored as raw bytes.
+///
+/// Serialized as `whsec_<base64>` strings for config files and APIs.
+/// `Debug` output is always redacted — key bytes are never printed.
 pub struct WebhookSecret {
     key: Vec<u8>,
 }

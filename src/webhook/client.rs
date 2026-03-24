@@ -11,15 +11,20 @@ use hyper_util::rt::TokioExecutor;
 
 use crate::error::{Error, Result};
 
-/// Response from a webhook delivery attempt.
+/// Response returned after a webhook delivery attempt.
 pub struct WebhookResponse {
+    /// HTTP status code returned by the endpoint.
     pub status: StatusCode,
+    /// Response body bytes.
     pub body: Bytes,
 }
 
-/// Trait for sending webhook HTTP POST requests.
-/// RPITIT — not object-safe, used as concrete type parameter.
+/// Trait for sending a single webhook HTTP POST request.
+///
+/// Uses return-position `impl Trait` (not object-safe). Use a concrete
+/// type parameter such as `WebhookSender<HyperClient>` rather than `dyn HttpClient`.
 pub trait HttpClient: Send + Sync + 'static {
+    /// Send an HTTP POST to `url` with the given `headers` and `body`.
     fn post(
         &self,
         url: &str,
@@ -38,6 +43,7 @@ pub struct HyperClient {
 }
 
 impl HyperClient {
+    /// Create a new client. Requests that exceed `timeout` return an error.
     pub fn new(timeout: Duration) -> Self {
         let connector = HttpsConnectorBuilder::new()
             .with_webpki_roots()

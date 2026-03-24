@@ -1,3 +1,8 @@
+//! Outbound webhook delivery following the Standard Webhooks specification.
+//!
+//! This module provides signed outbound HTTP POST requests using HMAC-SHA256.
+//! All types require the `"webhooks"` feature.
+
 mod client;
 mod secret;
 mod sender;
