@@ -115,6 +115,14 @@ impl Error {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, msg)
     }
 
+    pub fn bad_gateway(msg: impl Into<String>) -> Self {
+        Self::new(StatusCode::BAD_GATEWAY, msg)
+    }
+
+    pub fn gateway_timeout(msg: impl Into<String>) -> Self {
+        Self::new(StatusCode::GATEWAY_TIMEOUT, msg)
+    }
+
     /// Create an error indicating a broadcast subscriber lagged behind.
     pub fn lagged(skipped: u64) -> Self {
         Self {
@@ -294,5 +302,19 @@ mod tests {
         let response = err.into_response();
         let ext_err = response.extensions().get::<Error>().unwrap();
         assert_eq!(ext_err.error_code(), Some("jwt:expired"));
+    }
+
+    #[test]
+    fn bad_gateway_error_has_502_status() {
+        let err = Error::bad_gateway("upstream failed");
+        assert_eq!(err.status(), StatusCode::BAD_GATEWAY);
+        assert_eq!(err.message(), "upstream failed");
+    }
+
+    #[test]
+    fn gateway_timeout_error_has_504_status() {
+        let err = Error::gateway_timeout("timed out");
+        assert_eq!(err.status(), StatusCode::GATEWAY_TIMEOUT);
+        assert_eq!(err.message(), "timed out");
     }
 }
