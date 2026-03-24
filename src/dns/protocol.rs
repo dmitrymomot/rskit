@@ -6,14 +6,14 @@ use super::error::DnsError;
 
 /// Which DNS record type to query.
 #[derive(Debug, Clone, Copy)]
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code)]
 pub(crate) enum RecordType {
     Txt,
     Cname,
 }
 
 /// Build a DNS query packet. Returns (query_id, serialized_bytes).
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code)]
 pub(crate) fn build_query(domain: &str, record_type: RecordType) -> Result<(u16, Vec<u8>)> {
     let id: u16 = (rand::random::<u16>()) | 1; // avoid id=0
     let mut packet = Packet::new_query(id);
@@ -40,7 +40,7 @@ pub(crate) fn build_query(domain: &str, record_type: RecordType) -> Result<(u16,
 /// Validate a DNS response: parse, check ID, check RCODE.
 /// Returns the parsed packet on success.
 /// NXDOMAIN (NameError) returns Ok with an empty answers section.
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code)]
 pub(crate) fn validate_response(data: &[u8], expected_id: u16) -> Result<Packet<'_>> {
     let packet = Packet::parse(data).map_err(|_| {
         Error::bad_gateway("dns response malformed")
