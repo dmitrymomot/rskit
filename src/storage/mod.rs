@@ -14,4 +14,4 @@ pub use buckets::Buckets;
 pub use config::BucketConfig;
 pub use config::{gb, kb, mb};
 pub use facade::{PutInput, Storage};
-pub use options::PutOptions;
+pub use options::{Acl, PutOptions};

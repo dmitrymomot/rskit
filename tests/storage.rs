@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use modo::extractor::UploadedFile;
-use modo::storage::{Buckets, PutInput, PutOptions, Storage};
+use modo::storage::{Acl, Buckets, PutInput, PutOptions, Storage};
 
 #[tokio::test]
 async fn full_round_trip() {
@@ -77,6 +77,7 @@ async fn put_with_options() {
                 content_disposition: Some("attachment".into()),
                 cache_control: Some("no-cache".into()),
                 content_type: Some("text/plain".into()),
+                ..Default::default()
             },
         )
         .await
@@ -129,4 +130,52 @@ async fn delete_prefix_removes_multiple() {
 async fn delete_prefix_empty_is_noop() {
     let storage = Storage::memory();
     storage.delete_prefix("nonexistent/").await.unwrap();
+}
+
+#[tokio::test]
+async fn put_with_acl_public_read() {
+    let storage = Storage::memory();
+    let input = PutInput {
+        data: bytes::Bytes::from("public data"),
+        prefix: "public/".into(),
+        filename: Some("image.png".into()),
+        content_type: "image/png".into(),
+    };
+
+    let key = storage
+        .put_with(
+            &input,
+            PutOptions {
+                acl: Some(Acl::PublicRead),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(storage.exists(&key).await.unwrap());
+}
+
+#[tokio::test]
+async fn put_with_acl_private() {
+    let storage = Storage::memory();
+    let input = PutInput {
+        data: bytes::Bytes::from("private data"),
+        prefix: "private/".into(),
+        filename: Some("doc.pdf".into()),
+        content_type: "application/pdf".into(),
+    };
+
+    let key = storage
+        .put_with(
+            &input,
+            PutOptions {
+                acl: Some(Acl::Private),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(storage.exists(&key).await.unwrap());
 }

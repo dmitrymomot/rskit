@@ -71,7 +71,7 @@ pub use template::{
 };
 
 #[cfg(feature = "storage")]
-pub use storage::{BucketConfig, Buckets, PutInput, PutOptions, Storage};
+pub use storage::{Acl, BucketConfig, Buckets, PutInput, PutOptions, Storage};
 
 #[cfg(feature = "webhooks")]
 pub use webhook::{
