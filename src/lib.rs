@@ -57,7 +57,10 @@ pub use ip::{ClientIp, ClientIpLayer};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
 pub use session::{Session, SessionConfig, SessionData, SessionToken};
-pub use tenant::{HasTenantId, Tenant, TenantId, TenantResolver, TenantStrategy};
+pub use tenant::{
+    HasTenantId, Tenant, TenantId, TenantLayer, TenantMiddleware, TenantResolver, TenantStrategy,
+    middleware as tenant_middleware,
+};
 pub use validate::{Validate, ValidationError, Validator};
 
 #[cfg(feature = "auth")]
