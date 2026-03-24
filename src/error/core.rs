@@ -1,9 +1,38 @@
+//! Core [`Error`] type and [`Result`] alias.
+
 use axum::response::{IntoResponse, Response};
 use http::StatusCode;
 use std::fmt;
 
+/// A type alias for `std::result::Result<T, Error>`.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// The primary error type for the modo framework.
+///
+/// `Error` carries:
+/// - an HTTP [`StatusCode`] that will be used as the response status,
+/// - a human-readable `message` string,
+/// - an optional structured `details` payload (arbitrary JSON),
+/// - an optional boxed `source` error for causal chaining,
+/// - an optional static `error_code` string that survives the response pipeline,
+/// - a `lagged` flag used internally by the SSE broadcaster.
+///
+/// # Conversion to HTTP response
+///
+/// Calling `into_response()` produces a JSON body:
+///
+/// ```json
+/// { "error": { "status": 404, "message": "user not found" } }
+/// ```
+///
+/// If [`with_details`](Error::with_details) was called, a `"details"` field is included.
+/// A copy of the error (without `source`) is also stored in response extensions so middleware
+/// can inspect it after the fact.
+///
+/// # Clone behaviour
+///
+/// Cloning an `Error` drops the `source` field because `Box<dyn Error>` is not `Clone`.
+/// The `error_code`, `details`, and all other fields are preserved.
 pub struct Error {
     status: StatusCode,
     message: String,
@@ -14,6 +43,7 @@ pub struct Error {
 }
 
 impl Error {
+    /// Create a new error with the given HTTP status code and message.
     pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
         Self {
             status,
@@ -25,6 +55,9 @@ impl Error {
         }
     }
 
+    /// Create a new error with a status code, message, and a boxed source error.
+    ///
+    /// Use [`chain`](Error::chain) instead when constructing errors with the builder pattern.
     pub fn with_source(
         status: StatusCode,
         message: impl Into<String>,
@@ -40,18 +73,22 @@ impl Error {
         }
     }
 
+    /// Returns the HTTP status code of this error.
     pub fn status(&self) -> StatusCode {
         self.status
     }
 
+    /// Returns the human-readable error message.
     pub fn message(&self) -> &str {
         &self.message
     }
 
+    /// Returns the optional structured details payload.
     pub fn details(&self) -> Option<&serde_json::Value> {
         self.details.as_ref()
     }
 
+    /// Attach a structured JSON details payload (builder-style).
     pub fn with_details(mut self, details: serde_json::Value) -> Self {
         self.details = Some(details);
         self
@@ -64,6 +101,9 @@ impl Error {
     }
 
     /// Attach a static error code to preserve error identity through the response pipeline.
+    ///
+    /// The error code is included in the copy stored in response extensions and can be retrieved
+    /// after `into_response()` via [`Error::error_code`].
     pub fn with_code(mut self, code: &'static str) -> Self {
         self.error_code = Some(code);
         self
@@ -75,55 +115,71 @@ impl Error {
     }
 
     /// Downcast the source error to a concrete type.
+    ///
+    /// Returns `None` if no source is set or if the source is not of type `T`.
     pub fn source_as<T: std::error::Error + 'static>(&self) -> Option<&T> {
         self.source.as_ref()?.downcast_ref::<T>()
     }
 
+    /// Create a `400 Bad Request` error.
     pub fn bad_request(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::BAD_REQUEST, msg)
     }
 
+    /// Create a `401 Unauthorized` error.
     pub fn unauthorized(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, msg)
     }
 
+    /// Create a `403 Forbidden` error.
     pub fn forbidden(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::FORBIDDEN, msg)
     }
 
+    /// Create a `404 Not Found` error.
     pub fn not_found(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::NOT_FOUND, msg)
     }
 
+    /// Create a `409 Conflict` error.
     pub fn conflict(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::CONFLICT, msg)
     }
 
+    /// Create a `422 Unprocessable Entity` error.
     pub fn unprocessable_entity(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::UNPROCESSABLE_ENTITY, msg)
     }
 
+    /// Create a `429 Too Many Requests` error.
     pub fn too_many_requests(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::TOO_MANY_REQUESTS, msg)
     }
 
+    /// Create a `413 Payload Too Large` error.
     pub fn payload_too_large(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::PAYLOAD_TOO_LARGE, msg)
     }
 
+    /// Create a `500 Internal Server Error`.
     pub fn internal(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, msg)
     }
 
+    /// Create a `502 Bad Gateway` error.
     pub fn bad_gateway(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::BAD_GATEWAY, msg)
     }
 
+    /// Create a `504 Gateway Timeout` error.
     pub fn gateway_timeout(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::GATEWAY_TIMEOUT, msg)
     }
 
     /// Create an error indicating a broadcast subscriber lagged behind.
+    ///
+    /// The resulting error has a `500 Internal Server Error` status and [`is_lagged`](Error::is_lagged)
+    /// returns `true`. `skipped` is the number of messages that were dropped.
     pub fn lagged(skipped: u64) -> Self {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
@@ -141,6 +197,9 @@ impl Error {
     }
 }
 
+/// Clones the error, dropping the `source` field (which is not `Clone`).
+///
+/// All other fields — `status`, `message`, `error_code`, `details`, and `lagged` — are preserved.
 impl Clone for Error {
     fn clone(&self) -> Self {
         Self {
@@ -181,6 +240,18 @@ impl std::error::Error for Error {
     }
 }
 
+/// Converts `Error` into an axum [`Response`].
+///
+/// Produces a JSON body of the form:
+///
+/// ```json
+/// { "error": { "status": 422, "message": "validation failed" } }
+/// ```
+///
+/// If [`with_details`](Error::with_details) was called, a `"details"` key is added under `"error"`.
+///
+/// A copy of the error (without the `source` field) is stored in response extensions under
+/// the type `Error` so that downstream middleware can inspect it.
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let status = self.status;
