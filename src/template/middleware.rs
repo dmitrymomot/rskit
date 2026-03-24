@@ -1,5 +1,7 @@
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::task::{Context, Poll};
 
 use axum::body::Body;
@@ -9,6 +11,7 @@ use tower::{Layer, Service};
 use super::context::TemplateContext;
 use super::engine::Engine;
 use super::locale;
+use crate::flash::state::FlashState;
 
 // --- Layer ---
 
@@ -103,6 +106,21 @@ where
                 // csrf_token (if present in extensions)
                 if let Some(csrf) = parts.extensions.get::<crate::middleware::CsrfToken>() {
                     ctx.set("csrf_token", minijinja::Value::from(csrf.0.clone()));
+                }
+
+                // flash_messages() template function
+                if let Some(flash_state) = parts.extensions.get::<Arc<FlashState>>() {
+                    let state = flash_state.clone();
+                    ctx.set(
+                        "flash_messages",
+                        minijinja::Value::from_function(
+                            move |_args: &[minijinja::Value]| -> Result<minijinja::Value, minijinja::Error> {
+                                state.read.store(true, Ordering::Release);
+                                let entries = state.incoming_as_template_value();
+                                Ok(minijinja::Value::from_serialize(&entries))
+                            },
+                        ),
+                    );
                 }
 
                 // Insert TemplateContext into extensions
@@ -282,5 +300,52 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(body, "abc123");
+    }
+
+    #[tokio::test]
+    async fn injects_flash_messages_function() {
+        use crate::flash::state::{FlashEntry, FlashState};
+
+        let (_dir, engine) = test_engine();
+        let tpl_dir = _dir.path().join("templates");
+        std::fs::write(
+            tpl_dir.join("flash_test.html"),
+            "{% for msg in flash_messages() %}{% for level, text in msg|items %}{{ level }}:{{ text }};{% endfor %}{% endfor %}",
+        ).unwrap();
+
+        let entries = vec![
+            FlashEntry {
+                level: "error".into(),
+                message: "bad".into(),
+            },
+            FlashEntry {
+                level: "info".into(),
+                message: "ok".into(),
+            },
+        ];
+        let flash_state = Arc::new(FlashState::new(entries));
+
+        // Use the engine directly to render, simulating what Renderer does
+        let mut ctx = TemplateContext::default();
+
+        // Register flash_messages function (same logic as middleware)
+        let state = flash_state.clone();
+        ctx.set(
+            "flash_messages",
+            minijinja::Value::from_function(
+                move |_args: &[minijinja::Value]| -> Result<minijinja::Value, minijinja::Error> {
+                    state.read.store(true, std::sync::atomic::Ordering::Release);
+                    let entries = state.incoming_as_template_value();
+                    Ok(minijinja::Value::from_serialize(&entries))
+                },
+            ),
+        );
+
+        let merged = ctx.merge(minijinja::context! {});
+        let result = engine.render("flash_test.html", merged).unwrap();
+
+        assert!(result.contains("error:bad;"));
+        assert!(result.contains("info:ok;"));
+        assert!(flash_state.was_read());
     }
 }
