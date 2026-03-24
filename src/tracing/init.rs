@@ -2,11 +2,36 @@ use serde::Deserialize;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{EnvFilter, fmt};
 
+/// Configuration for the tracing subscriber.
+///
+/// Embedded in the top-level `modo::Config` as the `tracing` section:
+///
+/// ```yaml
+/// tracing:
+///   level: info
+///   format: pretty   # "pretty" | "json" | compact (any other value)
+/// ```
+///
+/// All fields have sane defaults so the entire section can be omitted.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    /// Minimum log level when `RUST_LOG` is not set.
+    ///
+    /// Accepts any valid [`tracing_subscriber::EnvFilter`] directive such as
+    /// `"info"`, `"debug"`, or `"myapp=debug,modo=info"`.
+    /// Defaults to `"info"`.
     pub level: String,
+
+    /// Output format: `"pretty"`, `"json"`, or compact (any other value).
+    ///
+    /// Defaults to `"pretty"`.
     pub format: String,
+
+    /// Sentry error-reporting settings.
+    ///
+    /// Requires the `sentry` feature. When absent or when the DSN
+    /// is empty, Sentry is not initialised.
     #[cfg(feature = "sentry")]
     pub sentry: Option<super::sentry::SentryConfig>,
 }
@@ -22,6 +47,22 @@ impl Default for Config {
     }
 }
 
+/// Initialise the global tracing subscriber.
+///
+/// Reads the log level from `RUST_LOG` if set; falls back to
+/// [`Config::level`] otherwise. Selects the output format from
+/// [`Config::format`].
+///
+/// When the `sentry` feature is enabled and a non-empty DSN is supplied,
+/// the Sentry SDK is also initialised and wired to the tracing subscriber
+/// via `sentry_tracing`.
+///
+/// Returns a `TracingGuard` that must be kept alive for the duration of
+/// the process. Dropping it flushes any buffered Sentry events.
+///
+/// Calling this function more than once in the same process is harmless —
+/// subsequent calls attempt `try_init` and silently ignore the
+/// "already initialised" error.
 pub fn init(config: &Config) -> crate::error::Result<super::sentry::TracingGuard> {
     let filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.level));

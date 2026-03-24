@@ -4,13 +4,36 @@ use crate::runtime::Task;
 #[cfg(feature = "sentry")]
 use serde::Deserialize;
 
+/// Sentry error and performance reporting settings.
+///
+/// Requires the `sentry` feature. Embed in `Config::sentry` and supply
+/// a valid DSN to enable Sentry.
+///
+/// ```yaml
+/// tracing:
+///   sentry:
+///     dsn: "https://key@sentry.io/project"
+///     environment: production
+///     sample_rate: 1.0
+///     traces_sample_rate: 0.1
+/// ```
 #[cfg(feature = "sentry")]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SentryConfig {
+    /// Sentry DSN. When empty, Sentry is not initialised.
     pub dsn: String,
+
+    /// Environment tag reported to Sentry (e.g. `"production"`).
+    ///
+    /// Defaults to the value of `APP_ENV` (see [`crate::config::env`]).
     pub environment: String,
+
+    /// Fraction of error events to send (0.0–1.0). Defaults to `1.0`.
     pub sample_rate: f32,
+
+    /// Fraction of transactions to trace for performance monitoring (0.0–1.0).
+    /// Defaults to `0.1`.
     pub traces_sample_rate: f32,
 }
 
@@ -26,6 +49,14 @@ impl Default for SentryConfig {
     }
 }
 
+/// RAII guard that keeps the tracing subscriber and Sentry client alive.
+///
+/// Returned by [`crate::tracing::init`]. Hold this value for the entire
+/// lifetime of the process — typically by passing it to [`crate::run!`]
+/// or calling [`Task::shutdown`] at the end of `main`.
+///
+/// Dropping the guard without calling `shutdown` is safe but may not flush
+/// all buffered Sentry events.
 pub struct TracingGuard {
     #[cfg(feature = "sentry")]
     _sentry: Option<sentry::ClientInitGuard>,
@@ -38,6 +69,7 @@ impl Default for TracingGuard {
 }
 
 impl TracingGuard {
+    /// Create a guard with no active Sentry client.
     pub fn new() -> Self {
         Self {
             #[cfg(feature = "sentry")]
@@ -45,6 +77,9 @@ impl TracingGuard {
         }
     }
 
+    /// Create a guard that owns an active Sentry client.
+    ///
+    /// Requires the `sentry` feature.
     #[cfg(feature = "sentry")]
     pub fn with_sentry(guard: sentry::ClientInitGuard) -> Self {
         Self {
@@ -54,6 +89,7 @@ impl TracingGuard {
 }
 
 impl Task for TracingGuard {
+    /// Flush pending Sentry events (up to 5 seconds) and release the client.
     async fn shutdown(self) -> Result<()> {
         #[cfg(feature = "sentry")]
         if let Some(guard) = self._sentry {
