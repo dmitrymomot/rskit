@@ -1,3 +1,23 @@
+//! Verification token generation for DNS domain ownership proofs.
+
+/// Generate a short, time-sortable verification token for DNS TXT record
+/// ownership challenges.
+///
+/// Returns a 13-character, lowercase, base36-encoded string (digits and
+/// `a`–`z`). Tokens are unique across calls with overwhelming probability
+/// because they embed a high-resolution timestamp.
+///
+/// # Example
+///
+/// ```rust
+/// # #[cfg(feature = "dns")]
+/// # {
+/// use modo::dns::generate_verification_token;
+///
+/// let token = generate_verification_token();
+/// assert_eq!(token.len(), 13);
+/// # }
+/// ```
 pub fn generate_verification_token() -> String {
     crate::id::short()
 }

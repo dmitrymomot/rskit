@@ -1,3 +1,5 @@
+//! Internal DNS resolver abstraction and UDP implementation.
+
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -11,7 +13,9 @@ use super::error::DnsError;
 use super::protocol::{self, RecordType};
 
 /// Internal trait for DNS resolution. Object-safe via `Pin<Box<dyn Future>>`.
-/// Not public — exists for test mocking.
+///
+/// Not part of the public API. Implemented by [`UdpDnsResolver`] for
+/// production use and by mock types in tests.
 pub(crate) trait DnsResolver: Send + Sync {
     fn resolve_txt(
         &self,

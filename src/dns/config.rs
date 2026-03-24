@@ -1,3 +1,5 @@
+//! Configuration for the DNS verification module.
+
 use std::net::SocketAddr;
 
 use serde::Deserialize;
@@ -12,16 +14,42 @@ fn default_timeout_ms() -> u64 {
     5000
 }
 
+/// Configuration for [`super::DomainVerifier`].
+///
+/// Deserializes from YAML via `serde`. The `txt_prefix` and `timeout_ms`
+/// fields have defaults and can be omitted.
+///
+/// # Example (YAML)
+///
+/// ```yaml
+/// dns:
+///   nameserver: "8.8.8.8:53"
+///   txt_prefix: "_myapp-verify"   # default: _modo-verify
+///   timeout_ms: 5000              # default: 5000
+/// ```
 #[derive(Debug, Clone, Deserialize)]
 pub struct DnsConfig {
+    /// Nameserver address, with or without port. Port 53 is appended when omitted.
+    ///
+    /// Examples: `"8.8.8.8:53"`, `"1.1.1.1"`.
     pub nameserver: String,
+    /// Prefix prepended to the domain when looking up TXT records.
+    ///
+    /// The resolved TXT lookup name is `{txt_prefix}.{domain}`.
+    /// Defaults to `"_modo-verify"`.
     #[serde(default = "default_txt_prefix")]
     pub txt_prefix: String,
+    /// UDP receive timeout in milliseconds. Defaults to `5000`.
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
 }
 
 impl DnsConfig {
+    /// Parse `nameserver` into a [`SocketAddr`].
+    ///
+    /// If the address already contains a port it is used as-is; otherwise port
+    /// `53` is appended. Returns [`crate::Error`] with status 500 when the
+    /// address is not a valid IP or hostname+port.
     pub fn parse_nameserver(&self) -> Result<SocketAddr> {
         if let Ok(addr) = self.nameserver.parse::<SocketAddr>() {
             return Ok(addr);

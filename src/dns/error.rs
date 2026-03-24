@@ -1,16 +1,33 @@
+//! DNS-specific error variants used to classify query failures.
+
 use std::fmt;
 
+/// Error variants for DNS query failures.
+///
+/// Each variant maps to a stable string code (see [`DnsError::code`]) that is
+/// preserved through the [`crate::Error`] pipeline via
+/// [`crate::Error::with_code`]. Use [`crate::Error::source_as::<DnsError>`]
+/// before the response is sent and [`crate::Error::error_code`] after.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DnsError {
+    /// The DNS query exceeded the configured timeout.
     Timeout,
+    /// The DNS server returned a SERVFAIL response code.
     ServerFailure,
+    /// The DNS server refused the query.
     Refused,
+    /// The DNS response could not be parsed or had a mismatched query ID.
     Malformed,
+    /// A network-level error occurred (socket bind, send, or receive failure).
     NetworkError,
+    /// The domain name or token argument was empty or invalid.
     InvalidInput,
 }
 
 impl DnsError {
+    /// Returns a stable, namespaced string code for this error.
+    ///
+    /// Codes have the form `"dns:<variant>"`, e.g. `"dns:timeout"`.
     pub fn code(&self) -> &'static str {
         match self {
             Self::Timeout => "dns:timeout",

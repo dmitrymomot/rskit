@@ -1,3 +1,5 @@
+//! Domain ownership verification via DNS TXT and CNAME record lookups.
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,9 +10,16 @@ use super::error::DnsError;
 use super::resolver::{DnsResolver, UdpDnsResolver};
 
 /// Result of a domain verification check.
+///
+/// Returned by [`DomainVerifier::verify_domain`]. Both checks run
+/// concurrently; a field is `true` only when the corresponding record was
+/// found and matched exactly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DomainStatus {
+    /// Whether the TXT record at `{txt_prefix}.{domain}` matched the
+    /// expected token.
     pub txt_verified: bool,
+    /// Whether the CNAME record at `domain` pointed to the expected target.
     pub cname_verified: bool,
 }
 
@@ -19,10 +28,32 @@ pub(crate) struct Inner {
     pub(crate) txt_prefix: String,
 }
 
-/// DNS-based domain verification service.
+/// DNS-based domain ownership verification service.
 ///
-/// Checks TXT record ownership and CNAME routing.
-/// Construct via `from_config()`. Cheap to clone (Arc-based).
+/// Checks TXT record ownership and CNAME routing via raw UDP DNS queries.
+/// Construct with [`DomainVerifier::from_config`]. The struct is cheap to
+/// clone because it wraps an `Arc` internally.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # #[cfg(feature = "dns")]
+/// # {
+/// use modo::dns::{DnsConfig, DomainVerifier, generate_verification_token};
+///
+/// let config = DnsConfig {
+///     nameserver: "8.8.8.8:53".into(),
+///     txt_prefix: "_modo-verify".into(),
+///     timeout_ms: 5000,
+/// };
+/// let verifier = DomainVerifier::from_config(&config).unwrap();
+/// let token = generate_verification_token();
+///
+/// // Ask the user to create: _modo-verify.example.com TXT "<token>"
+/// // Then verify:
+/// // let ok = verifier.check_txt("example.com", &token).await?;
+/// # }
+/// ```
 pub struct DomainVerifier {
     pub(crate) inner: Arc<Inner>,
 }
@@ -36,7 +67,10 @@ impl Clone for DomainVerifier {
 }
 
 impl DomainVerifier {
-    /// Create a new verifier from configuration.
+    /// Create a new verifier from [`DnsConfig`].
+    ///
+    /// Parses the nameserver address and builds a UDP resolver. Returns an
+    /// error if the nameserver string is not a valid IP address.
     pub fn from_config(config: &DnsConfig) -> Result<Self> {
         let nameserver = config.parse_nameserver()?;
         let timeout = Duration::from_millis(config.timeout_ms);
@@ -50,10 +84,15 @@ impl DomainVerifier {
         })
     }
 
-    /// Check if a TXT record matches the expected verification token.
+    /// Check whether a TXT record matches the expected verification token.
     ///
     /// Looks up `{txt_prefix}.{domain}` and returns `true` if any TXT record
-    /// value equals `expected_token` exactly (case-sensitive).
+    /// value equals `expected_token` exactly (case-sensitive). Returns `false`
+    /// when the record exists but no value matches, or when no TXT records
+    /// exist (NXDOMAIN is treated as an empty record set, not an error).
+    ///
+    /// Returns [`crate::Error`] with status 400 when `domain` or
+    /// `expected_token` is empty, or a gateway error on network/DNS failure.
     pub async fn check_txt(&self, domain: &str, expected_token: &str) -> Result<bool> {
         if domain.is_empty() {
             return Err(Error::bad_request("domain must not be empty")
@@ -72,10 +111,14 @@ impl DomainVerifier {
         Ok(records.iter().any(|r| r == expected_token))
     }
 
-    /// Check if a CNAME record points to the expected target.
+    /// Check whether a CNAME record points to the expected target.
     ///
-    /// Normalizes both the resolved target and expected target: lowercase,
-    /// strip trailing dot.
+    /// Normalizes both the resolved target and `expected_target` before
+    /// comparing: both are lowercased and any trailing dot is stripped.
+    /// Returns `false` when no CNAME record is present.
+    ///
+    /// Returns [`crate::Error`] with status 400 when `domain` or
+    /// `expected_target` is empty, or a gateway error on network/DNS failure.
     pub async fn check_cname(&self, domain: &str, expected_target: &str) -> Result<bool> {
         if domain.is_empty() {
             return Err(Error::bad_request("domain must not be empty")
@@ -101,6 +144,12 @@ impl DomainVerifier {
     }
 
     /// Check both TXT ownership and CNAME routing concurrently.
+    ///
+    /// Runs [`check_txt`](Self::check_txt) and
+    /// [`check_cname`](Self::check_cname) in parallel via `tokio::join!`.
+    /// Returns [`DomainStatus`] with individual results. If either check
+    /// returns a hard error (e.g. network failure) the error is propagated
+    /// and the other result is discarded.
     pub async fn verify_domain(
         &self,
         domain: &str,
