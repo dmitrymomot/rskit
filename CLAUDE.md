@@ -58,8 +58,8 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 13 (RBAC):** DONE — `src/rbac/` module with `RoleExtractor` trait, `Role` extractor, RBAC middleware, `require_role()` / `require_authenticated()` guard layers (22 unit + 8 integration tests)
 - **Plan 14 (JWT):** DONE — `src/auth/jwt/` module with `JwtEncoder`/`JwtDecoder`, `Claims<T>`, `HmacSigner` (HS256), `JwtLayer<T>` middleware, pluggable `TokenSource`, optional `Revocation` trait, `Bearer` extractor. Feature-gated under `auth` (73 unit + 13 integration tests)
 - **Plan 15 (Webhook Delivery):** DONE — `src/webhook/` module with `WebhookSender<C>`, `HttpClient` trait, `HyperClient`, `WebhookSecret`, Standard Webhooks signing. Feature-gated under `webhooks`
-- **Plan 16 (Flash Messages):** IN PROGRESS — spec and plan written, ready for implementation. `Flash` extractor with `flash.success()` / `flash.set()` / `flash.messages()`. Template function `flash_messages()`. Cookie-based (signed), read-once-and-clear. No session dependency
-- **Plan 17 (Storage ACL + Upload from URL):** IN PROGRESS — spec and plan written, ready for implementation. `Acl::Private` / `Acl::PublicRead` on `PutOptions`, `x-amz-acl` S3 header, `PutFromUrlInput`, `put_from_url()` / `put_from_url_with()` with streaming fetch and 30s timeout. Feature-gated under `storage`
+- **Plan 16 (Flash Messages):** DONE — `src/flash/` module with `Flash` extractor (`flash.success()` / `flash.set()` / `flash.messages()`), `FlashLayer` middleware, `flash_messages()` template function. Cookie-based (signed), read-once-and-clear. No session dependency. Always-available (no feature gate)
+- **Plan 17 (Storage ACL + Upload from URL):** SPEC + PLAN READY — spec and plan written, ready for implementation. `Acl::Private` / `Acl::PublicRead` on `PutOptions`, `x-amz-acl` S3 header, `PutFromUrlInput`, `put_from_url()` / `put_from_url_with()` with streaming fetch and 30s timeout. Feature-gated under `storage`
 - **Plan 18 (DNS Verification):** TXT record ownership check + CNAME verification for custom domain routing
 - **Plan 19 (Geolocation):** MaxMind GeoLite2 `.mmdb` reader, `GeoLocator` service with `lookup(ip) -> Location`. Feature-gated
 
@@ -71,7 +71,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - RPITIT traits (OAuthProvider, TenantResolver, RoleExtractor) — not object-safe; use concrete types
 - New middleware traits that need session access must take `&mut Parts` (not `&Parts`) so they can call `Session::from_request_parts()` — `SessionState` is `pub(crate)`
 - Guard/middleware errors use `Error::into_response()` — never construct raw HTTP responses; errors flow through the app's custom error handler
-- Always-available modules (no feature gate): cache, encoding, session, tenant, rbac, job, cron, testing (`test-helpers` feature)
+- Always-available modules (no feature gate): cache, encoding, flash, session, tenant, rbac, job, cron, testing (`test-helpers` feature)
 - `std::sync::RwLock` (not tokio) for all sync-only state — never hold across `.await`
 - Feature-gated modules: test with `cargo test --features X`, lint with `cargo clippy --features X --tests`, integration test files need `#![cfg(feature = "X")]`
 - No self-referencing dev-dependencies for feature-gated tests — use `#![cfg(feature = "X")]` guards and run via `cargo test --features X`
