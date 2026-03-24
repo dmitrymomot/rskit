@@ -6,6 +6,8 @@ DNS verification module for modo — TXT record ownership check + CNAME verifica
 
 Framework-level DNS verification service. Provides primitives and a convenience orchestrator. The app owns the DB schema, workflow, and when to invoke verification. The framework handles DNS querying, token generation, and record matching.
 
+**Also in scope:** add `Error::bad_gateway()` and `Error::gateway_timeout()` convenience constructors to `src/error/core.rs` (currently missing, needed for DNS upstream error mapping).
+
 ## Feature Gate
 
 - Feature: `dns`
@@ -21,7 +23,7 @@ src/dns/
   config.rs       — DnsConfig (YAML-deserializable)
   resolver.rs     — DnsResolver trait (pub(crate)) + UdpDnsResolver
   verifier.rs     — DomainVerifier (Arc<Inner> pattern)
-  token.rs        — generate_token()
+  token.rs        — generate_verification_token()
   protocol.rs     — DNS query/response helpers using simple-dns
   error.rs        — DnsError enum
 ```
@@ -31,18 +33,26 @@ src/dns/
 ### Config
 
 ```rust
+#[derive(Debug, Clone, Deserialize)]
 pub struct DnsConfig {
-    pub nameserver: String,     // parsed to SocketAddr in from_config(); required
-    pub txt_prefix: String,     // default: "_modo-verify"
-    pub timeout_ms: u64,        // default: 5000
+    pub nameserver: String,                           // required; "host:port" or "host" (port defaults to 53)
+    #[serde(default = "default_txt_prefix")]
+    pub txt_prefix: String,                           // default: "_modo-verify"
+    #[serde(default = "default_timeout_ms")]
+    pub timeout_ms: u64,                              // default: 5000
 }
+
+fn default_txt_prefix() -> String { "_modo-verify".into() }
+fn default_timeout_ms() -> u64 { 5000 }
 ```
+
+Nameserver parsing: if no port is provided (e.g. `"8.8.8.8"`), `:53` is appended automatically before parsing to `SocketAddr`. Invalid address → `Error::internal("invalid dns nameserver address")`.
 
 YAML example:
 
 ```yaml
 dns:
-  nameserver: "8.8.8.8:53"
+  nameserver: "8.8.8.8"
   txt_prefix: "_myapp-verify"
   timeout_ms: 5000
 ```
@@ -59,6 +69,12 @@ struct Inner {
     txt_prefix: String,
 }
 
+impl Clone for DomainVerifier {
+    fn clone(&self) -> Self {
+        Self { inner: Arc::clone(&self.inner) }
+    }
+}
+
 impl DomainVerifier {
     pub fn from_config(config: &DnsConfig) -> modo::Result<Self>;
     pub async fn check_txt(&self, domain: &str, expected_token: &str) -> modo::Result<bool>;
@@ -72,9 +88,12 @@ impl DomainVerifier {
 }
 ```
 
+`from_config()` parses nameserver to `SocketAddr`, creates `UdpDnsResolver`, wraps in `Arc<dyn DnsResolver>`. Fails fast on invalid config.
+
 ### DomainStatus
 
 ```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DomainStatus {
     pub txt_verified: bool,
     pub cname_verified: bool,
@@ -84,12 +103,15 @@ pub struct DomainStatus {
 ### Token Generation
 
 ```rust
-pub fn generate_token() -> String;  // id::short() — 13-char base36
+pub fn generate_verification_token() -> String;  // id::short() — 13-char base36
 ```
+
+Namespaced as `modo::dns::generate_verification_token()` to avoid ambiguity with session/CSRF tokens.
 
 ### DnsError
 
 ```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DnsError {
     Timeout,
     ServerFailure,
@@ -100,31 +122,78 @@ pub enum DnsError {
 }
 
 impl DnsError {
-    pub fn code(&self) -> &'static str;
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Timeout => "dns:timeout",
+            Self::ServerFailure => "dns:server_failure",
+            Self::Refused => "dns:refused",
+            Self::Malformed => "dns:malformed",
+            Self::NetworkError => "dns:network_error",
+            Self::InvalidInput => "dns:invalid_input",
+        }
+    }
 }
+
+impl fmt::Display for DnsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Timeout => write!(f, "dns query timed out"),
+            Self::ServerFailure => write!(f, "dns server failure"),
+            Self::Refused => write!(f, "dns query refused"),
+            Self::Malformed => write!(f, "dns response malformed"),
+            Self::NetworkError => write!(f, "dns network error"),
+            Self::InvalidInput => write!(f, "invalid dns input"),
+        }
+    }
+}
+
+impl std::error::Error for DnsError {}
 ```
 
 ## Internal Trait
 
 ```rust
 pub(crate) trait DnsResolver: Send + Sync {
-    async fn resolve_txt(&self, domain: &str) -> modo::Result<Vec<String>>;
-    async fn resolve_cname(&self, domain: &str) -> modo::Result<Option<String>>;
+    fn resolve_txt(&self, domain: &str) -> Pin<Box<dyn Future<Output = modo::Result<Vec<String>>> + Send + '_>>;
+    fn resolve_cname(&self, domain: &str) -> Pin<Box<dyn Future<Output = modo::Result<Option<String>>> + Send + '_>>;
 }
 ```
 
-Not public. Exists for test mocking. `DomainVerifier` holds `Arc<dyn DnsResolver>`.
+Uses `Pin<Box<dyn Future>>` return types — not RPITIT — so the trait is object-safe and can be stored as `Arc<dyn DnsResolver>`. This is a `pub(crate)` trait; the boxing overhead is irrelevant for DNS network calls.
+
+### UdpDnsResolver
+
+```rust
+struct UdpDnsResolver {
+    nameserver: SocketAddr,
+    timeout: Duration,
+}
+
+impl UdpDnsResolver {
+    fn new(nameserver: SocketAddr, timeout: Duration) -> Self {
+        Self { nameserver, timeout }
+    }
+}
+
+impl DnsResolver for UdpDnsResolver { ... }
+```
+
+Created internally by `DomainVerifier::from_config()`. Not public.
 
 ## DNS Resolution
 
 ### UdpDnsResolver Flow
 
 1. Build DNS query `Packet` via `simple-dns` (header + question for TXT or CNAME)
-2. Send raw bytes to configured nameserver via `tokio::net::UdpSocket`
-3. Receive with timeout (`tokio::time::timeout`)
-4. Parse response `Packet` via `simple-dns`, extract answers
-5. For TXT: collect all TXT RDATA strings → `Vec<String>`
-6. For CNAME: extract target from first CNAME answer → `Option<String>`
+2. Bind a new `tokio::net::UdpSocket` to `0.0.0.0:0`
+3. Send raw bytes to configured nameserver
+4. Receive with timeout (`tokio::time::timeout` using configured `timeout` duration)
+5. Parse response `Packet` via `simple-dns`, extract answers
+6. Verify response ID matches query ID
+7. For TXT: collect all TXT RDATA strings → `Vec<String>`
+8. For CNAME: extract target from first CNAME answer → `Option<String>`
+
+Receive buffer: 512 bytes. No EDNS0, no TCP fallback. Truncated responses (TC=1) return `Ok` with whatever answers fit — sufficient for single-value verification records. If this becomes a problem, TCP fallback is a backward-compatible internal change.
 
 ### What `simple-dns` Handles
 
@@ -143,27 +212,30 @@ Not public. Exists for test mocking. `DomainVerifier` holds `Arc<dyn DnsResolver
 
 ### check_txt(domain, expected_token)
 
-1. Prepend configured prefix: `{txt_prefix}.{domain}`
-2. Resolve TXT records for that name
-3. Return `true` if any TXT record value equals `expected_token` exactly (case-sensitive)
-4. Empty answers → `Ok(false)`
-5. NXDOMAIN → `Ok(false)`
+1. Validate inputs: empty domain or empty token → `Error::bad_request()`
+2. Prepend configured prefix: `{txt_prefix}.{domain}`
+3. Resolve TXT records for that name
+4. Return `true` if any TXT record value equals `expected_token` exactly (case-sensitive)
+5. Empty answers → `Ok(false)`
+6. NXDOMAIN → `Ok(false)`
 
 ### check_cname(domain, expected_target)
 
-1. Resolve CNAME for `domain` directly (the custom domain being added)
-2. Normalize both resolved target and `expected_target`: lowercase, strip trailing dot
-3. Return `true` if they match
-4. No CNAME record → `Ok(false)`
-5. NXDOMAIN → `Ok(false)`
+1. Validate inputs: empty domain or empty target → `Error::bad_request()`
+2. Resolve CNAME for `domain` directly (the custom domain being added)
+3. Normalize both resolved target and `expected_target`: lowercase, strip trailing dot
+4. Return `true` if they match
+5. No CNAME record → `Ok(false)`
+6. NXDOMAIN → `Ok(false)`
 
 ### verify_domain(domain, expected_token, expected_cname)
 
-1. Run `check_txt` and `check_cname` concurrently (`tokio::join!`)
-2. If either returns `Err`, propagate
-3. Return `DomainStatus { txt_verified, cname_verified }`
+1. Validate inputs
+2. Run `check_txt` and `check_cname` concurrently (`tokio::join!`)
+3. If either returns `Err`, propagate
+4. Return `DomainStatus { txt_verified, cname_verified }`
 
-### generate_token()
+### generate_verification_token()
 
 Calls `id::short()`. Stateless free function, no config needed.
 
@@ -178,19 +250,33 @@ Calls `id::short()`. Stateless free function, no config needed.
 | Unicode/IDN domains | App passes punycode; framework operates on ASCII |
 | Empty domain string | `Error::bad_request("domain must not be empty")` |
 | Empty token string | `Error::bad_request("token must not be empty")` |
+| Nameserver without port | Auto-append `:53` |
+| Truncated response (TC=1) | Process available answers; no TCP retry |
 
 ## Error Handling
 
+### New Error Constructors (src/error/core.rs)
+
+```rust
+pub fn bad_gateway(msg: impl Into<String>) -> Self {
+    Self::new(StatusCode::BAD_GATEWAY, msg)
+}
+
+pub fn gateway_timeout(msg: impl Into<String>) -> Self {
+    Self::new(StatusCode::GATEWAY_TIMEOUT, msg)
+}
+```
+
 ### DnsError → modo::Error Mapping
 
-| DnsError | HTTP Status | Message |
-|----------|-------------|---------|
-| Timeout | 504 Gateway Timeout | "dns query timed out" |
-| ServerFailure | 502 Bad Gateway | "dns server failure" |
-| Refused | 502 Bad Gateway | "dns query refused" |
-| Malformed | 502 Bad Gateway | "dns response malformed" |
-| NetworkError | 502 Bad Gateway | "dns network error" |
-| InvalidInput | 400 Bad Request | "domain must not be empty" / "token must not be empty" |
+| DnsError | HTTP Status | Message | Constructor |
+|----------|-------------|---------|-------------|
+| Timeout | 504 Gateway Timeout | "dns query timed out" | `Error::gateway_timeout()` |
+| ServerFailure | 502 Bad Gateway | "dns server failure" | `Error::bad_gateway()` |
+| Refused | 502 Bad Gateway | "dns query refused" | `Error::bad_gateway()` |
+| Malformed | 502 Bad Gateway | "dns response malformed" | `Error::bad_gateway()` |
+| NetworkError | 502 Bad Gateway | "dns network error" | `Error::bad_gateway()` |
+| InvalidInput | 400 Bad Request | (specific message) | `Error::bad_request()` |
 
 Pattern: `Error::bad_gateway("dns server failure").chain(DnsError::ServerFailure).with_code(DnsError::ServerFailure.code())`
 
@@ -207,14 +293,16 @@ NXDOMAIN and empty answers return `Ok(false)` — the record doesn't exist yet.
 pub mod dns;
 
 #[cfg(feature = "dns")]
-pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_token};
+pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};
 ```
+
+Note: `generate_verification_token` is also accessible as `modo::dns::generate_verification_token()` for clarity.
 
 ## Cargo.toml
 
 ```toml
 [features]
-dns = ["simple-dns"]
+dns = ["dep:simple-dns"]
 dns-test = ["dns"]
 full = ["templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns"]
 
@@ -236,7 +324,7 @@ async fn add_domain(
     Service(db): Service<WritePool>,
     JsonRequest(req): JsonRequest<AddDomainRequest>,
 ) -> modo::Result<Json<DomainResponse>> {
-    let token = modo::dns::generate_token();
+    let token = modo::dns::generate_verification_token();
     sqlx::query("INSERT INTO domains (tenant_id, domain, verify_token, status) VALUES (?, ?, ?, 'pending')")
         .bind(&req.tenant_id)
         .bind(&req.domain)
@@ -301,6 +389,8 @@ struct MockResolver {
 impl DnsResolver for MockResolver { ... }
 ```
 
+Constructed directly in unit tests (same crate, `pub(crate)` trait is accessible).
+
 **Verifier logic (via mock):**
 - `check_txt` — matching token → true
 - `check_txt` — no match → false
@@ -315,12 +405,13 @@ impl DnsResolver for MockResolver { ... }
 - `verify_domain` — txt pass, cname fail
 - `verify_domain` — both fail
 - `verify_domain` — dns error propagates
-- `generate_token` — returns 13-char string
+- `generate_verification_token` — returns 13-char string
 - Empty domain → bad request error
 - Empty token → bad request error
 
 **Config tests:**
 - Valid config parses nameserver to SocketAddr
+- Nameserver without port auto-appends `:53`
 - Invalid nameserver address → error
 - Defaults applied when fields omitted
 
@@ -339,14 +430,16 @@ Guarded with `#![cfg(feature = "dns")]`.
 - Resolve TXT for `nonexistent.invalid` — empty / NXDOMAIN
 - Timeout with unreachable nameserver (`192.0.2.1:53`, TEST-NET)
 
+Note: these tests require network access. Mark with `#[ignore]` if CI runs without internet; run explicitly via `cargo test --features dns -- --ignored`.
+
 ## Public Surface Summary
 
 | Item | Kind | Purpose |
 |------|------|---------|
-| `DnsConfig` | struct | YAML-deserializable config |
+| `DnsConfig` | struct | YAML-deserializable config with serde defaults |
 | `DomainVerifier` | struct | Main service: `from_config()`, `check_txt()`, `check_cname()`, `verify_domain()` |
 | `DomainStatus` | struct | Result of `verify_domain()` — two bools |
-| `DnsError` | enum | DNS-specific error variants with `.code()` |
-| `generate_token` | fn | Free function — 13-char base36 token |
+| `DnsError` | enum | DNS-specific error variants with `.code()`, `Display`, `std::error::Error` |
+| `generate_verification_token` | fn | Free function — 13-char base36 token |
 
 Five public items. No traits, no generics in the public API.
