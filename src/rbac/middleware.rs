@@ -12,6 +12,13 @@ use super::extractor::Role;
 use super::traits::RoleExtractor;
 
 /// Creates an RBAC middleware layer from a role extractor.
+///
+/// Calls `extractor.extract()` on every request, stores the resulting [`Role`] in
+/// request extensions, then forwards to the inner service. Extraction errors are
+/// converted to HTTP responses immediately; the inner service is not called.
+///
+/// Apply with `.layer()` on the outer router so the role is available to any
+/// `.route_layer()` guards that run after route matching.
 pub fn middleware<R>(extractor: R) -> RbacLayer<R>
 where
     R: RoleExtractor,
@@ -21,7 +28,7 @@ where
     }
 }
 
-/// Tower layer that produces `RbacMiddleware` services.
+/// Tower layer produced by [`middleware()`].
 pub struct RbacLayer<R> {
     extractor: Arc<R>,
 }
@@ -48,7 +55,7 @@ where
     }
 }
 
-/// Tower service that extracts roles from requests.
+/// Tower service produced by [`RbacLayer`].
 pub struct RbacMiddleware<Svc, R> {
     inner: Svc,
     extractor: Arc<R>,

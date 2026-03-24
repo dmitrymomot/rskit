@@ -17,12 +17,17 @@ use super::extractor::Role;
 /// Creates a guard layer that rejects requests unless the resolved role
 /// matches ANY of the allowed roles. Returns 403 Forbidden if role is
 /// present but not allowed, 401 Unauthorized if no role is present.
+///
+/// Apply with `.route_layer()` so the guard runs after route matching.
+/// The RBAC middleware must be applied with `.layer()` on the outer router
+/// so that [`Role`] is already in extensions when this guard runs.
 pub fn require_role(roles: impl IntoIterator<Item = impl Into<String>>) -> RequireRoleLayer {
     RequireRoleLayer {
         roles: Arc::new(roles.into_iter().map(Into::into).collect()),
     }
 }
 
+/// Tower layer produced by [`require_role()`].
 pub struct RequireRoleLayer {
     roles: Arc<Vec<String>>,
 }
@@ -46,6 +51,7 @@ impl<S> Layer<S> for RequireRoleLayer {
     }
 }
 
+/// Tower service produced by [`RequireRoleLayer`].
 pub struct RequireRoleService<S> {
     inner: S,
     roles: Arc<Vec<String>>,
@@ -98,12 +104,15 @@ where
 
 // --- require_authenticated ---
 
-/// Creates a guard layer that rejects requests unless a `Role` is present
+/// Creates a guard layer that rejects requests unless a [`Role`] is present
 /// in extensions. Returns 401 Unauthorized if no role is present.
+///
+/// Apply with `.route_layer()` so the guard runs after route matching.
 pub fn require_authenticated() -> RequireAuthenticatedLayer {
     RequireAuthenticatedLayer
 }
 
+/// Tower layer produced by [`require_authenticated()`].
 pub struct RequireAuthenticatedLayer;
 
 impl Clone for RequireAuthenticatedLayer {
@@ -120,6 +129,7 @@ impl<S> Layer<S> for RequireAuthenticatedLayer {
     }
 }
 
+/// Tower service produced by [`RequireAuthenticatedLayer`].
 pub struct RequireAuthenticatedService<S> {
     inner: S,
 }
