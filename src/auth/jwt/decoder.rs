@@ -15,7 +15,8 @@ use super::validation::ValidationConfig;
 
 /// JWT token decoder. Verifies signatures and validates claims.
 ///
-/// All operations are synchronous — revocation checks happen in the middleware.
+/// All validation is synchronous — revocation checks happen in [`JwtLayer`](super::middleware::JwtLayer).
+/// Cloning is cheap — state is stored behind `Arc`.
 pub struct JwtDecoder {
     inner: Arc<JwtDecoderInner>,
 }
@@ -35,6 +36,7 @@ fn jwt_err(kind: JwtError) -> Error {
 
 impl JwtDecoder {
     /// Creates a `JwtDecoder` from YAML configuration.
+    ///
     /// Uses `HmacSigner` (HS256) with the configured secret.
     pub fn from_config(config: &JwtConfig) -> Self {
         let signer = HmacSigner::new(config.secret.as_bytes());
@@ -56,17 +58,19 @@ impl JwtDecoder {
         &self.inner.validation
     }
 
-    /// Decodes and validates a JWT token string.
+    /// Decodes and validates a JWT token string, returning typed `Claims<T>`.
     ///
     /// Validation order:
-    /// 1. Split into 3 parts (header.payload.signature)
-    /// 2. Decode header, check algorithm
-    /// 3. Verify signature
-    /// 4. Decode payload, deserialize claims
-    /// 5. Check exp (always required + enforced)
-    /// 6. Check nbf (if present)
-    /// 7. Check iss (if policy requires it)
-    /// 8. Check aud (if policy requires it)
+    /// 1. Split into 3 parts (`header.payload.signature`)
+    /// 2. Decode header, check algorithm matches the verifier
+    /// 3. Verify HMAC signature
+    /// 4. Decode and deserialize payload into `Claims<T>`
+    /// 5. Enforce `exp` (always required; missing `exp` is treated as expired)
+    /// 6. Check `nbf` (if present)
+    /// 7. Check `iss` (if `require_issuer` is configured)
+    /// 8. Check `aud` (if `require_audience` is configured)
+    ///
+    /// Clock skew tolerance (`leeway`) is applied to steps 5 and 6.
     pub fn decode<T: DeserializeOwned>(&self, token: &str) -> Result<Claims<T>> {
         let parts: Vec<&str> = token.splitn(4, '.').collect();
         if parts.len() != 3 {
@@ -141,6 +145,9 @@ impl JwtDecoder {
     }
 }
 
+/// Creates a `JwtDecoder` that shares the signing key and validation config
+/// of an existing `JwtEncoder`. Useful when encoder and decoder are wired
+/// from the same `JwtConfig` value.
 impl From<&JwtEncoder> for JwtDecoder {
     fn from(encoder: &JwtEncoder) -> Self {
         Self {

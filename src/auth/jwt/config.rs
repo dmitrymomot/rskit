@@ -14,11 +14,20 @@ use serde::Deserialize;
 /// ```
 #[derive(Debug, Deserialize)]
 pub struct JwtConfig {
+    /// HMAC secret used for signing and verifying tokens.
     pub secret: String,
+    /// Default token lifetime in seconds. Applied automatically by `JwtEncoder::encode()`
+    /// when `claims.exp` is `None`. If `None`, tokens without an `exp` are rejected by the decoder.
     pub default_expiry: Option<u64>,
+    /// Clock skew tolerance in seconds. Applied to both `exp` and `nbf` checks.
+    /// Defaults to `0` when omitted from YAML.
     #[serde(default)]
     pub leeway: u64,
+    /// Required issuer (`iss`). When set, `JwtDecoder::decode()` rejects tokens
+    /// whose `iss` does not match.
     pub issuer: Option<String>,
+    /// Required audience (`aud`). When set, `JwtDecoder::decode()` rejects tokens
+    /// whose `aud` does not match.
     pub audience: Option<String>,
 }
 

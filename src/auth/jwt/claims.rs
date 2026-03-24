@@ -22,20 +22,28 @@ use serde::{Deserialize, Serialize};
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims<T> {
+    /// Issuer (`iss`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub iss: Option<String>,
+    /// Subject (`sub`) — typically the user identifier.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sub: Option<String>,
+    /// Audience (`aud`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aud: Option<String>,
+    /// Expiration time (`exp`) as a Unix timestamp in seconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exp: Option<u64>,
+    /// Not-before time (`nbf`) as a Unix timestamp in seconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nbf: Option<u64>,
+    /// Issued-at time (`iat`) as a Unix timestamp in seconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub iat: Option<u64>,
+    /// JWT ID (`jti`) — unique identifier for the token, used for revocation.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jti: Option<String>,
+    /// Application-defined custom claims, flattened into the top-level JSON object.
     #[serde(flatten)]
     pub custom: T,
 }
@@ -48,6 +56,7 @@ fn now_secs() -> u64 {
 }
 
 impl<T> Claims<T> {
+    /// Creates a new `Claims` with all registered fields set to `None`.
     pub fn new(custom: T) -> Self {
         Self {
             iss: None,
@@ -61,46 +70,56 @@ impl<T> Claims<T> {
         }
     }
 
+    /// Sets the issuer (`iss`) claim.
     pub fn with_iss(mut self, iss: impl Into<String>) -> Self {
         self.iss = Some(iss.into());
         self
     }
 
+    /// Sets the subject (`sub`) claim.
     pub fn with_sub(mut self, sub: impl Into<String>) -> Self {
         self.sub = Some(sub.into());
         self
     }
 
+    /// Sets the audience (`aud`) claim.
     pub fn with_aud(mut self, aud: impl Into<String>) -> Self {
         self.aud = Some(aud.into());
         self
     }
 
+    /// Sets the expiration time (`exp`) as an absolute Unix timestamp in seconds.
     pub fn with_exp(mut self, exp: u64) -> Self {
         self.exp = Some(exp);
         self
     }
 
+    /// Sets the expiration time (`exp`) relative to the current time.
     pub fn with_exp_in(mut self, duration: Duration) -> Self {
         self.exp = Some(now_secs() + duration.as_secs());
         self
     }
 
+    /// Sets the not-before time (`nbf`) as an absolute Unix timestamp in seconds.
     pub fn with_nbf(mut self, nbf: u64) -> Self {
         self.nbf = Some(nbf);
         self
     }
 
+    /// Sets the issued-at time (`iat`) to the current time.
     pub fn with_iat_now(mut self) -> Self {
         self.iat = Some(now_secs());
         self
     }
 
+    /// Sets the JWT ID (`jti`). Required for revocation checks.
     pub fn with_jti(mut self, jti: impl Into<String>) -> Self {
         self.jti = Some(jti.into());
         self
     }
 
+    /// Returns `true` if the token has an `exp` claim that is in the past.
+    /// Returns `false` when `exp` is absent.
     pub fn is_expired(&self) -> bool {
         match self.exp {
             Some(exp) => now_secs() > exp,
@@ -108,6 +127,8 @@ impl<T> Claims<T> {
         }
     }
 
+    /// Returns `true` if the token has an `nbf` claim that is in the future.
+    /// Returns `false` when `nbf` is absent.
     pub fn is_not_yet_valid(&self) -> bool {
         match self.nbf {
             Some(nbf) => now_secs() < nbf,
@@ -115,18 +136,22 @@ impl<T> Claims<T> {
         }
     }
 
+    /// Returns the subject claim (`sub`) as a string slice, if present.
     pub fn subject(&self) -> Option<&str> {
         self.sub.as_deref()
     }
 
+    /// Returns the JWT ID (`jti`) as a string slice, if present.
     pub fn token_id(&self) -> Option<&str> {
         self.jti.as_deref()
     }
 
+    /// Returns the issuer claim (`iss`) as a string slice, if present.
     pub fn issuer(&self) -> Option<&str> {
         self.iss.as_deref()
     }
 
+    /// Returns the audience claim (`aud`) as a string slice, if present.
     pub fn audience(&self) -> Option<&str> {
         self.aud.as_deref()
     }

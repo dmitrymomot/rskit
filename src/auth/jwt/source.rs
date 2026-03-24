@@ -3,11 +3,16 @@ use http::request::Parts;
 /// Trait for extracting JWT token strings from HTTP requests.
 ///
 /// Middleware tries sources in order and uses the first `Some(token)`.
+/// Implement this trait to support custom token locations.
 pub trait TokenSource: Send + Sync {
+    /// Attempts to extract a token string from request parts.
+    /// Returns `None` if this source does not find a token.
     fn extract(&self, parts: &Parts) -> Option<String>;
 }
 
-/// Extracts token from `Authorization: Bearer <token>` header.
+/// Extracts a token from the `Authorization: Bearer <token>` header.
+///
+/// Accepts both `Bearer` and `bearer` prefixes (case-insensitive prefix only).
 pub struct BearerSource;
 
 impl TokenSource for BearerSource {
@@ -27,7 +32,9 @@ impl TokenSource for BearerSource {
     }
 }
 
-/// Extracts token from a query parameter (e.g., `?token=xxx`).
+/// Extracts a token from a named query parameter (e.g., `?token=xxx`).
+///
+/// The inner `&'static str` is the parameter name to look up.
 pub struct QuerySource(pub &'static str);
 
 impl TokenSource for QuerySource {
@@ -45,10 +52,10 @@ impl TokenSource for QuerySource {
     }
 }
 
-/// Extracts token from a cookie (e.g., `Cookie: jwt=xxx`).
+/// Extracts a token from a named cookie (e.g., `Cookie: jwt=xxx`).
 ///
-/// Parses the raw `Cookie` header directly — no dependency on session
-/// middleware or `axum_extra`.
+/// The inner `&'static str` is the cookie name. Parses the raw `Cookie`
+/// header directly — no dependency on session middleware or `axum_extra`.
 pub struct CookieSource(pub &'static str);
 
 impl TokenSource for CookieSource {
@@ -67,7 +74,9 @@ impl TokenSource for CookieSource {
     }
 }
 
-/// Extracts token from a custom header (e.g., `X-API-Token: xxx`).
+/// Extracts a token from a custom request header (e.g., `X-API-Token: xxx`).
+///
+/// The inner `&'static str` is the header name.
 pub struct HeaderSource(pub &'static str);
 
 impl TokenSource for HeaderSource {

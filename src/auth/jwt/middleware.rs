@@ -18,10 +18,16 @@ use super::error::JwtError;
 use super::revocation::Revocation;
 use super::source::{BearerSource, TokenSource};
 
-/// Tower layer that produces `JwtMiddleware` services.
+/// Tower [`Layer`] that installs JWT authentication on a route.
 ///
-/// Extracts JWT tokens from requests, validates them, optionally checks
-/// revocation, and inserts typed `Claims<T>` into request extensions.
+/// For each request the middleware:
+/// 1. Tries each `TokenSource` in order; returns `401` if none yields a token.
+/// 2. Decodes and validates the token with `JwtDecoder`; returns `401` on failure.
+/// 3. If a `Revocation` backend is registered and the token has a `jti`, calls
+///    `is_revoked()`; returns `401` on revocation or backend error (fail-closed).
+/// 4. Inserts `Claims<T>` into request extensions for handler extraction.
+///
+/// The default token source is [`BearerSource`] (`Authorization: Bearer <token>`).
 pub struct JwtLayer<T> {
     decoder: JwtDecoder,
     sources: Arc<[Arc<dyn TokenSource>]>,
@@ -33,6 +39,8 @@ impl<T> JwtLayer<T>
 where
     T: DeserializeOwned + Clone + Send + Sync + 'static,
 {
+    /// Creates a `JwtLayer` with `BearerSource` as the sole token source
+    /// and no revocation backend.
     pub fn new(decoder: JwtDecoder) -> Self {
         Self {
             decoder,
@@ -42,11 +50,16 @@ where
         }
     }
 
+    /// Replaces the token sources with the provided list.
+    ///
+    /// Sources are tried in order; the first to return `Some` is used.
     pub fn with_sources(mut self, sources: Vec<Arc<dyn TokenSource>>) -> Self {
         self.sources = Arc::from(sources);
         self
     }
 
+    /// Attaches a revocation backend. Tokens with a `jti` claim are checked
+    /// against it on every request.
     pub fn with_revocation(mut self, revocation: Arc<dyn Revocation>) -> Self {
         self.revocation = Some(revocation);
         self
@@ -81,7 +94,7 @@ where
     }
 }
 
-/// Tower service that validates JWT tokens and inserts claims into extensions.
+/// Tower [`Service`] produced by [`JwtLayer`]. See that type for behavior details.
 pub struct JwtMiddleware<Svc, T> {
     inner: Svc,
     decoder: JwtDecoder,

@@ -9,8 +9,11 @@ use super::error::JwtError;
 /// Standalone extractor for the raw Bearer token string.
 ///
 /// Reads the `Authorization: Bearer <token>` header.
-/// Use this when you need the raw token (e.g., to forward it).
-/// Independent from JWT middleware.
+/// Use this when you need the raw token string (e.g., to forward it or revoke it).
+/// This extractor is independent from `JwtLayer` — it does not decode or validate the token.
+///
+/// Returns `401 Unauthorized` with `jwt:missing_token` when the header is absent
+/// or does not use the `Bearer` scheme.
 #[derive(Debug)]
 pub struct Bearer(pub String);
 
@@ -47,6 +50,11 @@ impl<S: Send + Sync> FromRequestParts<S> for Bearer {
     }
 }
 
+/// Extracts typed `Claims<T>` from request extensions.
+///
+/// `JwtLayer` must be applied to the route — the middleware decodes the token
+/// and inserts `Claims<T>` into extensions before the handler is called.
+/// Returns `401 Unauthorized` when claims are not present in extensions.
 impl<S: Send + Sync, T> FromRequestParts<S> for Claims<T>
 where
     T: Clone + Send + Sync + 'static,
@@ -62,6 +70,10 @@ where
     }
 }
 
+/// Optionally extracts typed `Claims<T>` from request extensions.
+///
+/// Returns `Ok(None)` when `JwtLayer` is not applied or the token is missing/invalid,
+/// allowing routes to serve both authenticated and unauthenticated users.
 impl<S: Send + Sync, T> OptionalFromRequestParts<S> for Claims<T>
 where
     T: Clone + Send + Sync + 'static,

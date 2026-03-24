@@ -2,31 +2,62 @@ use std::fmt;
 
 /// Typed JWT error enum. Stored as `modo::Error` source via `chain()`.
 ///
-/// Use `error.source_as::<JwtError>()` or `error.error_code()` in custom
-/// error handlers to decide what to expose to clients.
+/// Use `error.source_as::<JwtError>()` before the response pipeline
+/// or `error.error_code()` after `IntoResponse` to identify the failure.
+///
+/// # Error identity pattern
+///
+/// ```ignore
+/// use modo::auth::jwt::JwtError;
+///
+/// let err = modo::Error::unauthorized("unauthorized")
+///     .chain(JwtError::Expired)
+///     .with_code(JwtError::Expired.code());
+///
+/// // Before IntoResponse:
+/// assert_eq!(err.source_as::<JwtError>(), Some(&JwtError::Expired));
+/// // After IntoResponse (in error handler):
+/// assert_eq!(err.error_code(), Some("jwt:expired"));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JwtError {
     // Request errors (401)
+    /// No token was found by any configured `TokenSource`.
     MissingToken,
+    /// The token header could not be decoded or parsed.
     InvalidHeader,
+    /// The token does not have the expected three-part structure.
     MalformedToken,
+    /// The token payload could not be deserialized into the target claims type.
     DeserializationFailed,
+    /// The token signature does not match the signing key.
     InvalidSignature,
+    /// The token has expired (`exp` is in the past, beyond leeway).
     Expired,
+    /// The token is not yet valid (`nbf` is in the future, beyond leeway).
     NotYetValid,
+    /// The `iss` claim does not match the required issuer.
     InvalidIssuer,
+    /// The `aud` claim does not match the required audience.
     InvalidAudience,
+    /// The token's `jti` was found in the revocation store.
     Revoked,
+    /// The revocation store returned an error (fail-closed).
     RevocationCheckFailed,
+    /// The token header specifies an algorithm that differs from the verifier's algorithm.
     AlgorithmMismatch,
     // Server errors (500)
+    /// The HMAC signing operation failed.
     SigningFailed,
+    /// The claims could not be serialized to JSON.
     SerializationFailed,
 }
 
 impl JwtError {
     /// Returns a static error code string for use with `Error::with_code()`.
-    /// Survives the `IntoResponse` → `Clone` → `error_handler` pipeline.
+    ///
+    /// Survives the `IntoResponse` → `Clone` → error handler pipeline where
+    /// the original `source` is dropped.
     pub fn code(&self) -> &'static str {
         match self {
             Self::MissingToken => "jwt:missing_token",

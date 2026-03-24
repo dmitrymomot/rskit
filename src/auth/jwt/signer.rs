@@ -10,17 +10,29 @@ use super::error::JwtError;
 type HmacSha256 = Hmac<Sha256>;
 
 /// Object-safe trait for JWT signature verification.
+///
+/// Implemented by `HmacSigner`. Can be wrapped in `Arc<dyn TokenVerifier>`
+/// for use inside `JwtDecoder`.
 pub trait TokenVerifier: Send + Sync {
+    /// Verifies that `signature` was produced by signing `header_payload`
+    /// with the same key. Returns `Err` with `jwt:invalid_signature` on mismatch.
     fn verify(&self, header_payload: &[u8], signature: &[u8]) -> Result<()>;
+    /// Returns the JWT algorithm name used in the token header (e.g., `"HS256"`).
     fn algorithm_name(&self) -> &str;
 }
 
 /// Extends `TokenVerifier` with signing capability.
+///
+/// Implemented by `HmacSigner`. Can be wrapped in `Arc<dyn TokenSigner>`
+/// for use inside `JwtEncoder`.
 pub trait TokenSigner: TokenVerifier {
+    /// Signs `header_payload` and returns the raw signature bytes.
     fn sign(&self, header_payload: &[u8]) -> Result<Vec<u8>>;
 }
 
-/// HS256 (HMAC-SHA256) implementation of `TokenSigner`.
+/// HMAC-SHA256 (HS256) implementation of [`TokenSigner`] and [`TokenVerifier`].
+///
+/// Cloning is cheap — the secret is stored behind `Arc`.
 pub struct HmacSigner {
     inner: Arc<HmacSignerInner>,
 }
@@ -30,6 +42,7 @@ struct HmacSignerInner {
 }
 
 impl HmacSigner {
+    /// Creates a new `HmacSigner` with the given secret.
     pub fn new(secret: impl AsRef<[u8]>) -> Self {
         Self {
             inner: Arc::new(HmacSignerInner {

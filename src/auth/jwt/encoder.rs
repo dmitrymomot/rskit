@@ -10,9 +10,10 @@ use super::config::JwtConfig;
 use super::error::JwtError;
 use super::signer::{HmacSigner, TokenSigner};
 
-/// JWT token encoder. Signs tokens using a `TokenSigner`.
+/// JWT token encoder. Signs tokens using a [`TokenSigner`].
 ///
 /// Register in `Registry` for handler access via `Service<JwtEncoder>`.
+/// Cloning is cheap — state is stored behind `Arc`.
 pub struct JwtEncoder {
     inner: Arc<JwtEncoderInner>,
 }
@@ -25,7 +26,10 @@ struct JwtEncoderInner {
 
 impl JwtEncoder {
     /// Creates a `JwtEncoder` from YAML configuration.
-    /// Uses `HmacSigner` (HS256) with the configured secret.
+    ///
+    /// Uses `HmacSigner` (HS256) with the configured secret. The validation
+    /// config (leeway, issuer, audience) is stored so a matching `JwtDecoder`
+    /// can be created via `JwtDecoder::from(&encoder)`.
     pub fn from_config(config: &JwtConfig) -> Self {
         let signer = HmacSigner::new(config.secret.as_bytes());
         Self {
@@ -58,7 +62,8 @@ impl JwtEncoder {
     /// Encodes claims into a signed JWT token string.
     ///
     /// If `claims.exp` is `None` and `default_expiry` is configured,
-    /// `exp` is automatically set to `now + default_expiry`.
+    /// `exp` is automatically set to `now + default_expiry` before signing.
+    /// An explicitly set `exp` is never overwritten.
     pub fn encode<T: Serialize>(&self, claims: &super::claims::Claims<T>) -> Result<String> {
         // Auto-fill exp if missing and default_expiry is configured
         let claims_json = if claims.exp.is_none() {

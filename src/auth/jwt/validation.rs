@@ -2,12 +2,19 @@ use std::time::Duration;
 
 /// Policy-level validation rules applied to every `decode()` call.
 ///
-/// `exp` is always enforced (not configurable). These rules control
+/// `exp` is always enforced (not configurable). These fields control
 /// additional checks for `iss`, `aud`, and clock skew tolerance.
+///
+/// Built automatically from [`JwtConfig`](super::config::JwtConfig) by
+/// `JwtEncoder::from_config()` and `JwtDecoder::from_config()`.
 #[derive(Debug, Clone)]
 pub struct ValidationConfig {
+    /// Allowed clock skew applied to `exp` and `nbf` checks.
+    /// Defaults to `Duration::ZERO`.
     pub leeway: Duration,
+    /// When `Some`, `decode()` rejects tokens whose `iss` does not match.
     pub require_issuer: Option<String>,
+    /// When `Some`, `decode()` rejects tokens whose `aud` does not match.
     pub require_audience: Option<String>,
 }
 
