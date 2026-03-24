@@ -50,7 +50,7 @@ pub use config::Config;
 pub use error::{Error, Result};
 pub use extractor::Service;
 pub use flash::{Flash, FlashEntry, FlashLayer};
-pub use ip::ClientIp;
+pub use ip::{ClientIp, ClientIpLayer};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
 pub use session::{Session, SessionConfig, SessionData, SessionToken};
