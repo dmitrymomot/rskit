@@ -8,6 +8,35 @@ use crate::service::AppState;
 use super::context::TemplateContext;
 use super::engine::Engine;
 
+/// Axum extractor for rendering MiniJinja templates.
+///
+/// `Renderer` is extracted from a handler's argument list and provides three render
+/// methods:
+///
+/// - [`html`](Renderer::html) — renders a template and returns `Html<String>`.
+/// - [`html_partial`](Renderer::html_partial) — renders the partial template when the
+///   request is an HTMX request, or the full page template otherwise.
+/// - [`string`](Renderer::string) — renders a template and returns `String`.
+///
+/// The handler's `context` argument is merged with the middleware-populated
+/// [`TemplateContext`]; handler values override middleware values on conflict.
+///
+/// # Requirements
+///
+/// - [`Engine`] must be registered in the [`crate::service::AppState`] registry.
+/// - [`TemplateContextLayer`](super::TemplateContextLayer) must be installed as a
+///   middleware layer on the router.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use modo::template::{Renderer, context};
+/// use axum::response::Html;
+///
+/// async fn home(renderer: Renderer) -> modo::Result<Html<String>> {
+///     renderer.html("pages/home.html", context! { title => "Home" })
+/// }
+/// ```
 #[derive(Clone)]
 pub struct Renderer {
     pub(crate) engine: Engine,
@@ -16,12 +45,19 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    /// Renders `template` with the given MiniJinja `context` merged with middleware
+    /// context, and returns `Html<String>`.
     pub fn html(&self, template: &str, context: minijinja::Value) -> crate::Result<Html<String>> {
         let merged = self.context.merge(context);
         let result = self.engine.render(template, merged)?;
         Ok(Html(result))
     }
 
+    /// Renders `partial` if the request was issued by HTMX, otherwise renders `page`.
+    ///
+    /// This is the primary method for HTMX-driven partial updates: the full `page`
+    /// template is used for initial page loads, while `partial` is used for subsequent
+    /// HTMX swaps.
     pub fn html_partial(
         &self,
         page: &str,
@@ -32,11 +68,14 @@ impl Renderer {
         self.html(template, context)
     }
 
+    /// Renders `template` with the given MiniJinja `context` merged with middleware
+    /// context, and returns the raw `String` output.
     pub fn string(&self, template: &str, context: minijinja::Value) -> crate::Result<String> {
         let merged = self.context.merge(context);
         self.engine.render(template, merged)
     }
 
+    /// Returns `true` if the current request was issued by HTMX (`HX-Request: true`).
     pub fn is_htmx(&self) -> bool {
         self.is_htmx
     }

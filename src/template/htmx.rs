@@ -1,10 +1,27 @@
 use axum::extract::FromRequestParts;
 use http::request::Parts;
 
+/// Axum extractor that detects HTMX requests.
+///
+/// Returns `HxRequest(true)` when the request contains `HX-Request: true`,
+/// and `HxRequest(false)` otherwise. The extraction is infallible.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use modo::template::HxRequest;
+///
+/// async fn handler(hx: HxRequest) {
+///     if hx.is_htmx() {
+///         // respond with a partial
+///     }
+/// }
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct HxRequest(bool);
 
 impl HxRequest {
+    /// Returns `true` if the request was issued by HTMX (`HX-Request: true`).
     pub fn is_htmx(&self) -> bool {
         self.0
     }

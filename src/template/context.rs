@@ -1,19 +1,35 @@
 use std::collections::BTreeMap;
 
+/// Per-request template context shared between middleware and handlers.
+///
+/// [`TemplateContextLayer`](super::TemplateContextLayer) populates an instance with
+/// request-scoped values (`locale`, `current_url`, `is_htmx`, `csrf_token`,
+/// `flash_messages`) and inserts it into request extensions before the handler runs.
+///
+/// Handlers access the merged context through the [`Renderer`](super::Renderer)
+/// extractor. Values supplied by a handler override middleware-set values for the
+/// same key (handler context wins on conflicts).
 #[derive(Debug, Clone, Default)]
 pub struct TemplateContext {
     values: BTreeMap<String, minijinja::Value>,
 }
 
 impl TemplateContext {
+    /// Inserts or replaces a value in the context.
     pub fn set(&mut self, key: impl Into<String>, value: minijinja::Value) {
         self.values.insert(key.into(), value);
     }
 
+    /// Returns a reference to a value by key, or `None` if the key is absent.
     pub fn get(&self, key: &str) -> Option<&minijinja::Value> {
         self.values.get(key)
     }
 
+    /// Merges this context with a handler-supplied MiniJinja map.
+    ///
+    /// Handler values take precedence over values already stored in `self`.
+    /// If `handler_context` is not a map, the middleware values are returned unchanged
+    /// and a warning is logged.
     pub(crate) fn merge(&self, handler_context: minijinja::Value) -> minijinja::Value {
         let mut merged = BTreeMap::new();
 

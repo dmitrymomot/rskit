@@ -1,14 +1,37 @@
 use serde::Deserialize;
 
+/// Configuration for the template engine.
+///
+/// All fields have sensible defaults and can be overridden via YAML config.
+/// Paths are relative to the working directory of the running process.
+///
+/// # Defaults
+///
+/// | Field                | Default         |
+/// |----------------------|-----------------|
+/// | `templates_path`     | `"templates"`   |
+/// | `static_path`        | `"static"`      |
+/// | `static_url_prefix`  | `"/assets"`     |
+/// | `locales_path`       | `"locales"`     |
+/// | `default_locale`     | `"en"`          |
+/// | `locale_cookie`      | `"lang"`        |
+/// | `locale_query_param` | `"lang"`        |
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct TemplateConfig {
+    /// Directory that contains MiniJinja template files.
     pub templates_path: String,
+    /// Directory that contains static assets (CSS, JS, images, etc.).
     pub static_path: String,
+    /// URL prefix under which static assets are served (e.g. `"/assets"`).
     pub static_url_prefix: String,
+    /// Directory that contains locale subdirectories with YAML translation files.
     pub locales_path: String,
+    /// BCP 47 language tag used when no locale can be resolved from the request.
     pub default_locale: String,
+    /// Cookie name read by [`CookieResolver`](super::CookieResolver) to determine the active locale.
     pub locale_cookie: String,
+    /// Query-string parameter name read by [`QueryParamResolver`](super::QueryParamResolver).
     pub locale_query_param: String,
 }
 

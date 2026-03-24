@@ -14,12 +14,38 @@ use crate::flash::state::FlashState;
 
 // --- Layer ---
 
+/// Tower middleware layer that populates [`TemplateContext`] for every request.
+///
+/// Install this layer on your router **before** any handler that uses [`Renderer`](super::Renderer).
+/// The layer injects the following keys into the request's [`TemplateContext`]:
+///
+/// | Key               | Source                                        |
+/// |-------------------|-----------------------------------------------|
+/// | `current_url`     | `request.uri().to_string()`                  |
+/// | `is_htmx`         | `HX-Request: true` header                    |
+/// | `request_id`      | `X-Request-Id` header (if present)           |
+/// | `locale`          | Locale resolver chain (falls back to default) |
+/// | `csrf_token`      | [`CsrfToken`](crate::middleware::CsrfToken) extension (if present) |
+/// | `flash_messages`  | `FlashState` extension (if present)        |
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use modo::template::{Engine, EngineBuilder, TemplateConfig, TemplateContextLayer};
+///
+/// # fn example(engine: Engine) {
+/// let router: axum::Router = axum::Router::new()
+///     // ... routes ...
+///     .layer(TemplateContextLayer::new(engine));
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct TemplateContextLayer {
     engine: Engine,
 }
 
 impl TemplateContextLayer {
+    /// Creates a new layer backed by the given [`Engine`].
     pub fn new(engine: Engine) -> Self {
         Self { engine }
     }

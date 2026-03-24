@@ -3,18 +3,37 @@ use std::sync::Arc;
 
 use super::config::TemplateConfig;
 
+/// Trait for extracting the active locale from a request.
+///
+/// Implementations are tried in order within the locale chain built by
+/// [`EngineBuilder::locale_resolvers`](super::EngineBuilder::locale_resolvers).
+/// The first resolver that returns `Some` wins; if all resolvers return `None`,
+/// [`TemplateConfig::default_locale`] is used.
+///
+/// The resolved locale is stored in the request's [`TemplateContext`](super::TemplateContext)
+/// under the key `"locale"` and is available in every template as `{{ locale }}`.
 pub trait LocaleResolver: Send + Sync {
+    /// Returns a locale string (e.g. `"en"`, `"uk"`) if this resolver can determine
+    /// the locale from the request, or `None` to fall through to the next resolver.
     fn resolve(&self, parts: &Parts) -> Option<String>;
 }
 
 // --- QueryParamResolver ---
 
+/// Resolves the active locale from a URL query parameter.
+///
+/// When `available_locales` is non-empty, only values present in that list are
+/// accepted. Pass an empty slice to accept any value.
 pub struct QueryParamResolver {
     param_name: String,
     available_locales: Vec<String>,
 }
 
 impl QueryParamResolver {
+    /// Creates a new resolver that looks at `param_name` in the query string.
+    ///
+    /// `available_locales` constrains which values are accepted; pass `&[]` to accept
+    /// all values.
     pub fn new(param_name: &str, available_locales: &[String]) -> Self {
         Self {
             param_name: param_name.to_string(),
@@ -41,12 +60,20 @@ impl LocaleResolver for QueryParamResolver {
 
 // --- CookieResolver ---
 
+/// Resolves the active locale from a cookie.
+///
+/// When `available_locales` is non-empty, only values present in that list are
+/// accepted.
 pub struct CookieResolver {
     cookie_name: String,
     available_locales: Vec<String>,
 }
 
 impl CookieResolver {
+    /// Creates a new resolver that reads `cookie_name`.
+    ///
+    /// `available_locales` constrains which values are accepted; pass `&[]` to accept
+    /// all values.
     pub fn new(cookie_name: &str, available_locales: &[String]) -> Self {
         Self {
             cookie_name: cookie_name.to_string(),
@@ -77,6 +104,11 @@ impl LocaleResolver for CookieResolver {
 
 // --- SessionResolver ---
 
+/// Resolves the active locale from the session data.
+///
+/// Reads the `"locale"` key from the session's JSON data. Requires
+/// [`SessionLayer`](crate::session::SessionLayer) to be installed before this resolver
+/// runs in the middleware stack.
 pub struct SessionResolver;
 
 impl LocaleResolver for SessionResolver {
@@ -97,11 +129,16 @@ impl LocaleResolver for SessionResolver {
 
 // --- AcceptLanguageResolver ---
 
+/// Resolves the active locale from the `Accept-Language` HTTP header.
+///
+/// Parses quality values (`q=`), strips region subtags (`en-US` → `en`), and
+/// picks the highest-quality language that matches `available`.
 pub struct AcceptLanguageResolver {
     available: Vec<String>,
 }
 
 impl AcceptLanguageResolver {
+    /// Creates a new resolver that accepts only locales in `available`.
     pub fn new(available: &[&str]) -> Self {
         Self {
             available: available.iter().map(|s| s.to_string()).collect(),

@@ -12,16 +12,39 @@ struct EngineInner {
     config: TemplateConfig,
 }
 
+/// The template engine.
+///
+/// Wraps a MiniJinja [`Environment`](minijinja::Environment) and provides:
+///
+/// - Filesystem-based template loading from the directory in
+///   [`TemplateConfig::templates_path`].
+/// - Automatic registration of [minijinja-contrib](https://docs.rs/minijinja-contrib)
+///   filters and functions.
+/// - A `t()` function (available in every template) that looks up the `locale`
+///   context variable and delegates to the built-in translation store.
+/// - A `static_url()` function that appends a content-hash query parameter to asset
+///   paths for cache-busting.
+/// - In debug builds, the template cache is cleared on every render so changes on
+///   disk are picked up without a restart (hot-reload).
+///
+/// `Engine` is cheaply cloneable — it wraps an `Arc` internally.
+///
+/// Use [`Engine::builder`] to obtain an [`EngineBuilder`].
 #[derive(Clone)]
 pub struct Engine {
     inner: Arc<EngineInner>,
 }
 
 impl Engine {
+    /// Returns a new [`EngineBuilder`] with default settings.
     pub fn builder() -> EngineBuilder {
         EngineBuilder::default()
     }
 
+    /// Renders `template_name` with the given MiniJinja `context` and returns the
+    /// output as a `String`.
+    ///
+    /// Returns an error if the template file is not found or if rendering fails.
     pub(crate) fn render(
         &self,
         template_name: &str,
@@ -48,6 +71,12 @@ impl Engine {
             .map_err(|e| crate::Error::internal(format!("Render error in '{template_name}': {e}")))
     }
 
+    /// Returns an [`axum::Router`] that serves static files from
+    /// [`TemplateConfig::static_path`] under the [`TemplateConfig::static_url_prefix`]
+    /// URL prefix.
+    ///
+    /// In debug builds the router adds `Cache-Control: no-cache`. In release builds it
+    /// adds `Cache-Control: public, max-age=31536000, immutable`.
     pub fn static_service(&self) -> axum::Router {
         static_files::static_service(
             &self.inner.config.static_path,
@@ -66,6 +95,10 @@ impl Engine {
 
 type EnvCustomizer = Box<dyn FnOnce(&mut minijinja::Environment<'static>) + Send>;
 
+/// Builder for [`Engine`].
+///
+/// Obtained via [`Engine::builder()`]. Call [`EngineBuilder::build`] to construct
+/// the engine after setting options.
 #[derive(Default)]
 pub struct EngineBuilder {
     config: Option<TemplateConfig>,
@@ -74,11 +107,18 @@ pub struct EngineBuilder {
 }
 
 impl EngineBuilder {
+    /// Sets the template configuration.
+    ///
+    /// If not called, [`TemplateConfig::default()`] is used.
     pub fn config(mut self, config: TemplateConfig) -> Self {
         self.config = Some(config);
         self
     }
 
+    /// Registers a custom MiniJinja global function.
+    ///
+    /// `name` is the name used in templates (e.g. `"greet"`), `f` is any value that
+    /// implements `minijinja::functions::Function`.
     pub fn function<N, F, Rv, Args>(mut self, name: N, f: F) -> Self
     where
         N: Into<std::borrow::Cow<'static, str>> + Send + 'static,
@@ -91,6 +131,10 @@ impl EngineBuilder {
         self
     }
 
+    /// Registers a custom MiniJinja filter.
+    ///
+    /// `name` is the filter name used in templates (e.g. `"shout"`), `f` is any value
+    /// that implements `minijinja::functions::Function`.
     pub fn filter<N, F, Rv, Args>(mut self, name: N, f: F) -> Self
     where
         N: Into<std::borrow::Cow<'static, str>> + Send + 'static,
@@ -103,11 +147,21 @@ impl EngineBuilder {
         self
     }
 
+    /// Overrides the locale resolver chain.
+    ///
+    /// The resolvers are tried in order; the first one that returns `Some` wins.
+    /// When not called, a default chain of [`QueryParamResolver`](super::QueryParamResolver),
+    /// [`CookieResolver`](super::CookieResolver), [`SessionResolver`](super::SessionResolver),
+    /// and [`AcceptLanguageResolver`](super::AcceptLanguageResolver) is used.
     pub fn locale_resolvers(mut self, resolvers: Vec<Arc<dyn LocaleResolver>>) -> Self {
         self.locale_resolvers = Some(resolvers);
         self
     }
 
+    /// Builds and returns the [`Engine`].
+    ///
+    /// Fails if the templates directory is inaccessible or if a locale file cannot be
+    /// parsed.
     pub fn build(self) -> crate::Result<Engine> {
         let config = self.config.unwrap_or_default();
 
