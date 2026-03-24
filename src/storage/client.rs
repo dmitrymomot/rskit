@@ -76,6 +76,9 @@ impl RemoteBackend {
         if let Some(ref cc) = opts.cache_control {
             extra_headers.push(("cache-control".to_string(), cc.clone()));
         }
+        if let Some(acl) = &opts.acl {
+            extra_headers.push(("x-amz-acl".to_string(), acl.as_header_value().to_string()));
+        }
 
         let params = SigningParams {
             access_key: &self.access_key,
