@@ -1,0 +1,14 @@
+[package]
+name = "maximal"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+
+[dependencies]
+modo = { path = "../..", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+
+[dev-dependencies]
+modo = { path = "../..", features = ["full", "test-helpers"] }

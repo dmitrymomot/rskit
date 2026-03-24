@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Maximal App{% endblock %}</title>
+</head>
+<body>
+    {% for msg in flash_messages() %}
+    <div class="flash flash-{{ msg.level }}">{{ msg.message }}</div>
+    {% endfor %}
+
+    {% block content %}{% endblock %}
+</body>
+</html>

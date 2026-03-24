@@ -1,0 +1,71 @@
+server:
+  host: 0.0.0.0
+  port: ${PORT}
+
+database:
+  path: ${DATABASE_PATH}
+
+job_database:
+  path: ${JOB_DATABASE_PATH}
+
+tracing:
+  level: info
+  format: json
+  sentry:
+    dsn: ${SENTRY_DSN}
+    environment: production
+    sample_rate: 1.0
+    traces_sample_rate: 0.1
+
+cookie:
+  secret: ${COOKIE_SECRET}
+  secure: true
+
+session:
+  cookie_max_age: 86400
+  cookie_name: sid
+
+job:
+  poll_interval_secs: 1
+  queues:
+    - name: default
+      concurrency: 8
+
+rate_limit:
+  per_second: 50
+  burst_size: 100
+
+trusted_proxies:
+  - ${TRUSTED_PROXY_CIDR}
+
+cors:
+  allow_origins:
+    - ${APP_URL}
+
+oauth:
+  github:
+    client_id: ${GITHUB_CLIENT_ID}
+    client_secret: ${GITHUB_CLIENT_SECRET}
+    redirect_uri: ${APP_URL}/auth/github/callback
+  google:
+    client_id: ${GOOGLE_CLIENT_ID}
+    client_secret: ${GOOGLE_CLIENT_SECRET}
+    redirect_uri: ${APP_URL}/auth/google/callback
+
+email:
+  templates_path: emails
+  default_from_name: ${APP_NAME}
+  default_from_email: ${FROM_EMAIL}
+  smtp:
+    host: ${SMTP_HOST}
+    port: ${SMTP_PORT}
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+
+template:
+  templates_path: templates
+  static_path: static
+  static_url_prefix: /static
+
+geolocation:
+  mmdb_path: ${GEOIP_DB_PATH}

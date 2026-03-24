@@ -1,0 +1,31 @@
+set dotenv-load
+
+default:
+    @just --list
+
+dev:
+    cargo run
+
+check:
+    cargo check
+
+test:
+    cargo test
+
+lint:
+    cargo clippy -- -D warnings
+
+fmt:
+    cargo fmt
+
+fmt-check:
+    cargo fmt --check
+
+services:
+    docker compose up -d
+
+services-down:
+    docker compose down
+
+migrate:
+    cargo run -- migrate
