@@ -10,7 +10,7 @@ codes. Both are always available with no feature flag required.
 
 | Function            | Length   | Alphabet                     | Sortable | Use case                |
 | ------------------- | -------- | ---------------------------- | -------- | ----------------------- |
-| `modo::id::ulid()`  | 26 chars | Crockford base32 (uppercase) | Yes      | Primary keys, UUIDs     |
+| `modo::id::ulid()`  | 26 chars | Crockford base32 (uppercase) | Yes      | Primary keys            |
 | `modo::id::short()` | 13 chars | base36 (lowercase `0-9a-z`)  | Yes      | Slugs, user codes, URLs |
 
 ## Usage
@@ -26,11 +26,11 @@ lexicographically greater than earlier ones.
 use modo::id::ulid;
 
 let id = ulid();
-assert_eq!(id.len(), 26);       // always 26 characters
+assert_eq!(id.len(), 26);          // always 26 characters
 assert_eq!(id, id.to_uppercase()); // always uppercase
 ```
 
-Store in a `TEXT` column. Compatible with UUID-width (`CHAR(26)`) storage.
+Store in a `TEXT` column (`CHAR(26)` also works for fixed-width storage)s
 
 ### Short ID — slugs and user-visible codes
 
@@ -53,7 +53,7 @@ assert_eq!(id, id.to_lowercase()); // always lowercase
 use modo::id::{ulid, short};
 
 async fn create_user() {
-    let user_id = ulid();    // store as primary key
+    let user_id = ulid();      // store as primary key
     let invite_code = short(); // share with end users
 }
 ```

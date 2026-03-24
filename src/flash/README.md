@@ -48,7 +48,7 @@ async fn submit_handler(flash: Flash) -> Redirect {
 }
 ```
 
-Available convenience methods on `Flash`:
+Available methods on `Flash`:
 
 - `flash.success(message)` — level `"success"`
 - `flash.error(message)` — level `"error"`
@@ -81,16 +81,24 @@ Calling `messages()` multiple times within the same request returns the same dat
 ## Templates Integration
 
 When the `templates` feature is enabled, `TemplateContextLayer` automatically
-registers a `flash_messages()` function in the MiniJinja template context. Call
-it from any template without touching the extractor directly:
+registers a `flash_messages()` callable in the MiniJinja template context. It
+marks the messages as consumed and clears the cookie, equivalent to calling
+`Flash::messages()` from a handler.
+
+Each entry in the returned list is a map with one key (the severity level) mapped
+to the message text:
 
 ```jinja
 {% for msg in flash_messages() %}
-  <div class="alert alert-{{ msg.keys() | first }}">
-    {{ msg.values() | first }}
-  </div>
+  {% for level, text in msg|items %}
+    <div class="alert alert-{{ level }}">{{ text }}</div>
+  {% endfor %}
 {% endfor %}
 ```
+
+`FlashLayer` must still be applied to the router for the cookie to be read and
+written. `TemplateContextLayer` only injects the template function; it does not
+replace `FlashLayer`.
 
 ## Cookie Details
 

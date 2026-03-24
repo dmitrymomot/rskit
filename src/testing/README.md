@@ -113,7 +113,7 @@ Add to `Cargo.toml`:
 
 ```toml
 [dev-dependencies]
-modo = { path = "..", features = ["test-helpers"] }
+modo = { path = ".", features = ["test-helpers"] }
 ```
 
 And guard integration test files:

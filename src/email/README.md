@@ -50,7 +50,7 @@ Hi {{name}},
 [button:danger|Delete account](https://example.com/delete)
 ```
 
-`layout` defaults to `"base"` (built-in responsive HTML layout with dark-mode).
+`layout` defaults to `"base"` (built-in responsive HTML layout with dark-mode support).
 Custom layouts are `.html` files in `EmailConfig::layouts_path`.
 
 Locale fallback: `{locale}/{name}.md` → `{default_locale}/{name}.md` → `{name}.md`.
@@ -81,11 +81,13 @@ let email = SendEmail::new("invoice", "customer@example.com")
 ### Render without sending
 
 ```rust,no_run
-# use modo::email::{Mailer, SendEmail};
-# fn example(mailer: &Mailer) -> modo::Result<()> {
-let rendered = mailer.render(&SendEmail::new("welcome", "user@example.com"))?;
-println!("{}", rendered.subject);
-# Ok(()) }
+use modo::email::{EmailConfig, Mailer, SendEmail};
+
+fn example(mailer: &Mailer) -> modo::Result<()> {
+    let rendered = mailer.render(&SendEmail::new("welcome", "user@example.com"))?;
+    println!("{}", rendered.subject);
+    Ok(())
+}
 ```
 
 ### Custom template source
@@ -130,9 +132,9 @@ email:
 | Type                             | Description                                        |
 | -------------------------------- | -------------------------------------------------- |
 | `Mailer`                         | Renders templates and delivers email over SMTP     |
-| `EmailConfig`                    | Top-level configuration                            |
+| `EmailConfig`                    | Top-level configuration (deserializes from YAML)   |
 | `SmtpConfig` / `SmtpSecurity`    | SMTP connection settings and TLS mode              |
-| `SendEmail`                      | Builder for outgoing email                         |
+| `SendEmail`                      | Builder for composing an outgoing email            |
 | `SenderProfile`                  | Per-message `From` / `Reply-To` override           |
 | `RenderedEmail`                  | Output of `Mailer::render` (subject, HTML, text)   |
 | `TemplateSource`                 | Trait for pluggable template loaders               |

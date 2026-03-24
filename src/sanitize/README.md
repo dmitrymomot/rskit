@@ -4,9 +4,9 @@ Input sanitization utilities for the modo web framework.
 
 The module provides the `Sanitize` trait and a collection of standalone helper
 functions for normalizing `String` fields before validation or storage. The
-`JsonRequest`, `FormRequest`, and `Query` extractors all call `sanitize()`
-automatically after deserialization, so implementing the trait on a struct is
-the only wiring required.
+`JsonRequest`, `FormRequest`, `Query`, and `MultipartRequest` extractors all
+call `sanitize()` automatically after deserialization, so implementing the trait
+on a struct is the only wiring required.
 
 ## Key Types
 
@@ -51,7 +51,7 @@ Once `Sanitize` is implemented, the extractors handle sanitization automatically
 ```rust
 use axum::routing::post;
 use axum::Router;
-use modo::extractor::{JsonRequest, FormRequest, Query};
+use modo::extractor::{JsonRequest, FormRequest, Query, MultipartRequest};
 
 async fn create_user(JsonRequest(input): JsonRequest<CreateUserInput>) {
     // `input` has already been sanitized

@@ -20,7 +20,7 @@ The module provides three composable pieces for orderly process teardown:
 
 ### Implementing Task
 
-```rust
+```rust,no_run
 use modo::runtime::Task;
 use modo::Result;
 
@@ -39,7 +39,8 @@ impl Task for MyWorker {
 ### Running the application
 
 Pass all tasks to `run!` and `.await` the result in `main`. Tasks are shut down
-in the order they appear in the macro invocation.
+in the order they appear in the macro invocation. The macro returns
+`Ok::<(), modo::Error>(())` after all tasks finish.
 
 ```rust,no_run
 use modo::runtime::Task;
@@ -90,8 +91,10 @@ async fn main() {
 
 ## Notes
 
-- `run!` logs each step with `tracing::info!` and logs shutdown errors with
+- `run!` logs each step with `tracing::info!` and shutdown errors with
   `tracing::error!` — configure a tracing subscriber in `main` before calling it.
 - A task that returns `Err` from `shutdown` does **not** abort the remaining
   tasks; all tasks are always attempted.
 - `Task::shutdown` consumes `self`, so a task cannot be reused after shutdown.
+- `wait_for_shutdown_signal` panics if the OS-level signal handler cannot be
+  installed — this is treated as a fatal misconfiguration.

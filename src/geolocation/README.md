@@ -12,23 +12,23 @@ Requires the `geolocation` feature flag.
 
 ## Key Types
 
-| Type                | Description                                                               |
-| ------------------- | ------------------------------------------------------------------------- |
-| `GeolocationConfig` | Config struct; maps to the `geolocation` YAML section                     |
-| `GeoLocator`        | Reads the `.mmdb` file and performs IP lookups                            |
-| `GeoLayer`          | Tower layer; runs lookup per request and inserts `Location` in extensions |
-| `Location`          | Resolved geolocation data; also an axum extractor                         |
+| Type                | Description                                                                 |
+| ------------------- | --------------------------------------------------------------------------- |
+| `GeolocationConfig` | Config struct; deserializes from the `geolocation` YAML section             |
+| `GeoLocator`        | Reads the `.mmdb` file and performs IP lookups; cheaply cloneable via `Arc` |
+| `GeoLayer`          | Tower layer; runs lookup per request and inserts `Location` in extensions   |
+| `Location`          | Resolved geolocation data; also an axum extractor                           |
 
 ## Configuration
 
-Add a `geolocation` section to your YAML config file:
+Add a `geolocation` section to your application YAML config:
 
 ```yaml
 geolocation:
     mmdb_path: data/GeoLite2-City.mmdb
 ```
 
-`mmdb_path` supports `${VAR:default}` env-var substitution like all other config fields:
+`mmdb_path` supports `${VAR}` and `${VAR:default}` env-var substitution:
 
 ```yaml
 geolocation:
@@ -42,11 +42,15 @@ geolocation:
 ```rust
 use modo::geolocation::{GeoLocator, GeolocationConfig};
 
-let config = GeolocationConfig {
-    mmdb_path: "data/GeoLite2-City.mmdb".to_string(),
-};
-let locator = GeoLocator::from_config(&config)?;
+fn build_locator() -> modo::Result<GeoLocator> {
+    let config = GeolocationConfig {
+        mmdb_path: "data/GeoLite2-City.mmdb".to_string(),
+    };
+    GeoLocator::from_config(&config)
+}
 ```
+
+Returns an error when `mmdb_path` is empty or the file cannot be opened.
 
 ### Direct lookup
 
@@ -54,16 +58,15 @@ let locator = GeoLocator::from_config(&config)?;
 use std::net::IpAddr;
 use modo::geolocation::{GeoLocator, GeolocationConfig};
 
-let locator = GeoLocator::from_config(&GeolocationConfig {
-    mmdb_path: "data/GeoLite2-City.mmdb".to_string(),
-})?;
+fn lookup_example(locator: &GeoLocator) -> modo::Result<()> {
+    let ip: IpAddr = "81.2.69.142".parse().unwrap();
+    let location = locator.lookup(ip)?;
 
-let ip: IpAddr = "81.2.69.142".parse().unwrap();
-let location = locator.lookup(ip)?;
-
-println!("country: {:?}", location.country_code);
-println!("city:    {:?}", location.city);
-println!("tz:      {:?}", location.timezone);
+    println!("country: {:?}", location.country_code);
+    println!("city:    {:?}", location.city);
+    println!("tz:      {:?}", location.timezone);
+    Ok(())
+}
 ```
 
 `lookup` returns a `Location` with all fields set to `None` for IPs not found
@@ -80,18 +83,17 @@ use modo::ip::ClientIpLayer;
 use modo::geolocation::{GeoLayer, GeoLocator, GeolocationConfig};
 use axum::Router;
 
-let locator = GeoLocator::from_config(&GeolocationConfig {
-    mmdb_path: "data/GeoLite2-City.mmdb".to_string(),
-})?;
-
-let app = Router::new()
-    // routes ...
-    .layer(GeoLayer::new(locator))
-    .layer(ClientIpLayer::new());
+fn build_router(locator: GeoLocator) -> Router {
+    Router::new()
+        // routes ...
+        .layer(GeoLayer::new(locator))
+        .layer(ClientIpLayer::new())
+}
 ```
 
-Note: axum applies layers in bottom-up order, so `ClientIpLayer` is listed
-last to ensure it runs first.
+Axum applies `.layer()` calls in bottom-up order, so `ClientIpLayer` is listed
+last to ensure it runs first. If `ClientIp` is absent from extensions, `GeoLayer`
+passes the request through unchanged.
 
 ### Extracting Location in a handler
 

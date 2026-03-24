@@ -69,7 +69,7 @@ async fn handler(modo::ClientIp(ip): modo::ClientIp) -> String {
 ```rust
 use modo::{ClientIpLayer, Config};
 
-let config: Config = modo::config::load("config").unwrap();
+let config: Config = modo::config::load("config/").unwrap();
 let proxies: Vec<ipnet::IpNet> = config
     .trusted_proxies
     .iter()
@@ -102,12 +102,14 @@ trusted_proxies:
 `ClientIpLayer` must be applied **before** `SessionLayer`. The session
 middleware reads the `ClientIp` extension for fingerprint validation.
 
-```rust
+```no_run
 use axum::Router;
 use modo::{ClientIpLayer, session::SessionLayer};
 
+// ClientIpLayer must wrap SessionLayer so IP resolution happens first.
+// Apply layers in reverse order: the last .layer() call is the outermost.
 let app: Router = Router::new()
     // ...routes...
-    .layer(session_layer)       // inner — runs after ClientIpLayer
+    .layer(session_layer)         // inner — runs after ClientIpLayer
     .layer(ClientIpLayer::new()); // outer — resolves IP first
 ```

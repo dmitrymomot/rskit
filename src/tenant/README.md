@@ -145,3 +145,17 @@ raw value with a type prefix (`slug:`, `domain:`, `id:`).
 
 `TenantId::as_str()` returns the inner value across all variants, including
 the raw API key value — use it only for resolver logic, not for logging.
+
+## Tracing
+
+The middleware calls `Span::current().record("tenant_id", ...)` after a
+successful resolve. For this to appear in logs the enclosing tracing span
+must pre-declare the field:
+
+```rust
+#[tracing::instrument(fields(tenant_id = tracing::field::Empty))]
+async fn my_handler() { /* ... */ }
+```
+
+Spans that do not declare `tenant_id = tracing::field::Empty` silently
+ignore the `record()` call.

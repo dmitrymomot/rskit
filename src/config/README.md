@@ -82,12 +82,18 @@ database:
 
 tracing:
     level: ${LOG_LEVEL:info}
-    format: pretty # "pretty" | "json" | (anything else → compact)
+    format: pretty # "pretty" | "json" | (anything else -> compact)
+
+cookie:
+    secret: ${COOKIE_SECRET}
+    secure: true
 
 session:
     session_ttl_secs: 2592000
     cookie_name: _session
     validate_fingerprint: true
+    touch_interval_secs: 300
+    max_sessions_per_user: 10
 
 rate_limit:
     per_second: 10

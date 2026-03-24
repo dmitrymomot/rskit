@@ -14,12 +14,15 @@ Request signing uses AWS Signature Version 4. Both path-style
 modo = { version = "*", features = ["storage"] }
 ```
 
-For in-process tests using the memory backend, also add:
+For integration tests using the memory backend, also add:
 
 ```toml
 [dev-dependencies]
 modo = { version = "*", features = ["storage-test"] }
 ```
+
+The memory backend is also available inside `#[cfg(test)]` unit-test blocks
+without enabling `storage-test`.
 
 ## Usage
 
@@ -56,7 +59,7 @@ let public_url = storage.url(&key)?;
 ### Upload with options
 
 ```rust
-use modo::storage::{Acl, PutInput, PutOptions};
+use modo::storage::{Acl, PutOptions};
 
 let key = storage.put_with(&input, PutOptions {
     content_disposition: Some("attachment".into()),
@@ -126,7 +129,7 @@ let avatars = buckets.get("avatars")?;
 ### In-memory backend for tests
 
 ```rust
-// Requires the `storage-test` feature
+// Available in #[cfg(test)] blocks and with the `storage-test` feature
 let storage = Storage::memory();
 let buckets = Buckets::memory(&["avatars", "docs"]);
 ```

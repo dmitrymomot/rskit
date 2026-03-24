@@ -35,7 +35,7 @@ let config = SqliteConfig {
 let pool = db::connect(&config).await?;
 db::migrate("migrations", &pool).await?;
 
-// Use with sqlx directly — Pool derefs to sqlx::SqlitePool
+// Pool derefs to sqlx::SqlitePool for direct query use.
 let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
     .fetch_one(&*pool)
     .await?;
@@ -87,7 +87,7 @@ let writer = WritePool::new((*pool).clone());
 
 ### Graceful shutdown
 
-Wrap a pool with `managed` to participate in the `run!` shutdown sequence:
+Wrap a pool with `managed` to participate in the `modo::run!` shutdown sequence:
 
 ```rust
 use modo::db::{self, SqliteConfig};
@@ -95,8 +95,8 @@ use modo::db::{self, SqliteConfig};
 let pool = db::connect(&config).await?;
 let managed = db::managed(pool.clone());
 
-// pool still usable after this; managed is consumed by the shutdown sequence
-run!(server, managed);
+// pool is still usable after this; managed is consumed by the shutdown sequence
+modo::run!(server, managed).await
 ```
 
 `managed` accepts `Pool`, `ReadPool`, or `WritePool`. For a read/write split,
@@ -120,9 +120,9 @@ database:
     foreign_keys: true # default: true
     busy_timeout: 5000 # milliseconds, default: 5000
     cache_size: -2000 # KiB when negative; default: -2000 (2 MB)
-    # mmap_size: 268435456     # bytes, optional
-    # temp_store: MEMORY       # DEFAULT | FILE | MEMORY, optional
-    # wal_autocheckpoint: 1000 # pages, optional
+    # mmap_size: 268435456       # bytes, optional
+    # temp_store: MEMORY         # DEFAULT | FILE | MEMORY, optional
+    # wal_autocheckpoint: 1000   # pages, optional
 
     # Fine-tune read pool (used by connect_rw)
     reader:

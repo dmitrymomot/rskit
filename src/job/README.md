@@ -56,9 +56,9 @@ Set `cleanup: ~` (null) to disable automatic cleanup of terminal jobs.
 ```rust
 use modo::job::{JobConfig, JobOptions, Payload, Meta, Worker};
 use modo::service::Registry;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct WelcomePayload { user_id: String }
 
 async fn send_welcome_email(
@@ -73,14 +73,14 @@ async fn start_worker(config: &JobConfig, registry: &Registry) {
     let worker = Worker::builder(config, registry)
         .register("send_welcome_email", send_welcome_email)
         .register_with(
-            "generate_report",
-            generate_report,
-            JobOptions { max_attempts: 1, timeout_secs: 600 },
+            "send_welcome_email_retry1",
+            send_welcome_email,
+            JobOptions { max_attempts: 1, timeout_secs: 60 },
         )
         .start()
         .await;
 
-    // Integrate with graceful shutdown via the run! macro:
+    // Integrate with graceful shutdown:
     // modo::run!(server, worker).await.unwrap();
 }
 ```
@@ -92,7 +92,11 @@ async fn start_worker(config: &JobConfig, registry: &Registry) {
 ```rust
 use modo::job::{Enqueuer, EnqueueOptions, EnqueueResult};
 use modo::db::WritePool;
+use serde::Serialize;
 use chrono::Utc;
+
+#[derive(Serialize)]
+struct WelcomePayload { user_id: String }
 
 async fn enqueue_jobs(pool: &WritePool) {
     let enqueuer = Enqueuer::new(pool);
@@ -128,20 +132,35 @@ async fn enqueue_jobs(pool: &WritePool) {
 
 ### Accessing services inside handlers
 
+Use `Service<T>` as a handler argument to retrieve a value registered in the service
+registry. The inner value is `Arc<T>`.
+
 ```rust
 use modo::job::Payload;
-use modo::extractor::Service;
+use modo::Service;
+use std::sync::Arc;
+use serde::Deserialize;
+
+struct Mailer;
+
+#[derive(Deserialize)]
+struct WelcomePayload { user_id: String }
 
 async fn notify(
     payload: Payload<WelcomePayload>,
     mailer: Service<Mailer>,
 ) -> modo::Result<()> {
-    // mailer.0 is Arc<Mailer>
+    let _mailer: Arc<Mailer> = mailer.0.clone();
     Ok(())
 }
 ```
 
-## Retry behaviour
+## Retry Behaviour
 
 Failed jobs are rescheduled with exponential backoff: `delay = min(5 * 2^(attempt-1), 3600)` seconds.
 After `max_attempts` failures (default 3) the job is moved to `Dead` and not retried.
+
+## Database Schema
+
+The module reads and writes a `modo_jobs` table. End-applications must create and
+migrate this table themselves — no embedded migration is provided.

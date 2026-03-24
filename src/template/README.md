@@ -11,7 +11,7 @@ context, `Renderer` axum extractor, HTMX support, and static file serving.
 
 ### Building the engine
 
-```rust
+```rust,no_run
 use modo::template::{Engine, TemplateConfig};
 
 let engine = Engine::builder()
@@ -22,20 +22,20 @@ let engine = Engine::builder()
 
 ### Wiring into the router
 
-```rust
+```rust,no_run
 use modo::template::{Engine, TemplateContextLayer};
 
-# fn example(engine: Engine) {
-let router = axum::Router::new()
-    .merge(engine.static_service())          // serve /assets/*
-    // ... routes ...
-    .layer(TemplateContextLayer::new(engine)); // inject per-request context
-# }
+fn build_router(engine: Engine) -> axum::Router {
+    axum::Router::new()
+        .merge(engine.static_service())           // serve /assets/*
+        // ... routes ...
+        .layer(TemplateContextLayer::new(engine))  // inject per-request context
+}
 ```
 
 ### Rendering in a handler
 
-```rust
+```rust,no_run
 use modo::template::{Renderer, context};
 use axum::response::Html;
 
@@ -46,7 +46,7 @@ async fn home(renderer: Renderer) -> modo::Result<Html<String>> {
 
 ### HTMX partial rendering
 
-```rust
+```rust,no_run
 use modo::template::{Renderer, context};
 use axum::response::Html;
 
@@ -62,7 +62,7 @@ async fn dashboard(renderer: Renderer) -> modo::Result<Html<String>> {
 
 ### Detecting HTMX requests directly
 
-```rust
+```rust,no_run
 use modo::template::HxRequest;
 
 async fn handler(hx: HxRequest) {
@@ -72,7 +72,7 @@ async fn handler(hx: HxRequest) {
 
 ### Registering custom functions and filters
 
-```rust
+```rust,no_run
 use modo::template::{Engine, TemplateConfig};
 
 let engine = Engine::builder()
@@ -138,11 +138,11 @@ The locale chain resolves in order: query param → cookie → session →
 
 ## Template variables injected by middleware
 
-| Variable         | Value                                        |
-| ---------------- | -------------------------------------------- |
-| `current_url`    | Full request URI string                      |
-| `is_htmx`        | `true` when `HX-Request: true`               |
-| `request_id`     | Value of `X-Request-Id` header (if present)  |
-| `locale`         | Resolved locale string (e.g. `"en"`)         |
-| `csrf_token`     | CSRF token string (if `CsrfLayer` is active) |
-| `flash_messages` | Callable that returns flash entries (if any) |
+| Variable         | Value                                                           |
+| ---------------- | --------------------------------------------------------------- |
+| `current_url`    | Full request URI string                                         |
+| `is_htmx`        | `true` when `HX-Request: true`                                  |
+| `request_id`     | Value of `X-Request-Id` header (if present)                     |
+| `locale`         | Resolved locale string (e.g. `"en"`)                            |
+| `csrf_token`     | CSRF token string (if `csrf()` middleware is active)            |
+| `flash_messages` | Callable that returns flash entries (if `FlashLayer` is active) |

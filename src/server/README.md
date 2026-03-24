@@ -10,8 +10,8 @@ The module exposes two items:
 - `http(router, config)` — binds a TCP port, starts serving on a background task, and
   returns an `HttpServer` handle.
 
-`HttpServer` implements the `Task` trait, so it integrates directly with the `run!` macro
-for coordinated, signal-driven shutdown.
+`HttpServer` implements the `Task` trait, so it integrates directly with the `modo::run!`
+macro for coordinated, signal-driven shutdown.
 
 ## Usage
 
@@ -19,43 +19,43 @@ for coordinated, signal-driven shutdown.
 
 ```rust
 use modo::server::{Config, http};
-use modo::run;
 
 #[tokio::main]
 async fn main() -> modo::Result<()> {
     let config = Config::default();
     let router = modo::axum::Router::new();
     let server = http(router, &config).await?;
-    run!(server).await
+    modo::run!(server).await
 }
 ```
 
 ### Loading config from YAML
 
 ```rust
-use modo::server::Config;
 use modo::config::load;
 
+// Reads config/development.yaml (or the file named after APP_ENV)
 let config: modo::Config = load("config/").unwrap();
-// config.server is a server::Config
+// config.server is a modo::server::Config
+let _ = config.server;
 ```
 
 ### Coordinated shutdown with multiple services
 
-`run!` accepts any number of `Task` values and shuts them down in order after a
-`SIGTERM` or `Ctrl-C` signal is received.
+`modo::run!` accepts any number of `Task` values and shuts them down in order
+after a `SIGTERM` or `Ctrl-C` signal is received.
 
 ```rust
 use modo::server::{Config, http};
-use modo::run;
 
 #[tokio::main]
 async fn main() -> modo::Result<()> {
     let cfg = Config::default();
     let router = modo::axum::Router::new();
     let server = http(router, &cfg).await?;
-    // pass additional Task values (workers, schedulers, etc.) as extra arguments
-    run!(server).await
+    // Pass additional Task values (workers, schedulers, etc.) as extra arguments.
+    // Example: modo::run!(server, worker, scheduler).await
+    modo::run!(server).await
 }
 ```
 

@@ -30,7 +30,7 @@ modo = { version = "0.1", features = ["sse"] }
 Create one `Broadcaster` per domain concept and register it in the service
 registry so handlers can extract it with `Service<T>`.
 
-```rust
+```rust,ignore
 use modo::sse::{Broadcaster, SseConfig};
 
 // buffer = per-channel message buffer before subscribers lag
@@ -40,8 +40,8 @@ registry.add(chat);
 
 ### Stream events to a client
 
-```rust
-use modo::sse::{Broadcaster, Event, LagPolicy, SseConfig, SseStreamExt};
+```rust,ignore
+use modo::sse::{Broadcaster, Event, LagPolicy, SseStreamExt};
 use modo::Service;
 
 async fn chat_events(
@@ -62,7 +62,7 @@ async fn chat_events(
 Use `Broadcaster::channel()` when you need to push events from inside an async
 loop rather than mapping a broadcast stream.
 
-```rust
+```rust,ignore
 use modo::sse::{Broadcaster, Event};
 use modo::Service;
 use std::time::Duration;
@@ -82,7 +82,7 @@ async fn health_stream(
 
 ### Reconnection replay with `LastEventId`
 
-```rust
+```rust,ignore
 use modo::sse::{Broadcaster, Event, LagPolicy, LastEventId, SseStreamExt, replay};
 use modo::Service;
 
@@ -106,7 +106,7 @@ async fn notifications(
 
 ### Building events
 
-```rust
+```rust,ignore
 use modo::sse::Event;
 use std::time::Duration;
 

@@ -12,11 +12,11 @@ Wraps [`tracing_subscriber`](https://docs.rs/tracing-subscriber) with a simple Y
 
 ## Key Types
 
-| Type           | Description                                                                                   |
-| -------------- | --------------------------------------------------------------------------------------------- |
-| `Config`       | Log level and output format; optionally embeds `SentryConfig`.                                |
-| `TracingGuard` | RAII guard holding the subscriber and Sentry client. Implements `Task` for graceful shutdown. |
-| `SentryConfig` | Sentry DSN, environment, and sampling rates. Requires `sentry` feature.                       |
+| Type           | Description                                                                                         |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| `Config`       | Log level and output format; optionally embeds `SentryConfig` when the `sentry` feature is enabled. |
+| `TracingGuard` | RAII guard that keeps the subscriber and Sentry client alive. Implements `Task` and `Default`.      |
+| `SentryConfig` | Sentry DSN, environment tag, and sampling rates. Only present with the `sentry` feature.            |
 
 ## Usage
 
@@ -63,9 +63,17 @@ The `tracing` section in your YAML config file maps directly to `Config`:
 
 ```yaml
 tracing:
-    level: info # any RUST_LOG / EnvFilter directive
+    level: info # any RUST_LOG / EnvFilter directive; overridden by RUST_LOG env var
     format: pretty # "pretty" (default) | "json" | compact (any other value)
 ```
+
+### Log formats
+
+| Value      | Output style                           |
+| ---------- | -------------------------------------- |
+| `"pretty"` | Human-readable multi-line (default)    |
+| `"json"`   | Machine-readable JSON, one object/line |
+| other      | Compact single-line                    |
 
 `RUST_LOG` overrides `level` when set.
 

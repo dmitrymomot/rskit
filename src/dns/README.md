@@ -128,22 +128,25 @@ if err.error_code() == Some("dns:timeout") { /* ... */ }
 Register `DomainVerifier` in the service registry so handlers can extract it:
 
 ```rust,no_run
-use modo::{AppBuilder, registry::Registry};
+use modo::service::Registry;
 use modo::dns::{DnsConfig, DomainVerifier};
 
 let config: DnsConfig = app_config.dns; // from your YAML config
 let verifier = DomainVerifier::from_config(&config)?;
 
-let app = AppBuilder::new()
-    .service(verifier)
-    // ...
-    .build();
+let mut registry = Registry::new();
+registry.add(verifier);
+let state = registry.into_state();
+
+let app = axum::Router::new()
+    // .route(...)
+    .with_state(state);
 ```
 
 In a handler, extract the verifier with `Service<DomainVerifier>`:
 
 ```rust,no_run
-use modo::extract::Service;
+use modo::Service;
 use modo::dns::DomainVerifier;
 
 async fn verify_handler(

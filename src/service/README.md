@@ -4,7 +4,7 @@ Type-map service registry and axum application state for the modo web framework.
 
 ## Overview
 
-The module provides two complementary types:
+The module provides two complementary public types:
 
 - `Registry` — a mutable builder that holds services during startup.
 - `AppState` — an immutable, `Clone`-cheap snapshot passed to axum as application state.
@@ -23,7 +23,7 @@ second `add` call for the same type overwrites the previous entry.
 
 ### Registering services and building a router
 
-```rust
+```rust,ignore
 use modo::service::Registry;
 
 let mut registry = Registry::new();
@@ -39,10 +39,10 @@ let app = axum::Router::new()
 
 ### Retrieving a service inside a handler
 
-Use the `Service<T>` extractor (re-exported as `modo::Service`). It resolves from
-`AppState` automatically when the router was built with `with_state(state)`.
+Use the `Service<T>` extractor (re-exported as `modo::Service`). It resolves the
+service from `AppState` automatically when the router was built with `with_state(state)`.
 
-```rust
+```rust,ignore
 use modo::Service;
 
 async fn index(Service(pool): Service<MyPool>) -> String {
@@ -56,10 +56,10 @@ registered, with a message that names the missing type.
 
 ### Accessing the state directly
 
-`AppState::get<T>()` is available when you hold an `AppState` outside of a handler,
-for example inside middleware or during startup checks:
+`AppState::get::<T>()` returns `Option<Arc<T>>` and is available wherever you hold
+an `AppState` directly — for example inside middleware or during startup validation:
 
-```rust
+```rust,ignore
 use modo::service::{AppState, Registry};
 
 let mut registry = Registry::new();
@@ -70,8 +70,29 @@ let value: Option<std::sync::Arc<u32>> = state.get::<u32>();
 assert_eq!(*value.unwrap(), 42);
 ```
 
+### Startup validation with `Registry::get`
+
+`Registry::get::<T>()` lets you verify that a service was registered before calling
+`into_state()`:
+
+```rust,ignore
+use modo::service::Registry;
+
+let mut registry = Registry::new();
+registry.add(my_db_pool);
+
+// Confirm the pool is present before starting the server.
+assert!(registry.get::<MyPool>().is_some());
+
+let state = registry.into_state();
+```
+
 ## Integration with modo
 
-`AppState` implements `axum::extract::FromRef<AppState>` via axum's blanket identity
-impl, so it works directly with every extractor that is bound by `AppState: FromRef<S>`,
-including `Service<T>`, `Renderer`, and the OAuth state extractor.
+`AppState` satisfies axum's `FromRef<AppState>` bound via the blanket
+`impl<S: Clone> FromRef<S> for S` in axum, so it composes with every extractor
+bound by `AppState: FromRef<S>`:
+
+- `Service<T>` — always available; retrieves any registered service.
+- `Renderer` — requires the `templates` feature; retrieves the template engine.
+- `OAuthState` — requires the `auth` feature; reads and verifies the OAuth state cookie.

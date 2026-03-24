@@ -2,22 +2,23 @@
 
 Request extractors for the modo web framework.
 
-All sanitizing extractors call `Sanitize::sanitize` on the deserialized value before
-returning it, so whitespace trimming and other normalization happen automatically.
+All sanitizing extractors call [`Sanitize::sanitize`](../sanitize/index.html) on the
+deserialized value before returning it, so whitespace trimming and other normalization
+happen automatically.
 
 ## Key Types
 
-| Type                  | Source                                          | Trait bound on `T`            |
-| --------------------- | ----------------------------------------------- | ----------------------------- |
-| `JsonRequest<T>`      | JSON request body                               | `DeserializeOwned + Sanitize` |
-| `FormRequest<T>`      | URL-encoded form body                           | `DeserializeOwned + Sanitize` |
-| `Query<T>`            | URL query string                                | `DeserializeOwned + Sanitize` |
-| `MultipartRequest<T>` | `multipart/form-data` body                      | `DeserializeOwned + Sanitize` |
-| `Path<T>`             | URL path parameters (axum re-export)            | `DeserializeOwned`            |
-| `Service<T>`          | Application service registry                    | `Send + Sync + 'static`       |
-| `UploadedFile`        | A single file from a multipart upload           | —                             |
-| `Files`               | Map of field names to uploaded files            | —                             |
-| `UploadValidator<'_>` | Fluent file validator built from `UploadedFile` | —                             |
+| Type                  | Source                               | Trait bound on `T`            |
+| --------------------- | ------------------------------------ | ----------------------------- |
+| `JsonRequest<T>`      | JSON request body                    | `DeserializeOwned + Sanitize` |
+| `FormRequest<T>`      | URL-encoded form body                | `DeserializeOwned + Sanitize` |
+| `Query<T>`            | URL query string                     | `DeserializeOwned + Sanitize` |
+| `MultipartRequest<T>` | `multipart/form-data` body           | `DeserializeOwned + Sanitize` |
+| `Path<T>`             | URL path parameters (axum re-export) | `DeserializeOwned`            |
+| `Service<T>`          | Application service registry         | `Send + Sync + 'static`       |
+| `UploadedFile`        | Single file from a multipart upload  | —                             |
+| `Files`               | Map of field names to uploaded files | —                             |
+| `UploadValidator<'_>` | Fluent file validator                | —                             |
 
 ## Usage
 
@@ -94,9 +95,13 @@ async fn search(Query(params): Query<SearchParams>) {
 
 ### Multipart file upload
 
+`MultipartRequest<T>` deconstructs into `(T, Files)`. Text fields are deserialized and
+sanitized into `T`; file fields are accessible through the [`Files`] map.
+
 ```rust
 use modo::extractor::{MultipartRequest, Files};
 use modo::sanitize::Sanitize;
+use modo::Result;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -112,19 +117,22 @@ impl Sanitize for ProfileForm {
 
 async fn update_profile(
     MultipartRequest(form, mut files): MultipartRequest<ProfileForm>,
-) {
+) -> Result<()> {
     if let Some(avatar) = files.file("avatar") {
         // avatar.name, avatar.content_type, avatar.size, avatar.data
         avatar.validate()
             .max_size(5 * 1024 * 1024)  // 5 MB
             .accept("image/*")
-            .check()
-            .expect("validation failed");
+            .check()?;
     }
+    Ok(())
 }
 ```
 
 ### Service registry
+
+`Service<T>` retrieves a service registered via `Registry::add` during startup.
+The inner value is `Arc<T>`. Returns 500 if `T` was not registered.
 
 ```rust
 use modo::Service;
@@ -140,11 +148,11 @@ async fn handler(Service(email): Service<EmailService>) {
 ### File validation
 
 `UploadedFile::validate()` returns an `UploadValidator` for fluent constraint checking.
-All violations are collected before the error is returned.
+All violations are collected before the error is returned (422 Unprocessable Entity).
 
-Each `.accept(pattern)` call is an independent constraint — the file must satisfy every
-`.accept()` call. To allow a set of related types use a wildcard pattern (`"image/*"`)
-rather than chaining multiple exact types.
+Supported patterns for `.accept`: exact (`"image/png"`), wildcard subtype (`"image/*"`),
+and catch-all (`"*/*"`). Parameters after `;` in the content type are stripped before
+matching.
 
 ```rust
 use modo::extractor::UploadedFile;

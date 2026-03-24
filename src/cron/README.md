@@ -13,8 +13,8 @@ Three formats are accepted wherever a schedule string is required:
 
 | Format                                   | Examples                                                                        |
 | ---------------------------------------- | ------------------------------------------------------------------------------- |
-| Standard cron (5-field)                  | `"0 30 9 * * *"`, `"*/5 * * * *"`                                               |
-| Standard cron (6-field, leading seconds) | `"0 0 30 9 * * *"`                                                              |
+| Standard cron (5-field)                  | `"*/5 * * * *"`, `"0 9 * * 1"`                                                  |
+| Standard cron (6-field, leading seconds) | `"0 30 9 * * *"`, `"0 0 0 * * *"`                                               |
 | Named alias                              | `@yearly`, `@annually`, `@monthly`, `@weekly`, `@daily`, `@midnight`, `@hourly` |
 | Interval                                 | `@every 5m`, `@every 1h30m`, `@every 30s`                                       |
 
@@ -26,7 +26,7 @@ Invalid expressions or durations cause a panic at startup.
 | ------------------- | -------------------------------------------------------- |
 | `Scheduler`         | Running scheduler handle; implements `Task` for shutdown |
 | `SchedulerBuilder`  | Builder returned by `Scheduler::builder()`               |
-| `CronOptions`       | Per-job options (timeout)                                |
+| `CronOptions`       | Per-job options (timeout); default timeout is 300 s      |
 | `Meta`              | Job metadata injected into handler arguments             |
 | `CronContext`       | Full execution context; not used directly by handlers    |
 | `CronHandler<Args>` | Trait implemented automatically for matching `async fn`  |
@@ -35,29 +35,26 @@ Invalid expressions or durations cause a panic at startup.
 ## Basic Usage
 
 ```rust
-use modo::cron::{Scheduler, Meta};
+use modo::cron::Scheduler;
 use modo::extractor::Service;
 use modo::service::Registry;
-use modo::runtime::Task;
 use modo::Result;
-use std::sync::Arc;
 
 struct EmailService;
 
-async fn send_digest(svc: Service<Arc<EmailService>>) -> Result<()> {
-    // use svc.0 to call methods on EmailService
+async fn send_digest(svc: Service<EmailService>) -> Result<()> {
+    // svc.0 is Arc<EmailService>
     Ok(())
 }
 
 async fn heartbeat() -> Result<()> {
-    tracing::info!("heartbeat");
     Ok(())
 }
 
 #[tokio::main]
 async fn main() {
     let mut registry = Registry::new();
-    registry.add(Arc::new(EmailService));
+    registry.add(EmailService);
 
     let scheduler = Scheduler::builder(&registry)
         .job("@daily", send_digest)
@@ -93,6 +90,8 @@ async fn main() {
         )
         .start()
         .await;
+
+    scheduler.shutdown().await.unwrap();
 }
 ```
 

@@ -30,7 +30,9 @@ if let Some(user_id) = cache.get(&"token:abc") {
 ### Thread-safe Shared Cache
 
 `LruCache` is not `Sync`. Wrap it in `std::sync::RwLock` when sharing across
-request handlers. Never hold the lock across an `.await` point.
+request handlers. Because `get` requires `&mut self` to update the recency
+order, even read-only lookups must acquire a write lock. Never hold the lock
+across an `.await` point.
 
 ```rust
 use std::num::NonZeroUsize;
@@ -78,3 +80,11 @@ registry.add(cache);
 - On `put`: if the cache is full and the key is new, the least-recently-used
   entry is evicted first.
 - On `get`: accessing a key moves it to the most-recently-used position.
+
+## Performance
+
+Key-value lookup uses a `HashMap` (O(1) amortised), but maintaining LRU order
+requires a linear scan of the internal `VecDeque`, making the overall complexity
+of `get` and `put` O(n). For caches up to a few thousand entries this overhead
+is negligible. For larger working sets, consider a purpose-built crate such as
+`lru` or `quick-cache`.

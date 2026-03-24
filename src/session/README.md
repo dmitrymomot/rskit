@@ -76,7 +76,7 @@ async fn build_app(
     let session_layer = session::layer(store, &cookie_cfg, &key);
 
     let router = axum::Router::new()
-        // ... routes ...
+        // .route(...)
         .layer(session_layer);
 
     Ok(router)
@@ -127,7 +127,6 @@ struct Cart {
 }
 
 async fn handler(session: Session) -> modo::Result<()> {
-    // Check authentication
     if !session.is_authenticated() {
         return Err(modo::Error::unauthorized("login required"));
     }
@@ -200,12 +199,12 @@ Schedule `Store::cleanup_expired` periodically (e.g. via a cron job) to
 remove expired rows from the database:
 
 ```rust,no_run
-use modo::session::{SessionConfig, Store};
+use modo::session::Store;
 
-async fn cleanup_job(store: Store) -> modo::Result<()> {
+async fn cleanup_job(store: Store) -> modo::Result<u64> {
     let deleted = store.cleanup_expired().await?;
     tracing::info!(deleted, "expired sessions removed");
-    Ok(())
+    Ok(deleted)
 }
 ```
 
@@ -219,4 +218,3 @@ async fn cleanup_job(store: Store) -> modo::Result<()> {
 | `SessionToken`  | Opaque 32-byte random token; redacted in `Debug`/`Display`    |
 | `Store`         | Low-level SQLite store; use directly for background jobs      |
 | `SessionLayer`  | Tower layer; apply to a `Router` to enable session support    |
-| `SessionMeta`   | Per-request metadata (IP, UA, fingerprint) recorded at login  |

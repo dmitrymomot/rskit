@@ -96,12 +96,39 @@ error (without `source`) is also inserted into response extensions under the typ
 | `Error::forbidden(msg)`            | 403    |
 | `Error::not_found(msg)`            | 404    |
 | `Error::conflict(msg)`             | 409    |
-| `Error::unprocessable_entity(msg)` | 422    |
 | `Error::payload_too_large(msg)`    | 413    |
+| `Error::unprocessable_entity(msg)` | 422    |
 | `Error::too_many_requests(msg)`    | 429    |
 | `Error::internal(msg)`             | 500    |
 | `Error::bad_gateway(msg)`          | 502    |
 | `Error::gateway_timeout(msg)`      | 504    |
+
+For SSE subscriber errors, use `Error::lagged(skipped: u64)`, which produces a `500` with
+`is_lagged()` returning `true`.
+
+For a custom status code, use `Error::new(status, msg)` or `Error::with_source(status, msg, source)`.
+
+## HttpError Variants
+
+`HttpError` is a `Copy` enum with `status_code()` and `message()` methods. It converts into
+`Error` via `From<HttpError>`.
+
+| Variant                          | Status |
+| -------------------------------- | ------ |
+| `HttpError::BadRequest`          | 400    |
+| `HttpError::Unauthorized`        | 401    |
+| `HttpError::Forbidden`           | 403    |
+| `HttpError::NotFound`            | 404    |
+| `HttpError::MethodNotAllowed`    | 405    |
+| `HttpError::Conflict`            | 409    |
+| `HttpError::Gone`                | 410    |
+| `HttpError::PayloadTooLarge`     | 413    |
+| `HttpError::UnprocessableEntity` | 422    |
+| `HttpError::TooManyRequests`     | 429    |
+| `HttpError::InternalServerError` | 500    |
+| `HttpError::BadGateway`          | 502    |
+| `HttpError::ServiceUnavailable`  | 503    |
+| `HttpError::GatewayTimeout`      | 504    |
 
 ## Automatic From Conversions
 

@@ -50,8 +50,9 @@ let app: Router = Router::new()
 ```
 
 The RBAC middleware must be applied with `.layer()` on the outer router so it runs
-before any guard. Guards must be applied with `.route_layer()` so path parameters are
-available.
+before any guard. Guards must be applied with `.route_layer()` so they execute after
+route matching, at which point the outer middleware has already stored `Role` in
+extensions.
 
 ### Nested guards
 

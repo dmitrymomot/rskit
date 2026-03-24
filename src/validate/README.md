@@ -15,7 +15,8 @@ that validate themselves. `ValidationError` converts automatically into
 | `ValidationError` | Per-field error collection; converts into `Error` (HTTP 422)                         |
 | `Validate`        | Trait for types that know how to validate themselves                                 |
 
-Rules are applied through a `FieldValidator` obtained inside the `Validator::field` closure. String rules require `T: AsRef<str>`; numeric rules require `T: PartialOrd + Display`.
+Rules are applied through a `FieldValidator` obtained inside the `Validator::field` closure.
+String rules require `T: AsRef<str>`; numeric rules require `T: PartialOrd + Display`.
 
 ## Usage
 
@@ -81,16 +82,16 @@ if let Err(e) = result {
 
 ### String rules (`T: AsRef<str>`)
 
-| Method                       | Description                                                   |
-| ---------------------------- | ------------------------------------------------------------- |
-| `required()`                 | Value must not be empty after trimming                        |
-| `min_length(n)`              | At least `n` Unicode characters                               |
-| `max_length(n)`              | At most `n` Unicode characters                                |
-| `email()`                    | Simple structural email check                                 |
-| `url()`                      | Must start with `http://` or `https://` and contain no spaces |
-| `one_of(options)`            | Value must equal one of the provided string slices            |
-| `matches_regex(pattern)`     | Value must match the given regex                              |
-| `custom(predicate, message)` | User-supplied predicate; records `message` on failure         |
+| Method                       | Description                                                    |
+| ---------------------------- | -------------------------------------------------------------- |
+| `required()`                 | Value must not be empty after trimming                         |
+| `min_length(n)`              | At least `n` Unicode characters                                |
+| `max_length(n)`              | At most `n` Unicode characters                                 |
+| `email()`                    | Simple structural email check                                  |
+| `url()`                      | Must start with `http://` or `https://` and contain no spaces  |
+| `one_of(options)`            | Value must equal one of the provided string slices             |
+| `matches_regex(pattern)`     | Value must match the given regex; records error on bad pattern |
+| `custom(predicate, message)` | User-supplied predicate; records `message` on failure          |
 
 ### Numeric rules (`T: PartialOrd + Display`)
 
@@ -115,3 +116,6 @@ propagates it as an HTTP 422 response with a JSON body:
     }
 }
 ```
+
+`Validate`, `ValidationError`, and `Validator` are also re-exported at the crate root
+as `modo::Validate`, `modo::ValidationError`, and `modo::Validator`.

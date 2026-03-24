@@ -14,15 +14,15 @@ A collection of Tower-compatible middleware layers covering common cross-cutting
 | `tracing`                        | fn     | HTTP request/response lifecycle tracing spans            |
 | `cors` / `cors_with`             | fn     | CORS headers — static or dynamic origins                 |
 | `subdomains` / `urls`            | fn     | CORS origin predicates                                   |
-| `CorsConfig`                     | struct | Configuration for CORS middleware                        |
+| `CorsConfig`                     | struct | CORS configuration                                       |
 | `csrf`                           | fn     | Double-submit signed-cookie CSRF protection              |
-| `CsrfConfig`                     | struct | Configuration for CSRF middleware                        |
-| `CsrfToken`                      | struct | CSRF token stored in request/response extensions         |
+| `CsrfConfig`                     | struct | CSRF configuration                                       |
+| `CsrfToken`                      | struct | CSRF token in request/response extensions                |
 | `error_handler`                  | fn     | Centralised error-response rendering                     |
 | `security_headers`               | fn     | Add security headers to every response                   |
-| `SecurityHeadersConfig`          | struct | Configuration for security headers                       |
+| `SecurityHeadersConfig`          | struct | Security headers configuration                           |
 | `rate_limit` / `rate_limit_with` | fn     | Token-bucket rate limiting                               |
-| `RateLimitConfig`                | struct | Configuration for rate limiting                          |
+| `RateLimitConfig`                | struct | Rate-limit configuration                                 |
 | `RateLimitLayer`                 | struct | Tower layer produced by `rate_limit` / `rate_limit_with` |
 | `KeyExtractor`                   | trait  | Custom rate-limit key extraction                         |
 | `PeerIpKeyExtractor`             | struct | Rate-limit key from peer IP                              |
@@ -51,10 +51,7 @@ let app = Router::new()
 use modo::middleware::{CorsConfig, cors, cors_with, subdomains};
 
 // Static allow-list
-let config = CorsConfig {
-    origins: vec!["https://example.com".to_string()],
-    ..Default::default()
-};
+let config = CorsConfig { origins: vec!["https://example.com".to_string()], ..Default::default() };
 let layer = cors(&config);
 
 // Dynamic: any subdomain of example.com
@@ -72,7 +69,7 @@ let key = Key::generate();
 let layer = csrf(&config, &key);
 ```
 
-Handlers receive the token via `CsrfToken` in request extensions. Unsafe methods (POST, PUT, DELETE, PATCH) must include the token in the `X-CSRF-Token` header.
+Handlers receive the token via `CsrfToken` in request extensions. Unsafe methods (POST, PUT, DELETE, PATCH) must send the token in the `X-CSRF-Token` header.
 
 ### Security headers
 
@@ -101,7 +98,7 @@ async fn render_error(err: modo::Error, _parts: Parts) -> axum::response::Respon
 let layer = error_handler(render_error);
 ```
 
-The handler is called whenever a `modo::Error` is present in response extensions — this catches errors from `catch_panic`, `csrf`, `rate_limit`, and any handler that returns `modo::Error`.
+The handler fires whenever a `modo::Error` is present in response extensions — catches errors from `catch_panic`, `csrf`, `rate_limit`, and handler errors.
 
 ### Rate limiting
 
@@ -110,16 +107,16 @@ use tokio_util::sync::CancellationToken;
 use modo::middleware::{rate_limit, rate_limit_with, GlobalKeyExtractor, RateLimitConfig};
 
 let cancel = CancellationToken::new();
-
-// Per-IP rate limit (requires into_make_service_with_connect_info)
 let config = RateLimitConfig { per_second: 10, burst_size: 30, ..Default::default() };
+
+// Per-IP (requires into_make_service_with_connect_info)
 let layer = rate_limit(&config, cancel.clone());
 
 // Global shared bucket
 let layer = rate_limit_with(&config, GlobalKeyExtractor, cancel.clone());
 ```
 
-When `use_headers` is `true` (default), allowed responses include `x-ratelimit-limit`, `x-ratelimit-remaining`, and `x-ratelimit-reset`; rejected responses include `retry-after`.
+When `use_headers` is `true` (default), allowed responses carry `x-ratelimit-limit`, `x-ratelimit-remaining`, and `x-ratelimit-reset`; rejected responses carry `retry-after`.
 
 ### Custom key extractor
 
@@ -145,31 +142,9 @@ let layer = rate_limit_with(&RateLimitConfig::default(), ApiKeyExtractor, Cancel
 
 ## Configuration
 
-All `*Config` types implement `serde::Deserialize` with `#[serde(default)]`, so they can be loaded from YAML via `modo::config`:
+All `*Config` types implement `serde::Deserialize` with `#[serde(default)]` and load cleanly from YAML via `modo::config`. The default values are:
 
-```yaml
-cors:
-    origins: ["https://example.com"]
-    methods: ["GET", "POST", "PUT", "DELETE"]
-    max_age_secs: 86400
-    allow_credentials: true
-
-csrf:
-    cookie_name: "_csrf"
-    header_name: "X-CSRF-Token"
-    field_name: "_csrf_token"
-    ttl_secs: 21600
-
-security_headers:
-    x_content_type_options: true
-    x_frame_options: "DENY"
-    referrer_policy: "strict-origin-when-cross-origin"
-    hsts_max_age: 31536000
-
-rate_limit:
-    per_second: 10
-    burst_size: 50
-    use_headers: true
-    cleanup_interval_secs: 60
-    max_keys: 10000
-```
+- `RateLimitConfig`: `per_second=1`, `burst_size=10`, `use_headers=true`, `cleanup_interval_secs=60`, `max_keys=10000`
+- `CorsConfig`: allow any origin, methods GET/POST/PUT/DELETE/PATCH, `max_age_secs=86400`
+- `CsrfConfig`: cookie `_csrf`, header `X-CSRF-Token`, `ttl_secs=21600`, exempt GET/HEAD/OPTIONS
+- `SecurityHeadersConfig`: `x_content_type_options=true`, `x_frame_options=DENY`, `referrer_policy=strict-origin-when-cross-origin`
