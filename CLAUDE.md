@@ -60,7 +60,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 15 (Webhook Delivery):** DONE — `src/webhook/` module with `WebhookSender<C>`, `HttpClient` trait, `HyperClient`, `WebhookSecret`, Standard Webhooks signing. Feature-gated under `webhooks`
 - **Plan 16 (Flash Messages):** DONE — `src/flash/` module with `Flash` extractor (`flash.success()` / `flash.set()` / `flash.messages()`), `FlashLayer` middleware, `flash_messages()` template function. Cookie-based (signed), read-once-and-clear. No session dependency. Always-available (no feature gate)
 - **Plan 17 (Storage ACL + Upload from URL):** SPEC + PLAN READY — spec and plan written, ready for implementation. `Acl::Private` / `Acl::PublicRead` on `PutOptions`, `x-amz-acl` S3 header, `PutFromUrlInput`, `put_from_url()` / `put_from_url_with()` with streaming fetch and 30s timeout. Feature-gated under `storage`
-- **Plan 18 (DNS Verification):** TXT record ownership check + CNAME verification for custom domain routing
+- **Plan 18 (DNS Verification):** SPEC + PLAN READY — `DomainVerifier` with `check_txt()`, `check_cname()`, `verify_domain()`, `generate_verification_token()`. Uses `simple-dns` 0.11 for packet parsing, raw UDP transport. Feature-gated under `dns`
 - **Plan 19 (Geolocation):** MaxMind GeoLite2 `.mmdb` reader, `GeoLocator` service with `lookup(ip) -> Location`. Feature-gated
 
 ## Gotchas
@@ -69,6 +69,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 
 - Tower middleware pattern: `Layer` + `Service` structs, manual `Clone` impls, `std::mem::swap` in `call()` to preserve ready service — see `src/tenant/middleware.rs` as reference
 - RPITIT traits (OAuthProvider, TenantResolver, RoleExtractor) — not object-safe; use concrete types
+- Internal traits behind `Arc<dyn Trait>` must use `Pin<Box<dyn Future>>` returns (not RPITIT) to stay object-safe — see `DnsResolver` in `src/dns/resolver.rs`
 - New middleware traits that need session access must take `&mut Parts` (not `&Parts`) so they can call `Session::from_request_parts()` — `SessionState` is `pub(crate)`
 - Guard/middleware errors use `Error::into_response()` — never construct raw HTTP responses; errors flow through the app's custom error handler
 - Always-available modules (no feature gate): cache, encoding, flash, session, tenant, rbac, job, cron, testing (`test-helpers` feature)
@@ -123,6 +124,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Session middleware uses raw `cookie::CookieJar` — NOT `axum_extra::extract::cookie::SignedCookieJar`
 - `SessionLayer` must be re-exported from `src/session/mod.rs` — needed by test helpers and any code that programmatically creates session layers
 - MiniJinja: URLs/HTML must use `Value::from_safe_string()`; registrations consume by move (`Box<dyn FnOnce>`)
+- `simple-dns` 0.11 for DNS packet parsing (dns feature) — `TXT::attributes()` returns `HashMap<String, Option<String>>`, `CNAME` is tuple struct `CNAME(pub Name<'a>)`
 
 ### Storage
 
