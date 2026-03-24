@@ -1,0 +1,158 @@
+# modo::extractor
+
+Request extractors for the modo web framework.
+
+All sanitizing extractors call `Sanitize::sanitize` on the deserialized value before
+returning it, so whitespace trimming and other normalization happen automatically.
+
+## Key Types
+
+| Type                  | Source                                          | Trait bound on `T`            |
+| --------------------- | ----------------------------------------------- | ----------------------------- |
+| `JsonRequest<T>`      | JSON request body                               | `DeserializeOwned + Sanitize` |
+| `FormRequest<T>`      | URL-encoded form body                           | `DeserializeOwned + Sanitize` |
+| `Query<T>`            | URL query string                                | `DeserializeOwned + Sanitize` |
+| `MultipartRequest<T>` | `multipart/form-data` body                      | `DeserializeOwned + Sanitize` |
+| `Path<T>`             | URL path parameters (axum re-export)            | `DeserializeOwned`            |
+| `Service<T>`          | Application service registry                    | `Send + Sync + 'static`       |
+| `UploadedFile`        | A single file from a multipart upload           | —                             |
+| `Files`               | Map of field names to uploaded files            | —                             |
+| `UploadValidator<'_>` | Fluent file validator built from `UploadedFile` | —                             |
+
+## Usage
+
+### JSON body
+
+```rust
+use modo::extractor::JsonRequest;
+use modo::sanitize::Sanitize;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct CreateItem {
+    name: String,
+}
+
+impl Sanitize for CreateItem {
+    fn sanitize(&mut self) {
+        self.name = self.name.trim().to_string();
+    }
+}
+
+async fn create(JsonRequest(body): JsonRequest<CreateItem>) {
+    // body.name is already trimmed
+}
+```
+
+### URL-encoded form
+
+```rust
+use modo::extractor::FormRequest;
+use modo::sanitize::Sanitize;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct LoginForm {
+    username: String,
+    password: String,
+}
+
+impl Sanitize for LoginForm {
+    fn sanitize(&mut self) {
+        self.username = self.username.trim().to_lowercase();
+    }
+}
+
+async fn login(FormRequest(form): FormRequest<LoginForm>) {
+    // form.username is trimmed and lowercased
+}
+```
+
+### Query string
+
+```rust
+use modo::extractor::Query;
+use modo::sanitize::Sanitize;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct SearchParams {
+    q: String,
+    page: Option<u32>,
+}
+
+impl Sanitize for SearchParams {
+    fn sanitize(&mut self) {
+        self.q = self.q.trim().to_lowercase();
+    }
+}
+
+async fn search(Query(params): Query<SearchParams>) {
+    // params.q is trimmed and lowercased
+}
+```
+
+### Multipart file upload
+
+```rust
+use modo::extractor::{MultipartRequest, Files};
+use modo::sanitize::Sanitize;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct ProfileForm {
+    display_name: String,
+}
+
+impl Sanitize for ProfileForm {
+    fn sanitize(&mut self) {
+        self.display_name = self.display_name.trim().to_string();
+    }
+}
+
+async fn update_profile(
+    MultipartRequest(form, mut files): MultipartRequest<ProfileForm>,
+) {
+    if let Some(avatar) = files.file("avatar") {
+        // avatar.name, avatar.content_type, avatar.size, avatar.data
+        avatar.validate()
+            .max_size(5 * 1024 * 1024)  // 5 MB
+            .accept("image/*")
+            .check()
+            .expect("validation failed");
+    }
+}
+```
+
+### Service registry
+
+```rust
+use modo::Service;
+use std::sync::Arc;
+
+struct EmailService { /* ... */ }
+
+async fn handler(Service(email): Service<EmailService>) {
+    // email is Arc<EmailService>
+}
+```
+
+### File validation
+
+`UploadedFile::validate()` returns an `UploadValidator` for fluent constraint checking.
+All violations are collected before the error is returned.
+
+Each `.accept(pattern)` call is an independent constraint — the file must satisfy every
+`.accept()` call. To allow a set of related types use a wildcard pattern (`"image/*"`)
+rather than chaining multiple exact types.
+
+```rust
+use modo::extractor::UploadedFile;
+
+fn check_avatar(file: &UploadedFile) -> modo::Result<()> {
+    file.validate()
+        .max_size(2 * 1024 * 1024)  // 2 MB
+        .accept("image/*")          // allow any image type
+        .check()
+}
+```
