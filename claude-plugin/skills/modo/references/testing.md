@@ -237,7 +237,7 @@ let session_config = SessionConfig {
     ..Default::default()
 };
 let cookie_config = CookieConfig {
-    secret: "b".repeat(64),
+    secret: "a".repeat(64),
     secure: false,
     http_only: true,
     same_site: "lax".to_string(),
@@ -249,7 +249,7 @@ let session = TestSession::with_config(&db, session_config, cookie_config).await
 
 | Method | Description |
 |---|---|
-| `with_config(&db, session_config, cookie_config).await` | Create with custom `SessionConfig` and `CookieConfig`. |
+| `TestSession::with_config(&db, session_config, cookie_config).await` | Associated function: create with custom `SessionConfig` and `CookieConfig`. |
 | `authenticate(user_id).await` | Create a session, return signed cookie string (e.g., `"_session=<signed>"`). |
 | `authenticate_with(user_id, data).await` | Same, with custom JSON session data. |
 | `layer()` | Return a `SessionLayer` to apply to `TestAppBuilder`. |

@@ -16,14 +16,14 @@ Markdown-based transactional email with SMTP delivery. Templates use YAML frontm
 email:
   templates_path: emails           # directory with .md templates
   layouts_path: emails/layouts     # directory with .html layout files
-  default_from_name: MyApp
-  default_from_email: noreply@example.com
-  default_reply_to: support@example.com  # optional
+  default_from_name: MyApp              # default: "" (empty string)
+  default_from_email: noreply@example.com  # default: "" (empty string)
+  default_reply_to: support@example.com  # optional, default: null
   default_locale: en
   cache_templates: true
   template_cache_size: 100
   smtp:
-    host: smtp.example.com
+    host: smtp.example.com  # default: "localhost"
     port: 587
     username: user
     password: pass

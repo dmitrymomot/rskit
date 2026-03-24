@@ -273,7 +273,7 @@ Query methods:
 
 Custom fields are flattened into the top-level JSON object (not nested under `"custom"`).
 
-`Claims<T>` is also an axum `FromRequestParts` extractor (reads from request extensions inserted by `JwtLayer`). Returns 401 if not present. Implements `OptionalFromRequestParts` for `Option<Claims<T>>`.
+`Claims<T>` is also an axum `FromRequestParts` extractor (reads from request extensions inserted by `JwtLayer`). Returns 401 if not present. Implements `OptionalFromRequestParts` for `Option<Claims<T>>`. Requires `T: Clone + Send + Sync + 'static` for the extractor to work.
 
 ### JwtEncoder
 
@@ -419,6 +419,22 @@ pub use auth::jwt::{
 };
 ```
 
+### ValidationConfig
+
+```rust
+pub struct ValidationConfig {
+    pub leeway: Duration,                   // clock skew tolerance
+    pub require_issuer: Option<String>,     // required iss claim
+    pub require_audience: Option<String>,   // required aud claim
+}
+```
+
+Used internally by `JwtDecoder`. Built automatically from `JwtConfig` fields (`leeway`, `issuer`, `audience`).
+
+### Concrete TokenSource types
+
+Available at `modo::auth::jwt::{BearerSource, QuerySource, CookieSource, HeaderSource}` (not re-exported at crate root). See the TokenSource table above for usage.
+
 ---
 
 ## RBAC
@@ -527,7 +543,9 @@ The JWT module follows this pattern consistently -- all `JwtError` variants prod
 - RBAC middleware must apply via `.layer()` on the outer router. Guards must apply via `.route_layer()` after route matching.
 - `JwtDecoder::decode()` always requires `exp` -- tokens without `exp` are rejected as expired.
 - `OAuthState` extractor requires `Key` (from `axum_extra::extract::cookie`) registered in the `Registry`.
-- `Claims<T>` requires `JwtLayer<T>` to be applied to the route -- the middleware inserts claims into extensions.
+- `Claims<T>` requires `JwtLayer<T>` to be applied to the route -- the middleware inserts claims into extensions. `T` must be `Clone + Send + Sync + 'static`.
 - `Bearer` extractor is independent of `JwtLayer` -- it only reads the raw token string, no decode/validate.
 - `JwtEncoder`/`JwtDecoder` are cheap to clone (state behind `Arc`).
 - `JwtDecoder::from(&encoder)` shares the signing key -- use when encoder and decoder come from same config.
+- `PasswordConfig` and `TotpConfig` have `#[serde(default)]` at struct level -- all fields are optional in YAML (fall back to defaults).
+- `RequireRoleLayer` and `RequireAuthenticatedLayer` are return types of `require_role()` and `require_authenticated()` but are not re-exported -- they are opaque types that users cannot name directly.

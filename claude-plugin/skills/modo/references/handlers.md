@@ -56,7 +56,7 @@ let app = Router::new()
     .with_state(state);
 ```
 
-The service registry (`Registry`) is a `HashMap<TypeId, Arc<dyn Any>>`. Call `.add(value)` to insert, then `.into_state()` to freeze into `AppState`. Inside handlers, `Service<T>` extracts the registered value.
+The service registry (`Registry`) is a `HashMap<TypeId, Arc<dyn Any + Send + Sync>>`. Call `.add(value)` to insert, then `.into_state()` to freeze into `AppState`. Inside handlers, `Service<T>` extracts the registered value.
 
 ## Middleware
 
@@ -276,6 +276,8 @@ let layer = csrf(&config, &key);
 ```
 
 The `CsrfToken` type is inserted into request/response extensions for handler/template access.
+
+Note: `field_name` is retained for configuration compatibility but is **not currently validated** by the middleware -- token validation is header-only. Form-field-based token submission is not supported.
 
 ## ClientIp Extraction
 

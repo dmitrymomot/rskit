@@ -57,11 +57,12 @@ fn remove(&self, key: &K)
 // Access the SSE config.
 fn config(&self) -> &SseConfig
 
-// Wrap any Stream<Item = Result<Event, Error>> into an SSE HTTP Response.
+// Wrap any Stream<Item = Result<Event, Error>> + Send + 'static into an SSE HTTP Response.
 // Applies keep-alive and sets X-Accel-Buffering: no.
 fn response<S>(&self, stream: S) -> Response
 
 // Create an SSE response with an imperative sender (spawns a tokio task).
+// Closure must return Result<(), Error> and be Send + 'static.
 fn channel<F, Fut>(&self, f: F) -> Response
 ```
 
@@ -87,7 +88,7 @@ let stream = bc.subscribe(&key).on_lag(LagPolicy::Skip);
 
 ## Event
 
-Builder for a single SSE event. Both `id` and `event` name are required at construction and validated (rejects `\n` and `\r`).
+Builder for a single SSE event. Both `id` and `event` name are required as arguments at construction. Empty strings are valid -- only `\n` and `\r` characters are rejected.
 
 ```rust
 use modo::sse::Event;
@@ -205,7 +206,7 @@ The keep-alive sends SSE comment lines (`:`) at the configured interval to preve
 ## replay()
 
 ```rust
-pub fn replay<T>(items: Vec<T>) -> impl Stream<Item = Result<T, Error>> + Send
+pub fn replay<T: Send + 'static>(items: Vec<T>) -> impl Stream<Item = Result<T, Error>> + Send
 ```
 
 Converts a `Vec<T>` into a stream of `Ok(T)`. Chain with a live `BroadcastStream` using `.chain()` from `futures_util::StreamExt` for reconnection replay.
@@ -274,7 +275,7 @@ async fn chat(
     let stream = bc.subscribe(&room_id)
         .on_lag(LagPolicy::End)
         .cast_events(move |msg| {
-            let html = renderer.render("chat/message.html", &msg)?;
+            let html = renderer.string("chat/message.html", modo::template::context! { message => msg })?;
             Ok(Event::new(modo::id::short(), "message")?.html(html))
         });
     bc.response(stream)

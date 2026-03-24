@@ -46,12 +46,12 @@ async fn send_email_job(
 
 ### Enqueuing Jobs
 
-`Enqueuer` writes rows into `modo_jobs`. Construct with a `WritePool`:
+`Enqueuer` writes rows into `modo_jobs`. Construct with any `Writer`:
 
 ```rust
 use modo::job::{Enqueuer, EnqueueOptions};
 
-let enqueuer = Enqueuer::new(&write_pool);
+let enqueuer = Enqueuer::new(&write_pool);  // accepts &impl Writer (WritePool or Pool)
 
 // Immediate execution on the "default" queue
 let job_id = enqueuer.enqueue("send_email", &payload).await?;
@@ -126,7 +126,7 @@ job:
     retention_secs: 259200   # delete terminal jobs older than 72h
 ```
 
-Terminal statuses: `completed`, `dead`, `cancelled`. Set `cleanup: ~` (null) to disable.
+Terminal statuses: `completed`, `dead`, `cancelled`. Retention cutoff uses the `updated_at` column. Set `cleanup: ~` (null) to disable.
 
 ### Building and Starting a Worker
 
@@ -295,3 +295,14 @@ The cron `Meta.name` field is set to the fully qualified Rust type name of the h
 - **Idempotent enqueue uses SHA-256**: Uniqueness key is `sha256(name + "\0" + payload_json)`. Different JSON serialization order of the same logical payload produces different hashes.
 
 - **Named aliases expand to 6-field cron**: Aliases like `@daily` internally expand to `"0 0 0 * * *"` (6-field with seconds), not 5-field.
+
+### Additional public types
+
+These types are exported from `modo::job` and `modo::cron` but are rarely used directly:
+
+- `JobContext`, `FromJobContext` -- context type and extractor trait for custom job extractors
+- `JobHandler` -- handler trait (auto-implemented for matching `async fn`)
+- `WorkerBuilder` -- the builder type returned by `Worker::builder()`
+- `CronContext`, `FromCronContext` -- context type and extractor trait for custom cron extractors
+- `CronHandler` -- handler trait (auto-implemented for matching `async fn`)
+- `SchedulerBuilder` -- the builder type returned by `Scheduler::builder()`

@@ -98,8 +98,8 @@ Public methods on `Store`:
 | `destroy_all_for_user` | `async(&self, &str) -> Result<()>` | Delete all sessions for a user |
 | `destroy_all_except` | `async(&self, &str, &str) -> Result<()>` | Delete all for user except one id |
 | `rotate_token` | `async(&self, &str) -> Result<SessionToken>` | Issue new token for existing session |
-| `flush` | `async(&self, &str, &Value, DateTime, DateTime) -> Result<()>` | Persist data + touch timestamps |
-| `touch` | `async(&self, &str, DateTime, DateTime) -> Result<()>` | Update timestamps without changing data |
+| `flush` | `async(&self, &str, &Value, DateTime<Utc>, DateTime<Utc>) -> Result<()>` | Persist data + touch timestamps |
+| `touch` | `async(&self, &str, DateTime<Utc>, DateTime<Utc>) -> Result<()>` | Update timestamps without changing data |
 | `cleanup_expired` | `async(&self) -> Result<u64>` | Delete expired sessions, returns count |
 
 ### SessionToken
@@ -113,7 +113,7 @@ let hash: String = token.hash();          // SHA-256 hex (stored in DB)
 let token = SessionToken::from_hex(&hex)?; // decode from hex
 ```
 
-`Debug` and `Display` both print `"****"` to prevent accidental logging.
+`Debug` prints `"SessionToken(****)"` and `Display` prints `"****"` to prevent accidental logging.
 
 ### SessionData
 
@@ -166,7 +166,7 @@ The middleware lifecycle per request:
 
 ### Session extractor
 
-Axum extractor providing access to the current session. Panics if `SessionLayer` is not applied.
+Axum extractor providing access to the current session. Returns `Error::internal` (500) if `SessionLayer` is not applied.
 
 ```rust
 use modo::Session;
@@ -219,7 +219,7 @@ Changes are held in memory and flushed to the database by the middleware after t
 - `device_type` -- "desktop", "mobile", or "tablet"
 - `fingerprint` -- SHA-256 of user-agent + accept-language + accept-encoding
 
-Sub-modules `session::device` and `session::fingerprint` are public for direct use.
+Sub-modules `session::device`, `session::fingerprint`, and `session::meta` are public for direct use. `session::meta` exports `SessionMeta` (with `from_headers` constructor) and the `header_str` utility.
 
 ---
 
@@ -325,7 +325,7 @@ So `modo::Flash`, `modo::Session`, etc. work directly.
 
 8. **Max sessions per user**: When exceeded on `authenticate`/`authenticate_with`, the least-recently-used session is evicted inside the same transaction.
 
-9. **`SessionToken` redacted**: `Debug` and `Display` both print `"****"`. Only the SHA-256 hash is stored in the DB -- a database leak cannot forge cookies.
+9. **`SessionToken` redacted**: `Debug` prints `"SessionToken(****)"`, `Display` prints `"****"`. Only the SHA-256 hash is stored in the DB -- a database leak cannot forge cookies.
 
 10. **Flash cookie name is hard-coded**: Always `"flash"`, not configurable. Max-Age is always 300 seconds.
 

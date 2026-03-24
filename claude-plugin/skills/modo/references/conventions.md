@@ -156,6 +156,10 @@ assert_eq!(err.message(), "Not Found");
 
 Variants: `BadRequest`, `Unauthorized`, `Forbidden`, `NotFound`, `MethodNotAllowed`, `Conflict`, `Gone`, `UnprocessableEntity`, `TooManyRequests`, `PayloadTooLarge`, `InternalServerError`, `BadGateway`, `ServiceUnavailable`, `GatewayTimeout`.
 
+Methods:
+- `fn status_code(self) -> StatusCode` -- returns the corresponding HTTP status code
+- `fn message(self) -> &'static str` -- returns the canonical HTTP reason phrase
+
 ### Auto-conversions (`From` impls)
 
 | Source type | Maps to |
@@ -340,7 +344,7 @@ All operate in-place on `&mut String`:
 ```rust
 fn trim(s: &mut String)                        // trim leading/trailing whitespace
 fn trim_lowercase(s: &mut String)              // trim + lowercase
-fn collapse_whitespace(s: &mut String)         // consecutive whitespace -> single space
+fn collapse_whitespace(s: &mut String)         // consecutive whitespace -> single space; preserves a single leading space (does NOT trim)
 fn strip_html(s: &mut String)                  // remove tags, decode entities, strip script/style
 fn truncate(s: &mut String, max_chars: usize)  // limit to N Unicode scalar values
 fn normalize_email(s: &mut String)             // trim + lowercase + strip +tag
@@ -365,6 +369,8 @@ pub trait Validate {
 
 ### `Validator` (builder)
 
+Implements `Default` (delegates to `new()`).
+
 ```rust
 Validator::new()
     .field("name", &input.name, |f| f.required().min_length(2).max_length(100))
@@ -376,6 +382,8 @@ Validator::new()
 All fields are validated (no short-circuit). Errors are collected per-field.
 
 ### `FieldValidator` rules
+
+`FieldValidator` is an internal type (not re-exported). Users never name it directly -- it is the anonymous type received in the `Validator::field()` closure argument. Chain methods inside the closure.
 
 **String rules** (available when `T: AsRef<str>`):
 
@@ -424,7 +432,7 @@ input.validate()?;  // propagates as 422 with per-field errors
 
 ### `Registry`
 
-Mutable builder used at startup. Internally `HashMap<TypeId, Arc<dyn Any + Send + Sync>>`.
+Mutable builder used at startup. Internally `HashMap<TypeId, Arc<dyn Any + Send + Sync>>`. Implements `Default` (delegates to `new()`).
 
 ```rust
 fn new() -> Self
@@ -432,6 +440,8 @@ fn add<T: Send + Sync + 'static>(&mut self, service: T)   // register by type; r
 fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> // lookup for startup validation
 fn into_state(self) -> AppState                            // freeze into immutable state
 ```
+
+`Service<T>` extractor requires `AppState: FromRef<S>` on the router state type. This is automatic when using `Router::with_state(state)` where `state` is `AppState`, but custom composite state types must implement `FromRef`.
 
 ### `AppState`
 
