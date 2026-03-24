@@ -135,13 +135,13 @@ pub struct GeolocationConfig {
 ```rust
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Location {
-    pub country_code: Option<String>,   // ISO 3166-1 alpha-2, e.g. "US"
-    pub country_name: Option<String>,   // e.g. "United States"
-    pub region: Option<String>,         // first subdivision name, e.g. "California"
-    pub city: Option<String>,           // e.g. "San Francisco"
-    pub latitude: Option<f64>,
-    pub longitude: Option<f64>,
-    pub timezone: Option<String>,       // IANA tz, e.g. "America/Los_Angeles"
+    pub country_code: Option<String>,   // ISO 3166-1 alpha-2 from country.iso_code, e.g. "US"
+    pub country_name: Option<String>,   // from country.names.english, e.g. "United States"
+    pub region: Option<String>,         // from subdivisions[0].names.english, e.g. "California"
+    pub city: Option<String>,           // from city.names.english, e.g. "San Francisco"
+    pub latitude: Option<f64>,          // from location.latitude
+    pub longitude: Option<f64>,         // from location.longitude
+    pub timezone: Option<String>,       // from location.time_zone, IANA tz, e.g. "America/Los_Angeles"
 }
 ```
 
@@ -188,6 +188,8 @@ impl Clone for GeoLocator {
 ```
 
 `lookup()` is synchronous (not async) — the mmdb reader is an in-memory tree traversal, sub-microsecond.
+
+**Implementation note:** `maxminddb::Reader::lookup()` returns `geoip2::City<'de>` where `'de` is tied to `&self` — the deserialized struct contains `&str` slices borrowing from the reader's memory. All `&str` fields must be mapped to owned `String` values (via `.map(|s| s.to_owned())`) within the `lookup()` function body before returning the owned `Location` struct. The borrow checker will reject any attempt to return borrowed data.
 
 ### `GeoLayer` middleware
 
@@ -238,12 +240,15 @@ geolocation:
 
 ## Session Refactor
 
+**Breaking change:** `session.trusted_proxies` YAML key moves to top-level `trusted_proxies`. Existing configs with `session.trusted_proxies` will have that key silently ignored (serde does not use `deny_unknown_fields`). Operators must move the value to the top-level key.
+
 `src/session/middleware.rs` changes:
 - Remove `ConnectInfo<SocketAddr>` extraction and inline proxy logic
 - Read `ClientIp` from extensions: `parts.extensions.get::<ip::ClientIp>()`
 - Fallback if `ClientIp` absent: extract `ConnectInfo<SocketAddr>` directly, use raw peer IP (no proxy-awareness without `ClientIpLayer`)
-- `src/session/meta.rs`: remove `extract_client_ip()` function and `ipnet` import
+- `src/session/meta.rs`: remove `extract_client_ip()` function (keep `header_str()` and other utilities)
 - Session config: remove `trusted_proxies` field (moves to top-level config)
+- `ipnet` remains an unconditional dependency in `Cargo.toml` — used by `src/ip/` now
 
 ## Error Handling
 
@@ -251,7 +256,7 @@ geolocation:
 
 | Condition | Error |
 |-----------|-------|
-| Empty `mmdb_path` | `Error::bad_request("geolocation mmdb_path is not configured")` |
+| Empty `mmdb_path` | `Error::internal("geolocation mmdb_path is not configured")` |
 | File not found | `Error::internal("geolocation mmdb file not found: {path}")` + `io::Error` chained |
 | Corrupt file | `Error::internal("failed to open mmdb file")` + `MaxMindDBError` chained |
 
@@ -289,8 +294,8 @@ let geo_layer = GeoLayer::new(geo);
 
 let app = Router::new()
     .route("/", get(handler))
-    .layer(geo_layer)    // outer: runs second, reads ClientIp
-    .layer(ip_layer)     // inner: runs first, sets ClientIp
+    .layer(geo_layer)    // inner: reads ClientIp, runs after ip_layer
+    .layer(ip_layer)     // outer: sets ClientIp, runs first
 ```
 
 ### Handler usage
