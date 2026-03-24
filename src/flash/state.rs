@@ -46,6 +46,7 @@ impl FlashState {
         self.read.store(true, Ordering::Release);
     }
 
+    #[cfg_attr(not(feature = "templates"), allow(dead_code))]
     pub(crate) fn incoming_as_template_value(&self) -> Vec<BTreeMap<String, String>> {
         self.incoming
             .iter()
