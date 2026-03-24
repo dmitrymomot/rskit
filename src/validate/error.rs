@@ -1,23 +1,36 @@
 use std::collections::HashMap;
 use std::fmt;
 
+/// A collection of per-field validation errors.
+///
+/// Produced by [`super::Validator::check`] when one or more fields fail
+/// validation. Each field maps to a list of human-readable error messages.
+///
+/// Converts automatically into [`crate::Error`] (HTTP 422 Unprocessable Entity)
+/// via the `From` impl, with the field map serialized into the response
+/// `details` field.
 pub struct ValidationError {
     fields: HashMap<String, Vec<String>>,
 }
 
 impl ValidationError {
+    /// Create a new `ValidationError` from a pre-built field-error map.
     pub fn new(fields: HashMap<String, Vec<String>>) -> Self {
         Self { fields }
     }
 
+    /// Returns `true` if no field errors have been recorded.
     pub fn is_empty(&self) -> bool {
         self.fields.is_empty()
     }
 
+    /// Returns the error messages for a single field, or an empty slice if
+    /// the field had no errors.
     pub fn field_errors(&self, field: &str) -> &[String] {
         self.fields.get(field).map(|v| v.as_slice()).unwrap_or(&[])
     }
 
+    /// Returns the full map of field names to their error message lists.
     pub fn fields(&self) -> &HashMap<String, Vec<String>> {
         &self.fields
     }

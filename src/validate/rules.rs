@@ -3,8 +3,14 @@ use std::ops::RangeInclusive;
 
 /// A field-level validator that accumulates errors for a single field.
 ///
+/// Instances are created internally by [`super::Validator::field`] — you
+/// never construct one directly. Chain rule methods inside the closure passed
+/// to `Validator::field`; each failing rule appends a message to that field's
+/// error list.
+///
 /// String-specific rules are available when `T: AsRef<str>`.
-/// Numeric rules (e.g., `range`) are available when `T: PartialOrd + Display`.
+/// Numeric rules (e.g., [`range`](FieldValidator::range)) are available when
+/// `T: PartialOrd + Display`.
 pub struct FieldValidator<'a, T> {
     value: &'a T,
     errors: &'a mut Vec<String>,
@@ -45,7 +51,11 @@ impl<'a, T: AsRef<str>> FieldValidator<'a, T> {
         self
     }
 
-    /// Value must be a valid email address (simple check).
+    /// Value must be a valid email address (simple structural check).
+    ///
+    /// Verifies that the value contains exactly one `@`, that neither the
+    /// local part nor the domain is empty, and that the domain contains a `.`
+    /// that is not at the very start or end.
     pub fn email(self) -> Self {
         let s = self.value.as_ref();
         let is_valid = {
@@ -64,7 +74,8 @@ impl<'a, T: AsRef<str>> FieldValidator<'a, T> {
         self
     }
 
-    /// Value must be a valid URL (starts with http:// or https:// and contains no spaces).
+    /// Value must be a valid URL (starts with `http://` or `https://` and
+    /// contains no spaces).
     pub fn url(self) -> Self {
         let s = self.value.as_ref();
         let is_valid = (s.starts_with("http://") || s.starts_with("https://")) && !s.contains(' ');
@@ -85,6 +96,9 @@ impl<'a, T: AsRef<str>> FieldValidator<'a, T> {
     }
 
     /// Value must match the given regex pattern.
+    ///
+    /// If `pattern` is not a valid regular expression, an error message
+    /// indicating the invalid pattern is recorded instead of panicking.
     pub fn matches_regex(self, pattern: &str) -> Self {
         match regex::Regex::new(pattern) {
             Ok(re) => {
@@ -101,6 +115,8 @@ impl<'a, T: AsRef<str>> FieldValidator<'a, T> {
     }
 
     /// Custom validation with a predicate and error message.
+    ///
+    /// If `predicate` returns `false`, `message` is recorded as the field error.
     pub fn custom(self, predicate: impl FnOnce(&str) -> bool, message: &str) -> Self {
         if !predicate(self.value.as_ref()) {
             self.errors.push(message.to_string());
