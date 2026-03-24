@@ -59,6 +59,10 @@ impl<S> Layer<S> for ClientIpLayer {
     }
 }
 
+/// Tower service produced by [`ClientIpLayer`].
+///
+/// Resolves the client IP on every request and inserts it as a [`ClientIp`]
+/// extension before delegating to the inner service.
 pub struct ClientIpMiddleware<S> {
     inner: S,
     trusted_proxies: Arc<Vec<ipnet::IpNet>>,

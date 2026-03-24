@@ -5,6 +5,11 @@ use super::rules::FieldValidator;
 
 /// A builder that collects validation errors across multiple fields.
 ///
+/// Call [`Validator::new`] (or [`Default::default`]) to start, chain
+/// [`field`](Validator::field) calls for each input to validate, then call
+/// [`check`](Validator::check) to obtain the result. Errors from all fields
+/// are gathered before returning — no short-circuit.
+///
 /// # Example
 ///
 /// ```rust,no_run

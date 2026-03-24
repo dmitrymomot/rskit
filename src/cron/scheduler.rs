@@ -16,13 +16,15 @@ use super::handler::CronHandler;
 use super::meta::Meta;
 use super::schedule::Schedule;
 
-/// Options for a cron job entry.
+/// Per-job options supplied to [`SchedulerBuilder::job_with`].
 pub struct CronOptions {
-    /// Maximum execution time in seconds before the job is considered timed out.
+    /// Maximum number of seconds a single execution may run before it is
+    /// cancelled and logged as timed out. Defaults to `300` (5 minutes).
     pub timeout_secs: u64,
 }
 
 impl Default for CronOptions {
+    /// Returns `CronOptions { timeout_secs: 300 }`.
     fn default() -> Self {
         Self { timeout_secs: 300 }
     }
@@ -39,6 +41,8 @@ struct CronEntry {
 }
 
 /// Builder for constructing a [`Scheduler`] with registered cron jobs.
+///
+/// Obtain a builder with [`Scheduler::builder`].
 pub struct SchedulerBuilder {
     registry: Arc<RegistrySnapshot>,
     entries: Vec<CronEntry>,
@@ -49,6 +53,8 @@ impl SchedulerBuilder {
     ///
     /// The `schedule` string can be a standard cron expression, a named alias
     /// (`@daily`, `@hourly`, etc.), or an interval (`@every 5m`).
+    ///
+    /// Panics at call time if the schedule string is invalid.
     pub fn job<H, Args>(self, schedule: &str, handler: H) -> Self
     where
         H: CronHandler<Args> + Send + Sync,
@@ -56,7 +62,9 @@ impl SchedulerBuilder {
         self.job_with(schedule, handler, CronOptions::default())
     }
 
-    /// Register a cron job with custom options.
+    /// Register a cron job with custom [`CronOptions`].
+    ///
+    /// Panics at call time if the schedule string is invalid.
     pub fn job_with<H, Args>(mut self, schedule: &str, handler: H, options: CronOptions) -> Self
     where
         H: CronHandler<Args> + Send + Sync,
@@ -105,6 +113,10 @@ impl SchedulerBuilder {
 ///
 /// Implements [`crate::runtime::Task`] for clean shutdown integration with the
 /// runtime's `run!` macro.
+///
+/// When [`Task::shutdown`](crate::runtime::Task::shutdown) is called (or the
+/// `run!` macro triggers it), the scheduler signals all job loops to stop and
+/// waits up to 30 seconds for in-flight executions to complete.
 pub struct Scheduler {
     cancel: CancellationToken,
     handles: Vec<JoinHandle<()>>,
@@ -113,8 +125,8 @@ pub struct Scheduler {
 impl Scheduler {
     /// Create a new [`SchedulerBuilder`] from a service registry.
     ///
-    /// The registry is snapshotted at build time; services added after this
-    /// call will not be visible to cron handlers.
+    /// The registry is snapshotted at build time; services added to `registry`
+    /// after this call will not be visible to cron handlers.
     pub fn builder(registry: &Registry) -> SchedulerBuilder {
         SchedulerBuilder {
             registry: registry.snapshot(),

@@ -2,8 +2,16 @@ use crate::{Error, Result};
 use std::path::{Path, PathBuf};
 
 /// Trait for loading raw email templates (frontmatter + body).
+///
 /// Implementations must be `Send + Sync` for use in `Arc<dyn TemplateSource>`.
+/// The returned string is the raw template content including the YAML frontmatter
+/// block and Markdown body — parsing is handled downstream by the [`Mailer`](crate::email::Mailer).
 pub trait TemplateSource: Send + Sync {
+    /// Load a template by `name` for the given `locale`.
+    ///
+    /// `default_locale` is the application-wide fallback locale, used when a
+    /// locale-specific file does not exist.  Implementations should return
+    /// `Err` only when no suitable file can be found.
     fn load(&self, name: &str, locale: &str, default_locale: &str) -> Result<String>;
 }
 
@@ -19,6 +27,7 @@ pub struct FileSource {
 }
 
 impl FileSource {
+    /// Create a `FileSource` rooted at `templates_path`.
     pub fn new(templates_path: impl Into<PathBuf>) -> Self {
         Self {
             path: templates_path.into(),

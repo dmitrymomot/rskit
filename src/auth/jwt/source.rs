@@ -12,7 +12,9 @@ pub trait TokenSource: Send + Sync {
 
 /// Extracts a token from the `Authorization: Bearer <token>` header.
 ///
-/// Accepts both `Bearer` and `bearer` prefixes (case-insensitive prefix only).
+/// Accepts the scheme written as `Bearer` or `bearer` (those two exact
+/// capitalizations, followed by a single space). Other capitalizations
+/// or auth schemes return `None`.
 pub struct BearerSource;
 
 impl TokenSource for BearerSource {

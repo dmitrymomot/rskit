@@ -55,14 +55,16 @@ impl Default for Config {
 ///
 /// When the `sentry` feature is enabled and a non-empty DSN is supplied,
 /// the Sentry SDK is also initialised and wired to the tracing subscriber
-/// via `sentry_tracing`.
+/// via `sentry-tracing`.
 ///
-/// Returns a `TracingGuard` that must be kept alive for the duration of
+/// Returns a [`TracingGuard`] that must be kept alive for the duration of
 /// the process. Dropping it flushes any buffered Sentry events.
 ///
 /// Calling this function more than once in the same process is harmless —
 /// subsequent calls attempt `try_init` and silently ignore the
 /// "already initialised" error.
+///
+/// [`TracingGuard`]: crate::tracing::TracingGuard
 pub fn init(config: &Config) -> crate::error::Result<super::sentry::TracingGuard> {
     let filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.level));

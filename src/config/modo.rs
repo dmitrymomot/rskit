@@ -17,7 +17,8 @@ pub struct Config {
     pub database: crate::db::Config,
     /// Log level, format, and optional Sentry integration.
     pub tracing: crate::tracing::Config,
-    /// Signed cookie key. When absent, cookie signing is disabled.
+    /// Signed cookie secret and attributes. When absent, signed/private cookies
+    /// are disabled.
     pub cookie: Option<crate::cookie::CookieConfig>,
     /// HTTP security-header middleware settings.
     pub security_headers: crate::middleware::SecurityHeadersConfig,
@@ -27,11 +28,12 @@ pub struct Config {
     pub csrf: crate::middleware::CsrfConfig,
     /// Token-bucket rate-limiting settings.
     pub rate_limit: crate::middleware::RateLimitConfig,
-    /// Session TTL, cookie name, and fingerprint validation.
+    /// Session TTL, cookie name, fingerprint validation, touch interval, and
+    /// per-user session limit.
     pub session: crate::session::SessionConfig,
     /// Background job queue settings.
     pub job: crate::job::JobConfig,
-    /// CIDR ranges of trusted reverse proxies used by `ClientIpLayer`.
+    /// CIDR ranges of trusted reverse proxies used by [`crate::ip::ClientIpLayer`].
     ///
     /// Accepts any string parseable as [`ipnet::IpNet`], e.g. `"10.0.0.0/8"`.
     #[serde(default)]

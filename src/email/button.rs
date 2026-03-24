@@ -1,15 +1,25 @@
 /// Button type variants for email buttons.
+///
+/// Controls the background colour of the rendered HTML button.
+/// In template Markdown, use `[button:TYPE|Label](url)`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ButtonType {
+    /// Blue (or `brand_color` variable when supplied). Template syntax: `[button|Label](url)` or `[button:primary|Label](url)`.
     Primary,
+    /// Red. Template syntax: `[button:danger|Label](url)`.
     Danger,
+    /// Amber. Template syntax: `[button:warning|Label](url)`.
     Warning,
+    /// Cyan. Template syntax: `[button:info|Label](url)`.
     Info,
+    /// Green. Template syntax: `[button:success|Label](url)`.
     Success,
 }
 
 impl ButtonType {
-    /// Returns (background_color, text_color) for this button type.
+    /// Returns `(background_color, text_color)` CSS hex values for this button type.
+    ///
+    /// For `Primary`, `brand_color` overrides the default blue when provided.
     pub fn colors<'a>(&self, brand_color: Option<&'a str>) -> (&'a str, &'a str) {
         match self {
             Self::Primary => (brand_color.unwrap_or("#2563eb"), "#ffffff"),
@@ -70,7 +80,7 @@ pub fn render_button_html(
     )
 }
 
-/// Render a plain text button.
+/// Render a plain text button as `"Label: url"`.
 pub fn render_button_text(label: &str, url: &str) -> String {
     format!("{label}: {url}")
 }

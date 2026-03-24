@@ -12,10 +12,10 @@ use futures_util::{Stream, StreamExt};
 /// Import the trait and call `cast_events` on any compatible stream:
 ///
 /// ```rust,ignore
-/// use modo::sse::SseStreamExt;
+/// use modo::sse::{Event, SseStreamExt};
 ///
 /// let stream = bc.subscribe(&key).cast_events(|item| {
-///     Event::new(id::short(), "update")?.json(&item)
+///     Event::new(modo::id::short(), "update")?.json(&item)
 /// });
 /// ```
 pub trait SseStreamExt<T, E>: Stream<Item = Result<T, E>> + Sized

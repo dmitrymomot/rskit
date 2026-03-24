@@ -3,6 +3,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const BASE36_CHARS: &[u8; 36] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 const SHORT_ID_LEN: usize = 13;
 
+/// Generates a 13-character time-sortable ID encoded in lowercase base36 (`0-9a-z`).
+///
+/// Packs a 42-bit millisecond timestamp and 22 bits of randomness into a single
+/// `u64`, then encodes it as exactly 13 base36 digits. IDs generated later are
+/// lexicographically greater than earlier ones and are suitable for user-visible
+/// codes such as invite links, slugs, and short URLs.
 pub fn short() -> String {
     let ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)

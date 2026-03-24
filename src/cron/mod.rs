@@ -9,8 +9,8 @@
 //!
 //! Three formats are accepted wherever a schedule string is required:
 //!
-//! - **Standard cron expression** — 5-field (`"* * * * *"`) or 6-field with a
-//!   leading seconds field (`"0 30 * * * *"`).
+//! - **Standard cron expression** — 5-field (`"*/5 * * * *"`) or 6-field with a
+//!   leading seconds field (`"0 30 9 * * *"`).
 //! - **Named aliases** — `@yearly`, `@annually`, `@monthly`, `@weekly`,
 //!   `@daily`, `@midnight`, `@hourly`.
 //! - **Interval** — `@every <duration>` where duration is composed of `h`,
@@ -23,7 +23,6 @@
 //! ```rust,no_run
 //! use modo::cron::Scheduler;
 //! use modo::service::Registry;
-//! use modo::runtime::Task;
 //! use modo::Result;
 //!
 //! async fn cleanup() -> Result<()> {

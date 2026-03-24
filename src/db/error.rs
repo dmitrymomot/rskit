@@ -1,15 +1,17 @@
+//! Automatic conversion from [`sqlx::Error`] to [`crate::Error`].
+
 use crate::error::Error;
 use http::StatusCode;
 
 /// Converts a [`sqlx::Error`] into a [`crate::Error`] with an appropriate HTTP status code.
 ///
-/// | sqlx error | HTTP status | message |
-/// |---|---|---|
-/// | `RowNotFound` | 404 | "record not found" |
-/// | unique constraint violation | 409 | "record already exists" |
-/// | foreign key violation | 400 | "foreign key violation" |
-/// | `PoolTimedOut` | 500 | "database pool timeout" |
-/// | all others | 500 | "database error" |
+/// | sqlx error                  | HTTP status | message                 |
+/// |-----------------------------|-------------|-------------------------|
+/// | `RowNotFound`               | 404         | "record not found"      |
+/// | unique constraint violation | 409         | "record already exists" |
+/// | foreign key violation       | 400         | "foreign key violation" |
+/// | `PoolTimedOut`              | 500         | "database pool timeout" |
+/// | all others                  | 500         | "database error"        |
 impl From<sqlx::Error> for Error {
     fn from(err: sqlx::Error) -> Self {
         match &err {

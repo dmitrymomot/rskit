@@ -41,7 +41,12 @@ impl<C: HttpClient> WebhookSender<C> {
         }
     }
 
-    /// Override the default user-agent string.
+    /// Override the default `User-Agent` header sent with every request.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called after the sender has been cloned. Call this immediately
+    /// after [`WebhookSender::new`] before handing clones to other tasks.
     pub fn with_user_agent(mut self, user_agent: impl Into<String>) -> Self {
         let inner =
             Arc::get_mut(&mut self.inner).expect("with_user_agent must be called before cloning");
@@ -51,10 +56,14 @@ impl<C: HttpClient> WebhookSender<C> {
 
     /// Send a webhook following the Standard Webhooks protocol.
     ///
+    /// Signs the payload with every secret in `secrets` (supports key rotation)
+    /// and POSTs to `url` with the three Standard Webhooks headers:
+    /// `webhook-id`, `webhook-timestamp`, and `webhook-signature`.
+    ///
     /// - `url`: the endpoint to POST to
     /// - `id`: unique message ID for idempotency (e.g. `msg_<ulid>`)
     /// - `body`: raw request body (typically JSON)
-    /// - `secrets`: one or more signing secrets (supports key rotation)
+    /// - `secrets`: one or more signing secrets; at least one is required
     pub async fn send(
         &self,
         url: &str,
@@ -106,7 +115,7 @@ impl<C: HttpClient> WebhookSender<C> {
 }
 
 impl WebhookSender<HyperClient> {
-    /// Convenience constructor with default HyperClient (30s timeout).
+    /// Convenience constructor using [`HyperClient`] with a 30-second timeout.
     pub fn default_client() -> Self {
         Self::new(HyperClient::new(Duration::from_secs(30)))
     }

@@ -41,12 +41,16 @@ impl Registry {
 
     /// Returns a reference-counted handle to the service registered as type `T`,
     /// or `None` if no such service exists.
+    ///
+    /// Useful for startup validation — to confirm a required service was registered
+    /// before the server begins accepting requests.
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
         self.services
             .get(&TypeId::of::<T>())
             .and_then(|arc| arc.clone().downcast::<T>().ok())
     }
 
+    /// Returns a point-in-time snapshot of the registry for internal use.
     #[allow(dead_code)]
     pub(crate) fn snapshot(&self) -> Arc<super::RegistrySnapshot> {
         Arc::new(super::RegistrySnapshot::new(self.services.clone()))

@@ -20,8 +20,8 @@ pub fn sign(secret: &WebhookSecret, content: &[u8]) -> String {
 
 /// Verify a base64-encoded HMAC-SHA256 signature against `content` using `secret`.
 ///
-/// Uses constant-time comparison. Returns `false` if `signature` is not valid
-/// base64 or does not match.
+/// Uses constant-time comparison to prevent timing attacks. Returns `false` if
+/// `signature` is not valid base64 or does not match.
 pub fn verify(secret: &WebhookSecret, content: &[u8], signature: &str) -> bool {
     let sig_bytes = match BASE64.decode(signature) {
         Ok(b) => b,
@@ -39,7 +39,11 @@ pub struct SignedHeaders {
     pub webhook_id: String,
     /// Value for the `webhook-timestamp` header (Unix seconds).
     pub webhook_timestamp: i64,
-    /// Value for the `webhook-signature` header (`v1,<base64>` entries separated by spaces).
+    /// Value for the `webhook-signature` header.
+    ///
+    /// Contains one `v1,<base64>` entry per secret, joined by spaces.
+    /// Multiple entries support key rotation — a receiver accepts the message
+    /// if any entry matches.
     pub webhook_signature: String,
 }
 
@@ -50,7 +54,9 @@ pub struct SignedHeaders {
 ///
 /// # Panics
 ///
-/// Panics if `secrets` is empty. `WebhookSender::send` validates this before calling.
+/// Panics if `secrets` is empty. [`WebhookSender::send`] validates this before calling.
+///
+/// [`WebhookSender::send`]: super::sender::WebhookSender::send
 pub fn sign_headers(
     secrets: &[&WebhookSecret],
     id: &str,
@@ -75,9 +81,9 @@ pub fn sign_headers(
 /// Parse Standard Webhooks headers from an incoming request and verify the signature.
 ///
 /// Reads `webhook-id`, `webhook-timestamp`, and `webhook-signature` from `headers`.
-/// Validates that the timestamp is within `tolerance` of now (replay protection),
-/// then tries every `v1,` signature entry against every secret.
-/// Returns `Ok(())` as soon as one combination matches.
+/// Validates that the timestamp is within `tolerance` of now (replay-attack protection),
+/// then tries every `v1,` signature entry against every secret in `secrets`.
+/// Returns `Ok(())` as soon as one combination matches; returns an error if none does.
 pub fn verify_headers(
     secrets: &[&WebhookSecret],
     headers: &http::HeaderMap,

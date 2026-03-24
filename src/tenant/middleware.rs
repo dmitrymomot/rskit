@@ -74,8 +74,12 @@ where
 /// On each request this service:
 /// 1. Calls the [`TenantStrategy`] to extract a [`crate::tenant::TenantId`].
 /// 2. Calls the [`TenantResolver`] to obtain the concrete tenant value.
-/// 3. Records `tenant_id` in the current tracing span.
+/// 3. Records `tenant_id` in the current tracing span via `Span::current().record()`.
 /// 4. Inserts the resolved tenant as `Arc<T>` into request extensions.
+///
+/// For step 3 to take effect the enclosing tracing span must declare
+/// `tenant_id = tracing::field::Empty` — spans created without that field
+/// silently ignore the `record()` call.
 ///
 /// Errors at either step are converted to HTTP responses via [`IntoResponse`]
 /// and returned immediately without calling the inner service.

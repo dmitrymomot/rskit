@@ -3,8 +3,8 @@
 //! This module provides the [`Sanitize`] trait and a set of standalone functions
 //! for normalizing string fields before validation or storage.  Implementing
 //! `Sanitize` on a request struct is the integration point used by the
-//! `JsonRequest`, `FormRequest`, and `Query` extractors — each extractor calls
-//! [`Sanitize::sanitize`] automatically after deserialization.
+//! `JsonRequest`, `FormRequest`, `Query`, and `MultipartRequest` extractors —
+//! each extractor calls [`Sanitize::sanitize`] automatically after deserialization.
 //!
 //! # Functions
 //!

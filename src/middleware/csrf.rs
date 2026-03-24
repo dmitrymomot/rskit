@@ -13,16 +13,18 @@ use tower::{Layer, Service};
 /// Configuration for CSRF protection middleware.
 ///
 /// Uses the double-submit cookie pattern: a signed HttpOnly cookie holds the
-/// token, and the client must send the same token back via a header or form
-/// field on state-changing requests.
+/// token, and the client must echo the same token back via the configured
+/// header on state-changing requests.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct CsrfConfig {
     /// Name of the CSRF cookie.
     pub cookie_name: String,
-    /// Name of the HTTP header carrying the CSRF token.
+    /// Name of the HTTP header that must carry the CSRF token on unsafe requests.
     pub header_name: String,
-    /// Name of the form field carrying the CSRF token.
+    /// Intended form-field name for the CSRF token. Not currently read by the
+    /// middleware — token validation is header-only. Retained for configuration
+    /// compatibility.
     pub field_name: String,
     /// Cookie time-to-live in seconds.
     pub ttl_secs: u64,
@@ -77,8 +79,8 @@ impl<S> Layer<S> for CsrfLayer {
 /// and response extensions.
 ///
 /// For unsafe methods (POST, PUT, DELETE, PATCH, etc.), reads the signed
-/// cookie, compares the plain token with the header value, and rejects with
-/// 403 Forbidden on mismatch.
+/// cookie, compares the plain token with the value of the configured header,
+/// and rejects with 403 Forbidden on mismatch.
 #[derive(Clone)]
 pub struct CsrfService<S> {
     inner: S,
@@ -131,7 +133,7 @@ impl<S> CsrfService<S> {
             .any(|m| m.eq_ignore_ascii_case(method.as_str()))
     }
 
-    /// Extracts the token submitted by the client from the header.
+    /// Extracts the token submitted by the client from the configured header.
     fn extract_submitted_token<B>(&self, request: &Request<B>) -> Option<String> {
         request
             .headers()

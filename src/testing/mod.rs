@@ -10,7 +10,7 @@
 //!
 //! ```toml
 //! [dev-dependencies]
-//! modo = { path = "..", features = ["test-helpers"] }
+//! modo = { path = ".", features = ["test-helpers"] }
 //! ```
 //!
 //! # Quick start

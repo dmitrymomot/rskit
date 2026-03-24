@@ -1,6 +1,19 @@
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-/// RFC 4648 base64url encoding (alphabet A-Za-z0-9-_), no padding.
+/// Encodes `bytes` using RFC 4648 base64url (alphabet `A–Za–z0–9-_`), without padding.
+///
+/// The output uses `-` and `_` instead of `+` and `/`, making it safe for use
+/// in URLs, HTTP headers, and cookie values without percent-encoding.
+/// Returns an empty string when `bytes` is empty.
+///
+/// # Examples
+///
+/// ```rust
+/// use modo::encoding::base64url;
+///
+/// assert_eq!(base64url::encode(b"Hello"), "SGVsbG8");
+/// assert_eq!(base64url::encode(b""), "");
+/// ```
 pub fn encode(bytes: &[u8]) -> String {
     if bytes.is_empty() {
         return String::new();
@@ -25,7 +38,21 @@ pub fn encode(bytes: &[u8]) -> String {
     result
 }
 
-/// RFC 4648 base64url decoding, no padding expected.
+/// Decodes a base64url-encoded string.
+///
+/// No padding characters (`=`) are expected or accepted. Returns an empty `Vec`
+/// when `encoded` is empty. Returns [`crate::Error::bad_request`] if any
+/// character falls outside the RFC 4648 base64url alphabet (`A–Za–z0–9-_`).
+///
+/// # Examples
+///
+/// ```rust
+/// use modo::encoding::base64url;
+///
+/// assert_eq!(base64url::decode("SGVsbG8").unwrap(), b"Hello");
+/// // Invalid characters yield an error
+/// assert!(base64url::decode("SGVs!G8").is_err());
+/// ```
 pub fn decode(encoded: &str) -> crate::Result<Vec<u8>> {
     if encoded.is_empty() {
         return Ok(Vec::new());

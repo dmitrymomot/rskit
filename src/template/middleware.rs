@@ -64,6 +64,10 @@ impl<S> Layer<S> for TemplateContextLayer {
 
 // --- Service ---
 
+/// Tower [`Service`] produced by [`TemplateContextLayer`].
+///
+/// Populates a [`TemplateContext`] with per-request data and inserts it into
+/// request extensions before delegating to the inner service.
 #[derive(Clone)]
 pub struct TemplateContextMiddleware<S> {
     inner: S,

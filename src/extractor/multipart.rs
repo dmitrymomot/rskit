@@ -63,9 +63,10 @@ impl UploadedFile {
     /// Start building a fluent validation chain for this file.
     ///
     /// Returns an [`UploadValidator`](crate::extractor::UploadValidator) that can be used to
-    /// check size and content type. Call [`UploadValidator::check`](crate::extractor::UploadValidator::check)
-    /// to finalize and collect any violations.
-    pub fn validate(&self) -> crate::extractor::upload_validator::UploadValidator<'_> {
+    /// check size and content type. Call
+    /// [`UploadValidator::check`](crate::extractor::UploadValidator::check) to finalize and
+    /// collect any violations.
+    pub fn validate(&self) -> crate::extractor::UploadValidator<'_> {
         crate::extractor::upload_validator::UploadValidator::new(self)
     }
 }

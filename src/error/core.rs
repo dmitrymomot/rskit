@@ -15,7 +15,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// - an optional structured `details` payload (arbitrary JSON),
 /// - an optional boxed `source` error for causal chaining,
 /// - an optional static `error_code` string that survives the response pipeline,
-/// - a `lagged` flag used internally by the SSE broadcaster.
+/// - a `lagged` flag used by the SSE broadcaster to signal that a subscriber dropped messages.
 ///
 /// # Conversion to HTTP response
 ///
@@ -146,6 +146,11 @@ impl Error {
         Self::new(StatusCode::CONFLICT, msg)
     }
 
+    /// Create a `413 Payload Too Large` error.
+    pub fn payload_too_large(msg: impl Into<String>) -> Self {
+        Self::new(StatusCode::PAYLOAD_TOO_LARGE, msg)
+    }
+
     /// Create a `422 Unprocessable Entity` error.
     pub fn unprocessable_entity(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::UNPROCESSABLE_ENTITY, msg)
@@ -154,11 +159,6 @@ impl Error {
     /// Create a `429 Too Many Requests` error.
     pub fn too_many_requests(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::TOO_MANY_REQUESTS, msg)
-    }
-
-    /// Create a `413 Payload Too Large` error.
-    pub fn payload_too_large(msg: impl Into<String>) -> Self {
-        Self::new(StatusCode::PAYLOAD_TOO_LARGE, msg)
     }
 
     /// Create a `500 Internal Server Error`.

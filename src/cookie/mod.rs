@@ -1,3 +1,11 @@
+//! Cookie utilities: configuration, key derivation, and re-exports of
+//! `axum_extra` cookie jar types.
+//!
+//! The primary entry points are [`CookieConfig`] (loaded from YAML) and
+//! [`key_from_config`] (derives an HMAC [`Key`] at startup). The re-exported
+//! jar types — [`CookieJar`], [`SignedCookieJar`], [`PrivateCookieJar`] — are
+//! used by the session and flash middleware and can be used directly in handlers.
+
 mod config;
 mod key;
 

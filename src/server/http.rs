@@ -48,14 +48,13 @@ impl Task for HttpServer {
 ///
 /// ```no_run
 /// use modo::server::{Config, http};
-/// use modo::run;
 ///
 /// #[tokio::main]
 /// async fn main() -> modo::Result<()> {
 ///     let config = Config::default();
 ///     let router = modo::axum::Router::new();
 ///     let server = http(router, &config).await?;
-///     run!(server).await
+///     modo::run!(server).await
 /// }
 /// ```
 pub async fn http(router: axum::Router, config: &Config) -> Result<HttpServer> {

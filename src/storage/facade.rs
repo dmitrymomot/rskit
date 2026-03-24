@@ -16,6 +16,9 @@ use super::path::{generate_key, validate_path};
 use super::memory::MemoryBackend;
 
 /// Input for `Storage::put()` and `Storage::put_with()`.
+///
+/// Use `PutInput::from_upload()` to build from an `UploadedFile` received
+/// via multipart form data.
 pub struct PutInput {
     /// Raw file bytes.
     pub data: Bytes,
@@ -61,8 +64,9 @@ pub(crate) struct StorageInner {
 
 /// S3-compatible file storage.
 ///
-/// Cheaply cloneable (wraps `Arc`). Use `Storage::new()` for production
-/// or `Storage::memory()` (behind `storage-test` feature) for testing.
+/// Cheaply cloneable (wraps `Arc`). Use `Storage::new()` to create a production
+/// instance from a `BucketConfig`. `Storage::memory()` is available inside
+/// `#[cfg(test)]` blocks and when the `storage-test` feature is enabled.
 pub struct Storage {
     pub(crate) inner: Arc<StorageInner>,
 }
@@ -103,6 +107,9 @@ impl Storage {
     }
 
     /// In-memory storage for testing.
+    ///
+    /// Available inside `#[cfg(test)]` blocks without any extra feature, and
+    /// also when the `storage-test` feature is enabled (for integration tests).
     #[cfg(any(test, feature = "storage-test"))]
     pub fn memory() -> Self {
         Self {
@@ -196,6 +203,9 @@ impl Storage {
     }
 
     /// Public URL (string concatenation, no network call).
+    ///
+    /// Requires `public_url` to be set in `BucketConfig`. Returns an error if
+    /// `public_url` is not configured.
     pub fn url(&self, key: &str) -> Result<String> {
         validate_path(key)?;
         let base = self
@@ -227,11 +237,17 @@ impl Storage {
     }
 
     /// Fetch a file from a URL and upload it. Returns the generated S3 key.
+    ///
+    /// Redirects are not followed. A hard-coded 30-second timeout applies.
+    /// Returns an error when called on the memory backend.
     pub async fn put_from_url(&self, input: &PutFromUrlInput) -> Result<String> {
         self.put_from_url_inner(input, &PutOptions::default()).await
     }
 
     /// Fetch a file from a URL and upload it with custom options. Returns the generated S3 key.
+    ///
+    /// Redirects are not followed. A hard-coded 30-second timeout applies.
+    /// Returns an error when called on the memory backend.
     pub async fn put_from_url_with(
         &self,
         input: &PutFromUrlInput,

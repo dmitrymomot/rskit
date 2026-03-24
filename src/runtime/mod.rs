@@ -8,10 +8,12 @@
 //! - `run!` — a macro that waits for a shutdown signal and then calls
 //!   [`Task::shutdown`] on each supplied value in declaration order.
 //!
-//! # Example
+//! # Examples
+//!
+//! ## Using the `run!` macro
 //!
 //! ```rust,no_run
-//! use modo::runtime::{Task, wait_for_shutdown_signal};
+//! use modo::runtime::Task;
 //! use modo::Result;
 //!
 //! struct MyServer;
@@ -27,6 +29,18 @@
 //! async fn main() -> Result<()> {
 //!     let server = MyServer;
 //!     modo::run!(server).await
+//! }
+//! ```
+//!
+//! ## Using `wait_for_shutdown_signal` directly
+//!
+//! ```rust,no_run
+//! use modo::runtime::wait_for_shutdown_signal;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     wait_for_shutdown_signal().await;
+//!     println!("shutting down...");
 //! }
 //! ```
 

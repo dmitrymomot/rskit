@@ -1,16 +1,29 @@
 use sha2::{Digest, Sha256};
 use std::fmt::{self, Write};
 
+/// A cryptographically random 32-byte session token.
+///
+/// The raw bytes are never transmitted; only the hex-encoded form is written
+/// to the signed cookie, and the SHA-256 hash is stored in the database so
+/// that a stolen database cannot be used to forge cookies.
+///
+/// `Debug` and `Display` both redact the value as `"****"` to prevent
+/// accidental logging.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct SessionToken([u8; 32]);
 
 impl SessionToken {
+    /// Generate a new random session token.
     pub fn generate() -> Self {
         let mut bytes = [0u8; 32];
         rand::fill(&mut bytes);
         Self(bytes)
     }
 
+    /// Decode a session token from a 64-character lowercase hex string.
+    ///
+    /// Returns `Err` if the string is not exactly 64 characters or contains
+    /// non-hexadecimal characters.
     pub fn from_hex(s: &str) -> Result<Self, &'static str> {
         if s.len() != 64 {
             return Err("token must be 64 hex characters");
@@ -24,6 +37,9 @@ impl SessionToken {
         Ok(Self(bytes))
     }
 
+    /// Encode the token as a 64-character lowercase hex string.
+    ///
+    /// This is the value written into the session cookie.
     pub fn as_hex(&self) -> String {
         let mut s = String::with_capacity(64);
         for b in &self.0 {
@@ -32,6 +48,12 @@ impl SessionToken {
         s
     }
 
+    /// Compute the SHA-256 hash of the token and return it as a 64-character
+    /// lowercase hex string.
+    ///
+    /// This hash is what is stored in `modo_sessions.token_hash`. Storing only
+    /// the hash ensures that a read of the database cannot be used to impersonate
+    /// users.
     pub fn hash(&self) -> String {
         let digest = Sha256::digest(self.0);
         let mut s = String::with_capacity(64);
