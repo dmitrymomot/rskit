@@ -50,18 +50,20 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Cache: `src/cache/` module provides `LruCache` — always available, no feature gate
 - Encoding: `src/encoding/` module provides `base32` and `base64url` encode/decode — always available, no feature gate
 - Rate limiting: custom `KeyExtractor` trait in `src/middleware/rate_limit.rs` — `PeerIpKeyExtractor` for IP-based, `GlobalKeyExtractor` for shared bucket; `rate_limit()` and `rate_limit_with()` accept `CancellationToken` for cleanup shutdown
+- Config: `trusted_proxies` is a top-level config field (not under `session`) — parsed into `Vec<IpNet>` at startup for `ClientIpLayer`
 
 ## Current Work
 
 - **Plan 12 (Test Helpers):** DONE — `src/testing/` module behind `test-helpers` feature flag
 - Test migration fixtures live at `tests/fixtures/migrations/` — used by `TestDb::migrate()` tests
+- MaxMind test DB at `tests/fixtures/GeoIP2-City-Test.mmdb` — used by geolocation tests
 - **Plan 13 (RBAC):** DONE — `src/rbac/` module with `RoleExtractor` trait, `Role` extractor, RBAC middleware, `require_role()` / `require_authenticated()` guard layers (22 unit + 8 integration tests)
 - **Plan 14 (JWT):** DONE — `src/auth/jwt/` module with `JwtEncoder`/`JwtDecoder`, `Claims<T>`, `HmacSigner` (HS256), `JwtLayer<T>` middleware, pluggable `TokenSource`, optional `Revocation` trait, `Bearer` extractor. Feature-gated under `auth` (73 unit + 13 integration tests)
 - **Plan 15 (Webhook Delivery):** DONE — `src/webhook/` module with `WebhookSender<C>`, `HttpClient` trait, `HyperClient`, `WebhookSecret`, Standard Webhooks signing. Feature-gated under `webhooks`
 - **Plan 16 (Flash Messages):** DONE — `src/flash/` module with `Flash` extractor (`flash.success()` / `flash.set()` / `flash.messages()`), `FlashLayer` middleware, `flash_messages()` template function. Cookie-based (signed), read-once-and-clear. No session dependency. Always-available (no feature gate)
 - **Plan 17 (Storage ACL + Upload from URL):** DONE — `src/storage/` extended with `Acl` enum on `PutOptions`, `x-amz-acl` S3 header, `PutFromUrlInput`, `put_from_url()` / `put_from_url_with()` with streaming fetch and 30s timeout. Feature-gated under `storage`
 - **Plan 18 (DNS Verification):** DONE — `src/dns/` module with `DomainVerifier` (`check_txt()`, `check_cname()`, `verify_domain()`), `DnsConfig`, `DnsError`, `DomainStatus`, `generate_verification_token()`. Uses `simple-dns` 0.11 for packet parsing, raw UDP transport. Feature-gated under `dns` (39 unit + 5 integration tests)
-- **Plan 19 (Client IP + Geolocation):** SPEC + PLAN READY — `src/ip/` shared module (always available) with `ClientIp` extractor + `ClientIpLayer` middleware; `src/geolocation/` with `GeoLocator` service, `Location` struct, `GeoLayer` middleware. Session refactored to use shared `ClientIp`. Feature-gated under `geolocation`
+- **Plan 19 (Client IP + Geolocation):** DONE — `src/ip/` shared module (always available) with `ClientIp` extractor + `ClientIpLayer` middleware; `src/geolocation/` with `GeoLocator` service, `Location` struct, `GeoLayer` middleware. Session refactored to use shared `ClientIp`. Feature-gated under `geolocation` (28 unit + 0 integration tests)
 
 ## Gotchas
 
@@ -125,7 +127,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `SessionLayer` must be re-exported from `src/session/mod.rs` — needed by test helpers and any code that programmatically creates session layers
 - MiniJinja: URLs/HTML must use `Value::from_safe_string()`; registrations consume by move (`Box<dyn FnOnce>`)
 - `simple-dns` 0.11 for DNS packet parsing (dns feature) — `TXT::attributes()` returns `HashMap<String, Option<String>>`, `CNAME` is tuple struct `CNAME(pub Name<'a>)`
-- `maxminddb` 0.27 for geolocation — two-step API: `reader.lookup(ip)` → `LookupResult`, then `.decode::<T>()`. Error enum is `MaxMindDbError` (not `MaxMindDBError`), `#[non_exhaustive]`
+- `maxminddb` 0.27 for geolocation — two-step API: `reader.lookup(ip)` → `LookupResult`, then `.decode::<T>()` returns `Option<T>`. Error enum is `MaxMindDbError` (not `MaxMindDBError`), `#[non_exhaustive]`. `geoip2::City` has non-optional nested structs with typed `Names` having `.english: Option<&str>` (not `BTreeMap` — don't use `.get("en")`)
 
 ### Storage
 
