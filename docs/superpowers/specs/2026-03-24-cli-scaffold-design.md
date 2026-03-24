@@ -4,18 +4,6 @@
 
 A `cargo modo new <project-name>` subcommand built into the modo crate that interactively scaffolds new modo v2 applications. Generates real, idiomatic modo code — not generic boilerplate.
 
-## Prerequisites
-
-Before implementing the CLI, `modo::Config` must be extended to include all module configs that are currently missing:
-
-- `storage` — bucket/S3 config (feature-gated under `storage`)
-- `dns` — DNS resolver config (feature-gated under `dns`)
-- `jwt` — JWT signing/validation config (feature-gated under `auth`)
-- `webhooks` — webhook sender config (feature-gated under `webhooks`)
-- `job_database` — separate DB config for the job queue (always available)
-
-Once complete, `modo::Config` covers every module. Generated apps use `modo::Config` directly — no custom wrapper struct needed.
-
 ## Binary Setup
 
 - **Binary target:** `[[bin]] name = "cargo-modo"` in the existing `Cargo.toml`
@@ -125,6 +113,7 @@ myapp/
 │       └── 001_jobs.sql
 ├── src/
 │   ├── main.rs
+│   ├── config.rs
 │   ├── routes.rs
 │   ├── handlers/
 │   │   ├── mod.rs
@@ -175,7 +164,34 @@ myapp/
 
 **Job database** (`data/jobs.db`) — always a separate single pool. Keeps job queue writes from contending with app queries. Migrations live in `migrations/jobs/`. Only generated when `job` is selected.
 
-Both use `modo::Config` fields directly — `config.database` for the app DB, `config.job_database` for the job DB.
+App DB uses `config.modo.database`. Job DB uses `config.job_database` (on `AppConfig`).
+
+### App config struct (`src/config.rs`)
+
+The generated app defines `AppConfig` — by default it only wraps `modo::Config`:
+
+```rust
+use serde::Deserialize;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AppConfig {
+    #[serde(flatten)]
+    pub modo: modo::Config,
+}
+```
+
+The scaffold adds fields based on selections. For example, if `job` is selected:
+
+```rust
+#[derive(Debug, Clone, Deserialize)]
+pub struct AppConfig {
+    #[serde(flatten)]
+    pub modo: modo::Config,
+    pub job_database: modo::db::Config,
+}
+```
+
+This gives developers a natural place to add their own app-specific config fields later. All `modo::Config` fields (database, tracing, server, session, email, template, etc.) are accessed via `config.modo.*`.
 
 ### Migration content
 
@@ -234,25 +250,28 @@ mailpit:
 
 ## Bootstrap Code Pattern (`main.rs`)
 
-Generated code follows the exact modo bootstrap pattern. Uses `modo::Config` directly — no custom config wrapper. The scaffold generates one of two variants — only the selected variant appears in the output (no commented-out alternatives).
+Generated code follows the exact modo bootstrap pattern. Uses `AppConfig` which wraps `modo::Config` via `#[serde(flatten)]`. The scaffold generates one of two DB variants — only the selected variant appears in the output (no commented-out alternatives).
 
 ### Single pool variant
 
 ```rust
-use modo::{Config, Result};
+use modo::Result;
 use modo::axum::Router;
 
+mod config;
 mod handlers;
 mod routes;
 // mod jobs;  ← if job selected
 
+use config::AppConfig;
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config: Config = modo::config::load("config/")?;
-    let _guard = modo::tracing::init(&config.tracing)?;
+    let config: AppConfig = modo::config::load("config/")?;
+    let _guard = modo::tracing::init(&config.modo.tracing)?;
 
     // App DB — single pool, always file-based
-    let pool = modo::db::connect(&config.database).await?;
+    let pool = modo::db::connect(&config.modo.database).await?;
     modo::db::migrate("migrations/app", &pool).await?;
 
     let mut registry = modo::service::Registry::new();
@@ -270,7 +289,7 @@ async fn main() -> Result<()> {
 
     // Conditional: worker start if job selected
     let managed = modo::db::managed(pool);
-    let server = modo::server::http(app, &config.server).await?;
+    let server = modo::server::http(app, &config.modo.server).await?;
     modo::run!(server, managed).await
 }
 ```
@@ -279,7 +298,7 @@ async fn main() -> Result<()> {
 
 ```rust
     // App DB — read/write split
-    let (read_pool, write_pool) = modo::db::connect_rw(&config.database).await?;
+    let (read_pool, write_pool) = modo::db::connect_rw(&config.modo.database).await?;
     modo::db::migrate("migrations/app", &write_pool).await?;
 
     let mut registry = modo::service::Registry::new();
@@ -290,13 +309,13 @@ async fn main() -> Result<()> {
 
     let managed_read = modo::db::managed(read_pool);
     let managed_write = modo::db::managed(write_pool);
-    let server = modo::server::http(app, &config.server).await?;
+    let server = modo::server::http(app, &config.modo.server).await?;
     modo::run!(server, managed_read, managed_write).await
 ```
 
 ### Config YAML example (`config/development.yaml`)
 
-Representative example with database + session + email + storage + job. All config fields come from `modo::Config`:
+Representative example with database + session + email + storage + job. Top-level fields come from `modo::Config` (via flatten); `job_database` is on `AppConfig`:
 
 ```yaml
 server:
@@ -360,6 +379,7 @@ src/bin/cargo-modo/
 └── templates/       — template modules (one per generated file)
     ├── mod.rs       — only mod imports and re-exports
     ├── cargo_toml.rs
+    ├── app_config_rs.rs
     ├── main_rs.rs
     ├── routes_rs.rs
     ├── config_yaml.rs
