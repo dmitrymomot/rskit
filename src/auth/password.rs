@@ -4,12 +4,20 @@ use argon2::{
 };
 use serde::Deserialize;
 
+/// Argon2id hashing parameters.
+///
+/// Deserializes from YAML/TOML config. All fields have OWASP-recommended defaults:
+/// 19 MiB memory, 2 iterations, 1 thread, 32-byte output.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct PasswordConfig {
+    /// Memory cost in kibibytes (default: 19456 = 19 MiB).
     pub memory_cost_kib: u32,
+    /// Number of iterations (default: 2).
     pub time_cost: u32,
+    /// Degree of parallelism (default: 1).
     pub parallelism: u32,
+    /// Output hash length in bytes (default: 32).
     pub output_len: usize,
 }
 
@@ -24,6 +32,13 @@ impl Default for PasswordConfig {
     }
 }
 
+/// Hashes `password` with Argon2id using the provided configuration.
+///
+/// Runs on a blocking thread via `tokio::task::spawn_blocking` so it does not
+/// starve the async runtime. Returns a PHC-formatted string that embeds the
+/// algorithm, parameters, salt, and hash — suitable for storage in a database.
+///
+/// Requires feature `"auth"`.
 pub async fn hash(password: &str, config: &PasswordConfig) -> crate::Result<String> {
     let config = config.clone();
     let password = password.to_string();
@@ -32,6 +47,13 @@ pub async fn hash(password: &str, config: &PasswordConfig) -> crate::Result<Stri
         .map_err(|e| crate::Error::internal(format!("password hash task failed: {e}")))?
 }
 
+/// Verifies `password` against a PHC-formatted `hash` produced by [`hash`].
+///
+/// Runs on a blocking thread. Returns `true` if the password matches, `false`
+/// otherwise. Never returns an error for a wrong password — only for a
+/// malformed hash string.
+///
+/// Requires feature `"auth"`.
 pub async fn verify(password: &str, hash: &str) -> crate::Result<bool> {
     let password = password.to_string();
     let hash = hash.to_string();

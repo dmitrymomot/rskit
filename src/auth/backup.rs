@@ -3,10 +3,27 @@ use subtle::ConstantTimeEq;
 
 const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
 
+/// Generates `count` one-time backup recovery codes.
+///
+/// Each code is formatted as `xxxx-xxxx` (8 lowercase alphanumeric characters
+/// split by a hyphen). Returns a `Vec` of `(plaintext_code, sha256_hex_hash)`
+/// tuples. Store only the hashes; display the plaintext codes to the user
+/// once. Verify a submitted code with [`verify`].
+///
+/// Uses rejection sampling over `OsRng` to avoid modulo bias.
+///
+/// Requires feature `"auth"`.
 pub fn generate(count: usize) -> Vec<(String, String)> {
     (0..count).map(|_| generate_one()).collect()
 }
 
+/// Verifies `code` against a SHA-256 hex `hash` produced by [`generate`].
+///
+/// Normalizes `code` before hashing (strips hyphens, lowercases) so that
+/// users can submit codes with or without the separator. Comparison is
+/// constant-time to prevent timing attacks.
+///
+/// Requires feature `"auth"`.
 pub fn verify(code: &str, hash: &str) -> bool {
     let normalized = normalize(code);
     let computed = sha256_hex(&normalized);
