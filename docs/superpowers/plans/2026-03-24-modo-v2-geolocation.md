@@ -1013,7 +1013,7 @@ full = ["templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "g
 
 In `[dependencies]`:
 ```toml
-maxminddb = { version = "0.24", optional = true }
+maxminddb = { version = "0.27", optional = true }
 ```
 
 - [ ] **Step 6: Add `geolocation` config field to `src/config/modo.rs`**
@@ -1165,7 +1165,7 @@ impl GeoLocator {
 
         let reader = maxminddb::Reader::open_readfile(&config.mmdb_path).map_err(|e| {
             match e {
-                maxminddb::MaxMindDBError::IoError(_) => {
+                maxminddb::MaxMindDbError::Io(_) => {
                     Error::internal(format!(
                         "geolocation mmdb file not found: {}",
                         config.mmdb_path
@@ -1186,15 +1186,18 @@ impl GeoLocator {
     /// Returns a `Location` with all-`None` fields if the IP is valid but
     /// not found in the database (private, loopback, etc.).
     pub fn lookup(&self, ip: IpAddr) -> crate::Result<Location> {
-        let city: geoip2::City = match self.inner.reader.lookup(ip) {
-            Ok(city) => city,
-            Err(maxminddb::MaxMindDBError::AddressNotFoundError(_)) => {
-                return Ok(Location::default());
-            }
-            Err(e) => {
-                return Err(Error::internal("geolocation lookup failed").chain(e));
-            }
-        };
+        let result = self.inner.reader.lookup(ip).map_err(|e| {
+            Error::internal("geolocation lookup failed").chain(e)
+        })?;
+
+        if !result.has_data() {
+            return Ok(Location::default());
+        }
+
+        let city: geoip2::City = result
+            .decode()
+            .map_err(|e| Error::internal("geolocation decode failed").chain(e))?
+            .unwrap_or_default();
 
         Ok(Location {
             country_code: city
@@ -1231,7 +1234,10 @@ impl GeoLocator {
 }
 ```
 
-Note: The `maxminddb` crate's `geoip2::City` uses `names: Option<BTreeMap<&str, &str>>` (not named language fields). Access via `.get("en")`.
+Notes:
+- maxminddb 0.27 uses a two-step API: `reader.lookup(ip)` returns `LookupResult`, then `.decode::<T>()` deserializes. IP not in DB → `has_data()` returns `false`.
+- `geoip2::City` uses `names: Option<BTreeMap<&str, &str>>` (not named language fields). Access via `.get("en")`.
+- Error enum is `MaxMindDbError` (not `MaxMindDBError`) and is `#[non_exhaustive]` — match arms need a wildcard.
 
 - [ ] **Step 3: Update `src/geolocation/mod.rs`**
 

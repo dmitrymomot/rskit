@@ -21,7 +21,7 @@ geolocation = ["dep:maxminddb"]
 full = [..., "geolocation"]
 
 [dependencies]
-maxminddb = { version = "0.24", optional = true }
+maxminddb = { version = "0.27", optional = true }
 ```
 
 ## File Layout
@@ -189,7 +189,7 @@ impl Clone for GeoLocator {
 
 `lookup()` is synchronous (not async) — the mmdb reader is an in-memory tree traversal, sub-microsecond.
 
-**Implementation note:** `maxminddb::Reader::lookup()` returns `geoip2::City<'de>` where `'de` is tied to `&self` — the deserialized struct contains `&str` slices borrowing from the reader's memory. All `&str` fields must be mapped to owned `String` values (via `.map(|s| s.to_owned())`) within the `lookup()` function body before returning the owned `Location` struct. The borrow checker will reject any attempt to return borrowed data.
+**Implementation note:** maxminddb 0.27 uses a two-step API: `reader.lookup(ip)` returns a `LookupResult` handle, then `.decode::<geoip2::City>()` deserializes. The deserialized `geoip2::City<'de>` contains `&str` slices borrowing from the reader's memory. All `&str` fields must be mapped to owned `String` values (via `.map(|s| s.to_owned())`) within the `lookup()` function body before returning the owned `Location` struct. IP not found is handled via `result.has_data()` returning `false` (not an error variant).
 
 ### `GeoLayer` middleware
 
