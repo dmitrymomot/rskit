@@ -1,5 +1,15 @@
 use crate::error::{Error, Result};
 
+/// Replaces `${VAR}` and `${VAR:default}` placeholders in `input` with
+/// values from the process environment.
+///
+/// - `${VAR}` — substituted with the value of `VAR`; returns an error if `VAR`
+///   is not set.
+/// - `${VAR:default}` — substituted with the value of `VAR`, or `default` when
+///   `VAR` is not set.
+///
+/// Returns an error if a placeholder is unclosed or a required variable is
+/// missing.
 pub fn substitute_env_vars(input: &str) -> Result<String> {
     let mut result = String::with_capacity(input.len());
     let mut chars = input.chars().peekable();
