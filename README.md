@@ -112,6 +112,30 @@ cargo clippy --all-features --tests -- -D warnings  # lint
 cargo fmt --check        # format check
 ```
 
+## Claude Code Plugin
+
+The `modo-dev` plugin gives Claude Code knowledge of modo's APIs, conventions, and patterns so it can help you build applications with the framework.
+
+### Install
+
+Inside an active Claude Code session, run:
+
+```
+/plugin marketplace add dmitrymomot/modo
+/plugin install modo-dev@dmitrymomot-modo
+/reload-plugins
+```
+
+### Usage
+
+Once installed, the `modo-dev` skill activates automatically when you ask Claude Code to build something with modo. You can also invoke it explicitly:
+
+```
+/modo-dev
+```
+
+The skill covers handlers, routing, middleware, database, sessions, auth, RBAC, templates, SSE, jobs, cron, email, storage, webhooks, DNS verification, geolocation, multi-tenancy, flash messages, configuration, and testing.
+
 ## License
 
 Apache-2.0
