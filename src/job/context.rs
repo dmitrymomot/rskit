@@ -9,13 +9,29 @@ use crate::service::RegistrySnapshot;
 use super::meta::Meta;
 use super::payload::Payload;
 
+/// Runtime context passed to every job handler invocation.
+///
+/// `JobContext` carries the raw JSON payload, the job metadata ([`Meta`]), and
+/// a snapshot of the service registry. Handler arguments that implement
+/// [`FromJobContext`] are extracted from this context automatically before the
+/// handler is called.
 pub struct JobContext {
     pub(crate) registry: Arc<RegistrySnapshot>,
     pub(crate) payload: String,
     pub(crate) meta: Meta,
 }
 
+/// Extraction trait for job handler arguments.
+///
+/// Implement this trait to define custom types that can appear as parameters
+/// in job handler functions. Three implementations are provided out of the box:
+///
+/// - [`Payload<T>`] — deserializes the JSON payload into `T`
+/// - [`Service<T>`] — retrieves a service from the registry
+/// - [`Meta`] — returns a clone of the job metadata
 pub trait FromJobContext: Sized {
+    /// Extract `Self` from the job context, returning an error if extraction
+    /// fails.
     fn from_job_context(ctx: &JobContext) -> Result<Self>;
 }
 

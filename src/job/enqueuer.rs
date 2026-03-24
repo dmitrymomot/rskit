@@ -5,15 +5,25 @@ use sha2::{Digest, Sha256};
 use crate::db::{InnerPool, Writer};
 use crate::error::{Error, Result};
 
+/// Result of an idempotent enqueue operation.
+///
+/// Returned by [`Enqueuer::enqueue_unique`] and
+/// [`Enqueuer::enqueue_unique_with`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EnqueueResult {
+    /// A new job was inserted; contains its ID.
     Created(String),
+    /// A job with the same name and payload is already pending or running;
+    /// contains the ID of the existing job.
     Duplicate(String),
 }
 
+/// Options for customising a job enqueue operation.
 #[derive(Clone)]
 pub struct EnqueueOptions {
+    /// Name of the queue to place the job in. Defaults to `"default"`.
     pub queue: String,
+    /// When to make the job eligible for execution. Defaults to now (immediate).
     pub run_at: Option<DateTime<Utc>>,
 }
 
@@ -26,23 +36,34 @@ impl Default for EnqueueOptions {
     }
 }
 
+/// Enqueues jobs into the `modo_jobs` SQLite table.
+///
+/// Constructed via [`Enqueuer::new`]. Cheaply cloneable — the underlying
+/// connection pool is `Arc`-wrapped.
 #[derive(Clone)]
 pub struct Enqueuer {
     writer: InnerPool,
 }
 
 impl Enqueuer {
+    /// Create a new `Enqueuer` using the write pool from `writer`.
     pub fn new(writer: &impl Writer) -> Self {
         Self {
             writer: writer.write_pool().clone(),
         }
     }
 
+    /// Enqueue a job on the default queue for immediate execution.
+    ///
+    /// Returns the new job's ID on success.
     pub async fn enqueue<T: Serialize>(&self, name: &str, payload: &T) -> Result<String> {
         self.enqueue_with(name, payload, EnqueueOptions::default())
             .await
     }
 
+    /// Enqueue a job on the default queue to run at a specific time.
+    ///
+    /// Returns the new job's ID on success.
     pub async fn enqueue_at<T: Serialize>(
         &self,
         name: &str,
@@ -60,6 +81,9 @@ impl Enqueuer {
         .await
     }
 
+    /// Enqueue a job with full control over queue and schedule.
+    ///
+    /// Returns the new job's ID on success.
     pub async fn enqueue_with<T: Serialize>(
         &self,
         name: &str,
@@ -92,6 +116,10 @@ impl Enqueuer {
         Ok(id)
     }
 
+    /// Enqueue a job only if no pending or running job with the same name and
+    /// payload already exists (idempotent enqueue on the default queue).
+    ///
+    /// The uniqueness key is a SHA-256 hash of `name + "\0" + payload_json`.
     pub async fn enqueue_unique<T: Serialize>(
         &self,
         name: &str,
@@ -101,6 +129,10 @@ impl Enqueuer {
             .await
     }
 
+    /// Enqueue a job only if no pending or running job with the same name and
+    /// payload already exists, with full queue and schedule options.
+    ///
+    /// The uniqueness key is a SHA-256 hash of `name + "\0" + payload_json`.
     pub async fn enqueue_unique_with<T: Serialize>(
         &self,
         name: &str,
@@ -147,6 +179,10 @@ impl Enqueuer {
         }
     }
 
+    /// Cancel a pending job by ID.
+    ///
+    /// Returns `true` if the job was found and cancelled, `false` if it was
+    /// not found or was already past the `pending` state.
     pub async fn cancel(&self, id: &str) -> Result<bool> {
         let now_str = Utc::now().to_rfc3339();
         let result = sqlx::query(

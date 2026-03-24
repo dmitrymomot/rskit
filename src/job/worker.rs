@@ -22,7 +22,11 @@ use super::reaper::reaper_loop;
 
 /// Per-handler options controlling retry and timeout behavior.
 pub struct JobOptions {
+    /// Maximum number of execution attempts before the job is marked `Dead`.
+    /// Defaults to `3`.
     pub max_attempts: u32,
+    /// Per-execution timeout in seconds. If a handler exceeds this, the
+    /// attempt is treated as a failure. Defaults to `300` (5 min).
     pub timeout_secs: u64,
 }
 
@@ -44,6 +48,11 @@ struct HandlerEntry {
 }
 
 /// Builder for constructing a [`Worker`] with registered job handlers.
+///
+/// Obtained via [`Worker::builder`]. Call [`WorkerBuilder::register`] (or
+/// [`WorkerBuilder::register_with`]) for each job name, then call
+/// [`WorkerBuilder::start`] to spawn the background loops and obtain a
+/// [`Worker`] handle.
 pub struct WorkerBuilder {
     config: JobConfig,
     registry: Arc<RegistrySnapshot>,
@@ -52,7 +61,7 @@ pub struct WorkerBuilder {
 }
 
 impl WorkerBuilder {
-    /// Register a handler for the given job name with default options.
+    /// Register a handler for the given job name with default [`JobOptions`].
     pub fn register<H, Args>(mut self, name: &str, handler: H) -> Self
     where
         H: JobHandler<Args> + Send + Sync,
@@ -61,7 +70,7 @@ impl WorkerBuilder {
         self
     }
 
-    /// Register a handler for the given job name with custom options.
+    /// Register a handler for the given job name with custom [`JobOptions`].
     pub fn register_with<H, Args>(mut self, name: &str, handler: H, options: JobOptions) -> Self
     where
         H: JobHandler<Args> + Send + Sync,
@@ -86,6 +95,12 @@ impl WorkerBuilder {
     }
 
     /// Spawn the worker loops and return a [`Worker`] handle for shutdown.
+    ///
+    /// Three background tasks are started:
+    /// - **poll loop** — claims and dispatches pending jobs
+    /// - **stale reaper** — resets jobs stuck in `running` past the configured
+    ///   threshold
+    /// - **cleanup loop** (optional) — deletes old terminal jobs
     pub async fn start(self) -> Worker {
         let cancel = CancellationToken::new();
         let handlers = Arc::new(self.handlers);
@@ -142,7 +157,11 @@ impl WorkerBuilder {
 
 /// A running job worker that processes enqueued jobs.
 ///
-/// Implements [`crate::runtime::Task`] for graceful shutdown.
+/// Implements [`crate::runtime::Task`] for graceful shutdown. Pass the
+/// `Worker` to the [`run!`](crate::run) macro so it is shut down when the
+/// process receives a termination signal.
+///
+/// Construct via [`Worker::builder`].
 pub struct Worker {
     cancel: CancellationToken,
     poll_handle: JoinHandle<()>,
@@ -153,6 +172,8 @@ pub struct Worker {
 
 impl Worker {
     /// Create a [`WorkerBuilder`] from config and service registry.
+    ///
+    /// Panics if a [`crate::db::WritePool`] is not registered in `registry`.
     pub fn builder(config: &JobConfig, registry: &Registry) -> WorkerBuilder {
         let snapshot = registry.snapshot();
         let writer = snapshot

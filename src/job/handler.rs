@@ -4,7 +4,35 @@ use crate::error::Result;
 
 use super::context::{FromJobContext, JobContext};
 
+/// Trait implemented by all valid job handler functions.
+///
+/// A job handler is any `async fn` whose arguments each implement
+/// [`FromJobContext`]. Up to 12 arguments are supported via blanket
+/// implementations.
+///
+/// You never implement this trait directly — write a plain `async fn` and pass
+/// it to [`WorkerBuilder::register`](super::worker::WorkerBuilder::register).
+///
+/// # Supported signatures
+///
+/// ```rust,no_run
+/// use modo::job::{Payload, Meta};
+/// use serde::Deserialize;
+///
+/// #[derive(Deserialize)]
+/// struct MyPayload { value: u32 }
+///
+/// // Zero arguments
+/// async fn job_no_args() -> modo::Result<()> { Ok(()) }
+///
+/// // One argument
+/// async fn job_one_arg(payload: Payload<MyPayload>) -> modo::Result<()> { Ok(()) }
+///
+/// // Multiple arguments (up to 12)
+/// async fn job_two_args(payload: Payload<MyPayload>, meta: Meta) -> modo::Result<()> { Ok(()) }
+/// ```
 pub trait JobHandler<Args>: Clone + Send + 'static {
+    /// Invoke the handler with extracted arguments from `ctx`.
     fn call(self, ctx: JobContext) -> impl Future<Output = Result<()>> + Send;
 }
 
