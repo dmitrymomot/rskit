@@ -126,7 +126,7 @@ impl Storage {
 
         Ok(Self {
             inner: Arc::new(StorageInner {
-                backend: BackendKind::Remote(backend),
+                backend: BackendKind::Remote(Box::new(backend)),
                 public_url: config.normalized_public_url(),
                 max_file_size: config.max_file_size_bytes()?,
             }),

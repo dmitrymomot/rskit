@@ -7,7 +7,7 @@ use super::memory::MemoryBackend;
 use crate::error::{Error, Result};
 
 pub(crate) enum BackendKind {
-    Remote(RemoteBackend),
+    Remote(Box<RemoteBackend>),
     #[cfg_attr(not(any(test, feature = "storage-test")), allow(dead_code))]
     Memory(MemoryBackend),
 }
