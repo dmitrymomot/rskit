@@ -81,11 +81,11 @@ fn mime_matches(content_type: &str, pattern: &str) -> bool {
 }
 
 fn format_size(bytes: usize) -> String {
-    if bytes >= 1024 * 1024 * 1024 && bytes % (1024 * 1024 * 1024) == 0 {
+    if bytes >= 1024 * 1024 * 1024 && bytes.is_multiple_of(1024 * 1024 * 1024) {
         format!("{}GB", bytes / (1024 * 1024 * 1024))
-    } else if bytes >= 1024 * 1024 && bytes % (1024 * 1024) == 0 {
+    } else if bytes >= 1024 * 1024 && bytes.is_multiple_of(1024 * 1024) {
         format!("{}MB", bytes / (1024 * 1024))
-    } else if bytes >= 1024 && bytes % 1024 == 0 {
+    } else if bytes >= 1024 && bytes.is_multiple_of(1024) {
         format!("{}KB", bytes / 1024)
     } else {
         format!("{bytes}B")
