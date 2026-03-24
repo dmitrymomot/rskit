@@ -307,7 +307,7 @@ dns-test = ["dns"]
 full = ["templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns"]
 
 [dependencies]
-simple-dns = { version = "0.7", optional = true }
+simple-dns = { version = "0.11", optional = true }
 ```
 
 ## App Usage Example
