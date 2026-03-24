@@ -19,14 +19,14 @@ impl Acl {
     }
 }
 
-/// Options for `Storage::put_with()`.
+/// Options for `Storage::put_with()` and `Storage::put_from_url_with()`.
 #[derive(Debug, Clone, Default)]
 pub struct PutOptions {
     /// Sets the `Content-Disposition` header (e.g. `"attachment"`).
     pub content_disposition: Option<String>,
     /// Sets the `Cache-Control` header (e.g. `"max-age=31536000"`).
     pub cache_control: Option<String>,
-    /// Overrides the file's content type. If `None`, uses `UploadedFile.content_type`.
+    /// Overrides the content type from `PutInput`. If `None`, `PutInput.content_type` is used.
     pub content_type: Option<String>,
     /// Sets the S3 `x-amz-acl` header. If `None`, the bucket default applies.
     pub acl: Option<Acl>,
