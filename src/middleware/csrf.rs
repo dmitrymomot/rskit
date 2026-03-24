@@ -70,7 +70,7 @@ impl<S> Layer<S> for CsrfLayer {
     }
 }
 
-/// The [`Service`] produced by [`CsrfLayer`].
+/// The [`Service`] produced by `CsrfLayer`.
 ///
 /// For exempt methods (GET, HEAD, OPTIONS by default), generates a new CSRF
 /// token, sets a signed cookie, and injects [`CsrfToken`] into both request
@@ -229,7 +229,7 @@ where
     }
 }
 
-/// Returns a [`CsrfLayer`] that applies CSRF protection using the
+/// Returns a Tower layer that applies CSRF protection using the
 /// double-submit signed cookie pattern.
 ///
 /// # Example

@@ -105,7 +105,7 @@ impl<S> Layer<S> for SecurityHeadersLayer {
     }
 }
 
-/// The [`Service`] produced by [`SecurityHeadersLayer`].
+/// The [`Service`] produced by `SecurityHeadersLayer`.
 ///
 /// Wraps an inner service and appends security headers to every response.
 #[derive(Clone)]
@@ -144,7 +144,7 @@ where
     }
 }
 
-/// Returns a [`SecurityHeadersLayer`] that adds security headers to every response
+/// Returns a Tower layer that adds security headers to every response
 /// based on the provided configuration.
 ///
 /// # Example

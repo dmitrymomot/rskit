@@ -2,7 +2,11 @@ use tower_http::classify::ServerErrorsAsFailures;
 use tower_http::classify::SharedClassifier;
 use tower_http::trace::{MakeSpan, TraceLayer};
 
-/// Custom span maker that includes a `tenant_id` field for tenant middleware.
+/// Span maker that creates an `http_request` tracing span for each request.
+///
+/// Includes a `tenant_id` field (initially empty) so that the tenant
+/// middleware can record it via `span.record("tenant_id", ...)` after
+/// resolving the tenant.
 #[derive(Clone, Debug)]
 pub struct ModoMakeSpan;
 

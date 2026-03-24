@@ -192,6 +192,8 @@ impl ShardedMap {
 /// (e.g. from the peer IP or an API key header) and `None` when the key
 /// cannot be extracted — in which case the middleware returns a 500 error.
 pub trait KeyExtractor: Clone + Send + Sync + 'static {
+    /// Returns the rate-limit bucket key for `req`, or `None` if the key
+    /// cannot be determined.
     fn extract<B>(&self, req: &Request<B>) -> Option<String>;
 }
 
@@ -227,7 +229,10 @@ impl KeyExtractor for GlobalKeyExtractor {
 // Tower Layer + Service
 // ---------------------------------------------------------------------------
 
-/// A [`tower::Layer`] that applies rate limiting to all requests.
+/// A [`tower::Layer`] that applies token-bucket rate limiting to all requests.
+///
+/// Construct via [`rate_limit`] (peer-IP keyed) or [`rate_limit_with`]
+/// (custom [`KeyExtractor`]).
 pub struct RateLimitLayer<K> {
     state: Arc<ShardedMap>,
     config: RateLimitConfig,
@@ -257,7 +262,11 @@ impl<S, K: KeyExtractor> Layer<S> for RateLimitLayer<K> {
     }
 }
 
-/// The [`tower::Service`] created by [`RateLimitLayer`].
+/// The [`tower::Service`] produced by [`RateLimitLayer`].
+///
+/// Enforces the token-bucket rate limit on every request. Allowed requests
+/// pass through to the inner service; rejected requests receive a
+/// `429 Too Many Requests` response with optional `x-ratelimit-*` headers.
 pub struct RateLimitService<S, K> {
     inner: S,
     state: Arc<ShardedMap>,

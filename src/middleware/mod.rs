@@ -1,3 +1,23 @@
+//! HTTP middleware for the modo web framework.
+//!
+//! This module provides a collection of Tower-compatible middleware layers that
+//! cover the most common cross-cutting concerns for HTTP applications:
+//!
+//! | Function / type | Purpose |
+//! |---|---|
+//! | [`compression`] | Compress responses (gzip, deflate, brotli, zstd) |
+//! | [`request_id`] | Set / propagate `x-request-id` header |
+//! | [`catch_panic`] | Convert handler panics into 500 responses |
+//! | [`cors`] / [`cors_with`] | CORS headers (static or dynamic origins) |
+//! | [`subdomains`] / [`urls`] | CORS origin predicates |
+//! | [`csrf`] / [`CsrfConfig`] | Double-submit signed-cookie CSRF protection |
+//! | [`error_handler`] | Centralised error-response rendering |
+//! | [`security_headers`] / [`SecurityHeadersConfig`] | Security response headers |
+//! | [`tracing`] | HTTP request/response lifecycle spans |
+//! | [`rate_limit`] / [`rate_limit_with`] | Token-bucket rate limiting |
+//! | [`KeyExtractor`] | Trait for custom rate-limit key extraction |
+//! | [`PeerIpKeyExtractor`] / [`GlobalKeyExtractor`] | Built-in key extractors |
+
 mod catch_panic;
 mod compression;
 mod cors;
