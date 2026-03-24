@@ -20,7 +20,11 @@ pub struct UploadedFile {
 }
 
 impl UploadedFile {
-    /// Build an `UploadedFile` from an axum multipart field.
+    /// Build an `UploadedFile` by consuming an axum multipart field.
+    ///
+    /// Reads the entire field body into memory. Prefer using [`MultipartRequest`]
+    /// rather than calling this directly; it is public for advanced use cases
+    /// that need to process fields individually.
     pub async fn from_field(
         field: axum_extra::extract::multipart::Field,
     ) -> crate::error::Result<Self> {
@@ -42,8 +46,11 @@ impl UploadedFile {
         })
     }
 
-    /// File extension from the original filename (lowercase, without dot).
-    /// Returns `None` if no extension present.
+    /// Returns the file extension from the original filename in lowercase, without the leading dot.
+    ///
+    /// Returns `None` if the filename has no extension (e.g. `"readme"`) or is empty.
+    /// For compound extensions such as `"archive.tar.gz"`, only the last component (`"gz"`)
+    /// is returned.
     pub fn extension(&self) -> Option<String> {
         let ext = self.name.rsplit('.').next()?;
         if ext == self.name {
@@ -54,19 +61,25 @@ impl UploadedFile {
     }
 
     /// Start building a fluent validation chain for this file.
+    ///
+    /// Returns an [`UploadValidator`](crate::extractor::UploadValidator) that can be used to
+    /// check size and content type. Call [`UploadValidator::check`](crate::extractor::UploadValidator::check)
+    /// to finalize and collect any violations.
     pub fn validate(&self) -> crate::extractor::upload_validator::UploadValidator<'_> {
         crate::extractor::upload_validator::UploadValidator::new(self)
     }
 }
 
-/// A map of field-name to uploaded files.
+/// A map of field names to their uploaded files, produced by [`MultipartRequest`].
 ///
-/// Use `get()` for a shared reference, `file()` to take one file,
-/// or `files()` to take all files for a given field name.
+/// Files are stored by the multipart field name. Multiple files with the same field
+/// name are supported. Use [`Files::get`] for a shared reference to the first file,
+/// [`Files::file`] to take ownership of the first file, or [`Files::files`] to take
+/// all files for a given field name.
 pub struct Files(HashMap<String, Vec<UploadedFile>>);
 
 impl Files {
-    /// Create a `Files` from a pre-built map.
+    /// Create a `Files` collection from a pre-built map.
     pub fn from_map(map: HashMap<String, Vec<UploadedFile>>) -> Self {
         Self(map)
     }
@@ -76,8 +89,9 @@ impl Files {
         self.0.get(name).and_then(|v| v.first())
     }
 
-    /// Take and return the first file under `name`, removing the entry
-    /// if no files remain.
+    /// Take ownership of the first file under `name`.
+    ///
+    /// Removes the field entry entirely if no files remain after the take.
     pub fn file(&mut self, name: &str) -> Option<UploadedFile> {
         let files = self.0.get_mut(name)?;
         if files.is_empty() {
@@ -91,20 +105,49 @@ impl Files {
         }
     }
 
-    /// Take and return all files under `name`.
+    /// Take ownership of all files under `name`.
+    ///
+    /// Returns an empty `Vec` if `name` was not present.
     pub fn files(&mut self, name: &str) -> Vec<UploadedFile> {
         self.0.remove(name).unwrap_or_default()
     }
 }
 
-/// Extractor that parses a `multipart/form-data` request into a
-/// deserialized+sanitized value `T` (from text fields) and a `Files`
-/// map (from file fields).
+/// Axum extractor for `multipart/form-data` requests.
+///
+/// Splits the multipart body into text fields (deserialized and sanitized into `T`) and
+/// file fields (collected into a [`Files`] map). The inner tuple is `(T, Files)`.
+///
+/// Text fields are URL-encoded and deserialized via `serde_urlencoded` before
+/// [`Sanitize::sanitize`] is called on the result. File fields are collected into memory
+/// as [`UploadedFile`] values.
+///
+/// Returns a 400 Bad Request error if the request is not valid multipart data or a field
+/// cannot be read.
+///
+/// # Example
 ///
 /// ```ignore
-/// async fn upload(
-///     MultipartRequest(profile, files): MultipartRequest<Profile>,
-/// ) -> impl IntoResponse { ... }
+/// use modo::extractor::{MultipartRequest, Files};
+/// use modo::sanitize::Sanitize;
+/// use serde::Deserialize;
+///
+/// #[derive(Deserialize)]
+/// struct ProfileForm {
+///     display_name: String,
+/// }
+///
+/// impl Sanitize for ProfileForm {
+///     fn sanitize(&mut self) {
+///         self.display_name = self.display_name.trim().to_string();
+///     }
+/// }
+///
+/// async fn update_profile(
+///     MultipartRequest(form, mut files): MultipartRequest<ProfileForm>,
+/// ) {
+///     let avatar = files.file("avatar"); // Option<UploadedFile>
+/// }
 /// ```
 pub struct MultipartRequest<T>(pub T, pub Files);
 

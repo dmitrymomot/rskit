@@ -5,6 +5,22 @@ use http::request::Parts;
 
 use crate::service::AppState;
 
+/// Axum extractor that retrieves a service `T` from the application's service registry.
+///
+/// The inner value is an `Arc<T>`, so cloning the extractor is cheap.
+/// Returns a 500 Internal Server Error if `T` was not registered before the server started.
+///
+/// # Example
+///
+/// ```ignore
+/// use modo::Service;
+///
+/// struct MyService { /* ... */ }
+///
+/// async fn handler(Service(svc): Service<MyService>) {
+///     // svc is Arc<MyService>
+/// }
+/// ```
 pub struct Service<T>(pub Arc<T>);
 
 impl<S, T> FromRequestParts<S> for Service<T>

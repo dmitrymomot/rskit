@@ -4,6 +4,30 @@ use serde::de::DeserializeOwned;
 
 use crate::sanitize::Sanitize;
 
+/// Axum extractor that deserializes a JSON request body into `T` and then sanitizes it.
+///
+/// Returns a 400 Bad Request error if the body is not valid JSON or cannot be
+/// deserialized. `T` must implement both [`serde::de::DeserializeOwned`] and
+/// [`crate::sanitize::Sanitize`].
+///
+/// # Example
+///
+/// ```ignore
+/// use modo::extractor::JsonRequest;
+/// use modo::sanitize::Sanitize;
+/// use serde::Deserialize;
+///
+/// #[derive(Deserialize)]
+/// struct CreateItem { name: String }
+///
+/// impl Sanitize for CreateItem {
+///     fn sanitize(&mut self) { self.name = self.name.trim().to_string(); }
+/// }
+///
+/// async fn create(JsonRequest(body): JsonRequest<CreateItem>) {
+///     // body.name is already trimmed
+/// }
+/// ```
 pub struct JsonRequest<T>(pub T);
 
 impl<S, T> FromRequest<S> for JsonRequest<T>
