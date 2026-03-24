@@ -4,6 +4,7 @@ mod buckets;
 mod client;
 mod config;
 mod facade;
+mod fetch;
 pub(crate) mod memory;
 mod options;
 mod path;
