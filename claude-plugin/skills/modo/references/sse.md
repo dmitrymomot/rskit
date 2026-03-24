@@ -190,14 +190,24 @@ Infallible extraction -- never rejects the request.
 
 ## SseConfig
 
-```yaml
-sse:
-    keep_alive_interval_secs: 30  # default: 15
-```
-
 ```rust
 pub struct SseConfig {
     pub keep_alive_interval_secs: u64,  // default 15
+}
+```
+
+`SseConfig` implements `Default` and `Deserialize`. It is **not** a field on
+`modo::Config` — it is passed directly to `Broadcaster::new()`. To make it
+configurable via YAML, deserialize it from a custom section in the app's own
+config struct:
+
+```rust
+#[derive(Deserialize)]
+struct AppConfig {
+    #[serde(flatten)]
+    pub modo: modo::Config,
+    #[serde(default)]
+    pub sse: modo::sse::SseConfig,
 }
 ```
 

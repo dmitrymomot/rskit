@@ -305,10 +305,32 @@ Combines `TestDb`, `TestSession`, and `TestApp` with database-backed handlers:
 #![cfg(feature = "test-helpers")]
 
 use axum::Json;
-use axum::routing::get;
+use axum::routing::{get, post};
 use modo::db::Pool;
 use modo::session::Session;
 use modo::testing::{TestApp, TestDb, TestSession};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct User {
+    id: String,
+    name: String,
+}
+
+impl modo::Sanitize for User {
+    fn sanitize(&mut self) {
+        modo::sanitize::trim(&mut self.name);
+    }
+}
+
+async fn list_users(
+    modo::extractor::Service(pool): modo::extractor::Service<Pool>,
+) -> modo::Result<Json<Vec<User>>> {
+    let users = sqlx::query_as::<_, User>("SELECT id, name FROM users")
+        .fetch_all(&**pool)
+        .await?;
+    Ok(Json(users))
+}
 
 async fn create_user(
     _session: Session,
@@ -319,8 +341,7 @@ async fn create_user(
         .bind(&input.id)
         .bind(&input.name)
         .execute(&**pool)
-        .await
-        .map_err(|e| modo::Error::internal(e.to_string()))?;
+        .await?;
     Ok(Json(input))
 }
 

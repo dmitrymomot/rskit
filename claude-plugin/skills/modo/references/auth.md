@@ -138,7 +138,7 @@ pub async fn hash(password: &str, config: &PasswordConfig) -> Result<String>
 pub async fn verify(password: &str, hash: &str) -> Result<bool>
 ```
 
-Re-exported: `PasswordConfig` from `modo::auth::PasswordConfig`.
+Re-exported at crate root: `modo::PasswordConfig` (via `pub use auth::PasswordConfig`).
 
 ---
 
@@ -195,7 +195,7 @@ Methods:
 
 Verification uses constant-time comparison.
 
-Re-exported: `Totp`, `TotpConfig` from `modo::auth::{Totp, TotpConfig}`.
+Re-exported at crate root: `modo::Totp`, `modo::TotpConfig` (via `pub use auth::{Totp, TotpConfig}`).
 
 ---
 
