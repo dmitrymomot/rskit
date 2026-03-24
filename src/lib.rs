@@ -7,6 +7,7 @@ pub mod error;
 pub mod extractor;
 pub mod flash;
 pub mod id;
+pub mod ip;
 pub mod middleware;
 pub mod runtime;
 pub mod sanitize;
