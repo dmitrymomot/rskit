@@ -72,7 +72,7 @@ impl HealthChecks {
     }
 
     /// Returns a slice of all registered checks.
-    pub(crate) fn iter(&self) -> &[(String, Arc<dyn HealthCheck>)] {
+    pub(crate) fn as_slice(&self) -> &[(String, Arc<dyn HealthCheck>)] {
         &self.checks
     }
 }
@@ -147,15 +147,15 @@ mod tests {
     async fn check_adds_trait_impl() {
         let pool = Pool::new(sqlx::SqlitePool::connect(":memory:").await.unwrap());
         let checks = HealthChecks::new().check("pool", pool);
-        assert_eq!(checks.iter().len(), 1);
-        assert_eq!(checks.iter()[0].0, "pool");
-        checks.iter()[0].1.check().await.unwrap();
+        assert_eq!(checks.as_slice().len(), 1);
+        assert_eq!(checks.as_slice()[0].0, "pool");
+        checks.as_slice()[0].1.check().await.unwrap();
     }
 
     #[tokio::test]
     async fn fn_health_check_succeeds() {
         let checks = HealthChecks::new().check_fn("ok", || async { Ok(()) });
-        let (_, c) = &checks.iter()[0];
+        let (_, c) = &checks.as_slice()[0];
         c.check().await.unwrap();
     }
 
@@ -163,7 +163,7 @@ mod tests {
     async fn fn_health_check_fails() {
         let checks =
             HealthChecks::new().check_fn("fail", || async { Err(crate::Error::internal("down")) });
-        let (_, c) = &checks.iter()[0];
+        let (_, c) = &checks.as_slice()[0];
         assert!(c.check().await.is_err());
     }
 
@@ -173,13 +173,13 @@ mod tests {
             .check_fn("a", || async { Ok(()) })
             .check_fn("b", || async { Ok(()) })
             .check_fn("c", || async { Ok(()) });
-        let names: Vec<&str> = checks.iter().iter().map(|(n, _)| n.as_str()).collect();
+        let names: Vec<&str> = checks.as_slice().iter().map(|(n, _)| n.as_str()).collect();
         assert_eq!(names, vec!["a", "b", "c"]);
     }
 
     #[tokio::test]
     async fn health_checks_default_is_empty() {
         let checks = HealthChecks::default();
-        assert!(checks.iter().is_empty());
+        assert!(checks.as_slice().is_empty());
     }
 }

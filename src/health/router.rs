@@ -32,7 +32,7 @@ async fn live() -> StatusCode {
 }
 
 async fn ready(Service(checks): Service<HealthChecks>) -> StatusCode {
-    let entries = checks.iter();
+    let entries = checks.as_slice();
     if entries.is_empty() {
         return StatusCode::OK;
     }
@@ -86,10 +86,7 @@ mod tests {
     fn app_with_checks(checks: HealthChecks) -> Router {
         let mut registry = crate::service::Registry::new();
         registry.add(checks);
-        Router::new()
-            .route("/_live", get(live))
-            .route("/_ready", get(ready))
-            .with_state(registry.into_state())
+        router().with_state(registry.into_state())
     }
 
     #[tokio::test]
