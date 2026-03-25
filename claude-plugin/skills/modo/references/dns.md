@@ -21,7 +21,7 @@ pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verifi
 
 ## DnsConfig
 
-Deserializes from YAML via serde (`serde_yaml_ng`, not `serde_yaml`).
+`#[non_exhaustive]` — use `..Default::default()` for forward compatibility. Deserializes from YAML via serde (`serde_yaml_ng`, not `serde_yaml`).
 
 ```rust
 #[derive(Debug, Clone, Deserialize)]
@@ -32,6 +32,8 @@ pub struct DnsConfig {
 }
 ```
 
+Implements `Default` (`nameserver: "8.8.8.8"`, `txt_prefix: "_modo-verify"`, `timeout_ms: 5000`).
+
 YAML example:
 
 ```yaml
@@ -41,7 +43,12 @@ dns:
   timeout_ms: 5000              # optional, default: 5000
 ```
 
-`parse_nameserver()` appends port `:53` when omitted. Returns `Error::internal` (500) on invalid address.
+### Constructors and methods
+
+| Method | Signature | Notes |
+|--------|-----------|-------|
+| `new` | `fn new(nameserver: impl Into<String>) -> Self` | Sets `txt_prefix = "_modo-verify"`, `timeout_ms = 5000` |
+| `parse_nameserver` | `fn parse_nameserver(&self) -> Result<SocketAddr>` | Appends port `:53` when omitted. Returns `Error::internal` (500) on invalid address |
 
 ---
 

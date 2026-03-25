@@ -45,12 +45,14 @@ Google::new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Ke
 ### OAuthConfig
 
 ```rust
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct OAuthConfig {
     pub google: Option<OAuthProviderConfig>,
     pub github: Option<OAuthProviderConfig>,
 }
 
+#[non_exhaustive]
 pub struct OAuthProviderConfig {
     pub client_id: String,
     pub client_secret: String,
@@ -86,9 +88,10 @@ oauth:
 
 - `AuthorizationRequest` -- returned by `authorize_url()`, implements `IntoResponse` (303 redirect + `Set-Cookie`).
 - `OAuthState` -- axum `FromRequestParts` extractor. Reads signed `_oauth_state` cookie. Requires `Key` in `Registry`.
-- `CallbackParams` -- `Deserialize` struct with `code: String` and `state: String`. Extract with `Query<CallbackParams>`.
-- `UserProfile` -- normalized profile returned by `exchange()`:
+- `CallbackParams` -- `#[non_exhaustive]` `Deserialize` struct with `code: String` and `state: String`. Extract with `Query<CallbackParams>`. Must be constructed via deserialization (no public constructor).
+- `UserProfile` -- `#[non_exhaustive]` normalized profile returned by `exchange()`. Use `UserProfile::new()` constructor:
   ```rust
+  #[non_exhaustive]
   pub struct UserProfile {
       pub provider: String,          // "google", "github"
       pub provider_user_id: String,
@@ -124,6 +127,7 @@ Argon2id password hashing and verification. Runs on a blocking thread via `tokio
 ### PasswordConfig
 
 ```rust
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 pub struct PasswordConfig {
     pub memory_cost_kib: u32,  // default: 19456 (19 MiB)
@@ -131,9 +135,11 @@ pub struct PasswordConfig {
     pub parallelism: u32,      // default: 1
     pub output_len: usize,     // default: 32
 }
+
+impl Default for PasswordConfig  // OWASP-recommended defaults
 ```
 
-Defaults follow OWASP recommendations.
+`#[non_exhaustive]` -- use `PasswordConfig::default()` or `Default::default()` and override fields. Defaults follow OWASP recommendations.
 
 ### Functions
 
@@ -178,13 +184,18 @@ RFC 6238 TOTP authenticator compatible with Google Authenticator, Authy, etc.
 ### TotpConfig
 
 ```rust
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 pub struct TotpConfig {
     pub digits: u32,      // default: 6
     pub step_secs: u64,   // default: 30
     pub window: u32,      // default: 1 (±1 step tolerance)
 }
+
+impl Default for TotpConfig  // RFC 6238 defaults
 ```
+
+`#[non_exhaustive]` -- use `TotpConfig::default()` and override fields.
 
 ### Totp
 
@@ -234,6 +245,7 @@ pub fn verify(code: &str, hash: &str) -> bool
 ### JwtConfig
 
 ```rust
+#[non_exhaustive]
 pub struct JwtConfig {
     pub secret: String,              // HMAC secret
     pub default_expiry: Option<u64>, // seconds; auto-fills exp when claims.exp is None
@@ -248,6 +260,8 @@ impl JwtConfig {
 
 impl Default for JwtConfig  // secret defaults to empty string
 ```
+
+`#[non_exhaustive]` -- use `JwtConfig::new(secret)` constructor or `Default::default()`.
 
 ```yaml
 jwt:
@@ -396,6 +410,7 @@ Behavior:
 ### Bearer extractor
 
 ```rust
+#[derive(Debug)]
 pub struct Bearer(pub String);
 ```
 
@@ -436,14 +451,17 @@ pub use auth::jwt::{
 ### ValidationConfig
 
 ```rust
+#[non_exhaustive]
 pub struct ValidationConfig {
     pub leeway: Duration,                   // clock skew tolerance
     pub require_issuer: Option<String>,     // required iss claim
     pub require_audience: Option<String>,   // required aud claim
 }
+
+impl Default for ValidationConfig  // leeway=ZERO, no issuer/audience requirements
 ```
 
-Used internally by `JwtDecoder`. Built automatically from `JwtConfig` fields (`leeway`, `issuer`, `audience`).
+`#[non_exhaustive]` -- use `ValidationConfig::default()` and override fields. Used internally by `JwtDecoder`. Built automatically from `JwtConfig` fields (`leeway`, `issuer`, `audience`).
 
 ### Concrete TokenSource types
 
@@ -561,5 +579,6 @@ The JWT module follows this pattern consistently -- all `JwtError` variants prod
 - `Bearer` extractor is independent of `JwtLayer` -- it only reads the raw token string, no decode/validate.
 - `JwtEncoder`/`JwtDecoder` are cheap to clone (state behind `Arc`).
 - `JwtDecoder::from(&encoder)` shares the signing key -- use when encoder and decoder come from same config.
-- `PasswordConfig` and `TotpConfig` have `#[serde(default)]` at struct level -- all fields are optional in YAML (fall back to defaults).
+- `PasswordConfig`, `TotpConfig`, `JwtConfig`, `ValidationConfig`, `OAuthConfig`, `OAuthProviderConfig`, `CallbackParams`, and `UserProfile` are all `#[non_exhaustive]` -- never construct with struct literals. Use the provided constructors (`::new(...)`, `Default::default()`) and override fields.
+- `PasswordConfig`, `TotpConfig`, `JwtConfig`, and `OAuthConfig` have `#[serde(default)]` at struct level -- all fields are optional in YAML (fall back to defaults).
 - `RequireRoleLayer` and `RequireAuthenticatedLayer` are return types of `require_role()` and `require_authenticated()` but are not re-exported -- they are opaque types that users cannot name directly.

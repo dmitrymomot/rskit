@@ -114,18 +114,18 @@ Accepts any `&impl Writer`. Uses sqlx's standard migration file naming (e.g., `0
 
 ## Managed Pool (Graceful Shutdown)
 
-Consume a pool into `ManagedPool` for use with the `run!` macro:
+`ManagedPool` implements `Task`. Consume a pool into `ManagedPool` for use with the `run!` macro:
 
 ```rust
 let managed = db::managed(pool.clone());
 run!(server, managed);
 ```
 
-Accepts `Pool`, `ReadPool`, or `WritePool` (via `Into<ManagedPool>`). **Consumes the pool** -- clone first if you need continued access. On shutdown, closes the pool and drains connections.
+Accepts `Pool`, `ReadPool`, or `WritePool` (each has `impl From<T> for ManagedPool`). **Consumes the pool** -- clone first if you need continued access. On shutdown, closes the pool and drains connections.
 
 ## Configuration (`SqliteConfig`)
 
-Loaded from YAML. `db::Config` is a type alias for `SqliteConfig`.
+`#[non_exhaustive]`. Loaded from YAML. `db::Config` is a type alias for `SqliteConfig`.
 
 Key defaults:
 
@@ -145,6 +145,8 @@ Key defaults:
 | `mmap_size` | `Option<u64>` | `None` |
 | `temp_store` | `Option<TempStore>` | `None` |
 | `wal_autocheckpoint` | `Option<u32>` | `None` |
+| `reader` | `PoolOverrides` | `PoolOverrides::default_reader()` |
+| `writer` | `PoolOverrides` | `PoolOverrides::default_writer()` |
 
 ### Enum types
 
@@ -158,7 +160,7 @@ All three are publicly exported from `modo::db`.
 
 ### PoolOverrides
 
-`reader` and `writer` fields hold `PoolOverrides` for `connect_rw()`. All fields are `Option<T>` (override the base `SqliteConfig` value when `Some`).
+`#[non_exhaustive]`. `reader` and `writer` fields on `SqliteConfig` hold `PoolOverrides` for `connect_rw()`. All fields are `Option<T>` (override the base `SqliteConfig` value when `Some`).
 
 Fields: `max_connections`, `min_connections`, `acquire_timeout_secs`, `idle_timeout_secs`, `max_lifetime_secs`, `busy_timeout`, `cache_size`, `mmap_size`, `temp_store`, `wal_autocheckpoint`.
 

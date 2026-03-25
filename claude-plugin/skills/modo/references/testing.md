@@ -143,12 +143,13 @@ All return a `TestRequestBuilder`.
 
 ## TestRequestBuilder
 
-Builder for an in-process HTTP request. Obtained from `TestApp` method helpers.
+Builder for an in-process HTTP request. Obtained from `TestApp` method helpers or constructed directly via `new()`.
 
 ### Methods
 
 | Method | Description |
 |---|---|
+| `new(router, method, uri)` | Construct a builder that will dispatch `method` to `uri` on `router`. Rarely needed directly -- prefer `TestApp` method helpers. |
 | `header(key, value)` | Append a header. |
 | `json(&T)` | Serialize body as JSON, set `content-type: application/json`. Replaces any prior content-type. |
 | `form(&T)` | URL-encode body, set `content-type: application/x-www-form-urlencoded`. Replaces any prior content-type. |
@@ -184,6 +185,10 @@ let res = app.post("/upload").body(b"raw bytes".to_vec()).send().await;
 ## TestResponse
 
 Captured response from an in-process request.
+
+### Construction
+
+`TestResponse::new(status: StatusCode, headers: HeaderMap, body: Vec<u8>)` constructs from raw parts. Called internally by `TestRequestBuilder::send()` -- rarely needed directly.
 
 ### Methods
 

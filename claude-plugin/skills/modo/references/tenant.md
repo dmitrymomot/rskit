@@ -16,6 +16,7 @@ The tenant system has four moving parts:
 ## TenantId
 
 ```rust
+#[derive(Clone, PartialEq, Eq)]
 pub enum TenantId {
     Slug(String),    // subdomain, path_prefix, path_param
     Domain(String),  // domain(), subdomain_or_domain (custom domain branch)
@@ -104,12 +105,12 @@ Errors at step 1 or 2 short-circuit -- the inner service is never called and the
 pub struct Tenant<T>(/* Arc<T> */);
 ```
 
-Implements `FromRequestParts` and `OptionalFromRequestParts`.
+Implements `FromRequestParts`, `OptionalFromRequestParts`, `Deref<Target = T>`, `Clone`, and `Debug` (when `T: Debug`).
 
 - `Tenant<T>` -- returns 500 if middleware is not applied (developer error).
 - `Option<Tenant<T>>` -- returns `None` if no tenant in extensions.
-- Implements `Deref<Target = T>` so fields are accessible directly.
 - `.get() -> &T` for an explicit reference.
+- Dereferences to `T` so fields are accessible directly via `Deref`.
 
 ## Usage example
 

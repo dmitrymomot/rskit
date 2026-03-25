@@ -10,11 +10,11 @@ All types re-exported from `modo::sse::*`:
 |------|---------|
 | `Broadcaster<K, T>` | Keyed broadcast channel registry; produces SSE responses |
 | `BroadcastStream<T>` | Stream of raw `T` values from a broadcast channel |
-| `LagPolicy` | `End` or `Skip` -- controls behavior when a subscriber falls behind |
-| `Event` | Builder for a single SSE event (id + event name + data + retry) |
+| `LagPolicy` | `End` or `Skip` -- controls behavior when a subscriber falls behind. Derives `Debug`, `Clone`, `Copy` |
+| `Event` | `#[must_use]`. Builder for a single SSE event (id + event name + data + retry). Derives `Debug`, `Clone` |
 | `Sender` | Imperative event sender for `Broadcaster::channel()` closures |
 | `SseStreamExt` | `.cast_events()` combinator trait for stream-to-event conversion |
-| `LastEventId` | Axum extractor for the `Last-Event-ID` header |
+| `LastEventId` | Axum extractor for the `Last-Event-ID` header. Derives `Debug`, `Clone` |
 | `SseConfig` | Keep-alive configuration (deserializable from YAML) |
 | `replay()` | Convert a `Vec<T>` into a stream for reconnection replay |
 
@@ -22,7 +22,7 @@ Note: `modo::sse` is not re-exported at the crate root. Import as `modo::sse::{B
 
 ## Broadcaster
 
-`Broadcaster<K, T>` is a keyed fan-out channel registry. `K` is the channel key type (typically `String`), `T` is the message payload type. It wraps `Arc<Inner>` and is cheaply cloneable.
+`Broadcaster<K, T>` is a keyed fan-out channel registry. `K` is the channel key type (typically `String`), `T` is the message payload type. Implements `Clone` (manual via `Arc<Inner>`), cheaply cloneable.
 
 ### Construction
 
@@ -74,7 +74,7 @@ fn channel<F, Fut>(&self, f: F) -> Response
 
 ## BroadcastStream
 
-`BroadcastStream<T>` implements `Stream<Item = Result<T, Error>>`. It yields raw `T` values, not `Event`s. Convert downstream with `SseStreamExt::cast_events()`.
+`BroadcastStream<T>` implements `Stream<Item = Result<T, Error>>` and `Drop` (cleanup closure). It yields raw `T` values, not `Event`s. Convert downstream with `SseStreamExt::cast_events()`.
 
 ### Lag policy
 
@@ -88,7 +88,7 @@ let stream = bc.subscribe(&key).on_lag(LagPolicy::Skip);
 
 ## Event
 
-Builder for a single SSE event. Both `id` and `event` name are required as arguments at construction. Empty strings are valid -- only `\n` and `\r` characters are rejected.
+`#[must_use]`. Derives `Debug`, `Clone`. Builder for a single SSE event. Both `id` and `event` name are required as arguments at construction. Empty strings are valid -- only `\n` and `\r` characters are rejected.
 
 ```rust
 use modo::sse::Event;
@@ -164,7 +164,7 @@ Returns an error when the client disconnects (response stream dropped). Use this
 
 ## LastEventId
 
-Axum extractor for the `Last-Event-ID` header. Contains `Option<String>` -- `None` on first connection.
+Derives `Debug`, `Clone`. Axum extractor for the `Last-Event-ID` header. Contains `pub Option<String>` -- `None` on first connection. Infallible extraction (`Rejection = Infallible`).
 
 ```rust
 use modo::sse::LastEventId;
@@ -186,15 +186,18 @@ async fn events(
 }
 ```
 
-Infallible extraction -- never rejects the request.
-
 ## SseConfig
 
 ```rust
+#[non_exhaustive]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 pub struct SseConfig {
     pub keep_alive_interval_secs: u64,  // default 15
 }
 ```
+
+`impl Default` (manual): sets `keep_alive_interval_secs` to `15`.
 
 ### Methods
 
@@ -203,8 +206,7 @@ pub struct SseConfig {
 fn keep_alive_interval(&self) -> Duration
 ```
 
-`SseConfig` implements `Default` and `Deserialize`. It is **not** a field on
-`modo::Config` — it is passed directly to `Broadcaster::new()`. To make it
+`SseConfig` is **not** a field on `modo::Config` — it is passed directly to `Broadcaster::new()`. To make it
 configurable via YAML, deserialize it from a custom section in the app's own
 config struct:
 

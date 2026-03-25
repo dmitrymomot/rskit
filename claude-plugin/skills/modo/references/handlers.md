@@ -90,17 +90,19 @@ let app = Router::new()
 
 Token-bucket algorithm. Each key gets `burst_size` tokens; tokens replenish at `per_second` rate. Exhausted buckets receive `429 Too Many Requests`.
 
-**Configuration (`RateLimitConfig`):**
+**Configuration (`RateLimitConfig`):** `#[non_exhaustive]`, `#[serde(default)]` -- construct via `Default` or deserialize.
 
 ```rust
 use modo::middleware::RateLimitConfig;
 
+// #[non_exhaustive] -- use Default + field mutation (struct literals won't compile outside the crate)
 let config = RateLimitConfig {
     per_second: 1,          // token replenish rate
     burst_size: 10,         // max tokens per key
     use_headers: true,      // include x-ratelimit-* headers
     cleanup_interval_secs: 60,
     max_keys: 10_000,       // 0 = unlimited
+    ..Default::default()
 };
 ```
 
@@ -152,6 +154,8 @@ Built-in extractors:
 - `PeerIpKeyExtractor` -- keys by peer socket IP (needs `ConnectInfo<SocketAddr>`)
 - `GlobalKeyExtractor` -- single shared bucket for all requests
 
+`RateLimitLayer<K>` is also re-exported from `modo::middleware` -- it is the concrete Tower layer type returned by `rate_limit()` and `rate_limit_with()`. Typically you don't name this type directly; just use `let layer = rate_limit(...)` or `rate_limit_with(...)`.
+
 ### Tracing
 
 Creates an `http_request` span per request with `method`, `uri`, `version`, and an empty `tenant_id` field (filled later by tenant middleware).
@@ -164,7 +168,7 @@ Built on `tower_http::trace::TraceLayer` with a custom `ModoMakeSpan`.
 
 ### CORS
 
-**Static origins (`cors`):**
+**Static origins (`cors`):** `CorsConfig` is `#[non_exhaustive]` with `#[serde(default)]`.
 
 ```rust
 use modo::middleware::{cors, CorsConfig};
@@ -175,6 +179,7 @@ let config = CorsConfig {
     headers: vec!["Content-Type".into(), "Authorization".into()],
     max_age_secs: 86400,
     allow_credentials: true,
+    ..Default::default()
 };
 let layer = cors(&config);
 ```
@@ -240,7 +245,7 @@ The handler receives the error and the original request `Parts` (method, URI, he
 
 ### Security Headers
 
-Adds security response headers:
+Adds security response headers. `SecurityHeadersConfig` is `#[non_exhaustive]` with `#[serde(default)]`.
 
 ```rust
 use modo::middleware::{security_headers, SecurityHeadersConfig};
@@ -252,13 +257,14 @@ let config = SecurityHeadersConfig {
     hsts_max_age: Some(31536000),       // Strict-Transport-Security
     content_security_policy: None,
     permissions_policy: None,
+    ..Default::default()
 };
 let layer = security_headers(&config);
 ```
 
 ### CSRF
 
-Double-submit signed-cookie pattern. Exempt methods (GET, HEAD, OPTIONS by default) generate a token; unsafe methods must echo the token via the configured header:
+Double-submit signed-cookie pattern. Exempt methods (GET, HEAD, OPTIONS by default) generate a token; unsafe methods must echo the token via the configured header. `CsrfConfig` is `#[non_exhaustive]` with `#[serde(default)]`.
 
 ```rust
 use modo::middleware::{csrf, CsrfConfig};
@@ -270,12 +276,13 @@ let config = CsrfConfig {
     field_name: "_csrf_token".into(),
     ttl_secs: 21600,
     exempt_methods: vec!["GET".into(), "HEAD".into(), "OPTIONS".into()],
+    ..Default::default()
 };
 let key = Key::generate();
 let layer = csrf(&config, &key);
 ```
 
-The `CsrfToken` type is inserted into request/response extensions for handler/template access.
+`CsrfToken` is a tuple struct (`pub struct CsrfToken(pub String)`, derives `Clone, Debug`) inserted into request/response extensions for handler/template access. Access the inner token string via `.0`.
 
 Note: `field_name` is retained for configuration compatibility but is **not currently validated** by the middleware -- token validation is header-only. Form-field-based token submission is not supported.
 
@@ -311,6 +318,8 @@ use modo::ClientIpLayer;
 
 // No trusted proxies -- headers trusted unconditionally
 let layer = ClientIpLayer::new();
+// Equivalent: ClientIpLayer implements Default
+let layer = ClientIpLayer::default();
 
 // With trusted proxy CIDR ranges
 let trusted: Vec<ipnet::IpNet> = vec!["10.0.0.0/8".parse().unwrap()];
@@ -343,6 +352,8 @@ Resolution order is identical to `ClientIpLayer` (see above). Not re-exported at
 
 ### Config
 
+`Config` is `#[non_exhaustive]` with `#[serde(default)]` -- always construct via `Config::default()` and then mutate fields, or deserialize from YAML.
+
 ```rust
 use modo::server::Config;
 
@@ -360,7 +371,7 @@ server:
 
 ### Starting the Server
 
-`modo::server::http()` binds a TCP listener and returns an `HttpServer` handle that implements `Task`:
+`modo::server::http()` binds a TCP listener and returns an `HttpServer` (a public struct) that implements `Task`:
 
 ```rust
 use modo::server::{Config, http};
@@ -405,6 +416,19 @@ impl Task for MyWorker {
     }
 }
 ```
+
+### wait_for_shutdown_signal
+
+For finer-grained control over the shutdown sequence (instead of using `run!`), use `wait_for_shutdown_signal` directly:
+
+```rust
+use modo::runtime::wait_for_shutdown_signal;
+
+wait_for_shutdown_signal().await;
+// perform custom cleanup...
+```
+
+Resolves on `SIGINT` (Ctrl+C) or `SIGTERM` (Unix only). Panics if the OS signal handler cannot be installed.
 
 ## Gotchas
 

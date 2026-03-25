@@ -21,9 +21,10 @@ use modo::{GeoLocator, GeoLayer, GeolocationConfig, Location};
 
 ## GeolocationConfig
 
-Deserializes from the `geolocation` section of YAML config. Single field:
+`#[non_exhaustive]` — use `..Default::default()` for forward compatibility. Deserializes from the `geolocation` section of YAML config. Single field:
 
 ```rust
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct GeolocationConfig {

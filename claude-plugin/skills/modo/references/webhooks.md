@@ -18,6 +18,12 @@ use modo::{
 
 Source: `src/webhook/` (mod.rs, client.rs, sender.rs, secret.rs, signature.rs).
 
+Free functions `sign`, `verify`, `sign_headers`, `verify_headers` are exported from the `webhook` module but **not** re-exported at the crate root. Access them via:
+
+```rust
+use modo::webhook::{sign, verify, sign_headers, verify_headers};
+```
+
 ---
 
 ## HttpClient Trait

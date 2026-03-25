@@ -25,7 +25,7 @@ The `context!` macro from MiniJinja is also re-exported: `modo::template::contex
 
 ## TemplateConfig
 
-YAML-deserializable configuration. All fields have defaults and support `#[serde(default)]`.
+`#[non_exhaustive]`. Derives `Debug`, `Clone`, `Deserialize`. Has `impl Default` (manual, not derive). YAML-deserializable configuration. All fields have defaults and support `#[serde(default)]`.
 
 | Field                | Type     | Default       | Purpose                                  |
 |----------------------|----------|---------------|------------------------------------------|
@@ -41,7 +41,7 @@ YAML-deserializable configuration. All fields have defaults and support `#[serde
 
 ## Engine and EngineBuilder
 
-`Engine` wraps a MiniJinja `Environment` behind `Arc<RwLock>`. Cheaply cloneable.
+`Engine` derives `Clone`. Wraps a MiniJinja `Environment` behind `Arc<RwLock>`. Cheaply cloneable.
 
 ### Building
 
@@ -57,6 +57,8 @@ let engine = Engine::builder()
     .locale_resolvers(vec![...])              // override default locale chain
     .build()?;
 ```
+
+`EngineBuilder` is `#[must_use]` and derives `Default`.
 
 ### EngineBuilder methods
 
@@ -78,6 +80,8 @@ let engine = Engine::builder()
 
 - `static_service() -> axum::Router` -- serves static files from `static_path` under `static_url_prefix`. Debug builds use `Cache-Control: no-cache`; release builds use `Cache-Control: public, max-age=31536000, immutable`.
 - `render()` is `pub(crate)` -- handlers use `Renderer` instead.
+- `locale_chain()` is `pub(crate)` -- returns `&[Arc<dyn LocaleResolver>]`.
+- `default_locale()` is `pub(crate)` -- returns `&str`.
 
 ### Hot-reload
 
@@ -87,7 +91,7 @@ In debug builds (`cfg!(debug_assertions)`), the template cache is cleared on eve
 
 ## Renderer (axum extractor)
 
-Extracted from handler arguments. Requires `Engine` in the service registry and `TemplateContextLayer` middleware installed.
+Derives `Clone`. Extracted from handler arguments. Requires `Engine` in the service registry and `TemplateContextLayer` middleware installed.
 
 ```rust
 use modo::template::{Renderer, context};
@@ -97,6 +101,8 @@ async fn home(renderer: Renderer) -> modo::Result<Html<String>> {
     renderer.html("pages/home.html", context! { title => "Home" })
 }
 ```
+
+Fields (all `pub(crate)`): `engine: Engine`, `context: TemplateContext`, `is_htmx: bool`.
 
 ### Methods
 
@@ -113,7 +119,7 @@ Handler values passed via `context! { ... }` override middleware-populated value
 
 ## TemplateContext
 
-Per-request key-value map (`BTreeMap<String, minijinja::Value>`) shared between middleware and handlers.
+Derives `Debug`, `Clone`, `Default`. Per-request key-value map (`BTreeMap<String, minijinja::Value>`) shared between middleware and handlers.
 
 - `set(key, value)` -- inserts or replaces a value.
 - `get(key) -> Option<&minijinja::Value>` -- retrieves by key.
@@ -125,7 +131,7 @@ Handlers do not manipulate `TemplateContext` directly. The `Renderer` extractor 
 
 ## TemplateContextLayer (middleware)
 
-Tower middleware that populates `TemplateContext` and inserts it into request extensions.
+Derives `Clone`. Tower middleware that populates `TemplateContext` and inserts it into request extensions.
 
 ```rust
 let router = axum::Router::new()
@@ -148,7 +154,7 @@ let router = axum::Router::new()
 
 ## HxRequest (extractor)
 
-Infallible axum extractor. Checks for `HX-Request: true` header (case-insensitive on header name, exact `"true"` match on value).
+Derives `Debug`, `Clone`, `Copy`. Infallible axum extractor (`Rejection = Infallible`). Checks for `HX-Request: true` header (case-insensitive on header name, exact `"true"` match on value).
 
 ```rust
 use modo::template::HxRequest;

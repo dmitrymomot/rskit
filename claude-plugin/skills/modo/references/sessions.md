@@ -10,9 +10,12 @@ modo provides database-backed HTTP sessions (SQLite via `modo_sessions` table), 
 
 ### CookieConfig
 
-Deserialized from the `cookie` key in YAML config.
+Deserialized from the `cookie` key in YAML config. Marked `#[non_exhaustive]` -- cannot be constructed with struct literal syntax outside the crate; use `CookieConfig::new()`.
+
+Derives: `Debug`, `Clone`, `Deserialize`.
 
 ```rust
+#[non_exhaustive]
 pub struct CookieConfig {
     pub secret: String,     // HMAC signing secret, minimum 64 characters
     pub secure: bool,       // Secure attribute (default: true)
@@ -57,9 +60,12 @@ None. Use `modo::cookie::CookieConfig`, `modo::cookie::key_from_config`, etc.
 
 ### SessionConfig
 
-Deserialized from the `session` key in YAML config. All fields have defaults.
+Deserialized from the `session` key in YAML config. All fields have defaults via `impl Default`. Marked `#[non_exhaustive]` -- cannot be constructed with struct literal syntax outside the crate; use `SessionConfig::default()` and then mutate fields.
+
+Derives: `Debug`, `Clone`, `Deserialize`. Has `#[serde(default)]`.
 
 ```rust
+#[non_exhaustive]
 pub struct SessionConfig {
     pub session_ttl_secs: u64,          // default: 2_592_000 (30 days)
     pub cookie_name: String,            // default: "_session"
@@ -220,15 +226,45 @@ Changes are held in memory and flushed to the database by the middleware after t
 
 ### Session metadata
 
-`SessionMeta` is built automatically by the middleware from request headers:
+`SessionMeta` is built automatically by the middleware from request headers.
 
-- `ip_address` -- from `ClientIp` or `ConnectInfo`
-- `user_agent` -- raw User-Agent header
-- `device_name` -- parsed, e.g. "Chrome on macOS"
-- `device_type` -- "desktop", "mobile", or "tablet"
-- `fingerprint` -- SHA-256 of user-agent + accept-language + accept-encoding
+Derives: `Debug`, `Clone`.
 
-Sub-modules `session::device`, `session::fingerprint`, and `session::meta` are public for direct use. `session::meta` exports `SessionMeta` (with `from_headers` constructor) and the `header_str` utility.
+```rust
+pub struct SessionMeta {
+    pub ip_address: String,   // from ClientIp or ConnectInfo
+    pub user_agent: String,   // raw User-Agent header
+    pub device_name: String,  // parsed, e.g. "Chrome on macOS"
+    pub device_type: String,  // "desktop", "mobile", or "tablet"
+    pub fingerprint: String,  // SHA-256 of user-agent + accept-language + accept-encoding
+}
+```
+
+Constructor:
+
+```rust
+SessionMeta::from_headers(
+    ip_address: String,
+    user_agent: &str,
+    accept_language: &str,
+    accept_encoding: &str,
+) -> SessionMeta
+```
+
+#### Public sub-modules
+
+Sub-modules `session::device`, `session::fingerprint`, and `session::meta` are public for direct use.
+
+**`session::meta`** exports:
+- `SessionMeta` -- struct with `from_headers` constructor (see above)
+- `header_str(headers: &HeaderMap, name: &str) -> &str` -- extract a header value as a string slice, returning `""` when absent or non-UTF-8
+
+**`session::device`** exports:
+- `parse_device_name(user_agent: &str) -> String` -- derives human-readable name, e.g. `"Chrome on macOS"`, `"Safari on iPhone"`
+- `parse_device_type(user_agent: &str) -> String` -- returns `"tablet"`, `"mobile"`, or `"desktop"`
+
+**`session::fingerprint`** exports:
+- `compute_fingerprint(user_agent: &str, accept_language: &str, accept_encoding: &str) -> String` -- SHA-256 hex string (64 chars) from three headers concatenated with null-byte separators
 
 ---
 
@@ -309,10 +345,10 @@ When the `templates` feature is enabled, `TemplateContextLayer` injects a `flash
 
 ```rust
 pub use flash::{Flash, FlashEntry, FlashLayer};
-pub use session::{Session, SessionConfig, SessionData, SessionToken};
+pub use session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};
 ```
 
-So `modo::Flash`, `modo::Session`, etc. work directly.
+So `modo::Flash`, `modo::Session`, `modo::SessionLayer`, etc. work directly.
 
 ---
 

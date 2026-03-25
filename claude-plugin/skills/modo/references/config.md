@@ -4,7 +4,7 @@
 
 modo loads YAML config files with environment-variable substitution. The config system lives in `src/config/` and is always available (no feature gate).
 
-Key types: `modo::Config` (top-level struct), `modo::config::load()` (loader function).
+Key types: `modo::Config` (top-level struct), `modo::config::load()` (loader function), `modo::tracing::init()` (tracing initializer), `modo::tracing::TracingGuard` (RAII guard).
 
 ## YAML Loading
 
@@ -87,7 +87,7 @@ cookie:
 
 ## Config Struct
 
-`modo::Config` — top-level framework config. All fields use `#[serde(default)]`, so any section can be omitted.
+`modo::Config` — top-level framework config (`#[non_exhaustive]`). All fields use `#[serde(default)]`, so any section can be omitted.
 
 Source: `src/config/modo.rs`
 
@@ -157,13 +157,32 @@ Source: `src/config/modo.rs`
 
 ### `tracing::Config`
 
+`#[non_exhaustive]`. Derives: `Debug`, `Clone`, `Deserialize`. Impl `Default`.
+
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `level` | `String` | `"info"` | Min log level (overridden by `RUST_LOG` env var) |
 | `format` | `String` | `"pretty"` | `"pretty"`, `"json"`, or compact (any other value) |
 | `sentry` | `Option<SentryConfig>` | `None` | Sentry settings (requires `sentry` feature) |
 
-**`SentryConfig`** (feature-gated under `sentry`): `dsn: String`, `environment: String`, `sample_rate: f32` (default `1.0`), `traces_sample_rate: f32` (default `0.1`).
+**`SentryConfig`** (`#[non_exhaustive]`, feature-gated under `sentry`): `dsn: String` (default `""`), `environment: String` (default `config::env()`), `sample_rate: f32` (default `1.0`), `traces_sample_rate: f32` (default `0.1`).
+
+### `tracing::init()` and `TracingGuard`
+
+```rust
+use modo::tracing::{init, TracingGuard};
+
+let guard: TracingGuard = modo::tracing::init(&config.tracing)?;
+// Hold `guard` for the process lifetime; pass to `run!` or call `guard.shutdown().await`
+```
+
+`tracing::init(config: &Config) -> Result<TracingGuard>` — initializes the global tracing subscriber. Reads `RUST_LOG` env var for level filter, falls back to `Config::level`. When `sentry` feature is enabled and DSN is non-empty, also initializes Sentry SDK. Calling more than once is harmless (subsequent calls silently no-op).
+
+**`TracingGuard`** — RAII guard returned by `init()`. Implements `Task` (has `async fn shutdown(self) -> Result<()>`). Methods: `new()`, `with_sentry(guard)` (requires `sentry` feature). Implements `Default`. Dropping without calling `shutdown` is safe but may not flush all buffered Sentry events.
+
+### Tracing Re-exports
+
+The `modo::tracing` module re-exports the following macros from the `tracing` crate for convenience: `debug`, `error`, `info`, `trace`, `warn`. These are used internally by the `run!` macro (`$crate::tracing::info!`) and available for application code.
 
 ### `cookie::CookieConfig`
 

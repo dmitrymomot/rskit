@@ -10,7 +10,7 @@ Markdown-based transactional email with SMTP delivery. Templates use YAML frontm
 
 ## Configuration
 
-`EmailConfig` deserializes from YAML under the `email` key. All fields have defaults.
+`EmailConfig` is `#[non_exhaustive]`. Derives `Debug`, `Clone`, `Deserialize`. Has `impl Default` (manual). Deserializes from YAML under the `email` key. All fields have defaults.
 
 ```yaml
 email:
@@ -30,11 +30,15 @@ email:
     security: starttls             # starttls | tls | none
 ```
 
+`SmtpConfig` is `#[non_exhaustive]`. Derives `Debug`, `Clone`, `Deserialize`. Has `impl Default` (manual, defaults: host `"localhost"`, port `587`, no credentials, `StartTls` security).
+
 ### `SmtpSecurity` variants
+
+`SmtpSecurity` derives `Debug`, `Clone`, `Default`, `Deserialize`, `PartialEq`. YAML values are lowercase (`#[serde(rename_all = "lowercase")]`).
 
 | Variant    | YAML value   | Description                          |
 |------------|-------------|--------------------------------------|
-| `StartTls` | `starttls`  | STARTTLS upgrade (default, port 587) |
+| `StartTls` | `starttls`  | STARTTLS upgrade (`#[default]`, port 587) |
 | `Tls`      | `tls`       | Implicit TLS (port 465)              |
 | `None`     | `none`      | No encryption (dev/local relay only) |
 
@@ -125,9 +129,11 @@ Loads `.md` files from disk with locale fallback chain:
 3. `{templates_path}/{name}.md`
 4. Error
 
-### `CachedSource`
+### `CachedSource<S: TemplateSource>`
 
-LRU-cached wrapper around any `TemplateSource`. Cache key is the `(name, locale, default_locale)` triple. Enabled by default via `cache_templates: true`.
+Constructor: `CachedSource::new(inner: S, capacity: usize) -> Self` (a capacity of `0` is treated as `1`).
+
+LRU-cached wrapper around any `TemplateSource`. Implements `TemplateSource`. Cache key is the `(name, locale, default_locale)` triple. Enabled by default via `cache_templates: true`.
 
 ## Mailer
 
@@ -206,10 +212,10 @@ Errors: empty recipient list, malformed addresses, SMTP delivery failures.
 | `SmtpSecurity`   | `StartTls` / `Tls` / `None`                       |
 | `TemplateSource` | Trait for loading raw templates                   |
 | `FileSource`     | Filesystem template source with locale fallback   |
-| `CachedSource`   | LRU-cached wrapper for any `TemplateSource`       |
-| `ButtonType`     | Enum: `Primary`, `Danger`, `Warning`, `Info`, `Success` |
+| `CachedSource<S: TemplateSource>` | LRU-cached wrapper for any `TemplateSource`. `impl TemplateSource` |
+| `ButtonType`     | Enum: `Primary`, `Danger`, `Warning`, `Info`, `Success`. Derives `Debug`, `Clone`, `Copy`, `PartialEq` |
 
 ## Dependencies
 
 - `lettre` 0.11 -- SMTP transport and message building (with `tokio1-rustls` TLS)
-- `pulldown-cmark` 0.12 -- Markdown to HTML conversion
+- `pulldown-cmark` 0.13 -- Markdown to HTML conversion

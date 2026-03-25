@@ -91,7 +91,7 @@ Only cancels jobs still in `pending` status. Returns `false` if the job was not 
 
 ### Worker Configuration
 
-`JobConfig` deserializes from YAML under the `job` key. All fields have defaults:
+`JobConfig` (`#[non_exhaustive]`) deserializes from YAML under the `job` key. All fields have defaults. Because the struct is `#[non_exhaustive]`, construct via `JobConfig { field: val, ..Default::default() }`:
 
 | Field | Default | Description |
 |---|---|---|
@@ -101,9 +101,11 @@ Only cancels jobs still in `pending` status. Returns `false` if the job was not 
 | `drain_timeout_secs` | `30` | Max wait for in-flight jobs during shutdown |
 | `queues` | one `"default"` queue, concurrency 4 | List of `QueueConfig` entries |
 | `cleanup` | enabled, 1h interval, 72h retention | Optional `CleanupConfig` |
-| `database` | `None` | Optional separate `db::Config` for the job queue DB |
+| `database` | `None` | Optional separate `db::Config` for the job queue DB; isolates job-queue writes from app queries |
 
-#### Queue Config
+#### Queue Config (`#[non_exhaustive]`)
+
+`QueueConfig` is `#[non_exhaustive]` -- construct via `QueueConfig { name: ..., concurrency: ..., ..Default::default() }` or rely on YAML deserialization.
 
 ```yaml
 job:
@@ -118,7 +120,9 @@ job:
 
 Each queue gets its own `Semaphore` with the specified concurrency limit. **Priority is handled by separate queues with different concurrency**, not by a numeric priority field.
 
-#### Cleanup Config
+#### Cleanup Config (`#[non_exhaustive]`)
+
+`CleanupConfig` is `#[non_exhaustive]` -- construct via `CleanupConfig { ..Default::default() }` or YAML deserialization.
 
 ```yaml
 job:
@@ -181,7 +185,7 @@ When `attempt >= max_attempts`, the job moves to `dead` status.
 | `dead` | Exhausted all retries |
 | `cancelled` | Cancelled via `Enqueuer::cancel` |
 
-`Status::is_terminal()` returns `true` for `completed`, `dead`, and `cancelled`.
+`Status` methods: `as_str()` returns the lowercase string (`"pending"`, `"running"`, etc.), `from_str(s)` parses back (returns `Option<Status>`), `is_terminal()` returns `true` for `completed`, `dead`, and `cancelled`. `Status` also implements `Display` (delegates to `as_str()`).
 
 ### Background Loops
 
@@ -254,6 +258,7 @@ let scheduler = Scheduler::builder(&registry)
     .job("*/5 * * * *", heartbeat)
     .job_with("@every 30s", intensive_task, CronOptions {
         timeout_secs: 25,
+        ..Default::default()
     })
     .start()
     .await;
@@ -261,7 +266,9 @@ let scheduler = Scheduler::builder(&registry)
 
 `Scheduler` implements `Task` for `run!` macro integration. Shutdown waits up to 30 seconds for in-flight executions.
 
-### Per-Job Options (`CronOptions`)
+### Per-Job Options (`CronOptions`, `#[non_exhaustive]`)
+
+`CronOptions` is `#[non_exhaustive]` -- construct via `CronOptions { timeout_secs: 25, ..Default::default() }`.
 
 | Field | Default | Description |
 |---|---|---|
@@ -303,7 +310,7 @@ These types are exported from `modo::job` and `modo::cron` but are rarely used d
 
 - `JobContext`, `FromJobContext` -- context type and extractor trait for custom job extractors
 - `JobHandler` -- handler trait (auto-implemented for matching `async fn`)
-- `WorkerBuilder` -- the builder type returned by `Worker::builder()`
+- `WorkerBuilder` (`#[must_use]`) -- the builder type returned by `Worker::builder()`
 - `CronContext`, `FromCronContext` -- context type and extractor trait for custom cron extractors
 - `CronHandler` -- handler trait (auto-implemented for matching `async fn`)
-- `SchedulerBuilder` -- the builder type returned by `Scheduler::builder()`
+- `SchedulerBuilder` (`#[must_use]`) -- the builder type returned by `Scheduler::builder()`
