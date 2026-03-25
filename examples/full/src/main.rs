@@ -94,6 +94,13 @@ async fn main() -> Result<()> {
     let job_enqueuer = modo::job::Enqueuer::new(&job_pool);
     registry.add(job_enqueuer);
 
+    // Health checks
+    let health_checks = modo::health::HealthChecks::new()
+        .check("read_pool", read_pool.clone())
+        .check("write_pool", write_pool.clone())
+        .check("job_pool", job_pool.clone());
+    registry.add(health_checks);
+
     // --- Rate limiter ---
 
     let cancel = CancellationToken::new();
