@@ -1,5 +1,5 @@
 {
-  "name": "modo-dev",
+  "name": "modo",
   "description": "Skills for building applications with the modo Rust web framework",
   "version": "0.1.0",
   "author": { "name": "Dmytro Momot" },

@@ -1,5 +1,5 @@
 ---
-name: modo-dev
+name: dev
 allowed-tools: Read, Grep, Glob
 description: >
     This skill should be used when the user asks to "build a modo app",

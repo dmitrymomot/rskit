@@ -1,10 +1,10 @@
-# modo-dev
+# modo
 
 Claude Code plugin for building applications with the [modo](https://github.com/dmitrymomot/modo) Rust web framework.
 
 ## Skills
 
-### modo-dev
+### dev (`/modo:dev`)
 
 Development reference for modo v2. Covers handlers, routing, middleware, database (raw sqlx), sessions, auth (OAuth, JWT, password, TOTP), RBAC, templates, SSE, jobs, cron, email, storage, webhooks, DNS verification, geolocation, multi-tenancy, flash messages, configuration, and testing.
 
@@ -12,7 +12,7 @@ Development reference for modo v2. Covers handlers, routing, middleware, databas
 
 Includes 16 reference files covering every framework module.
 
-### modo-init
+### init (`/modo:init`)
 
 Interactive project scaffolding. Generates a complete, ready-to-run modo v2 application with Cargo.toml, config YAML, main.rs wiring, routes, handlers, migrations, justfile, Dockerfile, docker-compose, .env, .gitignore, and CI workflow.
 
@@ -22,11 +22,17 @@ Supports 4 app type presets (API service, Web application, Full stack, Custom) a
 
 ## Installation
 
-```bash
-claude --plugin-dir /path/to/claude-plugin
+Via marketplace:
+```
+/plugin marketplace add dmitrymomot/modo
+/plugin install modo@dmitrymomot-modo
+/reload-plugins
 ```
 
-Or add the plugin directory to your Claude Code settings.
+Or locally:
+```bash
+claude --plugin-dir /path/to/modo
+```
 
 ## License
 

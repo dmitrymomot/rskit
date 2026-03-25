@@ -1,10 +1,10 @@
 ---
-name: modo-init
+name: init
 allowed-tools: Read, Write, Glob, Grep, Bash, AskUserQuestion
 description: "Scaffold a new modo v2 application — generates folder structure, Cargo.toml, config YAML, main.rs wiring, routes, handlers, migrations, justfile, Dockerfile, docker-compose, .env, .gitignore, and CI workflow. Use this skill whenever the user wants to create a new modo project, initialize an app, scaffold a starter, set up a new service, bootstrap a web app with modo, or says things like 'new project', 'init app', 'create service', 'start fresh', 'scaffold', or 'bootstrap'. Also use when the user asks how to set up a modo project from scratch."
 ---
 
-# modo-init — Project Scaffolding
+# init — Project Scaffolding
 
 This skill generates a complete, ready-to-run modo v2 application. It drives the conversation using `AskUserQuestion` to gather requirements, then creates every file with proper wiring.
 
