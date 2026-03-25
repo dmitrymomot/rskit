@@ -31,6 +31,7 @@ pub trait HealthCheck: Send + Sync + 'static {
 }
 ```
 
+- `Result<()>` is `modo::Result<()>` (i.e., `std::result::Result<(), modo::Error>`).
 - Object-safe via `Pin<Box<dyn Future>>` returns.
 - No `name()` method — names are provided at registration time.
 
@@ -55,7 +56,7 @@ impl HealthChecks {
 }
 ```
 
-Builder pattern — consumes and returns `Self` for chaining.
+Builder pattern — consumes and returns `Self` for chaining. Implements `Default` (equivalent to `new()`).
 
 ### Closure adapter
 
@@ -79,6 +80,8 @@ pub fn router() -> Router<AppState>;
 
 Returns a `Router<AppState>` with `/_live` and `/_ready` routes. Merged into the app like any other route group.
 
+If `HealthChecks` is not registered in the registry, `/_ready` returns 500 (via `Service<T>`'s missing-service error).
+
 ### Handler: `live`
 
 ```rust
@@ -90,7 +93,7 @@ async fn live() -> StatusCode {
 ### Handler: `ready`
 
 - Extracts `Service<HealthChecks>` from the registry.
-- Runs all checks concurrently via `futures::future::join_all`.
+- Runs all checks concurrently via `tokio::task::JoinSet`.
 - Collects results; logs each failure at ERROR level with `check_name` and `error` fields.
 - Returns 200 if all pass, 503 if any fail.
 
@@ -127,8 +130,7 @@ src/health/
 
 ## Dependencies
 
-- `futures` (already in the dependency tree) for `join_all`.
-- No new external crates.
+- No new external crates. Uses `tokio::task::JoinSet` (already available via tokio).
 
 ## Re-exports from lib.rs
 
@@ -157,7 +159,7 @@ pub use health::{HealthCheck, HealthChecks};
 9. `/_ready` returns 200 when all checks pass.
 10. `/_ready` returns 503 when one check fails.
 11. `/_ready` returns 503 when all checks fail.
-12. `/_ready` runs checks concurrently (timing-based: N slow checks complete in ~1x time, not Nx).
+12. `/_ready` runs checks concurrently (use `tokio::sync::Barrier` to prove concurrent execution — all checks increment a counter before awaiting the barrier; sequential execution would deadlock).
 13. Failed checks produce ERROR-level log output with correct `check_name` and `error` fields.
 
 ### Integration tests (tests/health.rs)
