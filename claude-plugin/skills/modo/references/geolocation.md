@@ -37,7 +37,7 @@ YAML example:
 
 ```yaml
 geolocation:
-  mmdb_path: "${MMDB_PATH:data/GeoLite2-City.mmdb}"
+    mmdb_path: "${MMDB_PATH:data/GeoLite2-City.mmdb}"
 ```
 
 ## GeoLocator

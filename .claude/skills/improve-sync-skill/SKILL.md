@@ -23,10 +23,10 @@ existing rule that wasn't followed or wasn't clear enough.
 
 Review this conversation. For each problem, classify it into one of three categories:
 
-| Category | Meaning | Fix target |
-|----------|---------|------------|
-| **MISSING_RULE** | No rule in the sync-skill covers this case | Add a new rule |
-| **UNCLEAR_RULE** | A rule exists but it's ambiguous or easy to misread | Clarify the existing rule |
+| Category         | Meaning                                                     | Fix target                  |
+| ---------------- | ----------------------------------------------------------- | --------------------------- |
+| **MISSING_RULE** | No rule in the sync-skill covers this case                  | Add a new rule              |
+| **UNCLEAR_RULE** | A rule exists but it's ambiguous or easy to misread         | Clarify the existing rule   |
 | **IGNORED_RULE** | A rule exists and is clear, the model just didn't follow it | No sync-skill change needed |
 
 Look for:
@@ -49,6 +49,7 @@ For each issue, write one line with severity:
 ```
 
 Severity guide:
+
 - **HIGH** — wrong information made it into a reference (hallucinated/wrong items)
 - **MEDIUM** — correct information was omitted (missing items, incomplete coverage)
 - **LOW** — cosmetic or process issues (formatting, ordering, redundant work)
@@ -74,7 +75,7 @@ rule exists, modify it rather than adding a new one.
 
 For each change, show:
 
-```
+````
 ### [SEVERITY] Why: <one line explaining the miss>
 Category: MISSING_RULE | UNCLEAR_RULE
 Target section: <where in sync-skill>
@@ -84,7 +85,8 @@ Target section: <where in sync-skill>
 - old text (if modifying)
 + new or replacement text
   existing context line
-```
+````
+
 ```
 
 Group changes by target section. If multiple misses produce the same fix, combine them under
@@ -110,3 +112,4 @@ Present all proposed changes to the user. Apply only after they confirm.
 - Prefer clarifying an existing rule over adding a new one — fewer rules followed well beats many rules ignored
 - Don't add rules for IGNORED_RULE cases — the instructions were fine, repetition won't help
 - Don't remove existing content unless it's wrong — only add or refine
+```

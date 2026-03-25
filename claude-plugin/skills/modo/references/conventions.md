@@ -158,17 +158,18 @@ assert_eq!(err.message(), "Not Found");
 Variants: `BadRequest`, `Unauthorized`, `Forbidden`, `NotFound`, `MethodNotAllowed`, `Conflict`, `Gone`, `UnprocessableEntity`, `TooManyRequests`, `PayloadTooLarge`, `InternalServerError`, `BadGateway`, `ServiceUnavailable`, `GatewayTimeout`.
 
 Methods:
+
 - `fn status_code(self) -> StatusCode` -- returns the corresponding HTTP status code
 - `fn message(self) -> &'static str` -- returns the canonical HTTP reason phrase
 
 ### Auto-conversions (`From` impls)
 
-| Source type | Maps to |
-|---|---|
-| `std::io::Error` | 500 "IO error" |
-| `serde_json::Error` | 400 "JSON error" |
-| `serde_yaml_ng::Error` | 500 "YAML error" |
-| `ValidationError` | 422 "validation failed" (with details) |
+| Source type            | Maps to                                |
+| ---------------------- | -------------------------------------- |
+| `std::io::Error`       | 500 "IO error"                         |
+| `serde_json::Error`    | 400 "JSON error"                       |
+| `serde_yaml_ng::Error` | 500 "YAML error"                       |
+| `ValidationError`      | 422 "validation failed" (with details) |
 
 ---
 
@@ -617,6 +618,7 @@ pub trait HealthCheck: Send + Sync + 'static {
 ```
 
 Built-in implementations:
+
 - `db::Pool` -- acquires a connection to verify pool health
 - `db::ReadPool` -- acquires a connection to verify read pool health
 - `db::WritePool` -- acquires a connection to verify write pool health

@@ -37,18 +37,18 @@ let storage = Storage::new(&config)?;
 
 ### Methods
 
-| Method | Signature | Notes |
-|--------|-----------|-------|
-| `put` | `async fn put(&self, input: &PutInput) -> Result<String>` | Returns generated S3 key |
-| `put_with` | `async fn put_with(&self, input: &PutInput, opts: PutOptions) -> Result<String>` | With custom options |
-| `delete` | `async fn delete(&self, key: &str) -> Result<()>` | No-op if missing |
-| `delete_prefix` | `async fn delete_prefix(&self, prefix: &str) -> Result<()>` | Deletes all keys under prefix |
-| `url` | `fn url(&self, key: &str) -> Result<String>` | Public URL (no network call), requires `public_url` |
-| `presigned_url` | `async fn presigned_url(&self, key: &str, expires_in: Duration) -> Result<String>` | Presigned GET URL |
-| `exists` | `async fn exists(&self, key: &str) -> Result<bool>` | HEAD check |
-| `put_from_url` | `async fn put_from_url(&self, input: &PutFromUrlInput) -> Result<String>` | Fetch URL then upload |
-| `put_from_url_with` | `async fn put_from_url_with(&self, input: &PutFromUrlInput, opts: PutOptions) -> Result<String>` | With custom options |
-| `memory` | `fn memory() -> Self` | In-memory backend, `#[cfg(test)]` or `storage-test` feature |
+| Method              | Signature                                                                                        | Notes                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `put`               | `async fn put(&self, input: &PutInput) -> Result<String>`                                        | Returns generated S3 key                                    |
+| `put_with`          | `async fn put_with(&self, input: &PutInput, opts: PutOptions) -> Result<String>`                 | With custom options                                         |
+| `delete`            | `async fn delete(&self, key: &str) -> Result<()>`                                                | No-op if missing                                            |
+| `delete_prefix`     | `async fn delete_prefix(&self, prefix: &str) -> Result<()>`                                      | Deletes all keys under prefix                               |
+| `url`               | `fn url(&self, key: &str) -> Result<String>`                                                     | Public URL (no network call), requires `public_url`         |
+| `presigned_url`     | `async fn presigned_url(&self, key: &str, expires_in: Duration) -> Result<String>`               | Presigned GET URL                                           |
+| `exists`            | `async fn exists(&self, key: &str) -> Result<bool>`                                              | HEAD check                                                  |
+| `put_from_url`      | `async fn put_from_url(&self, input: &PutFromUrlInput) -> Result<String>`                        | Fetch URL then upload                                       |
+| `put_from_url_with` | `async fn put_from_url_with(&self, input: &PutFromUrlInput, opts: PutOptions) -> Result<String>` | With custom options                                         |
+| `memory`            | `fn memory() -> Self`                                                                            | In-memory backend, `#[cfg(test)]` or `storage-test` feature |
 
 ### Key Generation
 

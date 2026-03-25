@@ -6,17 +6,17 @@ Feature-gated under `sse`. Module: `src/sse/`.
 
 All types re-exported from `modo::sse::*`:
 
-| Type | Purpose |
-|------|---------|
-| `Broadcaster<K, T>` | Keyed broadcast channel registry; produces SSE responses |
-| `BroadcastStream<T>` | Stream of raw `T` values from a broadcast channel |
-| `LagPolicy` | `End` or `Skip` -- controls behavior when a subscriber falls behind. Derives `Debug`, `Clone`, `Copy` |
-| `Event` | `#[must_use]`. Builder for a single SSE event (id + event name + data + retry). Derives `Debug`, `Clone` |
-| `Sender` | Imperative event sender for `Broadcaster::channel()` closures |
-| `SseStreamExt` | `.cast_events()` combinator trait for stream-to-event conversion |
-| `LastEventId` | Axum extractor for the `Last-Event-ID` header. Derives `Debug`, `Clone` |
-| `SseConfig` | Keep-alive configuration (deserializable from YAML) |
-| `replay()` | Convert a `Vec<T>` into a stream for reconnection replay |
+| Type                 | Purpose                                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------- |
+| `Broadcaster<K, T>`  | Keyed broadcast channel registry; produces SSE responses                                                 |
+| `BroadcastStream<T>` | Stream of raw `T` values from a broadcast channel                                                        |
+| `LagPolicy`          | `End` or `Skip` -- controls behavior when a subscriber falls behind. Derives `Debug`, `Clone`, `Copy`    |
+| `Event`              | `#[must_use]`. Builder for a single SSE event (id + event name + data + retry). Derives `Debug`, `Clone` |
+| `Sender`             | Imperative event sender for `Broadcaster::channel()` closures                                            |
+| `SseStreamExt`       | `.cast_events()` combinator trait for stream-to-event conversion                                         |
+| `LastEventId`        | Axum extractor for the `Last-Event-ID` header. Derives `Debug`, `Clone`                                  |
+| `SseConfig`          | Keep-alive configuration (deserializable from YAML)                                                      |
+| `replay()`           | Convert a `Vec<T>` into a stream for reconnection replay                                                 |
 
 Note: `modo::sse` is not re-exported at the crate root. Import as `modo::sse::{Broadcaster, Event, ...}`.
 
@@ -278,6 +278,7 @@ async fn health(
 ```
 
 The closure runs as a spawned tokio task. It ends when:
+
 - The closure returns `Ok(())` -- stream ends cleanly.
 - The closure returns `Err(e)` -- error logged, stream ends.
 - `tx.send()` fails -- client disconnected.

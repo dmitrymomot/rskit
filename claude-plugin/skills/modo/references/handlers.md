@@ -151,6 +151,7 @@ Both `rate_limit()` and `rate_limit_with()` spawn a background cleanup task. The
 Response headers when `use_headers` is true: `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`. Rejected responses also include `retry-after`.
 
 Built-in extractors:
+
 - `PeerIpKeyExtractor` -- keys by peer socket IP (needs `ConnectInfo<SocketAddr>`)
 - `GlobalKeyExtractor` -- single shared bucket for all requests
 
@@ -199,6 +200,7 @@ let layer = cors_with(&config, urls(&["https://app.example.com".into()]));
 ```
 
 Built-in predicates:
+
 - `subdomains(domain)` -- matches the domain and any subdomain (both http and https)
 - `urls(origins)` -- exact-match against a list of origin strings
 
@@ -307,6 +309,7 @@ Returns `Error::internal` if `ClientIpLayer` is not applied.
 Tower layer that resolves the real client IP on every request.
 
 Resolution order:
+
 1. If `trusted_proxies` is non-empty and the connecting IP is NOT in any trusted range, return the connecting IP directly (ignore proxy headers).
 2. `X-Forwarded-For` header -- first valid IP.
 3. `X-Real-IP` header -- valid IP.
@@ -362,11 +365,12 @@ let config = Config::default();
 ```
 
 YAML:
+
 ```yaml
 server:
-  host: 0.0.0.0
-  port: ${PORT:8080}
-  shutdown_timeout_secs: 30
+    host: 0.0.0.0
+    port: ${PORT:8080}
+    shutdown_timeout_secs: 30
 ```
 
 ### Starting the Server

@@ -26,10 +26,10 @@ RPITIT on `exchange` -- **not object-safe**. Use concrete types or monomorphised
 
 ### Built-in providers
 
-| Provider | Struct | Default scopes | User-info endpoint |
-|----------|--------|----------------|-------------------|
-| GitHub | `GitHub` | `user:email`, `read:user` | `/user` + `/user/emails` |
-| Google | `Google` | `openid`, `email`, `profile` | `/oauth2/v2/userinfo` |
+| Provider | Struct   | Default scopes               | User-info endpoint       |
+| -------- | -------- | ---------------------------- | ------------------------ |
+| GitHub   | `GitHub` | `user:email`, `read:user`    | `/user` + `/user/emails` |
+| Google   | `Google` | `openid`, `email`, `profile` | `/oauth2/v2/userinfo`    |
 
 Both use Authorization Code flow with PKCE (S256).
 
@@ -69,14 +69,14 @@ YAML example:
 
 ```yaml
 oauth:
-  google:
-    client_id: "${GOOGLE_CLIENT_ID}"
-    client_secret: "${GOOGLE_CLIENT_SECRET}"
-    redirect_uri: "https://example.com/auth/google/callback"
-  github:
-    client_id: "${GITHUB_CLIENT_ID}"
-    client_secret: "${GITHUB_CLIENT_SECRET}"
-    redirect_uri: "https://example.com/auth/github/callback"
+    google:
+        client_id: "${GOOGLE_CLIENT_ID}"
+        client_secret: "${GOOGLE_CLIENT_SECRET}"
+        redirect_uri: "https://example.com/auth/google/callback"
+    github:
+        client_id: "${GITHUB_CLIENT_ID}"
+        client_secret: "${GITHUB_CLIENT_SECRET}"
+        redirect_uri: "https://example.com/auth/github/callback"
 ```
 
 ### Authorization flow
@@ -90,22 +90,23 @@ oauth:
 - `OAuthState` -- axum `FromRequestParts` extractor. Reads signed `_oauth_state` cookie. Requires `Key` in `Registry`.
 - `CallbackParams` -- `#[non_exhaustive]` `Deserialize` struct with `code: String` and `state: String`. Extract with `Query<CallbackParams>`. Must be constructed via deserialization (no public constructor).
 - `UserProfile` -- `#[non_exhaustive]` normalized profile returned by `exchange()`. Use `UserProfile::new()` constructor:
-  ```rust
-  #[non_exhaustive]
-  pub struct UserProfile {
-      pub provider: String,          // "google", "github"
-      pub provider_user_id: String,
-      pub email: String,
-      pub email_verified: bool,
-      pub name: Option<String>,
-      pub avatar_url: Option<String>,
-      pub raw: serde_json::Value,    // raw provider JSON
-  }
 
-  impl UserProfile {
-      pub fn new(provider: impl Into<String>, provider_user_id: impl Into<String>, email: impl Into<String>) -> Self
-  }
-  ```
+    ```rust
+    #[non_exhaustive]
+    pub struct UserProfile {
+        pub provider: String,          // "google", "github"
+        pub provider_user_id: String,
+        pub email: String,
+        pub email_verified: bool,
+        pub name: Option<String>,
+        pub avatar_url: Option<String>,
+        pub raw: serde_json::Value,    // raw provider JSON
+    }
+
+    impl UserProfile {
+        pub fn new(provider: impl Into<String>, provider_user_id: impl Into<String>, email: impl Into<String>) -> Self
+    }
+    ```
 
 ### Crate root re-exports (under `#[cfg(feature = "auth")]`)
 
@@ -206,6 +207,7 @@ Totp::generate_secret() -> String  // 20-byte random, base32-encoded
 ```
 
 Methods:
+
 - `generate() -> String` -- current TOTP code using system clock
 - `generate_at(timestamp: u64) -> String` -- code for a specific Unix timestamp
 - `verify(code: &str) -> bool` -- verify against current time with window tolerance
@@ -265,11 +267,11 @@ impl Default for JwtConfig  // secret defaults to empty string
 
 ```yaml
 jwt:
-  secret: "${JWT_SECRET}"
-  default_expiry: 3600
-  leeway: 5
-  issuer: "my-app"
-  audience: "api"
+    secret: "${JWT_SECRET}"
+    default_expiry: 3600
+    leeway: 5
+    issuer: "my-app"
+    audience: "api"
 ```
 
 ### Claims\<T\>
@@ -290,12 +292,14 @@ pub struct Claims<T> {
 ```
 
 Builder methods (all consume and return `Self`):
+
 - `Claims::new(custom: T)` -- all registered fields `None`
 - `.with_iss(iss)`, `.with_sub(sub)`, `.with_aud(aud)`
 - `.with_exp(timestamp)`, `.with_exp_in(Duration)` -- absolute or relative
 - `.with_nbf(timestamp)`, `.with_iat_now()`, `.with_jti(jti)`
 
 Query methods:
+
 - `.subject()`, `.token_id()`, `.issuer()`, `.audience()` -- return `Option<&str>`
 - `.is_expired()`, `.is_not_yet_valid()` -- check `exp`/`nbf` against current time
 
@@ -324,6 +328,7 @@ decoder.decode::<T>(token: &str) -> Result<Claims<T>>  // T: DeserializeOwned
 ```
 
 Validation order:
+
 1. Split into 3 parts
 2. Decode header, check algorithm matches (`HS256`)
 3. Verify HMAC signature
@@ -368,6 +373,7 @@ JwtLayer::<MyClaims>::new(decoder: JwtDecoder) -> Self
 Default token source: `BearerSource` (`Authorization: Bearer <token>`).
 
 Middleware flow:
+
 1. Try each `TokenSource` in order; 401 if none yields a token.
 2. Decode and validate with `JwtDecoder`; 401 on failure.
 3. If `Revocation` backend registered AND token has `jti`, call `is_revoked()`. Fail-closed (errors reject the request).
@@ -383,12 +389,12 @@ pub trait TokenSource: Send + Sync {
 
 Built-in implementations:
 
-| Source | Description |
-|--------|-------------|
-| `BearerSource` | `Authorization: Bearer <token>` header |
-| `QuerySource("param")` | Query parameter `?param=<token>` |
-| `CookieSource("name")` | Cookie `name=<token>` |
-| `HeaderSource("X-Name")` | Custom header value |
+| Source                   | Description                            |
+| ------------------------ | -------------------------------------- |
+| `BearerSource`           | `Authorization: Bearer <token>` header |
+| `QuerySource("param")`   | Query parameter `?param=<token>`       |
+| `CookieSource("name")`   | Cookie `name=<token>`                  |
+| `HeaderSource("X-Name")` | Custom header value                    |
 
 ### Revocation trait
 
@@ -401,6 +407,7 @@ pub trait Revocation: Send + Sync {
 Object-safe (`Pin<Box<dyn Future>>` returns, not RPITIT). Implement against your storage (DB, Redis, `LruCache`).
 
 Behavior:
+
 - Only called when registered AND token has `jti`.
 - Token without `jti` + registered backend: accepted (no call).
 - `Ok(true)`: rejected with `jwt:revoked`.
@@ -422,22 +429,22 @@ Typed error enum chained into `modo::Error` via `chain()`.
 
 Variants and codes:
 
-| Variant | Code | HTTP status |
-|---------|------|-------------|
-| `MissingToken` | `jwt:missing_token` | 401 |
-| `InvalidHeader` | `jwt:invalid_header` | 401 |
-| `MalformedToken` | `jwt:malformed_token` | 401 |
-| `DeserializationFailed` | `jwt:deserialization_failed` | 401 |
-| `InvalidSignature` | `jwt:invalid_signature` | 401 |
-| `Expired` | `jwt:expired` | 401 |
-| `NotYetValid` | `jwt:not_yet_valid` | 401 |
-| `InvalidIssuer` | `jwt:invalid_issuer` | 401 |
-| `InvalidAudience` | `jwt:invalid_audience` | 401 |
-| `Revoked` | `jwt:revoked` | 401 |
-| `RevocationCheckFailed` | `jwt:revocation_check_failed` | 401 |
-| `AlgorithmMismatch` | `jwt:algorithm_mismatch` | 401 |
-| `SigningFailed` | `jwt:signing_failed` | 500 |
-| `SerializationFailed` | `jwt:serialization_failed` | 500 |
+| Variant                 | Code                          | HTTP status |
+| ----------------------- | ----------------------------- | ----------- |
+| `MissingToken`          | `jwt:missing_token`           | 401         |
+| `InvalidHeader`         | `jwt:invalid_header`          | 401         |
+| `MalformedToken`        | `jwt:malformed_token`         | 401         |
+| `DeserializationFailed` | `jwt:deserialization_failed`  | 401         |
+| `InvalidSignature`      | `jwt:invalid_signature`       | 401         |
+| `Expired`               | `jwt:expired`                 | 401         |
+| `NotYetValid`           | `jwt:not_yet_valid`           | 401         |
+| `InvalidIssuer`         | `jwt:invalid_issuer`          | 401         |
+| `InvalidAudience`       | `jwt:invalid_audience`        | 401         |
+| `Revoked`               | `jwt:revoked`                 | 401         |
+| `RevocationCheckFailed` | `jwt:revocation_check_failed` | 401         |
+| `AlgorithmMismatch`     | `jwt:algorithm_mismatch`      | 401         |
+| `SigningFailed`         | `jwt:signing_failed`          | 500         |
+| `SerializationFailed`   | `jwt:serialization_failed`    | 500         |
 
 ### Crate root re-exports (under `#[cfg(feature = "auth")]`)
 
@@ -521,11 +528,13 @@ rbac::require_authenticated() -> RequireAuthenticatedLayer
 Apply with `.route_layer()` (after route matching).
 
 **`require_role`:**
+
 - Role matches any in list: passes through.
 - Role present but not in list: 403 Forbidden.
 - No role in extensions: 401 Unauthorized.
 
 **`require_authenticated`:**
+
 - Role present in extensions: passes through.
 - No role: 401 Unauthorized.
 

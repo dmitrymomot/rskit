@@ -38,16 +38,16 @@ YAML example:
 
 ```yaml
 dns:
-  nameserver: "8.8.8.8:53"
-  txt_prefix: "_myapp-verify"   # optional, default: _modo-verify
-  timeout_ms: 5000              # optional, default: 5000
+    nameserver: "8.8.8.8:53"
+    txt_prefix: "_myapp-verify" # optional, default: _modo-verify
+    timeout_ms: 5000 # optional, default: 5000
 ```
 
 ### Constructors and methods
 
-| Method | Signature | Notes |
-|--------|-----------|-------|
-| `new` | `fn new(nameserver: impl Into<String>) -> Self` | Sets `txt_prefix = "_modo-verify"`, `timeout_ms = 5000` |
+| Method             | Signature                                          | Notes                                                                               |
+| ------------------ | -------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `new`              | `fn new(nameserver: impl Into<String>) -> Self`    | Sets `txt_prefix = "_modo-verify"`, `timeout_ms = 5000`                             |
 | `parse_nameserver` | `fn parse_nameserver(&self) -> Result<SocketAddr>` | Appends port `:53` when omitted. Returns `Error::internal` (500) on invalid address |
 
 ---
@@ -129,6 +129,7 @@ err.error_code(); // Some("dns:server_failure")
 ```
 
 HTTP status mapping:
+
 - `Timeout` -> 504 Gateway Timeout
 - `ServerFailure`, `Refused`, `Malformed`, `NetworkError` -> 502 Bad Gateway
 - `InvalidInput` -> 400 Bad Request

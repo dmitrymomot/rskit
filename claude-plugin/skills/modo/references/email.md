@@ -14,20 +14,20 @@ Markdown-based transactional email with SMTP delivery. Templates use YAML frontm
 
 ```yaml
 email:
-  templates_path: emails           # directory with .md templates
-  layouts_path: emails/layouts     # directory with .html layout files
-  default_from_name: MyApp              # default: "" (empty string)
-  default_from_email: noreply@example.com  # default: "" (empty string)
-  default_reply_to: support@example.com  # optional, default: null
-  default_locale: en
-  cache_templates: true
-  template_cache_size: 100
-  smtp:
-    host: smtp.example.com  # default: "localhost"
-    port: 587
-    username: user
-    password: pass
-    security: starttls             # starttls | tls | none
+    templates_path: emails # directory with .md templates
+    layouts_path: emails/layouts # directory with .html layout files
+    default_from_name: MyApp # default: "" (empty string)
+    default_from_email: noreply@example.com # default: "" (empty string)
+    default_reply_to: support@example.com # optional, default: null
+    default_locale: en
+    cache_templates: true
+    template_cache_size: 100
+    smtp:
+        host: smtp.example.com # default: "localhost"
+        port: 587
+        username: user
+        password: pass
+        security: starttls # starttls | tls | none
 ```
 
 `SmtpConfig` is `#[non_exhaustive]`. Derives `Debug`, `Clone`, `Deserialize`. Has `impl Default` (manual, defaults: host `"localhost"`, port `587`, no credentials, `StartTls` security).
@@ -36,11 +36,11 @@ email:
 
 `SmtpSecurity` derives `Debug`, `Clone`, `Default`, `Deserialize`, `PartialEq`. YAML values are lowercase (`#[serde(rename_all = "lowercase")]`).
 
-| Variant    | YAML value   | Description                          |
-|------------|-------------|--------------------------------------|
-| `StartTls` | `starttls`  | STARTTLS upgrade (`#[default]`, port 587) |
-| `Tls`      | `tls`       | Implicit TLS (port 465)              |
-| `None`     | `none`      | No encryption (dev/local relay only) |
+| Variant    | YAML value | Description                               |
+| ---------- | ---------- | ----------------------------------------- |
+| `StartTls` | `starttls` | STARTTLS upgrade (`#[default]`, port 587) |
+| `Tls`      | `tls`      | Implicit TLS (port 465)                   |
+| `None`     | `none`     | No encryption (dev/local relay only)      |
 
 Username and password must both be set or both be absent -- mismatched pair returns an error.
 
@@ -63,9 +63,9 @@ Thanks for signing up.
 
 ### Frontmatter fields
 
-| Field     | Required | Default | Description                   |
-|-----------|----------|---------|-------------------------------|
-| `subject` | yes      | --      | Email subject line            |
+| Field     | Required | Default | Description                     |
+| --------- | -------- | ------- | ------------------------------- |
+| `subject` | yes      | --      | Email subject line              |
 | `layout`  | no       | `base`  | Layout name (`base` = built-in) |
 
 ### Variable substitution
@@ -94,6 +94,7 @@ Unrecognized button types (e.g., `[button:unknown|X](url)`) render as a normal l
 ## Layouts
 
 The built-in `base` layout provides:
+
 - 600px max-width, responsive (mobile collapses to full width)
 - Dark mode support (`prefers-color-scheme: dark`)
 - System font stack
@@ -102,6 +103,7 @@ The built-in `base` layout provides:
 ### Conditional sections
 
 These template variables activate optional layout sections:
+
 - `logo_url` -- renders a centered logo image above the content card
 - `footer_text` -- renders a footer row below the content card
 
@@ -124,6 +126,7 @@ pub trait TemplateSource: Send + Sync {
 Constructor: `FileSource::new(templates_path: impl Into<PathBuf>) -> Self`.
 
 Loads `.md` files from disk with locale fallback chain:
+
 1. `{templates_path}/{locale}/{name}.md`
 2. `{templates_path}/{default_locale}/{name}.md`
 3. `{templates_path}/{name}.md`
@@ -201,19 +204,19 @@ Errors: empty recipient list, malformed addresses, SMTP delivery failures.
 
 ## Public API Summary
 
-| Type             | Description                                      |
-|------------------|--------------------------------------------------|
-| `Mailer`         | Renders templates and sends email over SMTP      |
-| `SendEmail`      | Builder for composing an email to send            |
-| `RenderedEmail`  | Result of rendering: `subject`, `html`, `text`    |
-| `SenderProfile`  | Per-email From/Reply-To override                  |
-| `EmailConfig`    | Top-level config (templates, defaults, SMTP)      |
-| `SmtpConfig`     | SMTP host, port, credentials, security mode       |
-| `SmtpSecurity`   | `StartTls` / `Tls` / `None`                       |
-| `TemplateSource` | Trait for loading raw templates                   |
-| `FileSource`     | Filesystem template source with locale fallback   |
-| `CachedSource<S: TemplateSource>` | LRU-cached wrapper for any `TemplateSource`. `impl TemplateSource` |
-| `ButtonType`     | Enum: `Primary`, `Danger`, `Warning`, `Info`, `Success`. Derives `Debug`, `Clone`, `Copy`, `PartialEq` |
+| Type                              | Description                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `Mailer`                          | Renders templates and sends email over SMTP                                                            |
+| `SendEmail`                       | Builder for composing an email to send                                                                 |
+| `RenderedEmail`                   | Result of rendering: `subject`, `html`, `text`                                                         |
+| `SenderProfile`                   | Per-email From/Reply-To override                                                                       |
+| `EmailConfig`                     | Top-level config (templates, defaults, SMTP)                                                           |
+| `SmtpConfig`                      | SMTP host, port, credentials, security mode                                                            |
+| `SmtpSecurity`                    | `StartTls` / `Tls` / `None`                                                                            |
+| `TemplateSource`                  | Trait for loading raw templates                                                                        |
+| `FileSource`                      | Filesystem template source with locale fallback                                                        |
+| `CachedSource<S: TemplateSource>` | LRU-cached wrapper for any `TemplateSource`. `impl TemplateSource`                                     |
+| `ButtonType`                      | Enum: `Primary`, `Danger`, `Warning`, `Info`, `Success`. Derives `Debug`, `Clone`, `Copy`, `PartialEq` |
 
 ## Dependencies
 

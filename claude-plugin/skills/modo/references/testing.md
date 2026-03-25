@@ -39,13 +39,13 @@ Panics if the database cannot be opened.
 
 ### Methods
 
-| Method | Signature | Description |
-|---|---|---|
-| `exec` | `async fn exec(self, sql: &str) -> Self` | Execute raw SQL. Panics on failure. Returns self for chaining. |
-| `migrate` | `async fn migrate(self, path: &str) -> Self` | Run all `.sql` migrations in `path` directory. Panics on failure. Returns self for chaining. |
-| `pool` | `fn pool(&self) -> Pool` | Cloned `Pool` newtype. |
-| `read_pool` | `fn read_pool(&self) -> ReadPool` | `ReadPool` sharing the same connection. |
-| `write_pool` | `fn write_pool(&self) -> WritePool` | `WritePool` sharing the same connection. |
+| Method       | Signature                                    | Description                                                                                  |
+| ------------ | -------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `exec`       | `async fn exec(self, sql: &str) -> Self`     | Execute raw SQL. Panics on failure. Returns self for chaining.                               |
+| `migrate`    | `async fn migrate(self, path: &str) -> Self` | Run all `.sql` migrations in `path` directory. Panics on failure. Returns self for chaining. |
+| `pool`       | `fn pool(&self) -> Pool`                     | Cloned `Pool` newtype.                                                                       |
+| `read_pool`  | `fn read_pool(&self) -> ReadPool`            | `ReadPool` sharing the same connection.                                                      |
+| `write_pool` | `fn write_pool(&self) -> WritePool`          | `WritePool` sharing the same connection.                                                     |
 
 ### Chaining pattern
 
@@ -117,24 +117,24 @@ let app = TestApp::from_router(router);
 
 ### TestAppBuilder methods
 
-| Method | Description |
-|---|---|
-| `service<T>(val: T)` | Register a value extractable via `modo::extractor::Service<T>`. |
-| `route(path, method_router)` | Add a route. The `method_router` uses `AppState`. |
-| `layer(layer)` | Apply a Tower middleware layer. |
-| `merge(router)` | Merge a `Router<AppState>` into the test router. |
-| `build()` | Finalize: binds the registry as state, returns `TestApp`. |
+| Method                       | Description                                                     |
+| ---------------------------- | --------------------------------------------------------------- |
+| `service<T>(val: T)`         | Register a value extractable via `modo::extractor::Service<T>`. |
+| `route(path, method_router)` | Add a route. The `method_router` uses `AppState`.               |
+| `layer(layer)`               | Apply a Tower middleware layer.                                 |
+| `merge(router)`              | Merge a `Router<AppState>` into the test router.                |
+| `build()`                    | Finalize: binds the registry as state, returns `TestApp`.       |
 
 ### Request methods on TestApp
 
-| Method | HTTP verb |
-|---|---|
-| `get(uri)` | GET |
-| `post(uri)` | POST |
-| `put(uri)` | PUT |
-| `patch(uri)` | PATCH |
-| `delete(uri)` | DELETE |
-| `options(uri)` | OPTIONS |
+| Method                 | HTTP verb        |
+| ---------------------- | ---------------- |
+| `get(uri)`             | GET              |
+| `post(uri)`            | POST             |
+| `put(uri)`             | PUT              |
+| `patch(uri)`           | PATCH            |
+| `delete(uri)`          | DELETE           |
+| `options(uri)`         | OPTIONS          |
 | `request(method, uri)` | Arbitrary method |
 
 All return a `TestRequestBuilder`.
@@ -147,14 +147,14 @@ Builder for an in-process HTTP request. Obtained from `TestApp` method helpers o
 
 ### Methods
 
-| Method | Description |
-|---|---|
+| Method                     | Description                                                                                                                      |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `new(router, method, uri)` | Construct a builder that will dispatch `method` to `uri` on `router`. Rarely needed directly -- prefer `TestApp` method helpers. |
-| `header(key, value)` | Append a header. |
-| `json(&T)` | Serialize body as JSON, set `content-type: application/json`. Replaces any prior content-type. |
-| `form(&T)` | URL-encode body, set `content-type: application/x-www-form-urlencoded`. Replaces any prior content-type. |
-| `body(impl Into<Vec<u8>>)` | Set raw byte body. |
-| `send().await` | Dispatch the request via `oneshot`, return `TestResponse`. |
+| `header(key, value)`       | Append a header.                                                                                                                 |
+| `json(&T)`                 | Serialize body as JSON, set `content-type: application/json`. Replaces any prior content-type.                                   |
+| `form(&T)`                 | URL-encode body, set `content-type: application/x-www-form-urlencoded`. Replaces any prior content-type.                         |
+| `body(impl Into<Vec<u8>>)` | Set raw byte body.                                                                                                               |
+| `send().await`             | Dispatch the request via `oneshot`, return `TestResponse`.                                                                       |
 
 ### Examples
 
@@ -192,14 +192,14 @@ Captured response from an in-process request.
 
 ### Methods
 
-| Method | Return | Description |
-|---|---|---|
-| `status()` | `u16` | HTTP status code as integer. |
-| `header(name)` | `Option<&str>` | First value of header, or `None`. |
-| `header_all(name)` | `Vec<&str>` | All values for a multi-value header (e.g., `set-cookie`). |
-| `text()` | `&str` | Body as UTF-8 string. Panics if invalid UTF-8. |
-| `json<T: DeserializeOwned>()` | `T` | Deserialize body as JSON. Panics on failure. |
-| `bytes()` | `&[u8]` | Raw body bytes. |
+| Method                        | Return         | Description                                               |
+| ----------------------------- | -------------- | --------------------------------------------------------- |
+| `status()`                    | `u16`          | HTTP status code as integer.                              |
+| `header(name)`                | `Option<&str>` | First value of header, or `None`.                         |
+| `header_all(name)`            | `Vec<&str>`    | All values for a multi-value header (e.g., `set-cookie`). |
+| `text()`                      | `&str`         | Body as UTF-8 string. Panics if invalid UTF-8.            |
+| `json<T: DeserializeOwned>()` | `T`            | Deserialize body as JSON. Panics on failure.              |
+| `bytes()`                     | `&[u8]`        | Raw body bytes.                                           |
 
 ### Examples
 
@@ -252,12 +252,12 @@ let session = TestSession::with_config(&db, session_config, cookie_config).await
 
 ### Methods
 
-| Method | Description |
-|---|---|
-| `TestSession::with_config(&db, session_config, cookie_config).await` | Associated function: create with custom `SessionConfig` and `CookieConfig`. |
-| `authenticate(user_id).await` | Create a session, return signed cookie string (e.g., `"_session=<signed>"`). |
-| `authenticate_with(user_id, data).await` | Same, with custom JSON session data. |
-| `layer()` | Return a `SessionLayer` to apply to `TestAppBuilder`. |
+| Method                                                               | Description                                                                  |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `TestSession::with_config(&db, session_config, cookie_config).await` | Associated function: create with custom `SessionConfig` and `CookieConfig`.  |
+| `authenticate(user_id).await`                                        | Create a session, return signed cookie string (e.g., `"_session=<signed>"`). |
+| `authenticate_with(user_id, data).await`                             | Same, with custom JSON session data.                                         |
+| `layer()`                                                            | Return a `SessionLayer` to apply to `TestAppBuilder`.                        |
 
 ### Full pattern
 
@@ -419,10 +419,10 @@ The `--tests` flag is needed or clippy skips test code entirely.
 
 ## Test fixtures
 
-| Path | Purpose |
-|---|---|
-| `tests/fixtures/migrations/` | SQL migration files used by `TestDb::migrate()` tests. |
-| `tests/fixtures/GeoIP2-City-Test.mmdb` | MaxMind test database for geolocation tests. |
+| Path                                   | Purpose                                                |
+| -------------------------------------- | ------------------------------------------------------ |
+| `tests/fixtures/migrations/`           | SQL migration files used by `TestDb::migrate()` tests. |
+| `tests/fixtures/GeoIP2-City-Test.mmdb` | MaxMind test database for geolocation tests.           |
 
 Migration files are plain `.sql`, ordered by filename prefix:
 

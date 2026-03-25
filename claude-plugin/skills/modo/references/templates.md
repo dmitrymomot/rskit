@@ -27,8 +27,8 @@ The `context!` macro from MiniJinja is also re-exported: `modo::template::contex
 
 `#[non_exhaustive]`. Derives `Debug`, `Clone`, `Deserialize`. Has `impl Default` (manual, not derive). YAML-deserializable configuration. All fields have defaults and support `#[serde(default)]`.
 
-| Field                | Type     | Default       | Purpose                                  |
-|----------------------|----------|---------------|------------------------------------------|
+| Field                | Type     | Default       | Purpose                                   |
+| -------------------- | -------- | ------------- | ----------------------------------------- |
 | `templates_path`     | `String` | `"templates"` | Directory with MiniJinja template files   |
 | `static_path`        | `String` | `"static"`    | Directory with static assets              |
 | `static_url_prefix`  | `String` | `"/assets"`   | URL prefix for serving static files       |
@@ -141,13 +141,13 @@ let router = axum::Router::new()
 
 ### Keys injected per request
 
-| Key              | Source                                                  |
-|------------------|---------------------------------------------------------|
-| `current_url`    | `request.uri().to_string()`                             |
-| `is_htmx`        | `HX-Request: true` header                               |
-| `request_id`     | `X-Request-Id` header (if present)                      |
-| `locale`         | Locale resolver chain, falls back to `default_locale`   |
-| `csrf_token`     | `CsrfToken` extension (if CSRF middleware installed)    |
+| Key              | Source                                                              |
+| ---------------- | ------------------------------------------------------------------- |
+| `current_url`    | `request.uri().to_string()`                                         |
+| `is_htmx`        | `HX-Request: true` header                                           |
+| `request_id`     | `X-Request-Id` header (if present)                                  |
+| `locale`         | Locale resolver chain, falls back to `default_locale`               |
+| `csrf_token`     | `CsrfToken` extension (if CSRF middleware installed)                |
 | `flash_messages` | Template function from `FlashState` (if flash middleware installed) |
 
 ---
@@ -207,8 +207,8 @@ YAML format for plural entries (must have `other` key; allowed keys: `zero`, `on
 
 ```yaml
 count:
-  one: "{count} item"
-  other: "{count} items"
+    one: "{count} item"
+    other: "{count} items"
 ```
 
 Uses CLDR plural rules via `intl_pluralrules`. Correct for Slavic languages (Ukrainian `few`/`many` categories), English, and others.

@@ -45,6 +45,7 @@ let key = key_from_config(&cookie_config)?;
 ### Re-exports
 
 `modo::cookie` re-exports from `axum_extra::extract::cookie`:
+
 - `Key` -- HMAC signing key
 - `CookieJar` -- unsigned cookie jar extractor
 - `SignedCookieJar` -- signed cookie jar extractor
@@ -79,11 +80,11 @@ YAML example:
 
 ```yaml
 session:
-  session_ttl_secs: 2592000
-  cookie_name: "_session"
-  validate_fingerprint: true
-  touch_interval_secs: 300
-  max_sessions_per_user: 10
+    session_ttl_secs: 2592000
+    cookie_name: "_session"
+    validate_fingerprint: true
+    touch_interval_secs: 300
+    max_sessions_per_user: 10
 ```
 
 ### Store
@@ -102,20 +103,20 @@ let store = Store::new_rw(&read_pool, &write_pool, config);
 
 Public methods on `Store`:
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `config` | `&self -> &SessionConfig` | Return config reference |
-| `read_by_token` | `async(&self, &SessionToken) -> Result<Option<SessionData>>` | Lookup active session by token hash |
-| `read` | `async(&self, &str) -> Result<Option<SessionData>>` | Lookup session by ULID id (ignores expiry) |
-| `list_for_user` | `async(&self, &str) -> Result<Vec<SessionData>>` | List active sessions for a user |
-| `create` | `async(&self, &SessionMeta, &str, Option<Value>) -> Result<(SessionData, SessionToken)>` | Create a new session (enforces max limit) |
-| `destroy` | `async(&self, &str) -> Result<()>` | Delete session by id |
-| `destroy_all_for_user` | `async(&self, &str) -> Result<()>` | Delete all sessions for a user |
-| `destroy_all_except` | `async(&self, &str, &str) -> Result<()>` | Delete all for user except one id |
-| `rotate_token` | `async(&self, &str) -> Result<SessionToken>` | Issue new token for existing session |
-| `flush` | `async(&self, &str, &Value, DateTime<Utc>, DateTime<Utc>) -> Result<()>` | Persist data + touch timestamps |
-| `touch` | `async(&self, &str, DateTime<Utc>, DateTime<Utc>) -> Result<()>` | Update timestamps without changing data |
-| `cleanup_expired` | `async(&self) -> Result<u64>` | Delete expired sessions, returns count |
+| Method                 | Signature                                                                                | Description                                |
+| ---------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `config`               | `&self -> &SessionConfig`                                                                | Return config reference                    |
+| `read_by_token`        | `async(&self, &SessionToken) -> Result<Option<SessionData>>`                             | Lookup active session by token hash        |
+| `read`                 | `async(&self, &str) -> Result<Option<SessionData>>`                                      | Lookup session by ULID id (ignores expiry) |
+| `list_for_user`        | `async(&self, &str) -> Result<Vec<SessionData>>`                                         | List active sessions for a user            |
+| `create`               | `async(&self, &SessionMeta, &str, Option<Value>) -> Result<(SessionData, SessionToken)>` | Create a new session (enforces max limit)  |
+| `destroy`              | `async(&self, &str) -> Result<()>`                                                       | Delete session by id                       |
+| `destroy_all_for_user` | `async(&self, &str) -> Result<()>`                                                       | Delete all sessions for a user             |
+| `destroy_all_except`   | `async(&self, &str, &str) -> Result<()>`                                                 | Delete all for user except one id          |
+| `rotate_token`         | `async(&self, &str) -> Result<SessionToken>`                                             | Issue new token for existing session       |
+| `flush`                | `async(&self, &str, &Value, DateTime<Utc>, DateTime<Utc>) -> Result<()>`                 | Persist data + touch timestamps            |
+| `touch`                | `async(&self, &str, DateTime<Utc>, DateTime<Utc>) -> Result<()>`                         | Update timestamps without changing data    |
+| `cleanup_expired`      | `async(&self) -> Result<u64>`                                                            | Delete expired sessions, returns count     |
 
 ### SessionToken
 
@@ -193,34 +194,34 @@ async fn handler(session: Session) -> modo::Result<impl IntoResponse> {
 
 #### Synchronous reads
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `user_id` | `&self -> Option<String>` | Authenticated user's ID, or `None` |
-| `get::<T>` | `&self, &str -> Result<Option<T>>` | Deserialize a value by key |
-| `is_authenticated` | `&self -> bool` | Whether a valid session exists |
-| `current` | `&self -> Option<SessionData>` | Clone of full session data |
+| Method             | Signature                          | Description                        |
+| ------------------ | ---------------------------------- | ---------------------------------- |
+| `user_id`          | `&self -> Option<String>`          | Authenticated user's ID, or `None` |
+| `get::<T>`         | `&self, &str -> Result<Option<T>>` | Deserialize a value by key         |
+| `is_authenticated` | `&self -> bool`                    | Whether a valid session exists     |
+| `current`          | `&self -> Option<SessionData>`     | Clone of full session data         |
 
 #### In-memory writes (deferred to response path)
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `set::<T>` | `&self, &str, &T -> Result<()>` | Store a serializable value under a key |
-| `remove_key` | `&self, &str` | Remove a key from session data |
+| Method       | Signature                       | Description                            |
+| ------------ | ------------------------------- | -------------------------------------- |
+| `set::<T>`   | `&self, &str, &T -> Result<()>` | Store a serializable value under a key |
+| `remove_key` | `&self, &str`                   | Remove a key from session data         |
 
 Changes are held in memory and flushed to the database by the middleware after the handler returns. No-op when there is no active session.
 
 #### Auth lifecycle (immediate DB writes)
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `authenticate` | `async(&self, &str) -> Result<()>` | Create session for user (empty data) |
-| `authenticate_with` | `async(&self, &str, Value) -> Result<()>` | Create session with initial JSON data |
-| `rotate` | `async(&self) -> Result<()>` | New token + refresh expiry (fixation prevention) |
-| `logout` | `async(&self) -> Result<()>` | Destroy current session, clear cookie |
-| `logout_all` | `async(&self) -> Result<()>` | Destroy all sessions for current user |
-| `logout_other` | `async(&self) -> Result<()>` | Destroy all except current session |
-| `list_my_sessions` | `async(&self) -> Result<Vec<SessionData>>` | List all active sessions for current user |
-| `revoke` | `async(&self, &str) -> Result<()>` | Destroy a specific session by id (must belong to current user) |
+| Method              | Signature                                  | Description                                                    |
+| ------------------- | ------------------------------------------ | -------------------------------------------------------------- |
+| `authenticate`      | `async(&self, &str) -> Result<()>`         | Create session for user (empty data)                           |
+| `authenticate_with` | `async(&self, &str, Value) -> Result<()>`  | Create session with initial JSON data                          |
+| `rotate`            | `async(&self) -> Result<()>`               | New token + refresh expiry (fixation prevention)               |
+| `logout`            | `async(&self) -> Result<()>`               | Destroy current session, clear cookie                          |
+| `logout_all`        | `async(&self) -> Result<()>`               | Destroy all sessions for current user                          |
+| `logout_other`      | `async(&self) -> Result<()>`               | Destroy all except current session                             |
+| `list_my_sessions`  | `async(&self) -> Result<Vec<SessionData>>` | List all active sessions for current user                      |
+| `revoke`            | `async(&self, &str) -> Result<()>`         | Destroy a specific session by id (must belong to current user) |
 
 `authenticate` and `authenticate_with` destroy any existing session first (session fixation prevention). `rotate` returns 401 if no active session. `revoke` returns 404 if the target session does not belong to the current user (deliberate to prevent enumeration).
 
@@ -256,14 +257,17 @@ SessionMeta::from_headers(
 Sub-modules `session::device`, `session::fingerprint`, and `session::meta` are public for direct use.
 
 **`session::meta`** exports:
+
 - `SessionMeta` -- struct with `from_headers` constructor (see above)
 - `header_str(headers: &HeaderMap, name: &str) -> &str` -- extract a header value as a string slice, returning `""` when absent or non-UTF-8
 
 **`session::device`** exports:
+
 - `parse_device_name(user_agent: &str) -> String` -- derives human-readable name, e.g. `"Chrome on macOS"`, `"Safari on iPhone"`
 - `parse_device_type(user_agent: &str) -> String` -- returns `"tablet"`, `"mobile"`, or `"desktop"`
 
 **`session::fingerprint`** exports:
+
 - `compute_fingerprint(user_agent: &str, accept_language: &str, accept_encoding: &str) -> String` -- SHA-256 hex string (64 chars) from three headers concatenated with null-byte separators
 
 ---
@@ -287,6 +291,7 @@ let router = Router::new()
 ```
 
 Cookie details:
+
 - Name: `flash` (hard-coded)
 - Signed with HMAC using the application `Key`
 - Max-Age: 300 seconds (5 minutes)
@@ -310,18 +315,18 @@ async fn list_handler(flash: Flash) -> impl IntoResponse {
 
 #### Writing methods
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `set` | `&self, &str, &str` | Queue message with arbitrary level |
-| `success` | `&self, &str` | Queue with level `"success"` |
-| `error` | `&self, &str` | Queue with level `"error"` |
-| `warning` | `&self, &str` | Queue with level `"warning"` |
-| `info` | `&self, &str` | Queue with level `"info"` |
+| Method    | Signature           | Description                        |
+| --------- | ------------------- | ---------------------------------- |
+| `set`     | `&self, &str, &str` | Queue message with arbitrary level |
+| `success` | `&self, &str`       | Queue with level `"success"`       |
+| `error`   | `&self, &str`       | Queue with level `"error"`         |
+| `warning` | `&self, &str`       | Queue with level `"warning"`       |
+| `info`    | `&self, &str`       | Queue with level `"info"`          |
 
 #### Reading
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
+| Method     | Signature                  | Description                                 |
+| ---------- | -------------------------- | ------------------------------------------- |
 | `messages` | `&self -> Vec<FlashEntry>` | Read incoming messages and mark as consumed |
 
 `messages()` is idempotent within a request -- calling multiple times returns the same data. After calling it, the middleware clears the flash cookie on the response.

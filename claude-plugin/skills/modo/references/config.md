@@ -54,9 +54,9 @@ let config: AppConfig = modo::config::load("config/").unwrap();
 
 Before YAML parsing, all `${...}` placeholders are replaced from the process environment.
 
-| Syntax | Behavior |
-|---|---|
-| `${VAR}` | Replaced with the value of `VAR`. **Error if unset.** |
+| Syntax           | Behavior                                                 |
+| ---------------- | -------------------------------------------------------- |
+| `${VAR}`         | Replaced with the value of `VAR`. **Error if unset.**    |
 | `${VAR:default}` | Replaced with the value of `VAR`, or `default` if unset. |
 
 The substitution function is also available standalone:
@@ -68,6 +68,7 @@ let result = substitute_env_vars("host: ${DB_HOST:localhost}").unwrap();
 ```
 
 **Errors:**
+
 - Unclosed `${...` (missing `}`) returns an error.
 - `${VAR}` without a default returns an error when `VAR` is not set.
 
@@ -75,14 +76,14 @@ let result = substitute_env_vars("host: ${DB_HOST:localhost}").unwrap();
 
 ```yaml
 server:
-  host: ${HOST:0.0.0.0}
-  port: ${PORT:8080}
+    host: ${HOST:0.0.0.0}
+    port: ${PORT:8080}
 
 database:
-  path: ${DATABASE_PATH:data/app.db}
+    path: ${DATABASE_PATH:data/app.db}
 
 cookie:
-  secret: ${COOKIE_SECRET}
+    secret: ${COOKIE_SECRET}
 ```
 
 ## Config Struct
@@ -93,62 +94,62 @@ Source: `src/config/modo.rs`
 
 ### Always-Available Fields
 
-| Field | Type | YAML key | Description |
-|---|---|---|---|
-| `server` | `server::Config` | `server` | HTTP bind address and shutdown |
-| `database` | `db::SqliteConfig` | `database` | SQLite connection pool |
-| `tracing` | `tracing::Config` | `tracing` | Log level, format, optional Sentry |
-| `cookie` | `Option<cookie::CookieConfig>` | `cookie` | Signed cookie secret and attributes. `None` disables signed/private cookies |
-| `security_headers` | `middleware::SecurityHeadersConfig` | `security_headers` | HTTP security response headers |
-| `cors` | `middleware::CorsConfig` | `cors` | CORS policy |
-| `csrf` | `middleware::CsrfConfig` | `csrf` | CSRF protection |
-| `rate_limit` | `middleware::RateLimitConfig` | `rate_limit` | Token-bucket rate limiting |
-| `session` | `session::SessionConfig` | `session` | Session TTL, cookie, fingerprint |
-| `job` | `job::JobConfig` | `job` | Background job queue |
-| `trusted_proxies` | `Vec<String>` | `trusted_proxies` | CIDR ranges for `ClientIpLayer` |
+| Field              | Type                                | YAML key           | Description                                                                 |
+| ------------------ | ----------------------------------- | ------------------ | --------------------------------------------------------------------------- |
+| `server`           | `server::Config`                    | `server`           | HTTP bind address and shutdown                                              |
+| `database`         | `db::SqliteConfig`                  | `database`         | SQLite connection pool                                                      |
+| `tracing`          | `tracing::Config`                   | `tracing`          | Log level, format, optional Sentry                                          |
+| `cookie`           | `Option<cookie::CookieConfig>`      | `cookie`           | Signed cookie secret and attributes. `None` disables signed/private cookies |
+| `security_headers` | `middleware::SecurityHeadersConfig` | `security_headers` | HTTP security response headers                                              |
+| `cors`             | `middleware::CorsConfig`            | `cors`             | CORS policy                                                                 |
+| `csrf`             | `middleware::CsrfConfig`            | `csrf`             | CSRF protection                                                             |
+| `rate_limit`       | `middleware::RateLimitConfig`       | `rate_limit`       | Token-bucket rate limiting                                                  |
+| `session`          | `session::SessionConfig`            | `session`          | Session TTL, cookie, fingerprint                                            |
+| `job`              | `job::JobConfig`                    | `job`              | Background job queue                                                        |
+| `trusted_proxies`  | `Vec<String>`                       | `trusted_proxies`  | CIDR ranges for `ClientIpLayer`                                             |
 
 ### Feature-Gated Fields
 
-| Field | Type | YAML key | Feature |
-|---|---|---|---|
-| `oauth` | `auth::oauth::OAuthConfig` | `oauth` | `auth` |
-| `jwt` | `auth::jwt::JwtConfig` | `jwt` | `auth` |
-| `email` | `email::EmailConfig` | `email` | `email` |
-| `template` | `template::TemplateConfig` | `template` | `templates` |
-| `storage` | `storage::BucketConfig` | `storage` | `storage` |
-| `dns` | `dns::DnsConfig` | `dns` | `dns` |
+| Field         | Type                             | YAML key      | Feature       |
+| ------------- | -------------------------------- | ------------- | ------------- |
+| `oauth`       | `auth::oauth::OAuthConfig`       | `oauth`       | `auth`        |
+| `jwt`         | `auth::jwt::JwtConfig`           | `jwt`         | `auth`        |
+| `email`       | `email::EmailConfig`             | `email`       | `email`       |
+| `template`    | `template::TemplateConfig`       | `template`    | `templates`   |
+| `storage`     | `storage::BucketConfig`          | `storage`     | `storage`     |
+| `dns`         | `dns::DnsConfig`                 | `dns`         | `dns`         |
 | `geolocation` | `geolocation::GeolocationConfig` | `geolocation` | `geolocation` |
 
 ## Sub-Config Details
 
 ### `server::Config`
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `host` | `String` | `"localhost"` | Network interface to bind |
-| `port` | `u16` | `8080` | TCP port |
-| `shutdown_timeout_secs` | `u64` | `30` | Graceful shutdown timeout |
+| Field                   | Type     | Default       | Description               |
+| ----------------------- | -------- | ------------- | ------------------------- |
+| `host`                  | `String` | `"localhost"` | Network interface to bind |
+| `port`                  | `u16`    | `8080`        | TCP port                  |
+| `shutdown_timeout_secs` | `u64`    | `30`          | Graceful shutdown timeout |
 
 ### `db::SqliteConfig`
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `path` | `String` | `"data/app.db"` | SQLite file path. `":memory:"` for in-memory |
-| `max_connections` | `u32` | `10` | Pool max connections |
-| `min_connections` | `u32` | `1` | Pool min idle connections |
-| `acquire_timeout_secs` | `u64` | `30` | Connection acquire timeout |
-| `idle_timeout_secs` | `u64` | `600` | Idle connection timeout |
-| `max_lifetime_secs` | `u64` | `1800` | Max connection lifetime |
-| `journal_mode` | `JournalMode` | `WAL` | PRAGMA journal_mode |
-| `synchronous` | `SynchronousMode` | `NORMAL` | PRAGMA synchronous |
-| `foreign_keys` | `bool` | `true` | PRAGMA foreign_keys |
-| `busy_timeout` | `u64` | `5000` | PRAGMA busy_timeout (ms) |
-| `cache_size` | `i64` | `-2000` | PRAGMA cache_size (negative = KiB) |
-| `mmap_size` | `Option<u64>` | `None` | PRAGMA mmap_size (bytes) |
-| `temp_store` | `Option<TempStore>` | `None` | PRAGMA temp_store |
-| `wal_autocheckpoint` | `Option<u32>` | `None` | PRAGMA wal_autocheckpoint |
-| `reader` | `PoolOverrides` | see below | Reader pool overrides for `connect_rw` |
-| `writer` | `PoolOverrides` | see below | Writer pool overrides for `connect_rw` |
+| Field                  | Type                | Default         | Description                                  |
+| ---------------------- | ------------------- | --------------- | -------------------------------------------- |
+| `path`                 | `String`            | `"data/app.db"` | SQLite file path. `":memory:"` for in-memory |
+| `max_connections`      | `u32`               | `10`            | Pool max connections                         |
+| `min_connections`      | `u32`               | `1`             | Pool min idle connections                    |
+| `acquire_timeout_secs` | `u64`               | `30`            | Connection acquire timeout                   |
+| `idle_timeout_secs`    | `u64`               | `600`           | Idle connection timeout                      |
+| `max_lifetime_secs`    | `u64`               | `1800`          | Max connection lifetime                      |
+| `journal_mode`         | `JournalMode`       | `WAL`           | PRAGMA journal_mode                          |
+| `synchronous`          | `SynchronousMode`   | `NORMAL`        | PRAGMA synchronous                           |
+| `foreign_keys`         | `bool`              | `true`          | PRAGMA foreign_keys                          |
+| `busy_timeout`         | `u64`               | `5000`          | PRAGMA busy_timeout (ms)                     |
+| `cache_size`           | `i64`               | `-2000`         | PRAGMA cache_size (negative = KiB)           |
+| `mmap_size`            | `Option<u64>`       | `None`          | PRAGMA mmap_size (bytes)                     |
+| `temp_store`           | `Option<TempStore>` | `None`          | PRAGMA temp_store                            |
+| `wal_autocheckpoint`   | `Option<u32>`       | `None`          | PRAGMA wal_autocheckpoint                    |
+| `reader`               | `PoolOverrides`     | see below       | Reader pool overrides for `connect_rw`       |
+| `writer`               | `PoolOverrides`     | see below       | Writer pool overrides for `connect_rw`       |
 
 **Reader defaults:** `busy_timeout=1000`, `cache_size=-16000` (16 MB), `mmap_size=256 MiB`.
 **Writer defaults:** `max_connections=1`, `busy_timeout=2000`, `cache_size=-16000`, `mmap_size=256 MiB`.
@@ -159,11 +160,11 @@ Source: `src/config/modo.rs`
 
 `#[non_exhaustive]`. Derives: `Debug`, `Clone`, `Deserialize`. Impl `Default`.
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `level` | `String` | `"info"` | Min log level (overridden by `RUST_LOG` env var) |
-| `format` | `String` | `"pretty"` | `"pretty"`, `"json"`, or compact (any other value) |
-| `sentry` | `Option<SentryConfig>` | `None` | Sentry settings (requires `sentry` feature) |
+| Field    | Type                   | Default    | Description                                        |
+| -------- | ---------------------- | ---------- | -------------------------------------------------- |
+| `level`  | `String`               | `"info"`   | Min log level (overridden by `RUST_LOG` env var)   |
+| `format` | `String`               | `"pretty"` | `"pretty"`, `"json"`, or compact (any other value) |
+| `sentry` | `Option<SentryConfig>` | `None`     | Sentry settings (requires `sentry` feature)        |
 
 **`SentryConfig`** (`#[non_exhaustive]`, feature-gated under `sentry`): `dsn: String` (default `""`), `environment: String` (default `config::env()`), `sample_rate: f32` (default `1.0`), `traces_sample_rate: f32` (default `0.1`).
 
@@ -186,82 +187,82 @@ The `modo::tracing` module re-exports the following macros from the `tracing` cr
 
 ### `cookie::CookieConfig`
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `secret` | `String` | (required) | HMAC signing secret, at least 64 characters |
-| `secure` | `bool` | `true` | Set `Secure` attribute. `false` for local HTTP dev |
-| `http_only` | `bool` | `true` | Set `HttpOnly` attribute |
-| `same_site` | `String` | `"lax"` | `"lax"`, `"strict"`, or `"none"` |
+| Field       | Type     | Default    | Description                                        |
+| ----------- | -------- | ---------- | -------------------------------------------------- |
+| `secret`    | `String` | (required) | HMAC signing secret, at least 64 characters        |
+| `secure`    | `bool`   | `true`     | Set `Secure` attribute. `false` for local HTTP dev |
+| `http_only` | `bool`   | `true`     | Set `HttpOnly` attribute                           |
+| `same_site` | `String` | `"lax"`    | `"lax"`, `"strict"`, or `"none"`                   |
 
 ### `middleware::SecurityHeadersConfig`
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `x_content_type_options` | `bool` | `true` | Adds `X-Content-Type-Options: nosniff` |
-| `x_frame_options` | `String` | `"DENY"` | `X-Frame-Options` header value |
-| `referrer_policy` | `String` | `"strict-origin-when-cross-origin"` | `Referrer-Policy` header value |
-| `hsts_max_age` | `Option<u64>` | `None` | `Strict-Transport-Security: max-age=<value>` |
-| `content_security_policy` | `Option<String>` | `None` | `Content-Security-Policy` header value |
-| `permissions_policy` | `Option<String>` | `None` | `Permissions-Policy` header value |
+| Field                     | Type             | Default                             | Description                                  |
+| ------------------------- | ---------------- | ----------------------------------- | -------------------------------------------- |
+| `x_content_type_options`  | `bool`           | `true`                              | Adds `X-Content-Type-Options: nosniff`       |
+| `x_frame_options`         | `String`         | `"DENY"`                            | `X-Frame-Options` header value               |
+| `referrer_policy`         | `String`         | `"strict-origin-when-cross-origin"` | `Referrer-Policy` header value               |
+| `hsts_max_age`            | `Option<u64>`    | `None`                              | `Strict-Transport-Security: max-age=<value>` |
+| `content_security_policy` | `Option<String>` | `None`                              | `Content-Security-Policy` header value       |
+| `permissions_policy`      | `Option<String>` | `None`                              | `Permissions-Policy` header value            |
 
 ### `middleware::CorsConfig`
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `origins` | `Vec<String>` | `[]` | Allowed origins. Empty = allow any (`*`) |
-| `methods` | `Vec<String>` | `["GET","POST","PUT","DELETE","PATCH"]` | Allowed methods |
-| `headers` | `Vec<String>` | `["Content-Type","Authorization"]` | Allowed headers |
-| `max_age_secs` | `u64` | `86400` | `Access-Control-Max-Age` |
-| `allow_credentials` | `bool` | `true` | Allow credentials. Forced to `false` when `origins` is empty |
+| Field               | Type          | Default                                 | Description                                                  |
+| ------------------- | ------------- | --------------------------------------- | ------------------------------------------------------------ |
+| `origins`           | `Vec<String>` | `[]`                                    | Allowed origins. Empty = allow any (`*`)                     |
+| `methods`           | `Vec<String>` | `["GET","POST","PUT","DELETE","PATCH"]` | Allowed methods                                              |
+| `headers`           | `Vec<String>` | `["Content-Type","Authorization"]`      | Allowed headers                                              |
+| `max_age_secs`      | `u64`         | `86400`                                 | `Access-Control-Max-Age`                                     |
+| `allow_credentials` | `bool`        | `true`                                  | Allow credentials. Forced to `false` when `origins` is empty |
 
 ### `middleware::CsrfConfig`
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `cookie_name` | `String` | `"_csrf"` | CSRF cookie name |
-| `header_name` | `String` | `"X-CSRF-Token"` | Header carrying the CSRF token |
-| `field_name` | `String` | `"_csrf_token"` | Form field name (config compat, not read by middleware) |
-| `ttl_secs` | `u64` | `21600` | Cookie TTL (6 hours) |
-| `exempt_methods` | `Vec<String>` | `["GET","HEAD","OPTIONS"]` | Methods exempt from CSRF |
+| Field            | Type          | Default                    | Description                                             |
+| ---------------- | ------------- | -------------------------- | ------------------------------------------------------- |
+| `cookie_name`    | `String`      | `"_csrf"`                  | CSRF cookie name                                        |
+| `header_name`    | `String`      | `"X-CSRF-Token"`           | Header carrying the CSRF token                          |
+| `field_name`     | `String`      | `"_csrf_token"`            | Form field name (config compat, not read by middleware) |
+| `ttl_secs`       | `u64`         | `21600`                    | Cookie TTL (6 hours)                                    |
+| `exempt_methods` | `Vec<String>` | `["GET","HEAD","OPTIONS"]` | Methods exempt from CSRF                                |
 
 ### `middleware::RateLimitConfig`
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `per_second` | `u64` | `1` | Token replenish rate (tokens/sec) |
-| `burst_size` | `u32` | `10` | Max burst tokens |
-| `use_headers` | `bool` | `true` | Include `x-ratelimit-*` headers |
-| `cleanup_interval_secs` | `u64` | `60` | Purge interval for expired entries |
-| `max_keys` | `usize` | `10000` | Max tracked keys. `0` = unlimited |
+| Field                   | Type    | Default | Description                        |
+| ----------------------- | ------- | ------- | ---------------------------------- |
+| `per_second`            | `u64`   | `1`     | Token replenish rate (tokens/sec)  |
+| `burst_size`            | `u32`   | `10`    | Max burst tokens                   |
+| `use_headers`           | `bool`  | `true`  | Include `x-ratelimit-*` headers    |
+| `cleanup_interval_secs` | `u64`   | `60`    | Purge interval for expired entries |
+| `max_keys`              | `usize` | `10000` | Max tracked keys. `0` = unlimited  |
 
 ### `session::SessionConfig`
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `session_ttl_secs` | `u64` | `2592000` | Session lifetime (30 days) |
-| `cookie_name` | `String` | `"_session"` | Session cookie name |
-| `validate_fingerprint` | `bool` | `true` | Reject mismatched browser fingerprints |
-| `touch_interval_secs` | `u64` | `300` | Min interval between `last_active_at` updates (5 min) |
-| `max_sessions_per_user` | `usize` | `10` | Max concurrent sessions per user. Must be > 0 |
+| Field                   | Type     | Default      | Description                                           |
+| ----------------------- | -------- | ------------ | ----------------------------------------------------- |
+| `session_ttl_secs`      | `u64`    | `2592000`    | Session lifetime (30 days)                            |
+| `cookie_name`           | `String` | `"_session"` | Session cookie name                                   |
+| `validate_fingerprint`  | `bool`   | `true`       | Reject mismatched browser fingerprints                |
+| `touch_interval_secs`   | `u64`    | `300`        | Min interval between `last_active_at` updates (5 min) |
+| `max_sessions_per_user` | `usize`  | `10`         | Max concurrent sessions per user. Must be > 0         |
 
 ### `job::JobConfig`
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `poll_interval_secs` | `u64` | `1` | DB poll interval |
-| `stale_threshold_secs` | `u64` | `600` | Stale job threshold (10 min) |
-| `stale_reaper_interval_secs` | `u64` | `60` | Stale reaper frequency |
-| `drain_timeout_secs` | `u64` | `30` | Shutdown drain timeout |
-| `queues` | `Vec<QueueConfig>` | `[{name:"default", concurrency:4}]` | Queue definitions |
-| `cleanup` | `Option<CleanupConfig>` | enabled | Periodic cleanup. `None` to disable |
+| Field                        | Type                    | Default                             | Description                         |
+| ---------------------------- | ----------------------- | ----------------------------------- | ----------------------------------- |
+| `poll_interval_secs`         | `u64`                   | `1`                                 | DB poll interval                    |
+| `stale_threshold_secs`       | `u64`                   | `600`                               | Stale job threshold (10 min)        |
+| `stale_reaper_interval_secs` | `u64`                   | `60`                                | Stale reaper frequency              |
+| `drain_timeout_secs`         | `u64`                   | `30`                                | Shutdown drain timeout              |
+| `queues`                     | `Vec<QueueConfig>`      | `[{name:"default", concurrency:4}]` | Queue definitions                   |
+| `cleanup`                    | `Option<CleanupConfig>` | enabled                             | Periodic cleanup. `None` to disable |
 
 **`QueueConfig`:** `name: String`, `concurrency: u32` (default `4`).
 **`CleanupConfig`:** `interval_secs: u64` (default `3600`), `retention_secs: u64` (default `259200` / 72h).
 
 ### `auth::oauth::OAuthConfig` (feature: `auth`)
 
-| Field | Type | Description |
-|---|---|---|
+| Field    | Type                          | Description           |
+| -------- | ----------------------------- | --------------------- |
 | `google` | `Option<OAuthProviderConfig>` | Google OAuth settings |
 | `github` | `Option<OAuthProviderConfig>` | GitHub OAuth settings |
 
@@ -269,100 +270,100 @@ The `modo::tracing` module re-exports the following macros from the `tracing` cr
 
 ### `email::EmailConfig` (feature: `email`)
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `templates_path` | `String` | `"emails"` | Email template directory |
-| `layouts_path` | `String` | `"emails/layouts"` | HTML layout directory |
-| `default_from_name` | `String` | `""` | Default sender display name |
-| `default_from_email` | `String` | `""` | Default sender email |
-| `default_reply_to` | `Option<String>` | `None` | Default Reply-To |
-| `default_locale` | `String` | `"en"` | Fallback locale |
-| `cache_templates` | `bool` | `true` | LRU cache for templates |
-| `template_cache_size` | `usize` | `100` | Cache capacity |
-| `smtp` | `SmtpConfig` | see below | SMTP settings |
+| Field                 | Type             | Default            | Description                 |
+| --------------------- | ---------------- | ------------------ | --------------------------- |
+| `templates_path`      | `String`         | `"emails"`         | Email template directory    |
+| `layouts_path`        | `String`         | `"emails/layouts"` | HTML layout directory       |
+| `default_from_name`   | `String`         | `""`               | Default sender display name |
+| `default_from_email`  | `String`         | `""`               | Default sender email        |
+| `default_reply_to`    | `Option<String>` | `None`             | Default Reply-To            |
+| `default_locale`      | `String`         | `"en"`             | Fallback locale             |
+| `cache_templates`     | `bool`           | `true`             | LRU cache for templates     |
+| `template_cache_size` | `usize`          | `100`              | Cache capacity              |
+| `smtp`                | `SmtpConfig`     | see below          | SMTP settings               |
 
 **`SmtpConfig`:** `host: String` (`"localhost"`), `port: u16` (`587`), `username: Option<String>`, `password: Option<String>`, `security: SmtpSecurity` (`starttls`). Security values: `starttls`, `tls`, `none` (lowercase in YAML).
 
 ### `template::TemplateConfig` (feature: `templates`)
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `templates_path` | `String` | `"templates"` | MiniJinja template directory |
-| `static_path` | `String` | `"static"` | Static asset directory |
-| `static_url_prefix` | `String` | `"/assets"` | URL prefix for static assets |
-| `locales_path` | `String` | `"locales"` | Locale YAML directory |
-| `default_locale` | `String` | `"en"` | Fallback locale |
-| `locale_cookie` | `String` | `"lang"` | Cookie for locale resolution |
-| `locale_query_param` | `String` | `"lang"` | Query param for locale resolution |
+| Field                | Type     | Default       | Description                       |
+| -------------------- | -------- | ------------- | --------------------------------- |
+| `templates_path`     | `String` | `"templates"` | MiniJinja template directory      |
+| `static_path`        | `String` | `"static"`    | Static asset directory            |
+| `static_url_prefix`  | `String` | `"/assets"`   | URL prefix for static assets      |
+| `locales_path`       | `String` | `"locales"`   | Locale YAML directory             |
+| `default_locale`     | `String` | `"en"`        | Fallback locale                   |
+| `locale_cookie`      | `String` | `"lang"`      | Cookie for locale resolution      |
+| `locale_query_param` | `String` | `"lang"`      | Query param for locale resolution |
 
 ### `geolocation::GeolocationConfig` (feature: `geolocation`)
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `mmdb_path` | `String` | `""` | Path to MaxMind `.mmdb` file. Empty = error |
+| Field       | Type     | Default | Description                                 |
+| ----------- | -------- | ------- | ------------------------------------------- |
+| `mmdb_path` | `String` | `""`    | Path to MaxMind `.mmdb` file. Empty = error |
 
 ### `storage::BucketConfig` (feature: `storage`)
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `name` | `String` | `""` | Lookup key in `Buckets`. Ignored by `Storage::new()` |
-| `bucket` | `String` | `""` | S3 bucket name (required) |
-| `region` | `Option<String>` | `None` | AWS region. `None` uses `us-east-1` |
-| `endpoint` | `String` | `""` | S3-compatible endpoint URL (required) |
-| `access_key` | `String` | `""` | Access key ID |
-| `secret_key` | `String` | `""` | Secret access key |
-| `public_url` | `Option<String>` | `None` | Base URL for public file URLs. `None` means `url()` errors |
-| `max_file_size` | `Option<String>` | `None` | Max file size, human-readable (e.g. `"10mb"`). `None` disables limit |
-| `path_style` | `bool` | `true` | Use path-style URLs. `false` for virtual-hosted-style |
+| Field           | Type             | Default | Description                                                          |
+| --------------- | ---------------- | ------- | -------------------------------------------------------------------- |
+| `name`          | `String`         | `""`    | Lookup key in `Buckets`. Ignored by `Storage::new()`                 |
+| `bucket`        | `String`         | `""`    | S3 bucket name (required)                                            |
+| `region`        | `Option<String>` | `None`  | AWS region. `None` uses `us-east-1`                                  |
+| `endpoint`      | `String`         | `""`    | S3-compatible endpoint URL (required)                                |
+| `access_key`    | `String`         | `""`    | Access key ID                                                        |
+| `secret_key`    | `String`         | `""`    | Secret access key                                                    |
+| `public_url`    | `Option<String>` | `None`  | Base URL for public file URLs. `None` means `url()` errors           |
+| `max_file_size` | `Option<String>` | `None`  | Max file size, human-readable (e.g. `"10mb"`). `None` disables limit |
+| `path_style`    | `bool`           | `true`  | Use path-style URLs. `false` for virtual-hosted-style                |
 
 Size format for `max_file_size`: `<number><unit>` where unit is `b`, `kb`, `mb`, `gb` (case-insensitive). Bare numbers treated as bytes.
 
 ### `dns::DnsConfig` (feature: `dns`)
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `nameserver` | `String` | `"8.8.8.8"` | Nameserver address, with or without port. Port 53 appended when omitted |
-| `txt_prefix` | `String` | `"_modo-verify"` | Prefix for TXT record lookups (`{txt_prefix}.{domain}`) |
-| `timeout_ms` | `u64` | `5000` | UDP receive timeout in milliseconds |
+| Field        | Type     | Default          | Description                                                             |
+| ------------ | -------- | ---------------- | ----------------------------------------------------------------------- |
+| `nameserver` | `String` | `"8.8.8.8"`      | Nameserver address, with or without port. Port 53 appended when omitted |
+| `txt_prefix` | `String` | `"_modo-verify"` | Prefix for TXT record lookups (`{txt_prefix}.{domain}`)                 |
+| `timeout_ms` | `u64`    | `5000`           | UDP receive timeout in milliseconds                                     |
 
 ### `auth::jwt::JwtConfig` (feature: `auth`)
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `secret` | `String` | `""` | HMAC secret for signing and verifying tokens |
-| `default_expiry` | `Option<u64>` | `None` | Default token lifetime in seconds. Applied by `JwtEncoder::encode()` when `claims.exp` is `None` |
-| `leeway` | `u64` | `0` | Clock skew tolerance in seconds for `exp` and `nbf` checks |
-| `issuer` | `Option<String>` | `None` | Required `iss` claim. Decoder rejects non-matching tokens |
-| `audience` | `Option<String>` | `None` | Required `aud` claim. Decoder rejects non-matching tokens |
+| Field            | Type             | Default | Description                                                                                      |
+| ---------------- | ---------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `secret`         | `String`         | `""`    | HMAC secret for signing and verifying tokens                                                     |
+| `default_expiry` | `Option<u64>`    | `None`  | Default token lifetime in seconds. Applied by `JwtEncoder::encode()` when `claims.exp` is `None` |
+| `leeway`         | `u64`            | `0`     | Clock skew tolerance in seconds for `exp` and `nbf` checks                                       |
+| `issuer`         | `Option<String>` | `None`  | Required `iss` claim. Decoder rejects non-matching tokens                                        |
+| `audience`       | `Option<String>` | `None`  | Required `aud` claim. Decoder rejects non-matching tokens                                        |
 
 ## Feature Flags
 
 Defined in `Cargo.toml`. Default is empty (no optional features enabled).
 
-| Feature | What it enables | Dependencies |
-|---|---|---|
-| `full` | All optional features below | (meta) |
-| `auth` | OAuth 2.0 (Google, GitHub), JWT, Argon2 password hashing | `argon2`, `hmac`, `sha1`, `subtle`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util` |
-| `templates` | MiniJinja template engine with i18n | `minijinja`, `minijinja-contrib`, `intl_pluralrules`, `unic-langid` |
-| `sse` | Server-Sent Events broadcaster | `futures-util` |
-| `email` | SMTP email delivery with Markdown-to-HTML | `lettre`, `pulldown-cmark` |
-| `storage` | S3-compatible object storage | `hmac`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util` |
-| `webhooks` | Webhook delivery with Standard Webhooks signing | `hmac`, `base64`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util` |
-| `dns` | DNS domain verification (TXT, CNAME) | `simple-dns` |
-| `geolocation` | MaxMind GeoIP2 geolocation | `maxminddb` |
-| `sentry` | Sentry error reporting via tracing | `sentry`, `sentry-tracing` |
-| `test-helpers` | `modo::testing` module for test utilities | (none) |
+| Feature        | What it enables                                          | Dependencies                                                                                |
+| -------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `full`         | All optional features below                              | (meta)                                                                                      |
+| `auth`         | OAuth 2.0 (Google, GitHub), JWT, Argon2 password hashing | `argon2`, `hmac`, `sha1`, `subtle`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util` |
+| `templates`    | MiniJinja template engine with i18n                      | `minijinja`, `minijinja-contrib`, `intl_pluralrules`, `unic-langid`                         |
+| `sse`          | Server-Sent Events broadcaster                           | `futures-util`                                                                              |
+| `email`        | SMTP email delivery with Markdown-to-HTML                | `lettre`, `pulldown-cmark`                                                                  |
+| `storage`      | S3-compatible object storage                             | `hmac`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util`                             |
+| `webhooks`     | Webhook delivery with Standard Webhooks signing          | `hmac`, `base64`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util`                   |
+| `dns`          | DNS domain verification (TXT, CNAME)                     | `simple-dns`                                                                                |
+| `geolocation`  | MaxMind GeoIP2 geolocation                               | `maxminddb`                                                                                 |
+| `sentry`       | Sentry error reporting via tracing                       | `sentry`, `sentry-tracing`                                                                  |
+| `test-helpers` | `modo::testing` module for test utilities                | (none)                                                                                      |
 
 ### Test Feature Flags
 
 These activate the parent feature for integration tests:
 
-| Feature | Activates |
-|---|---|
-| `email-test` | `email` |
-| `storage-test` | `storage` |
+| Feature         | Activates  |
+| --------------- | ---------- |
+| `email-test`    | `email`    |
+| `storage-test`  | `storage`  |
 | `webhooks-test` | `webhooks` |
-| `dns-test` | `dns` |
+| `dns-test`      | `dns`      |
 
 ## Gotchas
 

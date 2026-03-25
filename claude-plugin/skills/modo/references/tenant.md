@@ -44,15 +44,15 @@ Takes `&mut Parts` because some strategies rewrite the URI (e.g. `PathPrefixStra
 
 ## Built-in strategies
 
-| Constructor | Struct | Produces | Notes |
-|---|---|---|---|
-| `subdomain(base_domain)` | `SubdomainStrategy` | `TenantId::Slug` | Single-level only; multi-level is rejected |
-| `domain()` | `DomainStrategy` | `TenantId::Domain` | Full host as identifier |
+| Constructor                        | Struct                      | Produces           | Notes                                                                          |
+| ---------------------------------- | --------------------------- | ------------------ | ------------------------------------------------------------------------------ |
+| `subdomain(base_domain)`           | `SubdomainStrategy`         | `TenantId::Slug`   | Single-level only; multi-level is rejected                                     |
+| `domain()`                         | `DomainStrategy`            | `TenantId::Domain` | Full host as identifier                                                        |
 | `subdomain_or_domain(base_domain)` | `SubdomainOrDomainStrategy` | `Slug` or `Domain` | Subdomain of base -> Slug; unrelated host -> Domain; bare base domain -> error |
-| `header(name)` | `HeaderStrategy` | `TenantId::Id` | Reads a named request header |
-| `api_key_header(name)` | `ApiKeyHeaderStrategy` | `TenantId::ApiKey` | Reads API key from a named header |
-| `path_prefix(prefix)` | `PathPrefixStrategy` | `TenantId::Slug` | Strips prefix + slug from URI, preserves query string |
-| `path_param(name)` | `PathParamStrategy` | `TenantId::Slug` | Reads axum path parameter; **must use `.route_layer()` not `.layer()`** |
+| `header(name)`                     | `HeaderStrategy`            | `TenantId::Id`     | Reads a named request header                                                   |
+| `api_key_header(name)`             | `ApiKeyHeaderStrategy`      | `TenantId::ApiKey` | Reads API key from a named header                                              |
+| `path_prefix(prefix)`              | `PathPrefixStrategy`        | `TenantId::Slug`   | Strips prefix + slug from URI, preserves query string                          |
+| `path_param(name)`                 | `PathParamStrategy`         | `TenantId::Slug`   | Reads axum path parameter; **must use `.route_layer()` not `.layer()`**        |
 
 All constructors are free functions in `modo::tenant` (also re-exported from `modo::tenant::*`).
 

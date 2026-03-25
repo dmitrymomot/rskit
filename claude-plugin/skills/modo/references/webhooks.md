@@ -100,6 +100,7 @@ pub async fn send(
 ```
 
 Behavior:
+
 - Validates that `secrets` is non-empty and `id` is non-empty.
 - Validates `url` parses as `http::Uri`.
 - Gets current UTC timestamp.
@@ -200,6 +201,7 @@ pub fn verify_headers(
 ```
 
 For verifying incoming webhooks:
+
 - Reads `webhook-id`, `webhook-timestamp`, `webhook-signature` from headers.
 - Checks timestamp is within `tolerance` of current time (replay-attack protection).
 - Tries every `v1,` signature entry against every secret. Returns `Ok(())` on first match.

@@ -20,6 +20,7 @@ Jobs are stored in the `modo_jobs` table. The framework does **not** ship migrat
 A job handler is a plain `async fn` returning `modo::Result<()>`. Arguments must implement `FromJobContext`. Up to 12 arguments are supported.
 
 Built-in extractors:
+
 - `Payload<T>` -- deserializes the JSON payload into `T` (requires `T: DeserializeOwned`)
 - `Service<T>` -- retrieves a service from the registry snapshot
 - `Meta` -- job metadata (id, name, queue, attempt, max_attempts, deadline)
@@ -93,15 +94,15 @@ Only cancels jobs still in `pending` status. Returns `false` if the job was not 
 
 `JobConfig` (`#[non_exhaustive]`) deserializes from YAML under the `job` key. All fields have defaults. Because the struct is `#[non_exhaustive]`, construct via `JobConfig { field: val, ..Default::default() }`:
 
-| Field | Default | Description |
-|---|---|---|
-| `poll_interval_secs` | `1` | How often the worker polls for new jobs |
-| `stale_threshold_secs` | `600` (10 min) | Jobs stuck in `running` beyond this are reaped |
-| `stale_reaper_interval_secs` | `60` (1 min) | How often the stale reaper runs |
-| `drain_timeout_secs` | `30` | Max wait for in-flight jobs during shutdown |
-| `queues` | one `"default"` queue, concurrency 4 | List of `QueueConfig` entries |
-| `cleanup` | enabled, 1h interval, 72h retention | Optional `CleanupConfig` |
-| `database` | `None` | Optional separate `db::Config` for the job queue DB; isolates job-queue writes from app queries |
+| Field                        | Default                              | Description                                                                                     |
+| ---------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `poll_interval_secs`         | `1`                                  | How often the worker polls for new jobs                                                         |
+| `stale_threshold_secs`       | `600` (10 min)                       | Jobs stuck in `running` beyond this are reaped                                                  |
+| `stale_reaper_interval_secs` | `60` (1 min)                         | How often the stale reaper runs                                                                 |
+| `drain_timeout_secs`         | `30`                                 | Max wait for in-flight jobs during shutdown                                                     |
+| `queues`                     | one `"default"` queue, concurrency 4 | List of `QueueConfig` entries                                                                   |
+| `cleanup`                    | enabled, 1h interval, 72h retention  | Optional `CleanupConfig`                                                                        |
+| `database`                   | `None`                               | Optional separate `db::Config` for the job queue DB; isolates job-queue writes from app queries |
 
 #### Queue Config (`#[non_exhaustive]`)
 
@@ -109,13 +110,13 @@ Only cancels jobs still in `pending` status. Returns `false` if the job was not 
 
 ```yaml
 job:
-  queues:
-    - name: default
-      concurrency: 4
-    - name: emails
-      concurrency: 2
-    - name: critical
-      concurrency: 8
+    queues:
+        - name: default
+          concurrency: 4
+        - name: emails
+          concurrency: 2
+        - name: critical
+          concurrency: 8
 ```
 
 Each queue gets its own `Semaphore` with the specified concurrency limit. **Priority is handled by separate queues with different concurrency**, not by a numeric priority field.
@@ -126,9 +127,9 @@ Each queue gets its own `Semaphore` with the specified concurrency limit. **Prio
 
 ```yaml
 job:
-  cleanup:
-    interval_secs: 3600     # run cleanup every hour
-    retention_secs: 259200   # delete terminal jobs older than 72h
+    cleanup:
+        interval_secs: 3600 # run cleanup every hour
+        retention_secs: 259200 # delete terminal jobs older than 72h
 ```
 
 Terminal statuses: `completed`, `dead`, `cancelled`. Retention cutoff uses the `updated_at` column. Set `cleanup: ~` (null) to disable.
@@ -158,9 +159,9 @@ modo::run!(server, worker, scheduler);
 
 ### Per-Handler Options (`JobOptions`)
 
-| Field | Default | Description |
-|---|---|---|
-| `max_attempts` | `3` | Attempts before the job is marked `dead` |
+| Field          | Default       | Description                               |
+| -------------- | ------------- | ----------------------------------------- |
+| `max_attempts` | `3`           | Attempts before the job is marked `dead`  |
 | `timeout_secs` | `300` (5 min) | Per-execution timeout; exceeded = failure |
 
 ### Retries and Exponential Backoff
@@ -177,12 +178,12 @@ When `attempt >= max_attempts`, the job moves to `dead` status.
 
 ### Job Statuses
 
-| Status | Meaning |
-|---|---|
-| `pending` | Waiting to be picked up |
-| `running` | Currently executing |
-| `completed` | Finished successfully |
-| `dead` | Exhausted all retries |
+| Status      | Meaning                          |
+| ----------- | -------------------------------- |
+| `pending`   | Waiting to be picked up          |
+| `running`   | Currently executing              |
+| `completed` | Finished successfully            |
+| `dead`      | Exhausted all retries            |
 | `cancelled` | Cancelled via `Enqueuer::cancel` |
 
 `Status` methods: `as_str()` returns the lowercase string (`"pending"`, `"running"`, etc.), `from_str(s)` parses back (returns `Option<Status>`), `is_terminal()` returns `true` for `completed`, `dead`, and `cancelled`. `Status` also implements `Display` (delegates to `as_str()`).
@@ -204,6 +205,7 @@ When `attempt >= max_attempts`, the job moves to `dead` status.
 Same pattern as job handlers: plain `async fn` returning `modo::Result<()>`, up to 12 arguments.
 
 Built-in extractors (via `FromCronContext`):
+
 - `Service<T>` -- service from the registry snapshot
 - `cron::Meta` -- metadata: `name` (handler type name), `deadline`, `tick` (scheduled `DateTime<Utc>`)
 
@@ -227,12 +229,14 @@ Note: cron handlers do **not** have `Payload<T>` -- there is no payload to deser
 Three formats are accepted:
 
 **Standard cron expressions** -- 5-field or 6-field (with leading seconds):
+
 ```
 */5 * * * *        # every 5 minutes (5-field)
 0 30 9 * * *       # daily at 09:30:00 (6-field with seconds)
 ```
 
 **Named aliases**:
+
 - `@yearly` / `@annually`
 - `@monthly`
 - `@weekly`
@@ -240,6 +244,7 @@ Three formats are accepted:
 - `@hourly`
 
 **Interval syntax** -- `@every <duration>` with `h`, `m`, `s` units:
+
 ```
 @every 5m
 @every 1h30m
@@ -270,8 +275,8 @@ let scheduler = Scheduler::builder(&registry)
 
 `CronOptions` is `#[non_exhaustive]` -- construct via `CronOptions { timeout_secs: 25, ..Default::default() }`.
 
-| Field | Default | Description |
-|---|---|---|
+| Field          | Default       | Description                 |
+| -------------- | ------------- | --------------------------- |
 | `timeout_secs` | `300` (5 min) | Max execution time per tick |
 
 ### Overlap Protection

@@ -22,7 +22,7 @@ current state of the codebase. This is a verification and correction task — no
    exist — even if it "makes sense" for it to.
 
 3. **Inventory before editing.** You must produce a complete list of every public item from source
-   files *before* you touch a reference doc. This catches missing items that a casual read misses.
+   files _before_ you touch a reference doc. This catches missing items that a casual read misses.
 
 4. **Two-direction comparison.** Check source→reference (find undocumented APIs) AND
    reference→source (find stale/hallucinated items). Both directions matter equally.
@@ -133,6 +133,7 @@ src/dns/verifier.rs:
 ```
 
 Also read and inventory:
+
 - `src/lib.rs` — all `pub use` re-exports for the module's feature flag
 - `Cargo.toml` — the feature flag definition and its dependencies
 
@@ -155,6 +156,7 @@ Read the current reference doc from `claude-plugin/skills/modo/references/`.
 
 Go through every item in your Phase 1 inventory. For each one, check if it's documented in the
 reference. Mark items as:
+
 - DOCUMENTED — present and signature matches
 - MISSING — not in reference at all
 - WRONG — present but signature/type/field doesn't match source
@@ -163,6 +165,7 @@ reference. Mark items as:
 
 Go through every type, method, field, and variant mentioned in the reference doc. For each one,
 confirm it exists in your Phase 1 inventory (which was extracted directly from source). Mark items as:
+
 - VERIFIED — exists in source with matching signature
 - STALE — was in source before but has been removed or renamed
 - HALLUCINATED — never existed in source (this is the critical one to catch)
@@ -208,10 +211,10 @@ Now apply the verified changes to the reference doc. Rules:
 - Feature flag declaration at top (if applicable)
 - `## Public API` section with re-export list from `src/lib.rs`
 - `## TypeName` sections separated by `---`, each containing:
-  - Brief description (one line)
-  - Rust code block showing struct/enum definition with derives
-  - `### method_name(params) -> ReturnType` subsections for methods
-  - Prose explaining behavior, error cases, edge cases under each method
+    - Brief description (one line)
+    - Rust code block showing struct/enum definition with derives
+    - `### method_name(params) -> ReturnType` subsections for methods
+    - Prose explaining behavior, error cases, edge cases under each method
 - `## Gotchas` section at the bottom for non-obvious behavior
 - Code examples use realistic patterns, not toy examples
 
@@ -221,9 +224,9 @@ After editing, run a mechanical check:
 
 1. **Grep for public items** in the source files and count them:
 
-   ```bash
-   grep -rn "pub fn\|pub async fn\|pub struct\|pub enum\|pub trait\|pub type\|pub const" src/<module>/
-   ```
+    ```bash
+    grep -rn "pub fn\|pub async fn\|pub struct\|pub enum\|pub trait\|pub type\|pub const" src/<module>/
+    ```
 
 2. **Compare the count** to what's in your reference doc. If the numbers don't match,
    you missed something — go back to Phase 2.

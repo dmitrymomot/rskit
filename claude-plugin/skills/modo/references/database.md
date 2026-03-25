@@ -6,10 +6,10 @@ SQLite database layer built on raw sqlx. No ORM. One module: `src/db/`.
 
 All three wrap `sqlx::SqlitePool` (aliased as `InnerPool`) and `Deref` to it, so you can pass `&*pool` directly to sqlx queries.
 
-| Type | Implements | Purpose |
-|---|---|---|
-| `Pool` | `Reader + Writer` | Single pool for both reads and writes |
-| `ReadPool` | `Reader` only | Read-only handle; prevents accidental writes |
+| Type        | Implements        | Purpose                                       |
+| ----------- | ----------------- | --------------------------------------------- |
+| `Pool`      | `Reader + Writer` | Single pool for both reads and writes         |
+| `ReadPool`  | `Reader` only     | Read-only handle; prevents accidental writes  |
 | `WritePool` | `Reader + Writer` | Write handle; defaults to `max_connections=1` |
 
 Each has `::new(InnerPool) -> Self` and `Clone`.
@@ -94,13 +94,13 @@ let rows = sqlx::query_as::<_, UserRow>("SELECT * FROM users WHERE active = ?")
 
 `sqlx::Error` converts automatically into `modo::Error` via `From`:
 
-| sqlx error | HTTP status | message |
-|---|---|---|
-| `RowNotFound` | 404 | "record not found" |
-| unique constraint violation | 409 | "record already exists" |
-| foreign key violation | 400 | "foreign key violation" |
-| `PoolTimedOut` | 500 | "database pool timeout" |
-| all others | 500 | "database error" |
+| sqlx error                  | HTTP status | message                 |
+| --------------------------- | ----------- | ----------------------- |
+| `RowNotFound`               | 404         | "record not found"      |
+| unique constraint violation | 409         | "record already exists" |
+| foreign key violation       | 400         | "foreign key violation" |
+| `PoolTimedOut`              | 500         | "database pool timeout" |
+| all others                  | 500         | "database error"        |
 
 Use `?` in handlers and the conversion happens automatically.
 
@@ -129,24 +129,24 @@ Accepts `Pool`, `ReadPool`, or `WritePool` (each has `impl From<T> for ManagedPo
 
 Key defaults:
 
-| Field | Type | Default |
-|---|---|---|
-| `path` | `String` | `"data/app.db"` |
-| `max_connections` | `u32` | `10` |
-| `min_connections` | `u32` | `1` |
-| `journal_mode` | `JournalMode` | `Wal` |
-| `synchronous` | `SynchronousMode` | `Normal` |
-| `foreign_keys` | `bool` | `true` |
-| `busy_timeout` | `u64` | `5000` ms |
-| `cache_size` | `i64` | `-2000` (~2 MB) |
-| `acquire_timeout_secs` | `u64` | `30` |
-| `idle_timeout_secs` | `u64` | `600` |
-| `max_lifetime_secs` | `u64` | `1800` |
-| `mmap_size` | `Option<u64>` | `None` |
-| `temp_store` | `Option<TempStore>` | `None` |
-| `wal_autocheckpoint` | `Option<u32>` | `None` |
-| `reader` | `PoolOverrides` | `PoolOverrides::default_reader()` |
-| `writer` | `PoolOverrides` | `PoolOverrides::default_writer()` |
+| Field                  | Type                | Default                           |
+| ---------------------- | ------------------- | --------------------------------- |
+| `path`                 | `String`            | `"data/app.db"`                   |
+| `max_connections`      | `u32`               | `10`                              |
+| `min_connections`      | `u32`               | `1`                               |
+| `journal_mode`         | `JournalMode`       | `Wal`                             |
+| `synchronous`          | `SynchronousMode`   | `Normal`                          |
+| `foreign_keys`         | `bool`              | `true`                            |
+| `busy_timeout`         | `u64`               | `5000` ms                         |
+| `cache_size`           | `i64`               | `-2000` (~2 MB)                   |
+| `acquire_timeout_secs` | `u64`               | `30`                              |
+| `idle_timeout_secs`    | `u64`               | `600`                             |
+| `max_lifetime_secs`    | `u64`               | `1800`                            |
+| `mmap_size`            | `Option<u64>`       | `None`                            |
+| `temp_store`           | `Option<TempStore>` | `None`                            |
+| `wal_autocheckpoint`   | `Option<u32>`       | `None`                            |
+| `reader`               | `PoolOverrides`     | `PoolOverrides::default_reader()` |
+| `writer`               | `PoolOverrides`     | `PoolOverrides::default_writer()` |
 
 ### Enum types
 
