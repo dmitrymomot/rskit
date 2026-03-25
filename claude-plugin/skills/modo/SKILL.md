@@ -1,5 +1,6 @@
 ---
 name: modo-dev
+allowed-tools: Read, Grep, Glob
 description: >
     This skill should be used when the user asks to "build a modo app",
     "add a handler", "create a route", "set up database", "configure sessions",
@@ -63,9 +64,11 @@ Every modo app follows this structure in `main()`:
 6. **Start server** — `modo::server::http(app, &config.server)` returns an `HttpServer`
 7. **Run** — `modo::run!(server, worker, ...)` handles graceful shutdown via SIGINT/SIGTERM
 
-Middleware layer order (outermost to innermost): `error_handler` → `tracing` →
-`request_id` → `catch_panic` → `compression` → `cors` → `security_headers` →
-`rate_limit` → `ClientIpLayer` → `SessionLayer` → route-specific layers.
+Middleware layer order (innermost to outermost, matching `.layer()` call order):
+`error_handler` → `catch_panic` → `tracing` → `request_id` → `compression` →
+`security_headers` → `cors` → `csrf` → session → `FlashLayer` →
+`ClientIpLayer` → `rate_limit`. Optional layers (`TemplateContextLayer`,
+`GeoLayer`) slot in at their documented positions.
 
 ## Error Handling Patterns
 

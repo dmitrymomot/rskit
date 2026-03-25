@@ -195,6 +195,16 @@ trusted_proxies:
 cors:
   allow_origins:
     - "http://localhost:8080"
+
+csrf:
+  cookie_name: _csrf
+  header_name: X-CSRF-Token
+  ttl_secs: 21600
+
+security_headers:
+  x_content_type_options: true
+  x_frame_options: DENY
+  referrer_policy: strict-origin-when-cross-origin
 ```
 
 ### Core production YAML
@@ -229,6 +239,18 @@ trusted_proxies:
 cors:
   allow_origins:
     - ${APP_URL}
+
+csrf:
+  cookie_name: _csrf
+  header_name: X-CSRF-Token
+  ttl_secs: 21600
+
+security_headers:
+  x_content_type_options: true
+  x_frame_options: DENY
+  referrer_policy: strict-origin-when-cross-origin
+  hsts_max_age: 31536000
+  content_security_policy: "default-src 'self'"
 ```
 
 ### Core .env.example entries
