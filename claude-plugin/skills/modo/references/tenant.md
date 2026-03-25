@@ -2,7 +2,7 @@
 
 Module: `src/tenant/` | Always available (no feature gate)
 
-Re-exported from `modo`: `HasTenantId`, `Tenant`, `TenantId`, `TenantLayer`, `TenantMiddleware`, `TenantResolver`, `TenantStrategy`, `tenant_middleware`.
+Re-exported from `modo`: `HasTenantId`, `Tenant`, `TenantId`, `TenantLayer`, `TenantResolver`, `TenantStrategy`, `tenant_middleware`.
 
 ## Overview
 

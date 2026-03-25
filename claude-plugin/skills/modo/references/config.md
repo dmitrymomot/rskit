@@ -112,8 +112,11 @@ Source: `src/config/modo.rs`
 | Field | Type | YAML key | Feature |
 |---|---|---|---|
 | `oauth` | `auth::oauth::OAuthConfig` | `oauth` | `auth` |
+| `jwt` | `auth::jwt::JwtConfig` | `jwt` | `auth` |
 | `email` | `email::EmailConfig` | `email` | `email` |
 | `template` | `template::TemplateConfig` | `template` | `templates` |
+| `storage` | `storage::BucketConfig` | `storage` | `storage` |
+| `dns` | `dns::DnsConfig` | `dns` | `dns` |
 | `geolocation` | `geolocation::GeolocationConfig` | `geolocation` | `geolocation` |
 
 ## Sub-Config Details
@@ -278,6 +281,40 @@ Source: `src/config/modo.rs`
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `mmdb_path` | `String` | `""` | Path to MaxMind `.mmdb` file. Empty = error |
+
+### `storage::BucketConfig` (feature: `storage`)
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | `String` | `""` | Lookup key in `Buckets`. Ignored by `Storage::new()` |
+| `bucket` | `String` | `""` | S3 bucket name (required) |
+| `region` | `Option<String>` | `None` | AWS region. `None` uses `us-east-1` |
+| `endpoint` | `String` | `""` | S3-compatible endpoint URL (required) |
+| `access_key` | `String` | `""` | Access key ID |
+| `secret_key` | `String` | `""` | Secret access key |
+| `public_url` | `Option<String>` | `None` | Base URL for public file URLs. `None` means `url()` errors |
+| `max_file_size` | `Option<String>` | `None` | Max file size, human-readable (e.g. `"10mb"`). `None` disables limit |
+| `path_style` | `bool` | `true` | Use path-style URLs. `false` for virtual-hosted-style |
+
+Size format for `max_file_size`: `<number><unit>` where unit is `b`, `kb`, `mb`, `gb` (case-insensitive). Bare numbers treated as bytes.
+
+### `dns::DnsConfig` (feature: `dns`)
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `nameserver` | `String` | `"8.8.8.8"` | Nameserver address, with or without port. Port 53 appended when omitted |
+| `txt_prefix` | `String` | `"_modo-verify"` | Prefix for TXT record lookups (`{txt_prefix}.{domain}`) |
+| `timeout_ms` | `u64` | `5000` | UDP receive timeout in milliseconds |
+
+### `auth::jwt::JwtConfig` (feature: `auth`)
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `secret` | `String` | `""` | HMAC secret for signing and verifying tokens |
+| `default_expiry` | `Option<u64>` | `None` | Default token lifetime in seconds. Applied by `JwtEncoder::encode()` when `claims.exp` is `None` |
+| `leeway` | `u64` | `0` | Clock skew tolerance in seconds for `exp` and `nbf` checks |
+| `issuer` | `Option<String>` | `None` | Required `iss` claim. Decoder rejects non-matching tokens |
+| `audience` | `Option<String>` | `None` | Required `aud` claim. Decoder rejects non-matching tokens |
 
 ## Feature Flags
 

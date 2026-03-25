@@ -117,6 +117,8 @@ pub trait TemplateSource: Send + Sync {
 
 ### `FileSource`
 
+Constructor: `FileSource::new(templates_path: impl Into<PathBuf>) -> Self`.
+
 Loads `.md` files from disk with locale fallback chain:
 1. `{templates_path}/{locale}/{name}.md`
 2. `{templates_path}/{default_locale}/{name}.md`

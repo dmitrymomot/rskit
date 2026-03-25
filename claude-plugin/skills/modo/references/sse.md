@@ -196,6 +196,13 @@ pub struct SseConfig {
 }
 ```
 
+### Methods
+
+```rust
+// Returns the keep-alive interval as a Duration.
+fn keep_alive_interval(&self) -> Duration
+```
+
 `SseConfig` implements `Default` and `Deserialize`. It is **not** a field on
 `modo::Config` — it is passed directly to `Broadcaster::new()`. To make it
 configurable via YAML, deserialize it from a custom section in the app's own

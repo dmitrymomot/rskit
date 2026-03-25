@@ -101,6 +101,7 @@ Only cancels jobs still in `pending` status. Returns `false` if the job was not 
 | `drain_timeout_secs` | `30` | Max wait for in-flight jobs during shutdown |
 | `queues` | one `"default"` queue, concurrency 4 | List of `QueueConfig` entries |
 | `cleanup` | enabled, 1h interval, 72h retention | Optional `CleanupConfig` |
+| `database` | `None` | Optional separate `db::Config` for the job queue DB |
 
 #### Queue Config
 

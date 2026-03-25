@@ -66,6 +66,8 @@ Size helper functions: `kb(n)`, `mb(n)`, `gb(n)` convert to bytes.
 
 ## BucketConfig
 
+`#[non_exhaustive]` — use `..Default::default()` for forward compatibility.
+
 ```rust
 pub struct BucketConfig {
     pub name: String,            // lookup key in Buckets (ignored by Storage::new())
@@ -104,6 +106,8 @@ store.put(&input).await?;
 
 ## PutInput
 
+`#[non_exhaustive]` — must use a constructor or struct-update syntax.
+
 ```rust
 pub struct PutInput {
     pub data: Bytes,
@@ -113,15 +117,32 @@ pub struct PutInput {
 }
 ```
 
+### Constructors
+
+Build with `new()` (sets `filename: None`):
+
+```rust
+let input = PutInput::new(bytes, "avatars/", "image/jpeg");
+```
+
 Build from multipart upload:
 
 ```rust
 let input = PutInput::from_upload(&uploaded_file, "avatars/");
 ```
 
-`from_upload` maps an empty `UploadedFile.name` to `filename: None`.
+`from_upload` maps an empty `UploadedFile.name` to `filename: None`. Defined in `bridge.rs`.
+
+Set `filename` after construction:
+
+```rust
+let mut input = PutInput::new(bytes, "avatars/", "image/jpeg");
+input.filename = Some("photo.jpg".into());
+```
 
 ## PutOptions
+
+`#[non_exhaustive]` — use `..Default::default()` for forward compatibility.
 
 ```rust
 pub struct PutOptions {
@@ -136,16 +157,21 @@ All fields default to `None`. Used with `put_with()` and `put_from_url_with()`.
 
 ## Acl
 
+`#[non_exhaustive]`, derives `Default` (`Private` is `#[default]`).
+
 ```rust
 pub enum Acl {
-    Private,     // "private" (default)
+    #[default]
+    Private,     // "private"
     PublicRead,  // "public-read"
 }
 ```
 
-Maps to the S3 `x-amz-acl` header via `acl.as_header_value()`. When `PutOptions.acl` is `None`, the bucket default applies.
+`Acl::default()` returns `Acl::Private`. Maps to the S3 `x-amz-acl` header via `acl.as_header_value()`. When `PutOptions.acl` is `None`, the bucket default applies.
 
 ## PutFromUrlInput
+
+`#[non_exhaustive]` — must use a constructor or struct-update syntax.
 
 ```rust
 pub struct PutFromUrlInput {
@@ -155,16 +181,28 @@ pub struct PutFromUrlInput {
 }
 ```
 
+### Constructor
+
+Build with `new()` (sets `filename: None`):
+
+```rust
+let input = PutFromUrlInput::new("https://example.com/photo.jpg", "downloads/");
+```
+
+Set `filename` after construction:
+
+```rust
+let mut input = PutFromUrlInput::new("https://example.com/photo.jpg", "downloads/");
+input.filename = Some("photo.jpg".into());
+```
+
 Used with `put_from_url()` / `put_from_url_with()`. Fetches the URL, extracts `Content-Type` from the response (falls back to `application/octet-stream`), then uploads via the normal `put` path.
 
 ## Upload from URL
 
 ```rust
-let input = PutFromUrlInput {
-    url: "https://example.com/photo.jpg".into(),
-    prefix: "downloads/".into(),
-    filename: Some("photo.jpg".into()),
-};
+let mut input = PutFromUrlInput::new("https://example.com/photo.jpg", "downloads/");
+input.filename = Some("photo.jpg".into());
 let key = storage.put_from_url(&input).await?;
 
 // With options:

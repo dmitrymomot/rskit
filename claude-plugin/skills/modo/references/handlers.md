@@ -319,6 +319,26 @@ let layer = ClientIpLayer::with_trusted_proxies(trusted);
 
 The `trusted_proxies` field is a top-level config value (not under `session`), parsed into `Vec<IpNet>` at startup.
 
+### extract_client_ip()
+
+Standalone utility function that resolves the real client IP from headers and connection info. This is the same logic used internally by `ClientIpLayer`, exposed for cases where you need IP resolution outside of middleware (e.g., in a custom extractor or service).
+
+```rust
+use modo::ip::extract_client_ip;
+use http::HeaderMap;
+use std::net::IpAddr;
+
+let headers = HeaderMap::new();
+let trusted: Vec<ipnet::IpNet> = vec!["10.0.0.0/8".parse().unwrap()];
+let connect_ip: Option<IpAddr> = Some("10.0.0.1".parse().unwrap());
+
+let real_ip: IpAddr = extract_client_ip(&headers, &trusted, connect_ip);
+```
+
+**Signature:** `pub fn extract_client_ip(headers: &HeaderMap, trusted_proxies: &[ipnet::IpNet], connect_ip: Option<IpAddr>) -> IpAddr`
+
+Resolution order is identical to `ClientIpLayer` (see above). Not re-exported at the `modo::` top level -- access via `modo::ip::extract_client_ip`.
+
 ## Server Configuration and Graceful Shutdown
 
 ### Config

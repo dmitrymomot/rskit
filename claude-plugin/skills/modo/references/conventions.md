@@ -26,6 +26,7 @@ src/
 ```rust
 pub use error::{Error, Result};
 pub use extractor::Service;
+pub use health::{HealthCheck, HealthChecks};
 pub use sanitize::Sanitize;
 pub use validate::{Validate, ValidationError, Validator};
 ```
@@ -591,3 +592,76 @@ if let Some(data) = cache.get(&"session_abc") {
 - NOT `Sync`. Wrap in `std::sync::RwLock` or `std::sync::Mutex` for multi-threaded use. Because `get` needs `&mut self`, even `RwLock` requires a write lock for reads.
 - O(n) recency update (linear scan of VecDeque). Fine for caches up to a few thousand entries.
 - Use `std::sync::RwLock` (not tokio) for all sync-only state -- never hold across `.await`.
+
+---
+
+## Health Checks
+
+**Module:** `src/health/`
+Always available, no feature flag.
+**Re-exports:** `modo::HealthCheck`, `modo::HealthChecks`
+
+Provides liveness and readiness probe endpoints for Kubernetes-style health checks.
+
+### Endpoints
+
+- `/_live` -- always returns 200 OK (liveness probe)
+- `/_ready` -- runs all registered checks concurrently, returns 200 if all pass, 503 if any fail; failures logged at ERROR level
+
+### `HealthCheck` trait
+
+```rust
+pub trait HealthCheck: Send + Sync + 'static {
+    fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
+}
+```
+
+Built-in implementations:
+- `db::Pool` -- acquires a connection to verify pool health
+- `db::ReadPool` -- acquires a connection to verify read pool health
+- `db::WritePool` -- acquires a connection to verify write pool health
+
+### `HealthChecks`
+
+A collection of named health checks. Built with a fluent API. Implements `Default` (delegates to `new()`).
+
+```rust
+fn new() -> Self
+fn check(self, name: &str, c: impl HealthCheck) -> Self     // register trait impl
+fn check_fn<F, Fut>(self, name: &str, f: F) -> Self          // register closure
+```
+
+`check_fn` bounds: `F: Fn() -> Fut + Send + Sync + 'static`, `Fut: Future<Output = Result<()>> + Send + 'static`.
+
+### `router()`
+
+```rust
+pub fn router() -> Router<AppState>
+```
+
+Returns a router with `/_live` and `/_ready` routes. Merge into your app router.
+
+### Usage
+
+```rust
+use modo::health::{HealthChecks, router};
+use modo::service::Registry;
+
+let checks = HealthChecks::new()
+    .check("read_pool", read_pool.clone())
+    .check("write_pool", write_pool.clone())
+    .check_fn("redis", || async { Ok(()) });
+
+let mut registry = Registry::new();
+registry.add(checks);
+
+let app = axum::Router::new()
+    .merge(router())
+    .with_state(registry.into_state());
+```
+
+### Gotchas
+
+- `HealthChecks` must be registered in the `Registry` before the readiness endpoint works. If not registered, `Service<HealthChecks>` returns 500.
+- `HealthCheck` uses `Pin<Box<dyn Future>>` returns (not RPITIT) to stay object-safe behind `Arc<dyn HealthCheck>`.
+- All checks run concurrently via `JoinSet`. A panicking check is treated as a failure (503).

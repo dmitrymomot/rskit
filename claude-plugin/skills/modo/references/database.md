@@ -162,6 +162,11 @@ All three are publicly exported from `modo::db`.
 
 Fields: `max_connections`, `min_connections`, `acquire_timeout_secs`, `idle_timeout_secs`, `max_lifetime_secs`, `busy_timeout`, `cache_size`, `mmap_size`, `temp_store`, `wal_autocheckpoint`.
 
+Constructor methods:
+
+- `PoolOverrides::default_reader() -> Self` — returns a `PoolOverrides` pre-filled with reader defaults (`busy_timeout=1000`, `cache_size=-16000`, `mmap_size=268435456`).
+- `PoolOverrides::default_writer() -> Self` — returns a `PoolOverrides` pre-filled with writer defaults (`max_connections=1`, `busy_timeout=2000`, `cache_size=-16000`, `mmap_size=268435456`).
+
 Reader defaults: `busy_timeout=1000`, `cache_size=-16000` (~16 MB), `mmap_size=268435456` (256 MiB). Writer defaults: `max_connections=1`, `busy_timeout=2000`, `cache_size=-16000` (~16 MB), `mmap_size=268435456` (256 MiB).
 
 ## Registry Integration

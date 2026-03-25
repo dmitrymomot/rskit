@@ -21,6 +21,15 @@ pub struct CookieConfig {
 }
 ```
 
+### Constructor
+
+```rust
+use modo::cookie::CookieConfig;
+
+let config = CookieConfig::new("your-secret-at-least-64-characters...");
+// Returns CookieConfig with secure: true, http_only: true, same_site: "lax"
+```
+
 ### Key derivation
 
 ```rust

@@ -106,7 +106,7 @@ All paths are relative to the `references/` directory inside this skill folder.
 
 | Task | Read |
 |---|---|
-| File organization, error handling, extractors, response types, service registry, IDs | `references/conventions.md` |
+| File organization, error handling, extractors, response types, service registry, IDs, health checks | `references/conventions.md` |
 | YAML config, env var substitution, feature flags | `references/config.md` |
 | Database: raw sqlx, Pool/ReadPool/WritePool, Reader/Writer traits | `references/database.md` |
 | Handlers, routing, axum Router, middleware (rate limit, CORS, tracing) | `references/handlers.md` |

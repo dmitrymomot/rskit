@@ -57,6 +57,10 @@ pub struct OAuthProviderConfig {
     pub redirect_uri: String,
     pub scopes: Vec<String>,  // falls back to provider defaults when empty
 }
+
+impl OAuthProviderConfig {
+    pub fn new(client_id: impl Into<String>, client_secret: impl Into<String>, redirect_uri: impl Into<String>) -> Self
+}
 ```
 
 YAML example:
@@ -93,6 +97,10 @@ oauth:
       pub name: Option<String>,
       pub avatar_url: Option<String>,
       pub raw: serde_json::Value,    // raw provider JSON
+  }
+
+  impl UserProfile {
+      pub fn new(provider: impl Into<String>, provider_user_id: impl Into<String>, email: impl Into<String>) -> Self
   }
   ```
 
@@ -138,7 +146,7 @@ pub async fn hash(password: &str, config: &PasswordConfig) -> Result<String>
 pub async fn verify(password: &str, hash: &str) -> Result<bool>
 ```
 
-Re-exported at crate root: `modo::PasswordConfig` (via `pub use auth::PasswordConfig`).
+Re-exported at `modo::auth::PasswordConfig` (via `pub use password::PasswordConfig` in `auth/mod.rs`). Not re-exported at the crate root.
 
 ---
 
@@ -195,7 +203,7 @@ Methods:
 
 Verification uses constant-time comparison.
 
-Re-exported at crate root: `modo::Totp`, `modo::TotpConfig` (via `pub use auth::{Totp, TotpConfig}`).
+Re-exported at `modo::auth::Totp`, `modo::auth::TotpConfig` (via `pub use totp::{Totp, TotpConfig}` in `auth/mod.rs`). Not re-exported at the crate root.
 
 ---
 
@@ -233,6 +241,12 @@ pub struct JwtConfig {
     pub issuer: Option<String>,      // required iss claim
     pub audience: Option<String>,    // required aud claim
 }
+
+impl JwtConfig {
+    pub fn new(secret: impl Into<String>) -> Self  // all other fields default (None/0)
+}
+
+impl Default for JwtConfig  // secret defaults to empty string
 ```
 
 ```yaml
