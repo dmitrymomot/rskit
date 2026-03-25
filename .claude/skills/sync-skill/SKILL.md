@@ -73,11 +73,25 @@ src/email/          → email.md
 src/storage/        → storage.md
 src/webhook/        → webhooks.md
 src/dns/            → dns.md
+src/health/         → conventions.md
 src/geolocation/    → geolocation.md
+src/runtime/        → handlers.md
+src/tracing/        → config.md
 src/testing/        → testing.md
 ```
 
 ## Process
+
+### Phase 0: Validate Mapping
+
+Before inventorying, confirm the Module → Reference Mapping table is complete:
+
+1. List every `src/*/` directory that contains a `mod.rs`.
+2. Compare against the mapping table above.
+3. If any source module is missing from the table, determine which reference file it
+   belongs to (based on topic affinity with existing mappings) and add it before proceeding.
+
+This catches modules added since the last sync-skill update.
 
 ### Phase 1: Inventory the Public API
 
@@ -86,11 +100,14 @@ subdirectories. Produce a structured inventory of every public item:
 
 **What counts as "public API" — enumerate all of these:**
 
-- `pub struct` — name, generic params, derive macros, every `pub` field with type
-- `pub enum` — name, every variant with fields
+- `pub struct` — name, generic params, derive macros, `#[non_exhaustive]` if present, every `pub` field with type
+- `pub enum` — name, `#[non_exhaustive]` if present, every variant with fields (note `#[default]` variant)
 - `pub trait` — name, supertraits, every method with full signature (async/sync, params, return type, generic bounds)
 - `pub fn` (free functions) — full signature
 - `impl` blocks on public types — every `pub fn` / `pub async fn` with full signature
+- **Constructors deserve extra attention:** `new()`, `from_*()`, `with_*()`, `default_*()` builder
+  methods are the most commonly missed items. After listing all `impl` methods, double-check that
+  every constructor is included.
 - `pub type` aliases
 - `pub const` / `pub static`
 - `pub use` re-exports in `mod.rs`
@@ -224,6 +241,9 @@ After editing, run a mechanical check:
 
 2. If you changed an API pattern in a reference, check if `CLAUDE.md` conventions or gotchas
    need a corresponding update.
+
+3. If the module defines a config struct that is a field on `ModoConfig` (in `src/config/modo.rs`),
+   verify that `config.md` has a matching sub-config table with correct fields and defaults.
 
 ### Phase 6: Verify with cargo
 
