@@ -144,6 +144,15 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn check_adds_trait_impl() {
+        let pool = Pool::new(sqlx::SqlitePool::connect(":memory:").await.unwrap());
+        let checks = HealthChecks::new().check("pool", pool);
+        assert_eq!(checks.iter().len(), 1);
+        assert_eq!(checks.iter()[0].0, "pool");
+        checks.iter()[0].1.check().await.unwrap();
+    }
+
+    #[tokio::test]
     async fn fn_health_check_succeeds() {
         let checks = HealthChecks::new().check_fn("ok", || async { Ok(()) });
         let (_, c) = &checks.iter()[0];
