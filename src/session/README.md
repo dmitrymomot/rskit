@@ -2,7 +2,7 @@
 
 Database-backed HTTP session management for the modo framework.
 
-Sessions are stored in a SQLite table (`modo_sessions`) and identified by a
+Sessions are stored in a SQLite table (`sessions`) and identified by a
 signed, opaque cookie. The middleware handles the full request/response
 lifecycle: loading the session on the request path, validating the browser
 fingerprint, flushing dirty data after the handler runs, and setting or
@@ -12,11 +12,11 @@ This module is always available — no feature flag required.
 
 ## Schema
 
-The application must create `modo_sessions` before running. The table must
+The application must create `sessions` before running. The table must
 contain all columns present in `SessionData`:
 
 ```sql
-CREATE TABLE IF NOT EXISTS modo_sessions (
+CREATE TABLE IF NOT EXISTS sessions (
     id             TEXT    NOT NULL PRIMARY KEY,
     token_hash     TEXT    NOT NULL UNIQUE,
     user_id        TEXT    NOT NULL,
@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS modo_sessions (
     last_active_at TEXT    NOT NULL,
     expires_at     TEXT    NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_modo_sessions_user_id    ON modo_sessions (user_id);
-CREATE INDEX IF NOT EXISTS idx_modo_sessions_expires_at ON modo_sessions (expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id    ON sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions (expires_at);
 ```
 
 ## Configuration

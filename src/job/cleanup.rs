@@ -21,7 +21,7 @@ pub(crate) async fn cleanup_loop(
                     (Utc::now() - chrono::Duration::seconds(retention_secs as i64)).to_rfc3339();
 
                 match sqlx::query(
-                    "DELETE FROM modo_jobs \
+                    "DELETE FROM jobs \
                      WHERE status IN ('completed', 'dead', 'cancelled') AND updated_at < ?",
                 )
                 .bind(&threshold)

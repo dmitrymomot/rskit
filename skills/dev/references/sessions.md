@@ -2,7 +2,7 @@
 
 ## Overview
 
-modo provides database-backed HTTP sessions (SQLite via `modo_sessions` table), signed cookie utilities, and cookie-based flash messages. Sessions and flash are always available -- no feature flag required.
+modo provides database-backed HTTP sessions (SQLite via `sessions` table), signed cookie utilities, and cookie-based flash messages. Sessions and flash are always available -- no feature flag required.
 
 ---
 
@@ -365,7 +365,7 @@ So `modo::Flash`, `modo::Session`, `modo::SessionLayer`, etc. work directly.
 
 3. **Flash is always available**: No feature gate. It is part of the default build.
 
-4. **Session is always available**: No feature gate. The `modo_sessions` table schema is not shipped as a migration -- end-apps own their DB schema.
+4. **Session is always available**: No feature gate. The `sessions` table schema is not shipped as a migration -- end-apps own their DB schema.
 
 5. **`CookieConfig.secret` minimum 64 characters**: `key_from_config()` returns `Error::internal` if shorter.
 

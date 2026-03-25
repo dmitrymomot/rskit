@@ -6,7 +6,7 @@ use crate::session::{SessionConfig, Store};
 
 use super::db::TestDb;
 
-const SESSIONS_TABLE_SQL: &str = "CREATE TABLE modo_sessions (
+const SESSIONS_TABLE_SQL: &str = "CREATE TABLE sessions (
         id TEXT PRIMARY KEY,
         token_hash TEXT NOT NULL UNIQUE,
         user_id TEXT NOT NULL,
@@ -23,7 +23,7 @@ const SESSIONS_TABLE_SQL: &str = "CREATE TABLE modo_sessions (
 
 /// Session infrastructure for integration tests.
 ///
-/// `TestSession` sets up an in-memory `modo_sessions` table on the provided
+/// `TestSession` sets up an in-memory `sessions` table on the provided
 /// [`TestDb`], derives a signing key, and exposes helpers for authenticating
 /// test users and building the [`SessionLayer`](crate::session::SessionLayer)
 /// needed by [`super::TestApp`].
@@ -65,7 +65,7 @@ impl TestSession {
     /// Create a `TestSession` with default [`SessionConfig`] and a
     /// test-suitable [`CookieConfig`] (insecure, lax same-site, 64-char secret).
     ///
-    /// Creates the `modo_sessions` table on `db`. Panics on failure.
+    /// Creates the `sessions` table on `db`. Panics on failure.
     pub async fn new(db: &TestDb) -> Self {
         let cookie_config = CookieConfig {
             secret: "a".repeat(64),
@@ -78,7 +78,7 @@ impl TestSession {
 
     /// Create a `TestSession` with explicit [`SessionConfig`] and [`CookieConfig`].
     ///
-    /// Creates the `modo_sessions` table on `db`. Panics on failure.
+    /// Creates the `sessions` table on `db`. Panics on failure.
     pub async fn with_config(
         db: &TestDb,
         session_config: SessionConfig,
@@ -87,7 +87,7 @@ impl TestSession {
         sqlx::query(SESSIONS_TABLE_SQL)
             .execute(&*db.pool())
             .await
-            .expect("failed to create modo_sessions table");
+            .expect("failed to create sessions table");
 
         let key = key_from_config(&cookie_config).expect("failed to derive cookie key");
         let store = Store::new(&db.pool(), session_config.clone());

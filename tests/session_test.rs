@@ -23,7 +23,7 @@ async fn setup_store() -> (Store, modo::db::Pool) {
     let pool = modo::db::connect(&db_config).await.unwrap();
 
     sqlx::query(
-        "CREATE TABLE modo_sessions (
+        "CREATE TABLE sessions (
             id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
             user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
             user_agent TEXT NOT NULL, device_name TEXT NOT NULL,

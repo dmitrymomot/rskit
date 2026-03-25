@@ -1,5 +1,5 @@
 -- Job queue table
-CREATE TABLE IF NOT EXISTS modo_jobs (
+CREATE TABLE IF NOT EXISTS jobs (
     id          TEXT PRIMARY KEY,
     name        TEXT    NOT NULL,
     queue       TEXT    NOT NULL DEFAULT 'default',
@@ -18,6 +18,6 @@ CREATE TABLE IF NOT EXISTS modo_jobs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status_queue_run_at
-    ON modo_jobs(status, queue, run_at);
+    ON jobs(status, queue, run_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idempotency_key
-    ON modo_jobs(idempotency_key) WHERE idempotency_key IS NOT NULL;
+    ON jobs(idempotency_key) WHERE idempotency_key IS NOT NULL;

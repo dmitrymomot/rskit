@@ -11,7 +11,7 @@ async fn setup_store() -> Store {
     let pool = db::connect(&config).await.unwrap();
 
     sqlx::query(
-        "CREATE TABLE modo_sessions (
+        "CREATE TABLE sessions (
             id TEXT PRIMARY KEY,
             token_hash TEXT NOT NULL UNIQUE,
             user_id TEXT NOT NULL,
@@ -30,12 +30,12 @@ async fn setup_store() -> Store {
     .await
     .unwrap();
 
-    sqlx::query("CREATE INDEX idx_modo_sessions_user_id ON modo_sessions(user_id)")
+    sqlx::query("CREATE INDEX idx_sessions_user_id ON sessions(user_id)")
         .execute(&*pool)
         .await
         .unwrap();
 
-    sqlx::query("CREATE INDEX idx_modo_sessions_expires_at ON modo_sessions(expires_at)")
+    sqlx::query("CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)")
         .execute(&*pool)
         .await
         .unwrap();
@@ -205,7 +205,7 @@ async fn test_lru_eviction() {
     };
     let pool = db::connect(&db_config).await.unwrap();
     sqlx::query(
-        "CREATE TABLE modo_sessions (
+        "CREATE TABLE sessions (
             id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
             user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
             user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
@@ -270,7 +270,7 @@ async fn test_cleanup_expired_deletes_rows() {
     };
     let pool = db::connect(&config).await.unwrap();
     sqlx::query(
-        "CREATE TABLE modo_sessions (
+        "CREATE TABLE sessions (
             id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
             user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
             user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
@@ -282,11 +282,11 @@ async fn test_cleanup_expired_deletes_rows() {
     .execute(&*pool)
     .await
     .unwrap();
-    sqlx::query("CREATE INDEX idx_modo_sessions_user_id ON modo_sessions(user_id)")
+    sqlx::query("CREATE INDEX idx_sessions_user_id ON sessions(user_id)")
         .execute(&*pool)
         .await
         .unwrap();
-    sqlx::query("CREATE INDEX idx_modo_sessions_expires_at ON modo_sessions(expires_at)")
+    sqlx::query("CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)")
         .execute(&*pool)
         .await
         .unwrap();
@@ -296,7 +296,7 @@ async fn test_cleanup_expired_deletes_rows() {
     let (session, _) = store.create(&meta, "user-1", None).await.unwrap();
 
     // Manually expire the session
-    sqlx::query("UPDATE modo_sessions SET expires_at = ? WHERE id = ?")
+    sqlx::query("UPDATE sessions SET expires_at = ? WHERE id = ?")
         .bind("2020-01-01T00:00:00+00:00")
         .bind(&session.id)
         .execute(&*pool)
@@ -319,7 +319,7 @@ async fn test_max_sessions_per_user_one() {
     };
     let pool = db::connect(&config).await.unwrap();
     sqlx::query(
-        "CREATE TABLE modo_sessions (
+        "CREATE TABLE sessions (
             id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
             user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
             user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
@@ -331,11 +331,11 @@ async fn test_max_sessions_per_user_one() {
     .execute(&*pool)
     .await
     .unwrap();
-    sqlx::query("CREATE INDEX idx_modo_sessions_user_id ON modo_sessions(user_id)")
+    sqlx::query("CREATE INDEX idx_sessions_user_id ON sessions(user_id)")
         .execute(&*pool)
         .await
         .unwrap();
-    sqlx::query("CREATE INDEX idx_modo_sessions_expires_at ON modo_sessions(expires_at)")
+    sqlx::query("CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)")
         .execute(&*pool)
         .await
         .unwrap();
@@ -365,7 +365,7 @@ async fn test_list_for_user_excludes_expired() {
     };
     let pool = db::connect(&config).await.unwrap();
     sqlx::query(
-        "CREATE TABLE modo_sessions (
+        "CREATE TABLE sessions (
             id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
             user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
             user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
@@ -377,11 +377,11 @@ async fn test_list_for_user_excludes_expired() {
     .execute(&*pool)
     .await
     .unwrap();
-    sqlx::query("CREATE INDEX idx_modo_sessions_user_id ON modo_sessions(user_id)")
+    sqlx::query("CREATE INDEX idx_sessions_user_id ON sessions(user_id)")
         .execute(&*pool)
         .await
         .unwrap();
-    sqlx::query("CREATE INDEX idx_modo_sessions_expires_at ON modo_sessions(expires_at)")
+    sqlx::query("CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)")
         .execute(&*pool)
         .await
         .unwrap();
@@ -391,7 +391,7 @@ async fn test_list_for_user_excludes_expired() {
     let (session, _) = store.create(&meta, "user-1", None).await.unwrap();
 
     // Manually expire the session
-    sqlx::query("UPDATE modo_sessions SET expires_at = ? WHERE id = ?")
+    sqlx::query("UPDATE sessions SET expires_at = ? WHERE id = ?")
         .bind("2020-01-01T00:00:00+00:00")
         .bind(&session.id)
         .execute(&*pool)
@@ -411,7 +411,7 @@ async fn test_read_by_token_returns_none_for_expired() {
     };
     let pool = db::connect(&config).await.unwrap();
     sqlx::query(
-        "CREATE TABLE modo_sessions (
+        "CREATE TABLE sessions (
             id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
             user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
             user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
@@ -423,11 +423,11 @@ async fn test_read_by_token_returns_none_for_expired() {
     .execute(&*pool)
     .await
     .unwrap();
-    sqlx::query("CREATE INDEX idx_modo_sessions_user_id ON modo_sessions(user_id)")
+    sqlx::query("CREATE INDEX idx_sessions_user_id ON sessions(user_id)")
         .execute(&*pool)
         .await
         .unwrap();
-    sqlx::query("CREATE INDEX idx_modo_sessions_expires_at ON modo_sessions(expires_at)")
+    sqlx::query("CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)")
         .execute(&*pool)
         .await
         .unwrap();
@@ -437,7 +437,7 @@ async fn test_read_by_token_returns_none_for_expired() {
     let (session, token) = store.create(&meta, "user-1", None).await.unwrap();
 
     // Manually expire the session
-    sqlx::query("UPDATE modo_sessions SET expires_at = ? WHERE id = ?")
+    sqlx::query("UPDATE sessions SET expires_at = ? WHERE id = ?")
         .bind("2020-01-01T00:00:00+00:00")
         .bind(&session.id)
         .execute(&*pool)

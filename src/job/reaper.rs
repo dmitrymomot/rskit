@@ -23,7 +23,7 @@ pub(crate) async fn reaper_loop(
                 let now_str = Utc::now().to_rfc3339();
 
                 match sqlx::query(
-                    "UPDATE modo_jobs SET status = 'pending', started_at = NULL, updated_at = ? \
+                    "UPDATE jobs SET status = 'pending', started_at = NULL, updated_at = ? \
                      WHERE status = 'running' AND started_at < ?",
                 )
                 .bind(&now_str)

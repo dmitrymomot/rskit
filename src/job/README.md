@@ -4,11 +4,11 @@ Durable background job processing backed by SQLite.
 
 ## Overview
 
-The `job` module provides a named-job queue stored in the `modo_jobs` SQLite table.
+The `job` module provides a named-job queue stored in the `jobs` SQLite table.
 Handlers are plain `async fn` functions. The worker polls the database, dispatches
 jobs to handlers, retries failures with exponential backoff, and reaps stale jobs.
 
-End-applications own the `modo_jobs` table migration — this module ships none.
+End-applications own the `jobs` table migration — this module ships none.
 
 ## Key Types
 
@@ -162,5 +162,5 @@ After `max_attempts` failures (default 3) the job is moved to `Dead` and not ret
 
 ## Database Schema
 
-The module reads and writes a `modo_jobs` table. End-applications must create and
+The module reads and writes a `jobs` table. End-applications must create and
 migrate this table themselves — no embedded migration is provided.

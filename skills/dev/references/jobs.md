@@ -13,7 +13,7 @@ Both modules are re-exported at the crate root as `pub mod job` and `pub mod cro
 
 ### Database Table
 
-Jobs are stored in the `modo_jobs` table. The framework does **not** ship migrations -- the end-application owns its schema. You must create the table yourself with at minimum these columns: `id`, `name`, `queue`, `payload`, `payload_hash`, `status`, `attempt`, `run_at`, `started_at`, `completed_at`, `failed_at`, `error_message`, `created_at`, `updated_at`.
+Jobs are stored in the `jobs` table. The framework does **not** ship migrations -- the end-application owns its schema. You must create the table yourself with at minimum these columns: `id`, `name`, `queue`, `payload`, `payload_hash`, `status`, `attempt`, `run_at`, `started_at`, `completed_at`, `failed_at`, `error_message`, `created_at`, `updated_at`.
 
 ### Defining a Job Handler
 
@@ -47,7 +47,7 @@ async fn send_email_job(
 
 ### Enqueuing Jobs
 
-`Enqueuer` writes rows into `modo_jobs`. Construct with any `Writer`:
+`Enqueuer` writes rows into `jobs`. Construct with any `Writer`:
 
 ```rust
 use modo::job::{Enqueuer, EnqueueOptions};
@@ -291,7 +291,7 @@ The cron `Meta.name` field is set to the fully qualified Rust type name of the h
 
 ## Gotchas
 
-- **No embedded migrations**: Both `job` and `cron` modules are DB-backed (job) or in-memory (cron). The `modo_jobs` table must be created by the end-application's migration. The framework does not ship DDL.
+- **No embedded migrations**: Both `job` and `cron` modules are DB-backed (job) or in-memory (cron). The `jobs` table must be created by the end-application's migration. The framework does not ship DDL.
 
 - **999 bind params limit (SQLite)**: The worker poll loop builds a dynamic `IN (?, ?, ...)` clause for all registered handler names. SQLite has a 999 bind parameter limit per statement, so a single worker can support a maximum of roughly 900 registered handlers.
 

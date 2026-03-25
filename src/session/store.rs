@@ -84,7 +84,7 @@ impl Store {
         let row = sqlx::query_as::<_, SessionRow>(
             "SELECT id, user_id, ip_address, user_agent, device_name, device_type, \
              fingerprint, data, created_at, last_active_at, expires_at \
-             FROM modo_sessions WHERE token_hash = ? AND expires_at > ?",
+             FROM sessions WHERE token_hash = ? AND expires_at > ?",
         )
         .bind(&hash)
         .bind(&now)
@@ -102,7 +102,7 @@ impl Store {
         let row = sqlx::query_as::<_, SessionRow>(
             "SELECT id, user_id, ip_address, user_agent, device_name, device_type, \
              fingerprint, data, created_at, last_active_at, expires_at \
-             FROM modo_sessions WHERE id = ?",
+             FROM sessions WHERE id = ?",
         )
         .bind(id)
         .fetch_optional(&self.reader)
@@ -118,7 +118,7 @@ impl Store {
         let rows = sqlx::query_as::<_, SessionRow>(
             "SELECT id, user_id, ip_address, user_agent, device_name, device_type, \
              fingerprint, data, created_at, last_active_at, expires_at \
-             FROM modo_sessions WHERE user_id = ? AND expires_at > ? \
+             FROM sessions WHERE user_id = ? AND expires_at > ? \
              ORDER BY last_active_at DESC",
         )
         .bind(user_id)
@@ -162,7 +162,7 @@ impl Store {
             .map_err(|e| Error::internal(format!("begin transaction: {e}")))?;
 
         sqlx::query(
-            "INSERT INTO modo_sessions \
+            "INSERT INTO sessions \
              (id, token_hash, user_id, ip_address, user_agent, device_name, device_type, \
               fingerprint, data, created_at, last_active_at, expires_at) \
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -209,7 +209,7 @@ impl Store {
 
     /// Delete a session by its ULID identifier.
     pub async fn destroy(&self, id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM modo_sessions WHERE id = ?")
+        sqlx::query("DELETE FROM sessions WHERE id = ?")
             .bind(id)
             .execute(&self.writer)
             .await
@@ -219,7 +219,7 @@ impl Store {
 
     /// Delete all sessions belonging to a user.
     pub async fn destroy_all_for_user(&self, user_id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM modo_sessions WHERE user_id = ?")
+        sqlx::query("DELETE FROM sessions WHERE user_id = ?")
             .bind(user_id)
             .execute(&self.writer)
             .await
@@ -231,7 +231,7 @@ impl Store {
     ///
     /// Used to implement "log out other devices".
     pub async fn destroy_all_except(&self, user_id: &str, keep_id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM modo_sessions WHERE user_id = ? AND id != ?")
+        sqlx::query("DELETE FROM sessions WHERE user_id = ? AND id != ?")
             .bind(user_id)
             .bind(keep_id)
             .execute(&self.writer)
@@ -247,7 +247,7 @@ impl Store {
     pub async fn rotate_token(&self, id: &str) -> Result<SessionToken> {
         let new_token = SessionToken::generate();
         let new_hash = new_token.hash();
-        sqlx::query("UPDATE modo_sessions SET token_hash = ? WHERE id = ?")
+        sqlx::query("UPDATE sessions SET token_hash = ? WHERE id = ?")
             .bind(&new_hash)
             .bind(id)
             .execute(&self.writer)
@@ -270,7 +270,7 @@ impl Store {
         let data_str = serde_json::to_string(data)
             .map_err(|e| Error::internal(format!("serialize session data: {e}")))?;
         sqlx::query(
-            "UPDATE modo_sessions SET data = ?, last_active_at = ?, expires_at = ? WHERE id = ?",
+            "UPDATE sessions SET data = ?, last_active_at = ?, expires_at = ? WHERE id = ?",
         )
         .bind(&data_str)
         .bind(now.to_rfc3339())
@@ -292,7 +292,7 @@ impl Store {
         now: DateTime<Utc>,
         expires_at: DateTime<Utc>,
     ) -> Result<()> {
-        sqlx::query("UPDATE modo_sessions SET last_active_at = ?, expires_at = ? WHERE id = ?")
+        sqlx::query("UPDATE sessions SET last_active_at = ?, expires_at = ? WHERE id = ?")
             .bind(now.to_rfc3339())
             .bind(expires_at.to_rfc3339())
             .bind(id)
@@ -308,7 +308,7 @@ impl Store {
     /// via a cron job) to keep the table small.
     pub async fn cleanup_expired(&self) -> Result<u64> {
         let now = Utc::now().to_rfc3339();
-        let result = sqlx::query("DELETE FROM modo_sessions WHERE expires_at < ?")
+        let result = sqlx::query("DELETE FROM sessions WHERE expires_at < ?")
             .bind(&now)
             .execute(&self.writer)
             .await
@@ -323,7 +323,7 @@ impl Store {
         txn: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     ) -> Result<()> {
         let count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM modo_sessions WHERE user_id = ? AND expires_at > ?",
+            "SELECT COUNT(*) FROM sessions WHERE user_id = ? AND expires_at > ?",
         )
         .bind(user_id)
         .bind(now)
@@ -338,7 +338,7 @@ impl Store {
 
         let excess = count.0 - max;
         let oldest_ids: Vec<(String,)> = sqlx::query_as(
-            "SELECT id FROM modo_sessions WHERE user_id = ? AND expires_at > ? \
+            "SELECT id FROM sessions WHERE user_id = ? AND expires_at > ? \
              ORDER BY last_active_at ASC LIMIT ?",
         )
         .bind(user_id)
@@ -349,7 +349,7 @@ impl Store {
         .map_err(|e| Error::internal(format!("find oldest sessions: {e}")))?;
 
         for (id,) in oldest_ids {
-            sqlx::query("DELETE FROM modo_sessions WHERE id = ?")
+            sqlx::query("DELETE FROM sessions WHERE id = ?")
                 .bind(&id)
                 .execute(&mut **txn)
                 .await

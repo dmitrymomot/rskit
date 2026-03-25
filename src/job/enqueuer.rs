@@ -36,7 +36,7 @@ impl Default for EnqueueOptions {
     }
 }
 
-/// Enqueues jobs into the `modo_jobs` SQLite table.
+/// Enqueues jobs into the `jobs` SQLite table.
 ///
 /// Constructed via [`Enqueuer::new`]. Cheaply cloneable — the underlying
 /// connection pool is `Arc`-wrapped.
@@ -99,7 +99,7 @@ impl Enqueuer {
         let run_at_str = run_at.to_rfc3339();
 
         sqlx::query(
-            "INSERT INTO modo_jobs (id, name, queue, payload, status, attempt, run_at, created_at, updated_at) \
+            "INSERT INTO jobs (id, name, queue, payload, status, attempt, run_at, created_at, updated_at) \
              VALUES (?, ?, ?, ?, 'pending', 0, ?, ?, ?)",
         )
         .bind(&id)
@@ -149,7 +149,7 @@ impl Enqueuer {
         let run_at_str = run_at.to_rfc3339();
 
         match sqlx::query(
-            "INSERT INTO modo_jobs (id, name, queue, payload, payload_hash, status, attempt, run_at, created_at, updated_at) \
+            "INSERT INTO jobs (id, name, queue, payload, payload_hash, status, attempt, run_at, created_at, updated_at) \
              VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)",
         )
         .bind(&id)
@@ -166,7 +166,7 @@ impl Enqueuer {
             Ok(_) => Ok(EnqueueResult::Created(id)),
             Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
                 let (existing_id,): (String,) = sqlx::query_as(
-                    "SELECT id FROM modo_jobs WHERE payload_hash = ? AND status IN ('pending', 'running') LIMIT 1",
+                    "SELECT id FROM jobs WHERE payload_hash = ? AND status IN ('pending', 'running') LIMIT 1",
                 )
                 .bind(&hash)
                 .fetch_one(&self.writer)
@@ -186,7 +186,7 @@ impl Enqueuer {
     pub async fn cancel(&self, id: &str) -> Result<bool> {
         let now_str = Utc::now().to_rfc3339();
         let result = sqlx::query(
-            "UPDATE modo_jobs SET status = 'cancelled', updated_at = ? WHERE id = ? AND status = 'pending'",
+            "UPDATE jobs SET status = 'cancelled', updated_at = ? WHERE id = ? AND status = 'pending'",
         )
         .bind(&now_str)
         .bind(id)

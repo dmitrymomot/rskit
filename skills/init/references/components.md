@@ -265,7 +265,7 @@ COOKIE_SECRET=change-me-in-production-at-least-64-bytes-long-secret-key-here!!
 
 ```sql
 -- Sessions table (required by modo session middleware)
-CREATE TABLE IF NOT EXISTS modo_sessions (
+CREATE TABLE IF NOT EXISTS sessions (
     token       TEXT PRIMARY KEY,
     data        TEXT    NOT NULL DEFAULT '{}',
     user_id     TEXT,
@@ -277,8 +277,8 @@ CREATE TABLE IF NOT EXISTS modo_sessions (
     expires_at  TEXT    NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON modo_sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON modo_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 ```
 
 ### Core run! macro args
@@ -860,7 +860,7 @@ job:
 **migrations/jobs/001_jobs.sql:**
 ```sql
 -- Job queue table
-CREATE TABLE IF NOT EXISTS modo_jobs (
+CREATE TABLE IF NOT EXISTS jobs (
     id          TEXT PRIMARY KEY,
     name        TEXT    NOT NULL,
     queue       TEXT    NOT NULL DEFAULT 'default',
@@ -879,9 +879,9 @@ CREATE TABLE IF NOT EXISTS modo_jobs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status_queue_run_at
-    ON modo_jobs(status, queue, run_at);
+    ON jobs(status, queue, run_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idempotency_key
-    ON modo_jobs(idempotency_key) WHERE idempotency_key IS NOT NULL;
+    ON jobs(idempotency_key) WHERE idempotency_key IS NOT NULL;
 ```
 
 **src/jobs/mod.rs:**

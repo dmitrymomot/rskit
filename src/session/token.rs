@@ -51,7 +51,7 @@ impl SessionToken {
     /// Compute the SHA-256 hash of the token and return it as a 64-character
     /// lowercase hex string.
     ///
-    /// This hash is what is stored in `modo_sessions.token_hash`. Storing only
+    /// This hash is what is stored in `sessions.token_hash`. Storing only
     /// the hash ensures that a read of the database cannot be used to impersonate
     /// users.
     pub fn hash(&self) -> String {

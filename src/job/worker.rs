@@ -240,10 +240,10 @@ async fn poll_loop(
                         .join(", ");
 
                     let claim_sql = format!(
-                        "UPDATE modo_jobs SET status = 'running', attempt = attempt + 1, \
+                        "UPDATE jobs SET status = 'running', attempt = attempt + 1, \
                          started_at = ?, updated_at = ? \
                          WHERE id IN (\
-                             SELECT id FROM modo_jobs \
+                             SELECT id FROM jobs \
                              WHERE status = 'pending' AND run_at <= ? \
                              AND queue = ? AND name IN ({placeholders}) \
                              ORDER BY run_at ASC LIMIT ?\
@@ -320,7 +320,7 @@ async fn poll_loop(
                             match result {
                                 Ok(Ok(())) => {
                                     let _ = sqlx::query(
-                                        "UPDATE modo_jobs SET status = 'completed', \
+                                        "UPDATE jobs SET status = 'completed', \
                                          completed_at = ?, updated_at = ? WHERE id = ?",
                                     )
                                     .bind(&now_str)
@@ -382,7 +382,7 @@ async fn handle_job_failure(
 ) {
     if attempt >= max_attempts {
         let _ = sqlx::query(
-            "UPDATE modo_jobs SET status = 'dead', \
+            "UPDATE jobs SET status = 'dead', \
              failed_at = ?, error_message = ?, updated_at = ? WHERE id = ?",
         )
         .bind(now_str)
@@ -404,7 +404,7 @@ async fn handle_job_failure(
         let retry_at = (Utc::now() + chrono::Duration::seconds(delay_secs as i64)).to_rfc3339();
 
         let _ = sqlx::query(
-            "UPDATE modo_jobs SET status = 'pending', \
+            "UPDATE jobs SET status = 'pending', \
              run_at = ?, started_at = NULL, \
              failed_at = ?, error_message = ?, updated_at = ? WHERE id = ?",
         )

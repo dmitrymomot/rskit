@@ -1,20 +1,18 @@
 ---
-name: init
+name: modo-init
 allowed-tools: Read, Write, Glob, Grep, Bash, AskUserQuestion
 description: "Scaffold a new modo v2 application — generates folder structure, Cargo.toml, config YAML, main.rs wiring, routes, handlers, migrations, justfile, Dockerfile, docker-compose, .env, .gitignore, and CI workflow. Use this skill whenever the user wants to create a new modo project, initialize an app, scaffold a starter, set up a new service, bootstrap a web app with modo, or says things like 'new project', 'init app', 'create service', 'start fresh', 'scaffold', or 'bootstrap'. Also use when the user asks how to set up a modo project from scratch."
 ---
 
-# init — Project Scaffolding
+# modo-init — Project Scaffolding
 
-This skill generates a complete, ready-to-run modo v2 application. It drives the conversation using `AskUserQuestion` to gather requirements, then creates every file with proper wiring.
+This skill scaffolds a complete, ready-to-run modo v2 application. It drives the conversation using `AskUserQuestion` to gather requirements, then creates files using bash scripts for static boilerplate and `Write` for dynamic assembly.
 
 ## Workflow
 
-You MUST use the `AskUserQuestion` tool at each step to gather requirements. Do NOT dump text menus or expect freeform answers — use structured questions with options so the user can click through choices quickly.
-
 ### Step 1: Project Basics
 
-Use `AskUserQuestion` to ask the first round of questions. Ask up to 4 questions in a single call:
+Use `AskUserQuestion` to ask these questions in a single call:
 
 **Question 1 — App type preset:**
 - header: "App type"
@@ -44,7 +42,7 @@ After receiving answers, proceed based on the app type:
 
 ### Step 2: Custom Component Selection
 
-Only reached if the user chose "Custom" in Step 1. Use `AskUserQuestion` to ask up to 4 multi-select questions in a single call:
+Only reached if the user chose "Custom" in Step 1. Use `AskUserQuestion` with up to 4 multi-select questions in a single call:
 
 **Question 1 — Frontend:**
 - header: "Frontend"
@@ -92,7 +90,7 @@ Use `AskUserQuestion` to confirm details before generating:
 - question: "Where should I create the project?"
 - options:
   - **"./"** — Current directory (files created here directly)
-  - **"./\<project-name\>/"** — New subdirectory in current location
+  - **"./<project-name>/"** — New subdirectory in current location
 - multiSelect: false
 
 Before asking, briefly list what will be generated:
@@ -100,70 +98,73 @@ Before asking, briefly list what will be generated:
 - The selected optional components
 - Tell the user they can say "Other" to provide a custom path
 
-After this answer, you have everything needed. Proceed to generate.
-
 ### Step 4: Generate the Project
 
-Read `references/components.md` for the exact code to generate for each component. Read `references/files.md` for boilerplate file templates.
+This step uses bash scripts for static boilerplate and `Write` for files that depend on component selection.
 
-The project name is derived from the target directory name (last path segment), converted to a valid Rust crate name (lowercase, hyphens).
+#### 4a: Run the scaffold script
 
-The generated project structure follows this layout:
+Run `scripts/scaffold.sh` from this skill's directory to create the base project structure:
 
-```
-<project>/
-├── Cargo.toml
-├── justfile
-├── Dockerfile
-├── docker-compose.yml      (if storage or email selected)
-├── .env.example
-├── .gitignore
-├── .github/workflows/ci.yml
-├── config/
-│   ├── development.yaml
-│   └── production.yaml
-├── data/
-│   └── .gitkeep
-├── migrations/
-│   ├── app/
-│   │   └── 001_initial.sql
-│   └── jobs/                (if jobs selected)
-│       └── 001_jobs.sql
-├── src/
-│   ├── main.rs
-│   ├── config.rs
-│   ├── error.rs             (custom error handler)
-│   ├── routes/
-│   │   ├── mod.rs
-│   │   └── health.rs
-│   ├── handlers/
-│   │   └── mod.rs
-│   └── jobs/                (if jobs selected)
-│       ├── mod.rs
-│       └── example.rs
-├── templates/               (if templates selected)
-│   ├── base.html
-│   └── home.html
-├── emails/                  (if email selected)
-│   └── welcome.md
-└── static/                  (if templates selected)
-    └── .gitkeep
+```bash
+bash "<skill-dir>/scripts/scaffold.sh" "<project_dir>" "<project_name>"
 ```
 
-#### File Generation Rules
+This creates: directory structure, `src/config.rs`, `src/error.rs`, `src/routes/health.rs`, `migrations/app/001_initial.sql`, `.gitignore`, `.github/workflows/ci.yml`, `data/.gitkeep`.
 
-**`src/main.rs`** is the most critical file — it wires everything together. Build it by assembling blocks from `references/components.md` in this order:
+#### 4b: Run component scripts
 
-1. Module declarations and imports
-2. Config loading and tracing init
-3. Database connections and migrations
-4. Service registry creation
-5. Component initialization (one block per selected component)
-6. Router construction with middleware stack
-7. Background workers (if jobs/cron selected)
-8. Server start and `run!` macro
+For each selected component that has a script, run it:
 
-**Middleware layering order** matters (applied bottom-up, executed top-down). Always use this order for the layers that are present:
+| Component | Script |
+|-----------|--------|
+| Templates | `bash "<skill-dir>/scripts/init_templates.sh" "<project_dir>"` |
+| Jobs (or Cron) | `bash "<skill-dir>/scripts/init_jobs.sh" "<project_dir>"` |
+| Email | `bash "<skill-dir>/scripts/init_email.sh" "<project_dir>"` |
+
+#### 4c: Generate dynamic files
+
+These files depend on the selected components — generate each with `Write`. Read `references/components.md` for the exact code blocks to assemble.
+
+**Required dynamic files:**
+
+1. **`Cargo.toml`** — Set features based on selected components. See `references/files.md` for the template and feature mapping. Use `"full"` if all feature-gated components are selected.
+
+2. **`src/main.rs`** — Assemble from component blocks in `references/components.md`:
+   - Module declarations and imports
+   - Config loading and tracing init
+   - Database connections and migrations
+   - Service registry creation
+   - Component initialization (one block per selected component)
+   - Router construction with middleware stack
+   - Background workers (if jobs/cron selected)
+   - Server start and `run!` macro
+
+3. **`src/routes/mod.rs`** — Core health route plus any component routes (e.g., home route if templates selected).
+
+4. **`src/handlers/mod.rs`** — Module declarations for component handlers (e.g., `pub mod home;` if templates selected).
+
+5. **`config/development.yaml`** — Core config sections plus component config sections from `references/components.md`.
+
+6. **`config/production.yaml`** — Production variant of the config. Uses `${VAR}` (no defaults) for secrets.
+
+7. **`.env.example`** — Core entries plus component-specific entries from `references/components.md`.
+
+8. **`justfile`** — Base commands plus `services` / `services-down` targets if docker-compose is needed. See `references/files.md`.
+
+9. **`Dockerfile`** — Base template from `references/files.md`, plus conditional `COPY` lines:
+   - If templates: `COPY templates/ /app/templates/` and `COPY static/ /app/static/`
+   - If email: `COPY emails/ /app/emails/`
+
+10. **`docker-compose.yml`** (only if Email or Storage selected) — Assemble service blocks from `references/components.md`.
+
+11. **`src/tenant.rs`** (if Multi-tenancy selected) — Placeholder with `TenantResolver` trait docs.
+
+12. **`src/rbac.rs`** (if RBAC selected) — Placeholder with `RoleExtractor` trait docs.
+
+#### Middleware layering order
+
+Applied bottom-up, executed top-down. Only include layers for selected components:
 
 ```rust
 let app = routes::router(registry)
@@ -194,30 +195,6 @@ let app = routes::router(registry)
     // Rate limiting
     .layer(rate_limit_layer);
 ```
-
-Only include layers for selected components. If templates aren't selected, omit `TemplateContextLayer` and `static_service()`. If geolocation isn't selected, omit `GeoLayer`. And so on.
-
-**Config YAML** — include only sections for selected components. Always include: `server`, `database`, `tracing`, `cookie`, `session`, `rate_limit`, `trusted_proxies`, `cors`.
-
-**Cargo.toml features** — map selected components to modo feature flags:
-- Templates → `"templates"`
-- Auth → `"auth"`
-- Email → `"email"`
-- Storage → `"storage"`
-- SSE → `"sse"`
-- Webhooks → `"webhooks"`
-- DNS → `"dns"`
-- Geolocation → `"geolocation"`
-- Sentry → `"sentry"`
-- Jobs, Cron, Multi-tenancy, RBAC → no feature flag needed (always available)
-
-If ALL feature-gated components are selected, use `features = ["full"]` instead of listing them individually.
-
-**docker-compose.yml** — include services based on selections:
-- Email → Mailpit (SMTP + web UI)
-- Storage → RustFS (S3-compatible) + bucket init sidecar
-
-Only create docker-compose.yml if at least one docker service is needed.
 
 ### Step 5: Verify and Present
 

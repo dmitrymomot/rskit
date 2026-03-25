@@ -217,7 +217,7 @@ assert_eq!(users.len(), 1);
 ## TestSession
 
 Session infrastructure for integration tests. Creates an in-memory
-`modo_sessions` table, derives a signing key, and provides helpers for
+`sessions` table, derives a signing key, and provides helpers for
 authenticating test users.
 
 ### Construction
@@ -230,7 +230,7 @@ let session = TestSession::new(&db).await;
 ```
 
 Uses a test-suitable `CookieConfig` (insecure, lax same-site, 64-char secret).
-Creates the `modo_sessions` table automatically.
+Creates the `sessions` table automatically.
 
 **Custom config:**
 

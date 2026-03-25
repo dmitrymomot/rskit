@@ -12,7 +12,7 @@
 //!
 //! # Database schema
 //!
-//! The module reads and writes the `modo_jobs` table. End-applications own the
+//! The module reads and writes the `jobs` table. End-applications own the
 //! migration — no embedded migration is shipped by this module.
 //!
 //! # Shutdown

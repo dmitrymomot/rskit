@@ -1,40 +1,87 @@
 ---
-name: dev
-allowed-tools: Read, Grep, Glob
+name: modo-dev
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash, AskUserQuestion
 description: >
-    This skill should be used when the user asks to "build a modo app",
-    "add a handler", "create a route", "set up database", "configure sessions",
-    "add OAuth", "set up JWT auth", "hash passwords", "add TOTP", "create a
-    background job", "schedule a cron task", "add email sending", "configure S3
-    storage", "send webhooks", "verify DNS", "add geolocation", "set up
-    multi-tenancy", "add flash messages", "write tests", "configure middleware",
-    "add rate limiting", "set up CORS", "add CSRF protection", "set up SSE",
-    "add templates", "configure i18n", or is working with the modo Rust web
-    framework. Covers handlers, routing, middleware, database (raw sqlx),
-    sessions, auth (OAuth, JWT, password, TOTP, backup codes), RBAC, templates,
-    SSE, jobs, cron, email, storage, webhooks, DNS verification, geolocation,
-    multi-tenancy, flash messages, configuration, and testing.
+  Build features with the modo Rust web framework — handlers, routes, database
+  queries, middleware, auth, jobs, templates, and all other modo modules.
+  Use this skill whenever the user wants to add a feature, create an endpoint,
+  write a handler, add a route, hook up a module, set up database queries,
+  configure sessions, add OAuth, set up JWT auth, hash passwords, add TOTP,
+  create a background job, schedule a cron task, add email sending, configure S3
+  storage, send webhooks, verify DNS, add geolocation, set up multi-tenancy,
+  add flash messages, write tests, configure middleware, add rate limiting,
+  set up CORS, add CSRF protection, set up SSE, add templates, configure i18n,
+  or is working with the modo Rust web framework in any capacity. Even if the
+  user just says "add a new endpoint" or "create a handler" without mentioning
+  modo, use this skill if the project is a modo app.
 ---
 
-## Hard Rules
+## Workflow
 
-**Requirement-gathering gate.** Before writing any code, use AskUserQuestion to
-clarify what the user wants to build. Understand the specifics: field types,
-validation rules, which modules are involved, and how errors should surface.
-After gathering answers, describe the planned approach in plain language and wait
-for explicit approval. Never skip this step.
+Every feature follows this process. Do not skip steps.
 
-**Use built-in functionality first.** Prefer modo's built-in extractors,
-middleware, error types, and service patterns over manual implementations or
-third-party crates. Use `modo::Error` not custom error enums; use `Service<T>`
-for dependency injection; use `JsonRequest<T>` / `FormRequest<T>` / `Query<T>`
-for validated request bodies and query strings; use the session and auth
-middleware provided by modo. Only reach for external crates when no built-in
-equivalent exists, and call that choice out explicitly in the plan.
+### 1. Gather Requirements
 
-**Read before writing.** Consult the reference file for every module involved
-before writing code. The reference files contain exact API signatures, gotchas,
-and patterns that prevent common mistakes.
+Use `AskUserQuestion` to understand what the user wants to build. Clarify:
+
+- What the feature does (inputs, outputs, behavior)
+- Which modo modules are involved
+- Validation rules and error cases
+- How it fits with existing code
+
+Do not start writing code until you understand the full scope.
+
+### 2. Read References
+
+Before writing any code, read the reference files for every module involved. The topic index below maps tasks to reference files.
+
+Also read the existing source files you'll be modifying — understand current patterns, imports, and module structure before touching anything.
+
+### 3. Plan
+
+Describe what you'll do in plain language:
+
+- Files to create or modify
+- Handler function signatures
+- Routes and URL paths
+- Database queries needed
+- Middleware or extractor usage
+- Error cases and how they surface
+
+Wait for explicit user approval before proceeding to implementation.
+
+### 4. Implement
+
+Write the code following modo conventions:
+
+- Handlers are plain `async fn` — no macros, no signature rewriting
+- Routes use `axum::Router` directly — no auto-registration
+- Services wired via `Registry` and extracted with `Service<T>`
+- Database uses raw sqlx — no ORM
+- `modo::Error` for all errors, `?` for propagation
+- `mod.rs` files contain ONLY `mod` declarations and re-exports
+
+Use `Write` for new files, `Edit` for modifying existing files. Keep changes focused — only touch what's needed for the feature.
+
+### 5. Verify
+
+Run verification commands to confirm the code compiles and passes checks:
+
+```bash
+cargo check
+cargo clippy -- -D warnings
+cargo test
+```
+
+If working with feature-gated modules, include the feature flag:
+
+```bash
+cargo check --features <feature>
+cargo clippy --features <feature> --tests -- -D warnings
+cargo test --features <feature>
+```
+
+Fix any errors or warnings before marking the work complete.
 
 ## Architecture Overview
 
@@ -42,7 +89,7 @@ modo is a single Rust crate with zero proc macros. Everything is explicit:
 
 - **Handlers** are plain `async fn` satisfying axum's `Handler` trait.
 - **Routes** use `axum::Router` directly — no auto-registration or macros.
-- **Services** are wired in `main()` via `Registry` → `AppState` → `Service<T>` extraction.
+- **Services** are wired in `main()` via `Registry` -> `AppState` -> `Service<T>` extraction.
 - **Database** uses raw sqlx with `Pool`/`ReadPool`/`WritePool` newtypes and `Reader`/`Writer` traits.
 - **Middleware** is standard Tower layers applied via `.layer()` on the router.
 - **Config** loads from YAML files with `${VAR}` / `${VAR:default}` env var substitution.
@@ -65,9 +112,9 @@ Every modo app follows this structure in `main()`:
 7. **Run** — `modo::run!(server, worker, ...)` handles graceful shutdown via SIGINT/SIGTERM
 
 Middleware layer order (innermost to outermost, matching `.layer()` call order):
-`error_handler` → `catch_panic` → `tracing` → `request_id` → `compression` →
-`security_headers` → `cors` → `csrf` → session → `FlashLayer` →
-`ClientIpLayer` → `rate_limit`. Optional layers (`TemplateContextLayer`,
+`error_handler` -> `catch_panic` -> `tracing` -> `request_id` -> `compression` ->
+`security_headers` -> `cors` -> `csrf` -> session -> `FlashLayer` ->
+`ClientIpLayer` -> `rate_limit`. Optional layers (`TemplateContextLayer`,
 `GeoLayer`) slot in at their documented positions.
 
 ## Error Handling Patterns
@@ -134,14 +181,14 @@ then domain-specific files add the module details.
 
 | Workflow                                    | Reference files to read (in order)                                        |
 | ------------------------------------------- | ------------------------------------------------------------------------- |
-| Authenticated CRUD API                      | `conventions.md` → `database.md` → `handlers.md` → `auth.md`              |
-| Web form with validation                    | `conventions.md` → `handlers.md` → `templates.md`                         |
-| Background email on user action             | `handlers.md` → `jobs.md` → `email.md`                                    |
-| File upload with auth                       | `auth.md` → `storage.md` → `handlers.md`                                  |
-| Multi-tenant web app                        | `tenant.md` → `database.md` → `templates.md`                              |
-| JWT-protected API                           | `conventions.md` → `handlers.md` → `auth.md`                              |
-| SSE real-time updates                       | `conventions.md` → `handlers.md` → `sse.md`                               |
-| Full-stack feature (DB → API → job → email) | `conventions.md` → `database.md` → `handlers.md` → `jobs.md` → `email.md` |
+| Authenticated CRUD API                      | `conventions.md` -> `database.md` -> `handlers.md` -> `auth.md`          |
+| Web form with validation                    | `conventions.md` -> `handlers.md` -> `templates.md`                       |
+| Background email on user action             | `handlers.md` -> `jobs.md` -> `email.md`                                  |
+| File upload with auth                       | `auth.md` -> `storage.md` -> `handlers.md`                                |
+| Multi-tenant web app                        | `tenant.md` -> `database.md` -> `templates.md`                            |
+| JWT-protected API                           | `conventions.md` -> `handlers.md` -> `auth.md`                            |
+| SSE real-time updates                       | `conventions.md` -> `handlers.md` -> `sse.md`                             |
+| Full-stack feature (DB -> API -> job -> email) | `conventions.md` -> `database.md` -> `handlers.md` -> `jobs.md` -> `email.md` |
 
 ## Relationship to CLAUDE.md
 

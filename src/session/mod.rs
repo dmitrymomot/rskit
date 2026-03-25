@@ -1,6 +1,6 @@
 //! Database-backed HTTP session management.
 //!
-//! Sessions are stored in a SQLite table (`modo_sessions`) and identified by a
+//! Sessions are stored in a SQLite table (`sessions`) and identified by a
 //! signed, opaque cookie. The middleware handles the full request/response
 //! lifecycle: reading the session token from the cookie on the request path,
 //! loading and fingerprint-validating the session, running the handler, and

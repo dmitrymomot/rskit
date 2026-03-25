@@ -9,7 +9,7 @@ use modo::job::{self, Enqueuer, JobOptions, Payload, Worker};
 use modo::service::Registry;
 
 const CREATE_TABLE: &str = "
-CREATE TABLE modo_jobs (
+CREATE TABLE jobs (
     id            TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
     queue         TEXT NOT NULL DEFAULT 'default',
@@ -27,8 +27,8 @@ CREATE TABLE modo_jobs (
 )";
 
 const CREATE_INDEX: &str = "
-CREATE UNIQUE INDEX idx_modo_jobs_payload_hash
-    ON modo_jobs(payload_hash)
+CREATE UNIQUE INDEX idx_jobs_payload_hash
+    ON jobs(payload_hash)
     WHERE payload_hash IS NOT NULL AND status IN ('pending', 'running')";
 
 async fn setup() -> (Registry, db::Pool) {
@@ -99,7 +99,7 @@ async fn worker_processes_enqueued_job() {
 
     assert_eq!(counter.load(Ordering::SeqCst), 1);
 
-    let (status,): (String,) = sqlx::query_as("SELECT status FROM modo_jobs LIMIT 1")
+    let (status,): (String,) = sqlx::query_as("SELECT status FROM jobs LIMIT 1")
         .fetch_one(&*pool)
         .await
         .unwrap();
@@ -135,7 +135,7 @@ async fn worker_retries_failed_job() {
     modo::runtime::Task::shutdown(worker).await.unwrap();
 
     let (status, attempt): (String, i32) =
-        sqlx::query_as("SELECT status, attempt FROM modo_jobs LIMIT 1")
+        sqlx::query_as("SELECT status, attempt FROM jobs LIMIT 1")
             .fetch_one(&*pool)
             .await
             .unwrap();
@@ -166,7 +166,7 @@ async fn worker_ignores_unregistered_job_names() {
 
     // The job should remain pending because the worker only claims jobs
     // whose names match registered handlers (via the IN clause).
-    let (status,): (String,) = sqlx::query_as("SELECT status FROM modo_jobs LIMIT 1")
+    let (status,): (String,) = sqlx::query_as("SELECT status FROM jobs LIMIT 1")
         .fetch_one(&*pool)
         .await
         .unwrap();
@@ -211,7 +211,7 @@ async fn reaper_resets_stale_running_jobs() {
 
     let stale_time = (Utc::now() - chrono::Duration::minutes(2)).to_rfc3339();
     sqlx::query(
-        "UPDATE modo_jobs SET status = 'running', attempt = 1, started_at = ? WHERE id = ?",
+        "UPDATE jobs SET status = 'running', attempt = 1, started_at = ? WHERE id = ?",
     )
     .bind(&stale_time)
     .bind(&id)
@@ -250,7 +250,7 @@ async fn reaper_resets_stale_running_jobs() {
     // and the worker should have picked it up and completed it
     assert!(counter.load(Ordering::SeqCst) >= 1);
 
-    let (status,): (String,) = sqlx::query_as("SELECT status FROM modo_jobs WHERE id = ?")
+    let (status,): (String,) = sqlx::query_as("SELECT status FROM jobs WHERE id = ?")
         .bind(&id)
         .fetch_one(&*pool)
         .await
@@ -270,7 +270,7 @@ async fn cleanup_removes_old_terminal_jobs() {
         .unwrap();
 
     let old_time = (Utc::now() - chrono::Duration::minutes(2)).to_rfc3339();
-    sqlx::query("UPDATE modo_jobs SET status = 'completed', updated_at = ?")
+    sqlx::query("UPDATE jobs SET status = 'completed', updated_at = ?")
         .bind(&old_time)
         .execute(&*pool)
         .await
@@ -311,7 +311,7 @@ async fn cleanup_removes_old_terminal_jobs() {
 
     modo::runtime::Task::shutdown(worker).await.unwrap();
 
-    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM modo_jobs")
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM jobs")
         .fetch_one(&*pool)
         .await
         .unwrap();

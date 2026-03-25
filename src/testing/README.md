@@ -105,7 +105,7 @@ async fn test_session() {
 | `TestDb`             | In-memory SQLite database with chainable setup helpers                  |
 | `TestRequestBuilder` | Fluent builder for a single in-process HTTP request                     |
 | `TestResponse`       | Captured response with status, header, and body accessors               |
-| `TestSession`        | Session infrastructure: creates `modo_sessions` table and signs cookies |
+| `TestSession`        | Session infrastructure: creates `sessions` table and signs cookies |
 
 ## Feature flag
 

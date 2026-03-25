@@ -4,7 +4,7 @@ use modo::job::{EnqueueOptions, EnqueueResult, Enqueuer};
 use serde::Serialize;
 
 const CREATE_TABLE: &str = "
-CREATE TABLE modo_jobs (
+CREATE TABLE jobs (
     id            TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
     queue         TEXT NOT NULL DEFAULT 'default',
@@ -22,8 +22,8 @@ CREATE TABLE modo_jobs (
 )";
 
 const CREATE_INDEX: &str = "
-CREATE UNIQUE INDEX idx_modo_jobs_payload_hash
-    ON modo_jobs(payload_hash)
+CREATE UNIQUE INDEX idx_jobs_payload_hash
+    ON jobs(payload_hash)
     WHERE payload_hash IS NOT NULL AND status IN ('pending', 'running')";
 
 async fn setup() -> (Enqueuer, db::Pool) {
@@ -58,7 +58,7 @@ async fn enqueue_inserts_pending_job() {
         .unwrap();
 
     let row: (String, String, String, i64) =
-        sqlx::query_as("SELECT name, queue, status, attempt FROM modo_jobs WHERE id = ?")
+        sqlx::query_as("SELECT name, queue, status, attempt FROM jobs WHERE id = ?")
             .bind(&id)
             .fetch_one(&*pool)
             .await
@@ -85,7 +85,7 @@ async fn enqueue_at_sets_future_run_at() {
         .await
         .unwrap();
 
-    let (run_at_str,): (String,) = sqlx::query_as("SELECT run_at FROM modo_jobs WHERE id = ?")
+    let (run_at_str,): (String,) = sqlx::query_as("SELECT run_at FROM jobs WHERE id = ?")
         .bind(&id)
         .fetch_one(&*pool)
         .await
@@ -112,7 +112,7 @@ async fn enqueue_with_custom_queue() {
         .await
         .unwrap();
 
-    let (queue,): (String,) = sqlx::query_as("SELECT queue FROM modo_jobs WHERE id = ?")
+    let (queue,): (String,) = sqlx::query_as("SELECT queue FROM jobs WHERE id = ?")
         .bind(&id)
         .fetch_one(&*pool)
         .await
@@ -203,7 +203,7 @@ async fn enqueue_unique_with_custom_queue() {
 
     assert!(matches!(result, EnqueueResult::Created(_)));
 
-    let (queue,): (String,) = sqlx::query_as("SELECT queue FROM modo_jobs LIMIT 1")
+    let (queue,): (String,) = sqlx::query_as("SELECT queue FROM jobs LIMIT 1")
         .bind(match &result {
             EnqueueResult::Created(id) => id,
             _ => unreachable!(),
