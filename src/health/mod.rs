@@ -10,17 +10,19 @@
 //!
 //! ```ignore
 //! use modo::health::HealthChecks;
+//! use modo::service::Registry;
 //!
 //! let checks = HealthChecks::new()
 //!     .check("read_pool", read_pool.clone())
 //!     .check("write_pool", write_pool.clone())
 //!     .check_fn("redis", || async { Ok(()) });
 //!
+//! let mut registry = Registry::new();
 //! registry.add(checks);
 //!
 //! let app = axum::Router::new()
 //!     .merge(modo::health::router())
-//!     .with_state(state);
+//!     .with_state(registry.into_state());
 //! ```
 
 mod check;

@@ -77,6 +77,7 @@ impl HealthChecks {
     }
 }
 
+/// Returns an empty [`HealthChecks`] collection.
 impl Default for HealthChecks {
     fn default() -> Self {
         Self::new()
@@ -85,6 +86,7 @@ impl Default for HealthChecks {
 
 use crate::db;
 
+/// Checks pool health by attempting to acquire a connection.
 impl HealthCheck for db::Pool {
     fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async {
@@ -96,6 +98,7 @@ impl HealthCheck for db::Pool {
     }
 }
 
+/// Checks read pool health by attempting to acquire a connection.
 impl HealthCheck for db::ReadPool {
     fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async {
@@ -107,6 +110,7 @@ impl HealthCheck for db::ReadPool {
     }
 }
 
+/// Checks write pool health by attempting to acquire a connection.
 impl HealthCheck for db::WritePool {
     fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async {
