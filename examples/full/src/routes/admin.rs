@@ -1,5 +1,5 @@
-use modo::axum::routing::get;
 use modo::axum::Router;
+use modo::axum::routing::get;
 use modo::rbac;
 
 use crate::handlers;

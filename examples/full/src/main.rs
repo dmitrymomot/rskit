@@ -1,4 +1,5 @@
 use modo::Result;
+use modo::axum::response::IntoResponse;
 use tokio_util::sync::CancellationToken;
 
 mod config;
@@ -19,7 +20,7 @@ async fn main() -> Result<()> {
     let (read_pool, write_pool) = modo::db::connect_rw(&config.modo.database).await?;
     modo::db::migrate("migrations/app", &write_pool).await?;
 
-    // Job DB — separate single pool (configured under job.database)
+    // Job DB — separate single pool
     let job_db_config = config
         .modo
         .job
@@ -35,7 +36,10 @@ async fn main() -> Result<()> {
     registry.add(read_pool.clone());
     registry.add(write_pool.clone());
 
-    // Cookie signing key (required by session + flash)
+    // Register job pool for health checks (distinct type from ReadPool/WritePool)
+    registry.add(job_pool.clone());
+
+    // Cookie signing key (required by session, flash, csrf)
     let cookie_config = config
         .modo
         .cookie
@@ -53,7 +57,7 @@ async fn main() -> Result<()> {
         .build()?;
     registry.add(engine.clone());
 
-    // Storage (config from modo::Config)
+    // Storage
     let storage = modo::Storage::new(&config.modo.storage)?;
     registry.add(storage);
 
@@ -65,11 +69,11 @@ async fn main() -> Result<()> {
     let webhook_sender = modo::WebhookSender::default_client();
     registry.add(webhook_sender);
 
-    // DNS verification (config from modo::Config)
+    // DNS verification
     let domain_verifier = modo::DomainVerifier::from_config(&config.modo.dns)?;
     registry.add(domain_verifier);
 
-    // JWT (config from modo::Config)
+    // JWT
     let jwt_encoder = modo::JwtEncoder::from_config(&config.modo.jwt);
     let jwt_decoder = modo::JwtDecoder::from_config(&config.modo.jwt);
     registry.add(jwt_encoder);
@@ -90,18 +94,25 @@ async fn main() -> Result<()> {
     let job_enqueuer = modo::job::Enqueuer::new(&job_pool);
     registry.add(job_enqueuer);
 
-    // --- Cancellation token (for rate limiter cleanup) ---
-
-    let cancel = CancellationToken::new();
-
     // --- Rate limiter ---
 
+    let cancel = CancellationToken::new();
     let rate_limit_layer = modo::middleware::rate_limit(&config.modo.rate_limit, cancel.clone());
 
-    // --- Router ---
+    // --- Router + middleware stack ---
 
     let app = routes::router(registry)
         .merge(engine.static_service())
+        .layer(modo::middleware::error_handler(handle_error))
+        .layer(modo::middleware::catch_panic())
+        .layer(modo::middleware::tracing())
+        .layer(modo::middleware::request_id())
+        .layer(modo::middleware::compression())
+        .layer(modo::middleware::security_headers(
+            &config.modo.security_headers,
+        ))
+        .layer(modo::middleware::cors(&config.modo.cors))
+        .layer(modo::middleware::csrf(&config.modo.csrf, &cookie_key))
         .layer(modo::TemplateContextLayer::new(engine))
         .layer(modo::session::layer(
             session_store,
@@ -115,7 +126,6 @@ async fn main() -> Result<()> {
 
     // --- Background workers ---
 
-    // Job worker needs its own registry with the job DB's WritePool
     let mut job_registry = modo::service::Registry::new();
     job_registry.add(modo::db::WritePool::new((*job_pool).clone()));
     job_registry.add(read_pool.clone());
@@ -125,7 +135,6 @@ async fn main() -> Result<()> {
         .start()
         .await;
 
-    // Cron scheduler
     let scheduler = modo::cron::Scheduler::builder(&job_registry)
         .job("@hourly", jobs::example::scheduled)
         .start()
@@ -147,4 +156,11 @@ async fn main() -> Result<()> {
         managed_jobs
     )
     .await
+}
+
+async fn handle_error(
+    err: modo::Error,
+    _parts: modo::axum::http::request::Parts,
+) -> modo::axum::response::Response {
+    err.into_response()
 }

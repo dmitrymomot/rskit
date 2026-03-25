@@ -9,13 +9,16 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /app/target/release/maximal /app/maximal
+RUN mkdir -p /app/data
+
+COPY --from=builder /app/target/release/app /app/app
 COPY config/ /app/config/
 COPY templates/ /app/templates/
+COPY static/ /app/static/
 COPY emails/ /app/emails/
 COPY migrations/ /app/migrations/
 
 ENV APP_ENV=production
 EXPOSE 8080
 
-CMD ["/app/maximal"]
+CMD ["/app/app"]

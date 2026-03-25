@@ -26,6 +26,3 @@ services:
 
 services-down:
     docker compose down
-
-migrate:
-    cargo run -- migrate
