@@ -72,8 +72,9 @@ systemctl enable caddy
 
 echo "==> Installing Litestream..."
 if ! command -v litestream &>/dev/null; then
-    LITESTREAM_VERSION=0.3.13
-    curl -fsSL "https://github.com/benbjohnson/litestream/releases/download/v${LITESTREAM_VERSION}/litestream-v${LITESTREAM_VERSION}-linux-amd64.deb" \
+    LITESTREAM_VERSION=0.3.13  # Check https://github.com/benbjohnson/litestream/releases for latest
+    ARCH=$(dpkg --print-architecture)  # amd64 or arm64
+    curl -fsSL "https://github.com/benbjohnson/litestream/releases/download/v${LITESTREAM_VERSION}/litestream-v${LITESTREAM_VERSION}-linux-${ARCH}.deb" \
         -o /tmp/litestream.deb
     dpkg -i /tmp/litestream.deb && rm /tmp/litestream.deb
 fi
@@ -96,9 +97,12 @@ echo "  3. Create /etc/caddy/.env (if using DNS challenge):"
 echo "     systemctl edit caddy → add EnvironmentFile=/etc/caddy/.env"
 echo "  4. Create /etc/litestream/.env with S3 credentials:"
 echo "     systemctl edit litestream → add EnvironmentFile=/etc/litestream/.env"
-echo "  5. Create /data/<app>/.env.production per app"
-echo "  6. Login to GHCR: su - deploy -c 'docker login ghcr.io'"
-echo "  7. Deploy: docker stack deploy -c stack.yml <app>"
+echo "  5. Create per-app data directory:"
+echo "     mkdir -p /data/<app> && chown deploy:deploy /data/<app>"
+echo "  6. Copy .env.production to /data/<app>/.env.production"
+echo "  7. Login to GHCR: su - deploy -c 'docker login ghcr.io'"
+echo "     (Create a GitHub PAT with read:packages scope at github.com/settings/tokens)"
+echo "  8. Deploy: docker stack deploy -c stack.yml <app>"
 BASH
 
 chmod +x "$PROJECT_DIR/deploy/bootstrap.sh"

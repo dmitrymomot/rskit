@@ -40,11 +40,34 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Configure SSH known hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+
       - name: Deploy to VPS
         run: |
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > /tmp/deploy_key
-          chmod 600 /tmp/deploy_key
-          ssh -o StrictHostKeyChecking=no -i /tmp/deploy_key deploy@${{ secrets.VPS_HOST }} \
-            "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }} && \
-             docker service update --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }} ${{ secrets.SWARM_SERVICE }}"
-          rm /tmp/deploy_key
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}"
+          ssh deploy@${{ secrets.VPS_HOST }} "docker pull ${IMAGE} && docker service update --image ${IMAGE} ${{ secrets.SWARM_SERVICE }}"
+
+      - name: Verify deployment
+        run: |
+          for i in $(seq 1 30); do
+            STATUS=$(ssh deploy@${{ secrets.VPS_HOST }} \
+              "docker service inspect --format '{{.UpdateStatus.State}}' ${{ secrets.SWARM_SERVICE }} 2>/dev/null || echo 'new'")
+            if [ "$STATUS" = "completed" ] || [ "$STATUS" = "new" ]; then
+              echo "Deploy successful (status: $STATUS)"
+              exit 0
+            elif [ "$STATUS" = "rollback_completed" ]; then
+              echo "ERROR: Service rolled back! Check logs: ssh deploy@${{ secrets.VPS_HOST }} docker service logs ${{ secrets.SWARM_SERVICE }}"
+              exit 1
+            fi
+            echo "Waiting for convergence... (attempt $i/30, status: $STATUS)"
+            sleep 10
+          done
+          echo "ERROR: Deploy did not converge within 5 minutes"
+          exit 1

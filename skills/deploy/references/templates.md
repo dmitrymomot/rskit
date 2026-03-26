@@ -1,6 +1,24 @@
 # Deploy Templates Reference
 
-Templates for generating deployment files. Placeholders use `{{name}}` syntax — the skill replaces them with user-provided values via `Write`.
+Templates for generating deployment files. Placeholders use `{{name}}` syntax — the skill replaces them with user-provided values via `Write`. Lines marked `# CONDITIONAL` are only included if the corresponding directory exists in the project.
+
+## .dockerignore
+
+```
+.git
+target
+*.db
+*.db-*
+.env*
+deploy/
+docs/
+tests/
+.github/
+```
+
+**Assembly rules:**
+- Write to `.dockerignore` in the project root
+- No dynamic replacements needed
 
 ## Dockerfile
 
@@ -29,14 +47,14 @@ RUN mkdir -p /app/data && chown app:app /app/data
 
 COPY --from=builder /app/target/release/{{crate_name}} /app/server
 COPY config/ /app/config/
+# CONDITIONAL: include only if migrations/ directory exists
 COPY migrations/ /app/migrations/
-{{#if has_templates}}
+# CONDITIONAL: include only if templates/ directory exists
 COPY templates/ /app/templates/
+# CONDITIONAL: include only if assets/static/ directory exists
 COPY assets/static/ /app/assets/static/
-{{/if}}
-{{#if has_emails}}
+# CONDITIONAL: include only if emails/ directory exists
 COPY emails/ /app/emails/
-{{/if}}
 
 USER app
 
@@ -48,9 +66,11 @@ CMD ["/app/server"]
 
 **Assembly rules:**
 - Read `Cargo.toml` to find the crate/binary name for `{{crate_name}}`
-- Check if `templates/` directory exists → include templates COPY lines
-- Check if `assets/static/` directory exists → include static COPY line (same condition as templates)
-- Check if `emails/` directory exists → include emails COPY line
+- Check if `migrations/` directory exists → include the `COPY migrations/` line below its CONDITIONAL comment
+- Check if `templates/` directory exists → include the `COPY templates/` line below its CONDITIONAL comment
+- Check if `assets/static/` directory exists → include the `COPY assets/static/` line below its CONDITIONAL comment
+- Check if `emails/` directory exists → include the `COPY emails/` line below its CONDITIONAL comment
+- Remove all `# CONDITIONAL` comments and their corresponding `COPY` lines for directories that don't exist
 - Replace `{{port}}` with the user's chosen port (default `8080`)
 
 ## stack.yml
@@ -78,6 +98,11 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 ```
 
 ## deploy.yml (GitHub Actions)
@@ -95,6 +120,7 @@ No dynamic replacement needed — the workflow uses GitHub secrets and env vars 
 
 **GitHub secrets to document:**
 - `VPS_HOST` — server IP or hostname
+- `VPS_KNOWN_HOSTS` — output of `ssh-keyscan <VPS_HOST>` (for SSH host verification)
 - `DEPLOY_SSH_KEY` — SSH private key for the `deploy` user
 - `SWARM_SERVICE` — Swarm service name (`<stack>_app`, e.g., `myapp_app`)
 
@@ -110,8 +136,8 @@ APP_ENV=production
 PORT={{port}}
 
 # Database (paths relative to /app/data inside container)
-DATABASE_PATH=data/{{app_name}}.db
-JOB_DATABASE_PATH=data/{{app_name}}_jobs.db
+DATABASE_PATH=data/app.db
+JOB_DATABASE_PATH=data/jobs.db
 
 # Cookie signing (min 64 chars — generate with: openssl rand -hex 32)
 COOKIE_SECRET=
@@ -253,20 +279,26 @@ access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
 secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
 
 dbs:
-{{#each db_files}}
-  - path: /data/{{../app_name}}/{{this}}
+  - path: /data/{{app_name}}/app.db
     replicas:
       - type: s3
-        bucket: {{../s3_bucket}}
-        path: {{../app_name}}/{{this}}
-        endpoint: {{../s3_endpoint}}
-{{/each}}
+        bucket: {{s3_bucket}}
+        path: {{app_name}}/app.db
+        endpoint: {{s3_endpoint}}
+  # CONDITIONAL: include only if project has job config
+  - path: /data/{{app_name}}/jobs.db
+    replicas:
+      - type: s3
+        bucket: {{s3_bucket}}
+        path: {{app_name}}/jobs.db
+        endpoint: {{s3_endpoint}}
 ```
 
 **Assembly rules:**
-- Default `db_files`: `["app.db", "jobs.db"]` (if project has job config), or `["app.db"]`
+- Always include the `app.db` entry
+- Include the `jobs.db` entry only if the project has job config (check `config/production.yaml` for `job:`)
+- Remove the `# CONDITIONAL` comment and its corresponding `- path:` block if jobs are not used
 - Replace `{{app_name}}`, `{{s3_bucket}}`, `{{s3_endpoint}}` with user values
-- Expand `{{#each db_files}}` into one `- path:` block per DB file
 
 ## litestream .env
 
@@ -278,4 +310,15 @@ dbs:
 
 LITESTREAM_ACCESS_KEY_ID=
 LITESTREAM_SECRET_ACCESS_KEY=
+```
+
+## caddy .env (for wildcard/DNS challenge)
+
+```bash
+# Place at /etc/caddy/.env on VPS
+# Then: systemctl edit caddy
+# Add: [Service]
+#      EnvironmentFile=/etc/caddy/.env
+
+CLOUDFLARE_API_TOKEN=
 ```

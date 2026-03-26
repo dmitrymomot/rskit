@@ -83,6 +83,7 @@ Before generating files, detect what the project has:
 grep -m1 '^name' Cargo.toml | sed 's/.*= *"//;s/"//'
 
 # Check for existing directories
+test -d migrations && echo "HAS_MIGRATIONS=true" || echo "HAS_MIGRATIONS=false"
 test -d templates && echo "HAS_TEMPLATES=true" || echo "HAS_TEMPLATES=false"
 test -d emails && echo "HAS_EMAILS=true" || echo "HAS_EMAILS=false"
 test -d assets/static && echo "HAS_STATIC=true" || echo "HAS_STATIC=false"
@@ -111,16 +112,25 @@ bash "<skill-dir>/scripts/scaffold-deploy.sh" "<project_dir>"
 
 This creates `deploy/bootstrap.sh`.
 
-#### 4b: Generate Dockerfile
+#### 4b: Generate .dockerignore
+
+Read the .dockerignore template from `references/templates.md`. Write to `.dockerignore` in the project root. No dynamic replacement needed.
+
+#### 4c: Generate Dockerfile
 
 Read the Dockerfile template from `references/templates.md`. Replace:
 - `{{crate_name}}` → detected crate name
 - `{{port}}` → user's chosen port
-- Include/exclude conditional `COPY` lines based on detected directories
+- Include/exclude conditional `COPY` lines based on detected directories:
+  - Include `COPY migrations/` only if `HAS_MIGRATIONS=true`
+  - Include `COPY templates/` only if `HAS_TEMPLATES=true`
+  - Include `COPY assets/static/` only if `HAS_STATIC=true`
+  - Include `COPY emails/` only if `HAS_EMAILS=true`
+- Remove any `# CONDITIONAL` comments and their `COPY` lines for directories that don't exist
 
 Write to `Dockerfile` in the project root.
 
-#### 4c: Generate stack.yml
+#### 4d: Generate stack.yml
 
 Read the stack.yml template. Replace:
 - `{{image}}` → `ghcr.io/<github-owner>/<repo-name>` (detect from `git remote get-url origin`)
@@ -129,7 +139,7 @@ Read the stack.yml template. Replace:
 
 Write to `stack.yml` in the project root.
 
-#### 4d: Copy deploy.yml workflow
+#### 4e: Copy deploy.yml workflow
 
 Copy the static workflow file — no dynamic replacement needed:
 
@@ -138,7 +148,7 @@ mkdir -p .github/workflows
 cp "<skill-dir>/scripts/deploy-workflow.yml" ".github/workflows/deploy.yml"
 ```
 
-#### 4e: Generate .env.production.example
+#### 4f: Generate .env.production.example
 
 Read the template. Replace:
 - `{{app_name}}` → user's app name
@@ -147,7 +157,7 @@ Read the template. Replace:
 
 Write to `.env.production.example` in the project root.
 
-#### 4f: Generate Caddyfile.example
+#### 4g: Generate Caddyfile.example
 
 Based on the TLS pattern chosen in Step 1, select the appropriate Caddyfile template from `references/templates.md`:
 - "Single domain" → Caddyfile — Single Domain
@@ -159,15 +169,35 @@ Replace `{{domain}}` and `{{port}}`.
 
 Write to `deploy/Caddyfile.example`.
 
-#### 4g: Generate litestream.yml.example
+#### 4h: Generate litestream.yml.example
 
-Read the template. Build the DB file list:
-- Always include `{{app_name}}.db`
-- If `HAS_JOBS=true`, also include `{{app_name}}_jobs.db`
+Read the template. Build the DB entries:
+- Always include the `app.db` entry
+- If `HAS_JOBS=true`, also include the `jobs.db` entry
+- Remove the `# CONDITIONAL` comment and its `- path:` block if jobs are not used
 
-Replace `{{app_name}}`, `{{s3_endpoint}}`, `{{s3_bucket}}`, and expand the DB entries.
+Replace `{{app_name}}`, `{{s3_endpoint}}`, `{{s3_bucket}}`.
 
 Write to `deploy/litestream.yml.example`.
+
+#### 4i: Generate litestream.env.example
+
+Read the litestream .env template from `references/templates.md`. Write to `deploy/litestream.env.example`. No dynamic replacement needed.
+
+#### 4j: Generate caddy.env.example (conditional)
+
+Only if the TLS pattern is "Wildcard subdomains" or "Wildcard + custom domains":
+Read the caddy .env template from `references/templates.md`. Write to `deploy/caddy.env.example`. No dynamic replacement needed.
+
+#### 4k: Update .gitignore
+
+Append the following entries to `.gitignore` if not already present:
+
+```
+# Deployment secrets
+.env.production
+deploy/*.env
+```
 
 ### Step 5: Present Results
 
@@ -176,24 +206,37 @@ List every file created with a brief description, then show:
 ```
 Files generated:
 
+  .dockerignore                   — Docker build context exclusions
   Dockerfile                      — Multi-stage Rust build (cached deps, non-root user)
-  stack.yml                       — Docker Swarm stack (zero-downtime, auto-rollback)
+  stack.yml                       — Docker Swarm stack (zero-downtime, auto-rollback, log rotation)
   .env.production.example         — Production env vars template
   .github/workflows/deploy.yml    — CI/CD: tag push → build → push to GHCR → SSH deploy
   deploy/bootstrap.sh             — VPS setup: Docker, Caddy, Litestream, firewall
   deploy/Caddyfile.example        — Caddy reverse proxy config
   deploy/litestream.yml.example   — SQLite backup to S3
+  deploy/litestream.env.example   — Litestream S3 credentials template
+  deploy/caddy.env.example        — Caddy env vars (if wildcard TLS)  [conditional]
 
 Deployment workflow:
-  1. Set up VPS:     scp deploy/bootstrap.sh root@<vps>: && ssh root@<vps> bash bootstrap.sh
-  2. Configure VPS:  Copy deploy/*.example files to VPS, fill in values
-  3. First deploy:   git tag v0.1.0 && git push --tags
-  4. Rollback:       ssh deploy@<vps> docker service update --image ghcr.io/<owner>/<repo>:<prev-tag> <stack>_app
+
+  First deploy (one-time, on VPS):
+    1. Set up VPS:      scp deploy/bootstrap.sh root@<vps>: && ssh root@<vps> bash bootstrap.sh
+    2. Configure VPS:   Copy deploy/*.example files to VPS, fill in values
+    3. Create app dir:  ssh root@<vps> "mkdir -p /data/<app> && chown deploy:deploy /data/<app>"
+    4. Copy stack.yml:  scp stack.yml deploy@<vps>:/data/<app>/stack.yml
+    5. Initial deploy:  ssh deploy@<vps> "docker stack deploy -c /data/<app>/stack.yml <app>"
+
+  Subsequent deploys (automatic via CI):
+    git tag v0.1.0 && git push --tags
+
+  Rollback:
+    ssh deploy@<vps> docker service update --image ghcr.io/<owner>/<repo>:<prev-tag> <app>_app
 
 GitHub secrets to set:
-  - VPS_HOST        — Server IP or hostname
-  - DEPLOY_SSH_KEY  — SSH private key for deploy user
-  - SWARM_SERVICE   — Swarm service name (e.g., <app_name>_app)
+  - VPS_HOST         — Server IP or hostname
+  - VPS_KNOWN_HOSTS  — Output of: ssh-keyscan <VPS_HOST>
+  - DEPLOY_SSH_KEY   — SSH private key for deploy user
+  - SWARM_SERVICE    — Swarm service name (e.g., <app_name>_app)
 ```
 
 If the TLS pattern is "Wildcard subdomains" or "Wildcard + custom domains", also mention:
@@ -214,5 +257,5 @@ Caddy will call GET /api/domains/verify?domain=<domain> — return 200 for valid
 
 ## References
 
-- `references/templates.md` — All file templates (Dockerfile, stack.yml, deploy.yml, Caddyfile, litestream.yml)
+- `references/templates.md` — All file templates (.dockerignore, Dockerfile, stack.yml, deploy.yml, Caddyfile, litestream.yml, env examples)
 - Design spec: `docs/superpowers/specs/2026-03-26-vps-deployment-design.md`
