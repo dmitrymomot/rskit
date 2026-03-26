@@ -2,6 +2,27 @@
 
 Production-ready deployment infrastructure for modo-based micro-SaaS apps on a single VPS. No PaaS. Zero-downtime deploys. Survives reboots.
 
+## Delivery Format
+
+This design is delivered as a **modo plugin skill** at `./skills/deploy/`. When invoked, the skill:
+
+1. **Scaffolds deployment files into the project repo:**
+   - `Dockerfile` (multi-stage Rust build, dep caching, non-root user)
+   - `stack.yml` (Swarm stack with zero-downtime config)
+   - `.github/workflows/deploy.yml` (tag-triggered CI/CD)
+   - `.env.production.example` (template for VPS env vars)
+
+2. **Scaffolds VPS infrastructure scripts** (placed in `deploy/` directory in the project):
+   - `deploy/bootstrap.sh` (VPS initial setup — Docker, Caddy, Litestream, firewall, deploy user)
+   - `deploy/Caddyfile.example` (template with the appropriate TLS pattern)
+   - `deploy/litestream.yml.example` (template for DB replication config)
+
+3. **Guides VPS configuration interactively:**
+   - Asks which TLS pattern (single domain, wildcard, on-demand)
+   - Asks for domain name(s), port allocation
+   - Asks for S3 backup endpoint details
+   - Generates all files with the correct values filled in
+
 ## Architecture Overview
 
 ```
