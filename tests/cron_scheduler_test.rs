@@ -26,6 +26,7 @@ async fn scheduler_runs_job_on_interval() {
 
     let scheduler = Scheduler::builder(&registry)
         .job("@every 1s", counting_job)
+        .unwrap()
         .start()
         .await;
 
@@ -44,6 +45,7 @@ async fn scheduler_shutdown_is_clean() {
 
     let scheduler = Scheduler::builder(&registry)
         .job("@every 1s", counting_job)
+        .unwrap()
         .start()
         .await;
 
@@ -68,6 +70,7 @@ async fn scheduler_skips_overlapping_runs() {
             o.timeout_secs = 30;
             o
         })
+        .unwrap()
         .start()
         .await;
 
@@ -91,6 +94,7 @@ async fn scheduler_timeout_cancels_job() {
             o.timeout_secs = 1;
             o
         })
+        .unwrap()
         .start()
         .await;
 

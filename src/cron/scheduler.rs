@@ -56,8 +56,8 @@ impl SchedulerBuilder {
     /// The `schedule` string can be a standard cron expression, a named alias
     /// (`@daily`, `@hourly`, etc.), or an interval (`@every 5m`).
     ///
-    /// Panics at call time if the schedule string is invalid.
-    pub fn job<H, Args>(self, schedule: &str, handler: H) -> Self
+    /// Returns an error if the schedule string is invalid.
+    pub fn job<H, Args>(self, schedule: &str, handler: H) -> Result<Self>
     where
         H: CronHandler<Args> + Send + Sync,
     {
@@ -66,13 +66,18 @@ impl SchedulerBuilder {
 
     /// Register a cron job with custom [`CronOptions`].
     ///
-    /// Panics at call time if the schedule string is invalid.
-    pub fn job_with<H, Args>(mut self, schedule: &str, handler: H, options: CronOptions) -> Self
+    /// Returns an error if the schedule string is invalid.
+    pub fn job_with<H, Args>(
+        mut self,
+        schedule: &str,
+        handler: H,
+        options: CronOptions,
+    ) -> Result<Self>
     where
         H: CronHandler<Args> + Send + Sync,
     {
         let name = std::any::type_name::<H>().to_string();
-        let parsed = Schedule::parse(schedule);
+        let parsed = Schedule::parse(schedule)?;
 
         let erased: ErasedCronHandler = Arc::new(
             move |ctx: CronContext| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
@@ -87,7 +92,7 @@ impl SchedulerBuilder {
             handler: erased,
             timeout_secs: options.timeout_secs,
         });
-        self
+        Ok(self)
     }
 
     /// Start all registered cron jobs and return a [`Scheduler`] handle.

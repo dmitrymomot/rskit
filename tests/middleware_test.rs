@@ -339,7 +339,7 @@ async fn test_security_headers_defaults() {
     let config = modo::middleware::SecurityHeadersConfig::default();
     let app = Router::new()
         .route("/", get(handler))
-        .layer(modo::middleware::security_headers(&config))
+        .layer(modo::middleware::security_headers(&config).unwrap())
         .with_state(Registry::new().into_state());
 
     let response = app
@@ -371,7 +371,7 @@ async fn test_security_headers_hsts() {
     };
     let app = Router::new()
         .route("/", get(handler))
-        .layer(modo::middleware::security_headers(&config))
+        .layer(modo::middleware::security_headers(&config).unwrap())
         .with_state(Registry::new().into_state());
 
     let response = app
@@ -399,7 +399,7 @@ async fn test_security_headers_csp_and_permissions() {
     };
     let app = Router::new()
         .route("/", get(handler))
-        .layer(modo::middleware::security_headers(&config))
+        .layer(modo::middleware::security_headers(&config).unwrap())
         .with_state(Registry::new().into_state());
 
     let response = app
@@ -430,7 +430,7 @@ async fn test_security_headers_disabled_x_content_type_options() {
     };
     let app = Router::new()
         .route("/", get(handler))
-        .layer(modo::middleware::security_headers(&config))
+        .layer(modo::middleware::security_headers(&config).unwrap())
         .with_state(Registry::new().into_state());
 
     let response = app
@@ -870,7 +870,7 @@ async fn test_security_headers_does_not_overwrite_handler_set() {
     let config = modo::middleware::SecurityHeadersConfig::default();
     let app = Router::new()
         .route("/", get(handler_with_custom_frame_options))
-        .layer(modo::middleware::security_headers(&config))
+        .layer(modo::middleware::security_headers(&config).unwrap())
         .with_state(Registry::new().into_state());
 
     let response = app

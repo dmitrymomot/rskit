@@ -6,6 +6,8 @@ use http::{HeaderName, HeaderValue, Response};
 use serde::Deserialize;
 use tower::{Layer, Service};
 
+use crate::Error;
+
 /// Configuration for security response headers.
 ///
 /// All fields have sensible defaults. Optional fields (`hsts_max_age`,
@@ -49,7 +51,7 @@ pub struct SecurityHeadersLayer {
 }
 
 impl SecurityHeadersLayer {
-    fn from_config(config: &SecurityHeadersConfig) -> Self {
+    fn from_config(config: &SecurityHeadersConfig) -> crate::Result<Self> {
         let mut headers = Vec::new();
 
         if config.x_content_type_options {
@@ -61,37 +63,42 @@ impl SecurityHeadersLayer {
 
         headers.push((
             HeaderName::from_static("x-frame-options"),
-            HeaderValue::from_str(&config.x_frame_options).expect("invalid x-frame-options value"),
+            HeaderValue::from_str(&config.x_frame_options)
+                .map_err(|_| Error::unprocessable_entity("invalid x-frame-options value"))?,
         ));
 
         headers.push((
             HeaderName::from_static("referrer-policy"),
-            HeaderValue::from_str(&config.referrer_policy).expect("invalid referrer-policy value"),
+            HeaderValue::from_str(&config.referrer_policy)
+                .map_err(|_| Error::unprocessable_entity("invalid referrer-policy value"))?,
         ));
 
         if let Some(max_age) = config.hsts_max_age {
             headers.push((
                 http::header::STRICT_TRANSPORT_SECURITY,
                 HeaderValue::from_str(&format!("max-age={max_age}"))
-                    .expect("invalid hsts max-age value"),
+                    .map_err(|_| Error::unprocessable_entity("invalid hsts max-age value"))?,
             ));
         }
 
         if let Some(ref csp) = config.content_security_policy {
             headers.push((
                 HeaderName::from_static("content-security-policy"),
-                HeaderValue::from_str(csp).expect("invalid content-security-policy value"),
+                HeaderValue::from_str(csp).map_err(|_| {
+                    Error::unprocessable_entity("invalid content-security-policy value")
+                })?,
             ));
         }
 
         if let Some(ref pp) = config.permissions_policy {
             headers.push((
                 HeaderName::from_static("permissions-policy"),
-                HeaderValue::from_str(pp).expect("invalid permissions-policy value"),
+                HeaderValue::from_str(pp)
+                    .map_err(|_| Error::unprocessable_entity("invalid permissions-policy value"))?,
             ));
         }
 
-        Self { headers }
+        Ok(Self { headers })
     }
 }
 
@@ -148,14 +155,16 @@ where
 /// Returns a Tower layer that adds security headers to every response
 /// based on the provided configuration.
 ///
+/// Returns an error if any configured header value contains invalid characters.
+///
 /// # Example
 ///
 /// ```rust,no_run
 /// use modo::middleware::{security_headers, SecurityHeadersConfig};
 ///
 /// let config = SecurityHeadersConfig::default();
-/// let layer = security_headers(&config);
+/// let layer = security_headers(&config).unwrap();
 /// ```
-pub fn security_headers(config: &SecurityHeadersConfig) -> SecurityHeadersLayer {
+pub fn security_headers(config: &SecurityHeadersConfig) -> crate::Result<SecurityHeadersLayer> {
     SecurityHeadersLayer::from_config(config)
 }

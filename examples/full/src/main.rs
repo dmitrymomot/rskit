@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
         .layer(modo::middleware::compression())
         .layer(modo::middleware::security_headers(
             &config.modo.security_headers,
-        ))
+        )?)
         .layer(modo::middleware::cors(&config.modo.cors))
         .layer(modo::middleware::csrf(&config.modo.csrf, &cookie_key))
         .layer(modo::TemplateContextLayer::new(engine))
@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
         .await;
 
     let scheduler = modo::cron::Scheduler::builder(&job_registry)
-        .job("@hourly", jobs::example::scheduled)
+        .job("@hourly", jobs::example::scheduled)?
         .start()
         .await;
 

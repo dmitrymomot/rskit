@@ -16,7 +16,7 @@
 //! - **Interval** — `@every <duration>` where duration is composed of `h`,
 //!   `m`, and `s` units, e.g. `@every 5m`, `@every 1h30m`.
 //!
-//! Invalid expressions or durations cause a panic at scheduler build time.
+//! Invalid expressions or durations return an error at scheduler build time.
 //!
 //! # Usage
 //!
@@ -35,7 +35,7 @@
 //!     let registry = Registry::new();
 //!
 //!     let scheduler = Scheduler::builder(&registry)
-//!         .job("@daily", cleanup)
+//!         .job("@daily", cleanup).unwrap()
 //!         .start()
 //!         .await;
 //!

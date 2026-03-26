@@ -2,13 +2,15 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 
+use crate::{Error, Result};
+
 pub(crate) enum Schedule {
     Cron(Box<croner::Cron>),
     Interval(Duration),
 }
 
 impl Schedule {
-    pub(crate) fn parse(input: &str) -> Self {
+    pub(crate) fn parse(input: &str) -> Result<Self> {
         let trimmed = input.trim();
 
         // Named aliases
@@ -23,22 +25,22 @@ impl Schedule {
 
         // @every duration
         if let Some(dur_str) = trimmed.strip_prefix("@every ") {
-            let duration = parse_duration(dur_str.trim());
-            return Self::Interval(duration);
+            let duration = parse_duration(dur_str.trim())?;
+            return Ok(Self::Interval(duration));
         }
 
         // Standard cron expression
         Self::parse_cron(trimmed)
     }
 
-    fn parse_cron(expr: &str) -> Self {
+    fn parse_cron(expr: &str) -> Result<Self> {
         let parser = croner::parser::CronParser::builder()
             .seconds(croner::parser::Seconds::Optional)
             .build();
-        let cron = parser
-            .parse(expr)
-            .unwrap_or_else(|e| panic!("invalid cron expression '{expr}': {e}"));
-        Self::Cron(Box::new(cron))
+        let cron = parser.parse(expr).map_err(|e| {
+            Error::unprocessable_entity(format!("invalid cron expression '{expr}': {e}"))
+        })?;
+        Ok(Self::Cron(Box::new(cron)))
     }
 
     pub(crate) fn next_tick(&self, from: DateTime<Utc>) -> Option<DateTime<Utc>> {
@@ -49,7 +51,7 @@ impl Schedule {
     }
 }
 
-fn parse_duration(s: &str) -> Duration {
+fn parse_duration(s: &str) -> Result<Duration> {
     let mut total_secs: u64 = 0;
     let mut current_num = String::new();
     let mut found_any = false;
@@ -58,42 +60,56 @@ fn parse_duration(s: &str) -> Duration {
         match ch {
             '0'..='9' => current_num.push(ch),
             'h' => {
-                let n: u64 = current_num
-                    .parse()
-                    .unwrap_or_else(|_| panic!("invalid duration '{s}': bad number before 'h'"));
+                let n: u64 = current_num.parse().map_err(|_| {
+                    Error::unprocessable_entity(format!(
+                        "invalid duration '{s}': bad number before 'h'"
+                    ))
+                })?;
                 total_secs += n * 3600;
                 current_num.clear();
                 found_any = true;
             }
             'm' => {
-                let n: u64 = current_num
-                    .parse()
-                    .unwrap_or_else(|_| panic!("invalid duration '{s}': bad number before 'm'"));
+                let n: u64 = current_num.parse().map_err(|_| {
+                    Error::unprocessable_entity(format!(
+                        "invalid duration '{s}': bad number before 'm'"
+                    ))
+                })?;
                 total_secs += n * 60;
                 current_num.clear();
                 found_any = true;
             }
             's' => {
-                let n: u64 = current_num
-                    .parse()
-                    .unwrap_or_else(|_| panic!("invalid duration '{s}': bad number before 's'"));
+                let n: u64 = current_num.parse().map_err(|_| {
+                    Error::unprocessable_entity(format!(
+                        "invalid duration '{s}': bad number before 's'"
+                    ))
+                })?;
                 total_secs += n;
                 current_num.clear();
                 found_any = true;
             }
-            _ => panic!("invalid duration '{s}': unexpected character '{ch}'"),
+            _ => {
+                return Err(Error::unprocessable_entity(format!(
+                    "invalid duration '{s}': unexpected character '{ch}'"
+                )));
+            }
         }
     }
 
     if !current_num.is_empty() {
-        panic!("invalid duration '{s}': trailing number without unit (use h, m, or s)");
+        return Err(Error::unprocessable_entity(format!(
+            "invalid duration '{s}': trailing number without unit (use h, m, or s)"
+        )));
     }
 
     if !found_any {
-        panic!("invalid duration '{s}': no duration components found");
+        return Err(Error::unprocessable_entity(format!(
+            "invalid duration '{s}': no duration components found"
+        )));
     }
 
-    Duration::from_secs(total_secs)
+    Ok(Duration::from_secs(total_secs))
 }
 
 #[cfg(test)]
@@ -102,47 +118,50 @@ mod tests {
 
     #[test]
     fn parse_duration_hours() {
-        assert_eq!(parse_duration("2h"), Duration::from_secs(7200));
+        assert_eq!(parse_duration("2h").unwrap(), Duration::from_secs(7200));
     }
 
     #[test]
     fn parse_duration_minutes() {
-        assert_eq!(parse_duration("15m"), Duration::from_secs(900));
+        assert_eq!(parse_duration("15m").unwrap(), Duration::from_secs(900));
     }
 
     #[test]
     fn parse_duration_seconds() {
-        assert_eq!(parse_duration("30s"), Duration::from_secs(30));
+        assert_eq!(parse_duration("30s").unwrap(), Duration::from_secs(30));
     }
 
     #[test]
     fn parse_duration_combined() {
-        assert_eq!(parse_duration("1h30m"), Duration::from_secs(5400));
-        assert_eq!(parse_duration("2h30m15s"), Duration::from_secs(9015));
+        assert_eq!(parse_duration("1h30m").unwrap(), Duration::from_secs(5400));
+        assert_eq!(
+            parse_duration("2h30m15s").unwrap(),
+            Duration::from_secs(9015)
+        );
     }
 
     #[test]
-    #[should_panic(expected = "invalid duration")]
     fn parse_duration_rejects_days() {
-        parse_duration("1d");
+        let err = parse_duration("1d").err().unwrap();
+        assert!(err.message().contains("invalid duration"));
     }
 
     #[test]
-    #[should_panic(expected = "invalid duration")]
     fn parse_duration_rejects_ms() {
-        parse_duration("500ms");
+        let err = parse_duration("500ms").err().unwrap();
+        assert!(err.message().contains("invalid duration"));
     }
 
     #[test]
-    #[should_panic(expected = "trailing number without unit")]
     fn parse_duration_rejects_bare_number() {
-        parse_duration("30");
+        let err = parse_duration("30").err().unwrap();
+        assert!(err.message().contains("trailing number without unit"));
     }
 
     #[test]
-    #[should_panic(expected = "no duration components")]
     fn parse_duration_rejects_empty() {
-        parse_duration("");
+        let err = parse_duration("").err().unwrap();
+        assert!(err.message().contains("no duration components"));
     }
 
     #[test]
@@ -157,7 +176,7 @@ mod tests {
             "@midnight",
             "@hourly",
         ] {
-            let s = Schedule::parse(alias);
+            let s = Schedule::parse(alias).unwrap();
             assert!(
                 matches!(s, Schedule::Cron(_)),
                 "{alias} should parse as Cron"
@@ -171,7 +190,7 @@ mod tests {
 
     #[test]
     fn parse_every_interval() {
-        let s = Schedule::parse("@every 5m");
+        let s = Schedule::parse("@every 5m").unwrap();
         match s {
             Schedule::Interval(dur) => assert_eq!(dur, Duration::from_secs(300)),
             _ => panic!("expected Interval variant"),
@@ -180,14 +199,14 @@ mod tests {
 
     #[test]
     fn parse_standard_cron() {
-        let s = Schedule::parse("0 30 * * * *");
+        let s = Schedule::parse("0 30 * * * *").unwrap();
         assert!(matches!(s, Schedule::Cron(_)));
         assert!(s.next_tick(Utc::now()).is_some());
     }
 
     #[test]
-    #[should_panic(expected = "invalid cron expression")]
-    fn parse_invalid_cron_panics() {
-        Schedule::parse("not a cron");
+    fn parse_invalid_cron_returns_error() {
+        let err = Schedule::parse("not a cron").err().unwrap();
+        assert!(err.message().contains("invalid cron expression"));
     }
 }
