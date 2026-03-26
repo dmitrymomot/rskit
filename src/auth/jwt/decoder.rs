@@ -52,12 +52,6 @@ impl JwtDecoder {
         }
     }
 
-    /// Returns a reference to the validation config.
-    #[allow(dead_code)]
-    pub(super) fn validation(&self) -> &ValidationConfig {
-        &self.inner.validation
-    }
-
     /// Decodes and validates a JWT token string, returning typed `Claims<T>`.
     ///
     /// Validation order:
@@ -326,9 +320,12 @@ mod tests {
         })
         .with_exp(now_secs() + 3600);
         let mut token = make_token(&encoder, &claims);
-        // Tamper with the last character
-        let last = token.pop().unwrap();
-        token.push(if last == 'A' { 'B' } else { 'A' });
+        // Flip a character well inside the signature (not in base64 padding region)
+        let idx = token.len() - 5;
+        let original = token.as_bytes()[idx];
+        let replacement = if original == b'A' { b'B' } else { b'A' };
+        // SAFETY: replacing one ASCII byte with another ASCII byte
+        unsafe { token.as_bytes_mut()[idx] = replacement };
         let err = decoder.decode::<TestClaims>(&token).unwrap_err();
         assert_eq!(err.error_code(), Some("jwt:invalid_signature"));
     }

@@ -16,7 +16,7 @@ fn default_layout() -> String {
 }
 
 static VAR_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}").unwrap());
+    LazyLock::new(|| Regex::new(r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}").expect("static regex"));
 
 /// Replace all `{{var}}` in the input string with raw values from the vars map.
 /// Missing variables are replaced with empty strings.

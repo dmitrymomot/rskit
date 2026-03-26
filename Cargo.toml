@@ -9,7 +9,7 @@ readme = "README.md"
 keywords = ["web", "framework", "axum", "sqlite"]
 categories = ["web-programming::http-server"]
 rust-version = "1.92"
-exclude = [".claude", ".claude-plugin", "skills", "docs", ".github", "examples"]
+exclude = [".claude", ".claude-plugin", "skills", "docs", ".github", "examples", "CLAUDE.md", "justfile", "tests"]
 
 [features]
 default = []

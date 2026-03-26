@@ -53,7 +53,6 @@ impl Registry {
     }
 
     /// Returns a point-in-time snapshot of the registry for internal use.
-    #[allow(dead_code)]
     pub(crate) fn snapshot(&self) -> Arc<super::RegistrySnapshot> {
         Arc::new(super::RegistrySnapshot::new(self.services.clone()))
     }

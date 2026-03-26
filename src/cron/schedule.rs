@@ -46,7 +46,9 @@ impl Schedule {
     pub(crate) fn next_tick(&self, from: DateTime<Utc>) -> Option<DateTime<Utc>> {
         match self {
             Self::Cron(cron) => cron.find_next_occurrence(&from, false).ok(),
-            Self::Interval(dur) => Some(from + chrono::Duration::from_std(*dur).unwrap()),
+            Self::Interval(dur) => {
+                Some(from + chrono::Duration::from_std(*dur).expect("interval duration overflow"))
+            }
         }
     }
 }

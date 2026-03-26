@@ -21,7 +21,7 @@ pub fn markdown_to_html(markdown: &str, brand_color: Option<&str>) -> String {
         if link_url.is_some() {
             match &event {
                 Event::End(TagEnd::Link) => {
-                    let url = link_url.take().unwrap();
+                    let url = link_url.take().expect("guarded by is_some check");
                     let title = link_title.take();
 
                     // Concatenate all text events to check for button syntax

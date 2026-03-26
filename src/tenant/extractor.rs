@@ -21,12 +21,6 @@ impl<T> Tenant<T> {
     pub fn get(&self) -> &T {
         &self.0
     }
-
-    /// Returns the inner `Arc<T>`. Crate-internal only.
-    #[allow(dead_code)]
-    pub(crate) fn into_inner(self) -> Arc<T> {
-        self.0
-    }
 }
 
 impl<T> Deref for Tenant<T> {

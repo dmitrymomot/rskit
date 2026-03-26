@@ -13,7 +13,6 @@ pub struct RegistrySnapshot {
 }
 
 impl RegistrySnapshot {
-    #[allow(dead_code)]
     pub(crate) fn new(services: HashMap<TypeId, Arc<dyn Any + Send + Sync>>) -> Self {
         Self { services }
     }

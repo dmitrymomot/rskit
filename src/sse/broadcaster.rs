@@ -41,8 +41,7 @@ pub struct BroadcastStream<T> {
 
 impl<T: Clone + Send + 'static> BroadcastStream<T> {
     /// Create a new broadcast stream (no cleanup).
-    #[allow(dead_code)]
-    pub(crate) fn new(rx: broadcast::Receiver<T>) -> Self {
+    pub fn new(rx: broadcast::Receiver<T>) -> Self {
         Self {
             inner: Box::pin(unfold_default(rx)),
             _cleanup: None,
