@@ -126,7 +126,7 @@ pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verifi
 pub use geolocation::{GeoLayer, GeoLocator, GeolocationConfig, Location};
 
 #[cfg(feature = "qrcode")]
-pub use qrcode::{Ecl, QrCode, QrError, QrStyle};
+pub use qrcode::{Color, Ecl, FinderShape, ModuleShape, QrCode, QrError, QrStyle};
 
 #[cfg(all(feature = "qrcode", feature = "templates"))]
 pub use qrcode::qr_svg_function;

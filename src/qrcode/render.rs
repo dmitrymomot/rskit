@@ -24,9 +24,9 @@ pub(crate) fn render_svg(qr: &fast_qr::QRCode, style: &QrStyle) -> Result<String
     write!(svg, r#"<rect fill="{bg}" width="100%" height="100%"/>"#,).unwrap();
 
     // Render the three finder patterns as grouped elements
-    render_finder(style, &mut svg, &fg, 0, 0)?; // top-left
-    render_finder(style, &mut svg, &fg, 0, qr.size - 7)?; // top-right
-    render_finder(style, &mut svg, &fg, qr.size - 7, 0)?; // bottom-left
+    render_finder(style, &mut svg, &fg, &bg, 0, 0); // top-left
+    render_finder(style, &mut svg, &fg, &bg, 0, qr.size - 7); // top-right
+    render_finder(style, &mut svg, &fg, &bg, qr.size - 7, 0); // bottom-left
 
     // Render data modules (skip finder regions)
     for row in 0..qr.size {
@@ -99,10 +99,10 @@ fn render_finder(
     style: &QrStyle,
     svg: &mut String,
     fg: &str,
+    bg: &str,
     start_row: usize,
     start_col: usize,
-) -> Result<(), QrError> {
-    let bg = style.bg_color.to_hex()?;
+) {
     let m = style.module_size as f64;
     let q = style.quiet_zone as f64 * m;
     let x = q + start_col as f64 * m;
@@ -192,7 +192,6 @@ fn render_finder(
     }
 
     svg.push_str("</g>");
-    Ok(())
 }
 
 #[cfg(test)]
