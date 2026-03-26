@@ -103,15 +103,15 @@ impl Totp {
         let start = current_step.saturating_sub(window);
         let end = current_step + window;
 
+        use subtle::ConstantTimeEq;
+        let mut found = subtle::Choice::from(0);
         for step in start..=end {
             let expected = hotp(&self.secret, step, self.config.digits);
             let expected_str =
                 format!("{:0>width$}", expected, width = self.config.digits as usize);
-            if constant_time_eq(code.as_bytes(), expected_str.as_bytes()) {
-                return true;
-            }
+            found |= code.as_bytes().ct_eq(expected_str.as_bytes());
         }
-        false
+        found.into()
     }
 
     /// Returns an `otpauth://totp/` URI for QR code generation.
@@ -142,11 +142,6 @@ fn hotp(secret: &[u8], counter: u64, digits: u32) -> u32 {
         result[offset + 3],
     ]);
     code % 10u32.pow(digits)
-}
-
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    use subtle::ConstantTimeEq;
-    a.ct_eq(b).into()
 }
 
 fn urlencoding_encode(s: &str) -> String {

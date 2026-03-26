@@ -287,9 +287,15 @@ mod tests {
     async fn tampered_token_returns_401() {
         let config = test_config();
         let decoder = JwtDecoder::from_config(&config);
-        let mut token = make_token(&config);
-        let last = token.pop().unwrap();
-        token.push(if last == 'A' { 'B' } else { 'A' });
+        let token = make_token(&config);
+        // Flip a character in the middle of the signature where all 6 bits are significant.
+        // The last character of a base64url string may have insignificant low bits,
+        // so flipping it can decode to identical bytes (making the test flaky).
+        let dot = token.rfind('.').unwrap();
+        let mid = dot + (token.len() - dot) / 2;
+        let mut bytes = token.into_bytes();
+        bytes[mid] = if bytes[mid] == b'A' { b'Z' } else { b'A' };
+        let token = String::from_utf8(bytes).unwrap();
         let layer = JwtLayer::<TestClaims>::new(decoder);
         let svc = layer.layer(tower::service_fn(echo_handler));
 
