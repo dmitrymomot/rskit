@@ -4,7 +4,7 @@ use crate::qrcode::error::QrError;
 use crate::qrcode::style::{FinderShape, ModuleShape, QrStyle};
 
 /// Render a QR code matrix as an SVG string.
-pub(crate) fn render_svg(qr: &fast_qr::QRCode, style: &QrStyle) -> Result<String, QrError> {
+pub(super) fn render_svg(qr: &fast_qr::QRCode, style: &QrStyle) -> Result<String, QrError> {
     let fg = style.fg_color.to_hex()?;
     let bg = style.bg_color.to_hex()?;
     let m = style.module_size as f64;

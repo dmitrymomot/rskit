@@ -13,7 +13,7 @@
 //! use modo::qrcode::{QrCode, QrStyle};
 //!
 //! let qr = QrCode::new("https://example.com").unwrap();
-//! let svg = qr.to_svg(&QrStyle::default());
+//! let svg = qr.to_svg(&QrStyle::default()).unwrap();
 //! ```
 
 mod code;
