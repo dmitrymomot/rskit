@@ -210,14 +210,12 @@ async fn reaper_resets_stale_running_jobs() {
         .unwrap();
 
     let stale_time = (Utc::now() - chrono::Duration::minutes(2)).to_rfc3339();
-    sqlx::query(
-        "UPDATE jobs SET status = 'running', attempt = 1, started_at = ? WHERE id = ?",
-    )
-    .bind(&stale_time)
-    .bind(&id)
-    .execute(&*pool)
-    .await
-    .unwrap();
+    sqlx::query("UPDATE jobs SET status = 'running', attempt = 1, started_at = ? WHERE id = ?")
+        .bind(&stale_time)
+        .bind(&id)
+        .execute(&*pool)
+        .await
+        .unwrap();
 
     let config = {
         let mut c = job::JobConfig::default();

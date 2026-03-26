@@ -216,6 +216,23 @@ async fn poll_loop(
 ) {
     let poll_interval = Duration::from_secs(poll_interval_secs);
 
+    // Precompute the SQL template once — handler_names never changes after start.
+    let placeholders: String = handler_names
+        .iter()
+        .map(|_| "?")
+        .collect::<Vec<_>>()
+        .join(", ");
+    let claim_sql = format!(
+        "UPDATE jobs SET status = 'running', attempt = attempt + 1, \
+         started_at = ?, updated_at = ? \
+         WHERE id IN (\
+             SELECT id FROM jobs \
+             WHERE status = 'pending' AND run_at <= ? \
+             AND queue = ? AND name IN ({placeholders}) \
+             ORDER BY run_at ASC LIMIT ?\
+         ) RETURNING id, name, queue, payload, attempt",
+    );
+
     loop {
         tokio::select! {
             _ = cancel.cancelled() => break,
@@ -231,24 +248,6 @@ async fn poll_loop(
                     if slots == 0 {
                         continue;
                     }
-
-                    // Build dynamic IN clause for registered handler names
-                    let placeholders: String = handler_names
-                        .iter()
-                        .map(|_| "?")
-                        .collect::<Vec<_>>()
-                        .join(", ");
-
-                    let claim_sql = format!(
-                        "UPDATE jobs SET status = 'running', attempt = attempt + 1, \
-                         started_at = ?, updated_at = ? \
-                         WHERE id IN (\
-                             SELECT id FROM jobs \
-                             WHERE status = 'pending' AND run_at <= ? \
-                             AND queue = ? AND name IN ({placeholders}) \
-                             ORDER BY run_at ASC LIMIT ?\
-                         ) RETURNING id, name, queue, payload, attempt",
-                    );
 
                     let mut query =
                         sqlx::query_as::<_, (String, String, String, String, i32)>(&claim_sql)

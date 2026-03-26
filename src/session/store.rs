@@ -8,6 +8,9 @@ use super::config::SessionConfig;
 use super::meta::SessionMeta;
 use super::token::SessionToken;
 
+const SESSION_COLUMNS: &str = "id, user_id, ip_address, user_agent, device_name, device_type, \
+    fingerprint, data, created_at, last_active_at, expires_at";
+
 /// A snapshot of a session row as returned from the database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionData {
@@ -81,11 +84,9 @@ impl Store {
     pub async fn read_by_token(&self, token: &SessionToken) -> Result<Option<SessionData>> {
         let hash = token.hash();
         let now = Utc::now().to_rfc3339();
-        let row = sqlx::query_as::<_, SessionRow>(
-            "SELECT id, user_id, ip_address, user_agent, device_name, device_type, \
-             fingerprint, data, created_at, last_active_at, expires_at \
-             FROM sessions WHERE token_hash = ? AND expires_at > ?",
-        )
+        let row = sqlx::query_as::<_, SessionRow>(&format!(
+            "SELECT {SESSION_COLUMNS} FROM sessions WHERE token_hash = ? AND expires_at > ?"
+        ))
         .bind(&hash)
         .bind(&now)
         .fetch_optional(&self.reader)
@@ -99,11 +100,9 @@ impl Store {
     ///
     /// Returns `None` if no session with that ID exists.
     pub async fn read(&self, id: &str) -> Result<Option<SessionData>> {
-        let row = sqlx::query_as::<_, SessionRow>(
-            "SELECT id, user_id, ip_address, user_agent, device_name, device_type, \
-             fingerprint, data, created_at, last_active_at, expires_at \
-             FROM sessions WHERE id = ?",
-        )
+        let row = sqlx::query_as::<_, SessionRow>(&format!(
+            "SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?"
+        ))
         .bind(id)
         .fetch_optional(&self.reader)
         .await
@@ -115,12 +114,10 @@ impl Store {
     /// List all active (non-expired) sessions for a user, ordered by most recently active.
     pub async fn list_for_user(&self, user_id: &str) -> Result<Vec<SessionData>> {
         let now = Utc::now().to_rfc3339();
-        let rows = sqlx::query_as::<_, SessionRow>(
-            "SELECT id, user_id, ip_address, user_agent, device_name, device_type, \
-             fingerprint, data, created_at, last_active_at, expires_at \
-             FROM sessions WHERE user_id = ? AND expires_at > ? \
-             ORDER BY last_active_at DESC",
-        )
+        let rows = sqlx::query_as::<_, SessionRow>(&format!(
+            "SELECT {SESSION_COLUMNS} FROM sessions WHERE user_id = ? AND expires_at > ? \
+                 ORDER BY last_active_at DESC"
+        ))
         .bind(user_id)
         .bind(&now)
         .fetch_all(&self.reader)
@@ -322,39 +319,24 @@ impl Store {
         now: &str,
         txn: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     ) -> Result<()> {
-        let count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM sessions WHERE user_id = ? AND expires_at > ?",
-        )
-        .bind(user_id)
-        .bind(now)
-        .fetch_one(&mut **txn)
-        .await
-        .map_err(|e| Error::internal(format!("count sessions: {e}")))?;
-
         let max = self.config.max_sessions_per_user as i64;
-        if count.0 <= max {
-            return Ok(());
-        }
 
-        let excess = count.0 - max;
-        let oldest_ids: Vec<(String,)> = sqlx::query_as(
-            "SELECT id FROM sessions WHERE user_id = ? AND expires_at > ? \
-             ORDER BY last_active_at ASC LIMIT ?",
+        sqlx::query(
+            "DELETE FROM sessions WHERE id IN (\
+                 SELECT id FROM sessions \
+                 WHERE user_id = ? AND expires_at > ? \
+                 ORDER BY last_active_at ASC \
+                 LIMIT MAX(0, (SELECT COUNT(*) FROM sessions WHERE user_id = ? AND expires_at > ?) - ?)\
+             )",
         )
         .bind(user_id)
         .bind(now)
-        .bind(excess)
-        .fetch_all(&mut **txn)
+        .bind(user_id)
+        .bind(now)
+        .bind(max)
+        .execute(&mut **txn)
         .await
-        .map_err(|e| Error::internal(format!("find oldest sessions: {e}")))?;
-
-        for (id,) in oldest_ids {
-            sqlx::query("DELETE FROM sessions WHERE id = ?")
-                .bind(&id)
-                .execute(&mut **txn)
-                .await
-                .map_err(|e| Error::internal(format!("evict session: {e}")))?;
-        }
+        .map_err(|e| Error::internal(format!("evict excess sessions: {e}")))?;
 
         Ok(())
     }
