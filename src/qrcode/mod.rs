@@ -7,13 +7,24 @@
 //! case is TOTP authenticator enrollment, but the module is
 //! general-purpose.
 //!
+//! # Key types
+//!
+//! - [`QrCode`] — generated QR matrix; call [`QrCode::to_svg`] to render.
+//! - [`QrStyle`] — rendering options: module shape, finder shape, colors, sizes.
+//! - [`Ecl`] — error correction level (Low / Medium / Quartile / High).
+//! - [`Color`] — foreground/background color as hex string or RGB tuple.
+//! - [`ModuleShape`] — shape of data modules (Square, RoundedSquare, Circle, Diamond).
+//! - [`FinderShape`] — shape of finder patterns (Square, Rounded, Circle).
+//! - [`QrError`] — error type for generation and rendering failures.
+//!
 //! # Example
 //!
-//! ```rust,ignore
+//! ```
 //! use modo::qrcode::{QrCode, QrStyle};
 //!
 //! let qr = QrCode::new("https://example.com").unwrap();
 //! let svg = qr.to_svg(&QrStyle::default()).unwrap();
+//! assert!(svg.starts_with("<svg"));
 //! ```
 
 mod code;

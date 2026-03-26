@@ -1,16 +1,21 @@
 use std::fmt;
 
 /// Errors that can occur during QR code generation or rendering.
+///
+/// Converts into [`modo::Error`](crate::Error) with HTTP 400 (Bad Request)
+/// status. Use [`QrError::code`] to get a stable string identifier for
+/// each variant.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QrError {
     /// Input data exceeds QR code capacity for the chosen error correction level.
     DataTooLong,
-    /// Invalid hex color string.
+    /// Invalid hex color string (missing `#`, wrong length, or non-hex characters).
     InvalidColor(String),
 }
 
 impl QrError {
-    /// Returns a stable, namespaced string code for this error.
+    /// Returns a stable, namespaced string code for this error
+    /// (e.g. `"qrcode:data_too_long"`).
     pub fn code(&self) -> &'static str {
         match self {
             Self::DataTooLong => "qrcode:data_too_long",

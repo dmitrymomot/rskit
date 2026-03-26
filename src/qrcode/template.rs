@@ -11,11 +11,25 @@ use crate::qrcode::style::{Color, FinderShape, ModuleShape, QrStyle};
 /// engine.add_function("qr_svg", modo::qrcode::qr_svg_function());
 /// ```
 ///
-/// Template usage:
+/// # Template usage
 ///
 /// ```jinja
 /// {{ qr_svg(data="otpauth://totp/...", fg="#1a1a2e") }}
 /// ```
+///
+/// # Keyword arguments
+///
+/// | Argument | Required | Default | Description |
+/// |----------|----------|---------|-------------|
+/// | `data` | yes | -- | The string to encode in the QR code |
+/// | `fg` | no | `"#000000"` | Foreground color (hex string) |
+/// | `bg` | no | `"#ffffff"` | Background color (hex string) |
+/// | `module_shape` | no | `"rounded"` | `"square"`, `"rounded"`, `"circle"`, or `"diamond"` |
+/// | `finder_shape` | no | `"rounded"` | `"square"`, `"rounded"`, or `"circle"` |
+/// | `radius` | no | `0.3` | Corner radius for `"rounded"` module shape (0.0--0.5) |
+/// | `size` | no | `10` | Module size in SVG units |
+///
+/// The output is marked as safe HTML, so it renders directly without escaping.
 pub fn qr_svg_function()
 -> impl Fn(&[Value]) -> Result<Value, minijinja::Error> + Send + Sync + 'static {
     move |args: &[Value]| {

@@ -3,15 +3,18 @@ use crate::qrcode::render;
 use crate::qrcode::style::QrStyle;
 
 /// Error correction level for QR code generation.
+///
+/// Higher levels increase data recovery at the cost of larger QR codes.
+/// [`QrCode::new`] defaults to [`Ecl::Medium`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ecl {
-    /// Low — ~7% recovery.
+    /// Low — recovers ~7% of data.
     Low,
-    /// Medium — ~15% recovery (default).
+    /// Medium — recovers ~15% of data. This is the default.
     Medium,
-    /// Quartile — ~25% recovery.
+    /// Quartile — recovers ~25% of data.
     Quartile,
-    /// High — ~30% recovery.
+    /// High — recovers ~30% of data.
     High,
 }
 
@@ -27,18 +30,37 @@ impl Ecl {
 }
 
 /// A generated QR code ready for SVG rendering.
+///
+/// Create with [`QrCode::new`] (default error correction) or
+/// [`QrCode::with_ecl`] (explicit level), then render via
+/// [`QrCode::to_svg`].
+///
+/// # Example
+///
+/// ```
+/// use modo::qrcode::{QrCode, QrStyle, Ecl};
+///
+/// let qr = QrCode::with_ecl("https://example.com", Ecl::High).unwrap();
+/// let svg = qr.to_svg(&QrStyle::default()).unwrap();
+/// assert!(svg.starts_with("<svg"));
+/// ```
 #[derive(Debug)]
 pub struct QrCode {
     pub(super) qr: fast_qr::QRCode,
 }
 
 impl QrCode {
-    /// Generate a QR code matrix with default error correction (`Medium`).
+    /// Generate a QR code matrix with default error correction ([`Ecl::Medium`]).
+    ///
+    /// Returns [`QrError::DataTooLong`] if the input exceeds QR capacity.
     pub fn new(data: &str) -> Result<Self, QrError> {
         Self::with_ecl(data, Ecl::Medium)
     }
 
     /// Generate a QR code matrix with the specified error correction level.
+    ///
+    /// Returns [`QrError::DataTooLong`] if the input exceeds QR capacity
+    /// for the chosen level.
     pub fn with_ecl(data: &str, ecl: Ecl) -> Result<Self, QrError> {
         let qr = fast_qr::QRBuilder::new(data)
             .ecl(ecl.to_fast_qr())
@@ -48,11 +70,18 @@ impl QrCode {
     }
 
     /// Render the QR code as an SVG string.
+    ///
+    /// The SVG uses a `viewBox` (no fixed `width`/`height`) so it scales
+    /// to its container. Returns [`QrError::InvalidColor`] if any color
+    /// in `style` is malformed.
     pub fn to_svg(&self, style: &QrStyle) -> Result<String, QrError> {
         render::render_svg(&self.qr, style)
     }
 
-    /// Returns the number of modules along one side of the QR code (excluding quiet zone).
+    /// Returns the number of modules along one side of the QR matrix.
+    ///
+    /// This is the raw matrix dimension (e.g. 21 for Version 1) and does
+    /// not include the quiet zone added during SVG rendering.
     pub fn size(&self) -> usize {
         self.qr.size
     }

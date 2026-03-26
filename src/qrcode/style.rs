@@ -3,19 +3,29 @@ use std::fmt;
 use crate::qrcode::error::QrError;
 
 /// Shape of individual data modules (the small squares/dots).
+///
+/// Used in [`QrStyle::module_shape`]. The default is
+/// [`ModuleShape::RoundedSquare`] with `radius: 0.3`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModuleShape {
     /// Classic sharp-edged square.
     Square,
-    /// Square with rounded corners. `radius` is a fraction of module size (0.0–0.5), clamped at render time.
-    RoundedSquare { radius: f32 },
+    /// Square with rounded corners. `radius` is a fraction of module
+    /// size in the range `0.0..=0.5`; values outside this range are
+    /// clamped at render time.
+    RoundedSquare {
+        /// Corner radius as a fraction of module size (0.0 = square, 0.5 = maximum rounding).
+        radius: f32,
+    },
     /// Circular dot.
     Circle,
     /// 45-degree rotated square (diamond).
     Diamond,
 }
 
-/// Shape of the three finder patterns (7×7 corner markers).
+/// Shape of the three finder patterns (the large 7x7 corner markers).
+///
+/// Used in [`QrStyle::finder_shape`]. The default is [`FinderShape::Rounded`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FinderShape {
     /// Classic concentric squares.
@@ -27,18 +37,24 @@ pub enum FinderShape {
 }
 
 /// A color value for QR code rendering.
+///
+/// Used for [`QrStyle::fg_color`] and [`QrStyle::bg_color`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Color {
-    /// Hex string: `"#000000"` (6-char) or `"#000"` (3-char shorthand).
+    /// Hex string with `#` prefix: `"#000000"` (6-digit) or `"#000"` (3-digit shorthand).
     Hex(String),
-    /// RGB components.
+    /// RGB components (red, green, blue), each 0--255.
     Rgb(u8, u8, u8),
 }
 
 impl Color {
-    /// Resolves the color to a 6-character hex string (e.g. `"#1a1a2e"`).
+    /// Resolves the color to a lowercase hex string with `#` prefix
+    /// (e.g. `"#1a1a2e"`).
     ///
-    /// Returns `QrError::InvalidColor` for malformed hex values.
+    /// Three-digit shorthand is expanded (`"#fff"` becomes `"#ffffff"`).
+    ///
+    /// Returns [`QrError::InvalidColor`] if the hex value is malformed
+    /// (missing `#`, wrong length, or non-hex characters).
     pub fn to_hex(&self) -> Result<String, QrError> {
         match self {
             Color::Rgb(r, g, b) => Ok(format!("#{r:02x}{g:02x}{b:02x}")),
@@ -79,19 +95,44 @@ impl fmt::Display for Color {
 }
 
 /// Styling options for QR code SVG rendering.
+///
+/// All fields have sensible defaults via [`Default`]:
+///
+/// | Field | Default |
+/// |-------|---------|
+/// | `module_shape` | `RoundedSquare { radius: 0.3 }` |
+/// | `finder_shape` | `Rounded` |
+/// | `fg_color` | `Hex("#000000")` (black) |
+/// | `bg_color` | `Hex("#ffffff")` (white) |
+/// | `module_size` | `10` |
+/// | `quiet_zone` | `4` |
+///
+/// # Example
+///
+/// ```
+/// use modo::qrcode::{QrStyle, ModuleShape, FinderShape, Color};
+///
+/// let style = QrStyle {
+///     module_shape: ModuleShape::Circle,
+///     finder_shape: FinderShape::Circle,
+///     fg_color: Color::Rgb(26, 26, 46),
+///     ..Default::default()
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct QrStyle {
-    /// Shape of data modules.
+    /// Shape of individual data modules.
     pub module_shape: ModuleShape,
-    /// Shape of the three finder patterns.
+    /// Shape of the three finder patterns (corner markers).
     pub finder_shape: FinderShape,
-    /// Foreground (dark module) color.
+    /// Foreground (dark module) color. Default: black (`#000000`).
     pub fg_color: Color,
-    /// Background color.
+    /// Background color. Default: white (`#ffffff`).
     pub bg_color: Color,
-    /// Size of each module in SVG units (pixels). Default: 10.
+    /// Size of each module in SVG units. Default: `10`.
     pub module_size: u32,
-    /// Number of quiet-zone modules around the QR code. Default: 4 (spec minimum).
+    /// Number of quiet-zone modules around the QR code. Default: `4`
+    /// (the spec-recommended minimum).
     pub quiet_zone: u32,
 }
 
