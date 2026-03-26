@@ -10,6 +10,8 @@ Boilerplate files generated for every modo project. Placeholders use `{{project_
 - [docker-compose.yml](#docker-composeyml)
 - [.env.example](#envexample)
 - [.gitignore](#gitignore)
+- [.editorconfig](#editorconfig)
+- [CLAUDE.md](#claudemd)
 - [CI workflow](#ci-workflow)
 - [data/.gitkeep](#datagitkeep)
 
@@ -60,39 +62,115 @@ Jobs, Cron, Multi-tenancy, and RBAC do NOT require feature flags.
 
 ## justfile
 
+### Base (always included)
+
 ```makefile
 set dotenv-load
 
+# List available recipes
 default:
     @just --list
 
+# --- Development ---
+
+# First-time project setup
+setup:
+    cp -n .env.example .env || true
+
+# Run with auto-reload
 dev:
-    cargo run
+    @command -v cargo-watch >/dev/null 2>&1 || { echo "Error: cargo-watch not found. Install: cargo install cargo-watch"; exit 1; }
+    cargo watch -w src -w templates -w config -x run
 
-check:
-    cargo check
+# Build release binary
+build:
+    cargo build --release
 
+# --- Quality ---
+
+# Run all checks: format, lint, test
+check: fmt-check lint test
+
+# Run tests
 test:
     cargo test
 
+# Run clippy lints
 lint:
     cargo clippy -- -D warnings
 
+# Format code
 fmt:
     cargo fmt
 
+# Check formatting
 fmt-check:
     cargo fmt --check
+
+# --- Maintenance ---
+
+# Remove build artifacts and databases
+clean:
+    cargo clean
+    rm -rf data/*.db data/*.db-*
+
+# Update dependencies
+deps:
+    cargo update
+
+# Remove all database files
+db-reset:
+    rm -rf data/*.db data/*.db-*
 ```
 
-If docker-compose.yml is generated, add:
+### Conditional: Templates (add when Templates is selected)
 
 ```makefile
-services:
+# Download vendored JS assets (htmx, alpine)
+assets-download:
+    mkdir -p static/js
+    curl -sL https://unpkg.com/htmx.org@2/dist/htmx.min.js -o static/js/htmx.min.js
+    curl -sL https://unpkg.com/htmx-ext-sse@2/sse.js -o static/js/htmx-sse.js
+    curl -sL https://unpkg.com/alpinejs@3/dist/cdn.min.js -o static/js/alpine.min.js
+    @echo "Assets downloaded to static/js/"
+
+# Compile Tailwind CSS
+css:
+    @command -v tailwindcss >/dev/null 2>&1 || { echo "Error: tailwindcss CLI not found. See: https://tailwindcss.com/docs/installation/tailwindcss-cli"; exit 1; }
+    tailwindcss -i assets/css/app.css -o static/css/app.css --minify
+
+# Watch and recompile CSS on changes
+css-watch:
+    @command -v tailwindcss >/dev/null 2>&1 || { echo "Error: tailwindcss CLI not found. See: https://tailwindcss.com/docs/installation/tailwindcss-cli"; exit 1; }
+    tailwindcss -i assets/css/app.css -o static/css/app.css --watch
+```
+
+When Templates is selected, also add to the `setup` recipe body:
+```makefile
+    just assets-download
+    just css
+```
+
+### Conditional: Docker services (add when docker-compose.yml exists)
+
+```makefile
+# Start Docker services
+docker-up:
+    @command -v docker >/dev/null 2>&1 || { echo "Error: docker not found"; exit 1; }
     docker compose up -d
 
-services-down:
+# Stop Docker services
+docker-down:
     docker compose down
+
+# Tail Docker service logs
+docker-logs *ARGS:
+    docker compose logs -f {{ ARGS }}
+```
+
+When Docker services exist, also add to the `setup` recipe body:
+```makefile
+    just docker-up
 ```
 
 ---
@@ -124,6 +202,7 @@ Conditionally add these COPY lines based on selected components:
 # If templates selected:
 COPY templates/ /app/templates/
 COPY static/ /app/static/
+COPY locales/ /app/locales/
 
 # If email selected:
 COPY emails/ /app/emails/
@@ -182,6 +261,159 @@ Add component-specific entries as documented in each component's section in `com
 /data/*.db-*
 .env
 Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+```
+
+---
+
+## .editorconfig
+
+```editorconfig
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.rs]
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[justfile]
+indent_style = space
+indent_size = 4
+
+[*.md]
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = false
+
+[*.sql]
+indent_style = space
+indent_size = 4
+
+[*.html]
+indent_style = space
+indent_size = 2
+
+[*.toml]
+indent_style = space
+indent_size = 4
+
+[*.css]
+indent_style = space
+indent_size = 2
+```
+
+---
+
+## CLAUDE.md
+
+Generate dynamically using `Write`. Replace `{{project_name}}` with the actual project name.
+
+````markdown
+# {{project_name}}
+
+**Framework:** [modo](https://github.com/dmitrymomot/modo) v2 — Rust web framework with SQLite
+
+## Commands
+
+```bash
+just dev          # Run with auto-reload (cargo-watch)
+just build        # Build release binary
+just check        # Format, lint, and test
+just test         # Run tests
+just lint         # Run clippy
+just fmt          # Format code
+just clean        # Remove build artifacts and databases
+just deps         # Update dependencies
+just db-reset     # Remove all database files
+```
+
+<!-- CONDITIONAL_COMMANDS -->
+
+## Architecture
+
+- `src/main.rs` — App bootstrap: config, database, registry, middleware, server
+- `src/config.rs` — App config wrapper (`AppConfig` with `#[serde(flatten)]` on `modo::Config`)
+- `src/error.rs` — Error handler converting `modo::Error` to HTTP responses
+- `src/routes/` — Route definitions (one file per resource)
+- `src/handlers/` — Request handlers (one file per resource)
+- `config/` — YAML config per environment (`development.yaml`, `production.yaml`)
+- `migrations/app/` — SQLite migrations (numbered `.sql` files)
+
+## Conventions
+
+- Handlers are plain `async fn` — no macros, no signature rewriting
+- Routes use axum's `Router` directly — no auto-registration
+- Services wired explicitly in `main()` via `modo::service::Registry`
+- Database uses raw sqlx — no ORM
+- Config YAML uses `${VAR:default}` for dev, `${VAR}` for production
+- IDs: `modo::id::ulid()` for full ULID, `modo::id::short()` for short time-sortable ID
+- Error handling: `modo::Error` with `?` operator everywhere, `modo::Result<T>` alias
+- `mod.rs` files contain ONLY `mod` declarations and re-exports
+- Rust edition 2024, rust-version 1.92
+
+## Enabled Components
+
+<!-- COMPONENT_BULLETS -->
+````
+
+### Assembly rules for CLAUDE.md
+
+**`<!-- CONDITIONAL_COMMANDS -->`** — Replace with command blocks for selected components:
+
+If Templates:
+````
+```bash
+just assets-download  # Download vendored JS (htmx, alpine)
+just css              # Compile Tailwind CSS
+just css-watch        # Watch and recompile CSS
+```
+````
+
+If Docker services:
+````
+```bash
+just docker-up    # Start Docker services
+just docker-down  # Stop Docker services
+just docker-logs  # Tail Docker service logs
+```
+````
+
+**`<!-- COMPONENT_BULLETS -->`** — Replace with one bullet per enabled component:
+
+Example for full-stack:
+```
+- **Templates** — MiniJinja HTML rendering + static file serving
+- **Auth** — JWT, OAuth (GitHub/Google), password hashing, TOTP, backup codes
+- **Email** — SMTP mailer with Markdown-to-HTML templates
+- **Storage** — S3-compatible object storage
+- **SSE** — Server-Sent Events broadcaster
+- **Webhooks** — Outbound webhook delivery with Standard Webhooks signing
+- **DNS** — Domain verification via TXT/CNAME records
+- **Geolocation** — MaxMind GeoIP2 IP-to-location lookups
+- **Sentry** — Crash reporting and performance monitoring
+- **Jobs** — Background job queue with retries
+- **Cron** — Async cron scheduler for recurring tasks
+- **Multi-tenancy** — Subdomain/domain/header/path-based tenant routing
+- **RBAC** — Role-based access control with guard layers
 ```
 
 ---

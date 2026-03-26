@@ -29,7 +29,6 @@ These are always generated regardless of component selection.
 
 ```rust
 use modo::Result;
-use modo::axum::response::IntoResponse;
 use tokio_util::sync::CancellationToken;
 
 mod config;
@@ -120,14 +119,10 @@ pub struct AppConfig {
 ### src/error.rs
 
 ```rust
-use modo::axum::response::Response;
 use modo::axum::http::request::Parts;
-use modo::axum::response::IntoResponse;
+use modo::axum::response::{IntoResponse, Response};
 
-pub async fn handle_error(
-    err: modo::Error,
-    _parts: Parts,
-) -> Response {
+pub async fn handle_error(err: modo::Error, _parts: Parts) -> Response {
     err.into_response()
 }
 ```
@@ -322,6 +317,7 @@ template:
   templates_path: templates
   static_path: static
   static_url_prefix: /static
+  locales_path: locales
 ```
 
 ### Config YAML (production)
@@ -333,18 +329,34 @@ Same as development (paths are relative to the binary).
 **templates/base.html:**
 ```html
 <!doctype html>
-<html lang="en">
+<html lang="{{ locale }}">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}App{% endblock %}</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}App{% endblock %}</title>
+  <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
+  <script defer src="{{ static_url('js/alpine.min.js') }}"></script>
+  {% block head %}{% endblock %}
 </head>
-<body>
-    {% for msg in flash_messages() %}
-    <div class="flash flash-{{ msg.level }}">{{ msg.message }}</div>
-    {% endfor %}
+<body class="min-h-screen bg-gray-50 text-gray-900 antialiased">
+  {% for msg in flash_messages() %}
+  {% if msg.level == "success" %}
+  <div class="mx-4 mt-2 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800" role="alert">{{ msg.message }}</div>
+  {% elif msg.level == "error" %}
+  <div class="mx-4 mt-2 rounded-md bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{{ msg.message }}</div>
+  {% elif msg.level == "warning" %}
+  <div class="mx-4 mt-2 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800" role="alert">{{ msg.message }}</div>
+  {% else %}
+  <div class="mx-4 mt-2 rounded-md bg-blue-50 px-4 py-3 text-sm text-blue-800" role="alert">{{ msg.message }}</div>
+  {% endif %}
+  {% endfor %}
 
-    {% block content %}{% endblock %}
+  {% block content %}{% endblock %}
+
+  <script src="{{ static_url('js/htmx.min.js') }}"></script>
+  <script src="{{ static_url('js/htmx-sse.js') }}"></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>
 ```
@@ -356,12 +368,23 @@ Same as development (paths are relative to the binary).
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-<h1>{{ title }}</h1>
-<p>Welcome to your new modo app!</p>
+<main class="mx-auto max-w-xl px-6 py-20">
+  <h1 class="text-3xl font-bold tracking-tight">{{ title }}</h1>
+  <p class="mt-2 text-gray-500">Your modo app is running.</p>
+  <ul class="mt-8 flex flex-col gap-3">
+    <li><a href="/_ready" class="text-blue-600 hover:underline">Health check</a></li>
+  </ul>
+</main>
 {% endblock %}
 ```
 
-**static/.gitkeep:** empty file
+**static/css/app.css:** Tailwind CSS output (compiled by `init_templates.sh` if `tailwindcss` CLI is available, otherwise run `just css`)
+
+**static/js/:** directory for vendored JS (htmx, alpine — downloaded by `download_assets.sh`)
+
+**assets/css/app.css:** Tailwind v4 source file (created by `init_templates.sh`)
+
+**locales/en/common.yaml:** base translations (created by `init_templates.sh`)
 
 ### Example handler (when templates are selected)
 
@@ -426,15 +449,16 @@ registry.add(jwt_decoder);
 jwt:
   secret: ${JWT_SECRET:change-me-in-production-at-least-64-bytes-long-jwt-secret-key-here!!!!!}
 
-oauth:
-  github:
-    client_id: ${GITHUB_CLIENT_ID:}
-    client_secret: ${GITHUB_CLIENT_SECRET:}
-    redirect_uri: http://localhost:8080/auth/github/callback
-  google:
-    client_id: ${GOOGLE_CLIENT_ID:}
-    client_secret: ${GOOGLE_CLIENT_SECRET:}
-    redirect_uri: http://localhost:8080/auth/google/callback
+# Uncomment when OAuth credentials are configured:
+# oauth:
+#   github:
+#     client_id: ${GITHUB_CLIENT_ID}
+#     client_secret: ${GITHUB_CLIENT_SECRET}
+#     redirect_uri: http://localhost:8080/auth/github/callback
+#   google:
+#     client_id: ${GOOGLE_CLIENT_ID}
+#     client_secret: ${GOOGLE_CLIENT_SECRET}
+#     redirect_uri: http://localhost:8080/auth/google/callback
 ```
 
 ### Config YAML (production)
@@ -458,10 +482,6 @@ oauth:
 
 ```
 JWT_SECRET=change-me-in-production-at-least-64-bytes-long-jwt-secret-key-here!!!!!
-GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
 ```
 
 ### Notes
@@ -530,15 +550,31 @@ mailpit:
 
 ### Files to create
 
+**emails/layouts/:** directory (required by modo email layout system)
+
 **emails/welcome.md:**
 ```markdown
-# Welcome
+---
+subject: Welcome — let's get started!
+layout: base
+---
 
-Hello {{ name }},
+# Welcome, {{ name }}!
 
-Thanks for signing up! We're glad to have you.
+Thanks for signing up. We're excited to have you on board.
 
-— The Team
+## Getting Started
+
+1. **Complete your profile** — add your details to personalize your experience
+2. **Explore the dashboard** — familiarize yourself with the interface
+
+## Need Help?
+
+Just reply to this email — we're happy to help.
+
+---
+
+If you didn't create this account, please ignore this email.
 ```
 
 ---
@@ -970,6 +1006,8 @@ Generate a placeholder module with a TODO:
 
 **src/tenant.rs:**
 ```rust
+#![allow(unused)]
+
 use modo::tenant::{TenantId, TenantResolver};
 use modo::Result;
 
@@ -1022,6 +1060,8 @@ RBAC requires the user to implement the `RoleExtractor` trait. Generate a placeh
 
 **src/rbac.rs:**
 ```rust
+#![allow(unused)]
+
 use modo::rbac::RoleExtractor;
 use modo::Result;
 

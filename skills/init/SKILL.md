@@ -110,17 +110,20 @@ Run `scripts/scaffold.sh` from this skill's directory to create the base project
 bash "<skill-dir>/scripts/scaffold.sh" "<project_dir>" "<project_name>"
 ```
 
-This creates: directory structure, `src/config.rs`, `src/error.rs`, `src/routes/health.rs`, `migrations/app/001_initial.sql`, `.gitignore`, `.github/workflows/ci.yml`, `data/.gitkeep`.
+This creates: directory structure, `src/config.rs`, `src/error.rs`, `src/routes/health.rs`, `migrations/app/001_initial.sql`, `.gitignore`, `.editorconfig`, `.github/workflows/ci.yml`, `data/.gitkeep`.
 
 #### 4b: Run component scripts
 
-For each selected component that has a script, run it:
+For each selected component that has a script, run it in this order:
 
 | Component | Script |
 |-----------|--------|
 | Templates | `bash "<skill-dir>/scripts/init_templates.sh" "<project_dir>"` |
+| Templates | `bash "<skill-dir>/scripts/download_assets.sh" "<project_dir>"` |
 | Jobs (or Cron) | `bash "<skill-dir>/scripts/init_jobs.sh" "<project_dir>"` |
 | Email | `bash "<skill-dir>/scripts/init_email.sh" "<project_dir>"` |
+
+Note: `download_assets.sh` downloads htmx, htmx-sse, and alpine.js. It runs after `init_templates.sh` which creates the `static/js/` directory. `init_templates.sh` also compiles Tailwind CSS if the `tailwindcss` CLI is available.
 
 #### 4c: Generate dynamic files
 
@@ -150,10 +153,10 @@ These files depend on the selected components — generate each with `Write`. Re
 
 7. **`.env.example`** — Core entries plus component-specific entries from `references/components.md`.
 
-8. **`justfile`** — Base commands plus `services` / `services-down` targets if docker-compose is needed. See `references/files.md`.
+8. **`justfile`** — Assemble from base recipes + conditional recipe blocks based on selected components. See `references/files.md` for the full template with `command -v` guards on external tools. The `setup` recipe body is assembled conditionally (include `just assets-download` and `just css` if Templates, `just docker-up` if Docker services).
 
 9. **`Dockerfile`** — Base template from `references/files.md`, plus conditional `COPY` lines:
-   - If templates: `COPY templates/ /app/templates/` and `COPY static/ /app/static/`
+   - If templates: `COPY templates/ /app/templates/`, `COPY static/ /app/static/`, `COPY locales/ /app/locales/`
    - If email: `COPY emails/ /app/emails/`
 
 10. **`docker-compose.yml`** (only if Email or Storage selected) — Assemble service blocks from `references/components.md`.
@@ -161,6 +164,8 @@ These files depend on the selected components — generate each with `Write`. Re
 11. **`src/tenant.rs`** (if Multi-tenancy selected) — Placeholder with `TenantResolver` trait docs.
 
 12. **`src/rbac.rs`** (if RBAC selected) — Placeholder with `RoleExtractor` trait docs.
+
+13. **`CLAUDE.md`** — Project context file for Claude Code. Assemble from `references/files.md` template, replacing `{{project_name}}` and conditional command/component sections based on selected components.
 
 #### Middleware layering order
 
@@ -205,10 +210,8 @@ After generating all files:
 
 ```
 cd <project>
-cp .env.example .env
-# Edit .env with your secrets
-just services    # (if docker-compose exists) Start local services
-just dev         # Run the app
+just setup       # Copies .env, downloads assets, compiles CSS, starts Docker
+just dev         # Run the app with auto-reload
 ```
 
 3. Mention what they'll need to do next:
@@ -231,8 +234,11 @@ just dev         # Run the app
 - Cookie secret must be at least 64 characters
 - `.env.example` has safe defaults for development, no real secrets
 - Rust edition is `2024`, rust-version is `"1.92"`
+- HTML templates use ONLY Tailwind CSS utility classes — no custom CSS, no inline styles
+- Static JS assets (htmx, alpine) are vendored in `static/js/` and committed to the repo
+- Justfile recipes that depend on external tools (`cargo-watch`, `tailwindcss`, `docker`) must guard with `command -v` checks
 
 ## References
 
 - `references/components.md` — Code snippets for each component (registry, config, main.rs blocks)
-- `references/files.md` — Boilerplate file templates (Cargo.toml, justfile, Dockerfile, etc.)
+- `references/files.md` — Boilerplate file templates (Cargo.toml, justfile, Dockerfile, CLAUDE.md, etc.)

@@ -2,30 +2,48 @@
 # Adds template component files to a modo project.
 # Usage: init_templates.sh <project_dir>
 #
-# Creates: templates/base.html, templates/home.html, static/.gitkeep,
+# Creates: templates/base.html, templates/home.html,
+#          static/css/app.css, assets/css/app.css,
+#          locales/en/common.yaml,
 #          src/handlers/home.rs, src/routes/home.rs
 
 set -euo pipefail
 
 PROJECT_DIR="${1:?Usage: init_templates.sh <project_dir>}"
 
-mkdir -p "$PROJECT_DIR"/{templates,static}
+mkdir -p "$PROJECT_DIR"/{templates,static/css,static/js,assets/css,locales/en}
 
 # ── templates/base.html ─────────────────────────────────────
 cat > "$PROJECT_DIR/templates/base.html" << 'HTML'
 <!doctype html>
-<html lang="en">
+<html lang="{{ locale }}">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}App{% endblock %}</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}App{% endblock %}</title>
+  <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
+  <script defer src="{{ static_url('js/alpine.min.js') }}"></script>
+  {% block head %}{% endblock %}
 </head>
-<body>
-    {% for msg in flash_messages() %}
-    <div class="flash flash-{{ msg.level }}">{{ msg.message }}</div>
-    {% endfor %}
+<body class="min-h-screen bg-gray-50 text-gray-900 antialiased">
+  {% for msg in flash_messages() %}
+  {% if msg.level == "success" %}
+  <div class="mx-4 mt-2 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800" role="alert">{{ msg.message }}</div>
+  {% elif msg.level == "error" %}
+  <div class="mx-4 mt-2 rounded-md bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{{ msg.message }}</div>
+  {% elif msg.level == "warning" %}
+  <div class="mx-4 mt-2 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800" role="alert">{{ msg.message }}</div>
+  {% else %}
+  <div class="mx-4 mt-2 rounded-md bg-blue-50 px-4 py-3 text-sm text-blue-800" role="alert">{{ msg.message }}</div>
+  {% endif %}
+  {% endfor %}
 
-    {% block content %}{% endblock %}
+  {% block content %}{% endblock %}
+
+  <script src="{{ static_url('js/htmx.min.js') }}"></script>
+  <script src="{{ static_url('js/htmx-sse.js') }}"></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>
 HTML
@@ -37,13 +55,39 @@ cat > "$PROJECT_DIR/templates/home.html" << 'HTML'
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-<h1>{{ title }}</h1>
-<p>Welcome to your new modo app!</p>
+<main class="mx-auto max-w-xl px-6 py-20">
+  <h1 class="text-3xl font-bold tracking-tight">{{ title }}</h1>
+  <p class="mt-2 text-gray-500">Your modo app is running.</p>
+  <ul class="mt-8 flex flex-col gap-3">
+    <li><a href="/_ready" class="text-blue-600 hover:underline">Health check</a></li>
+  </ul>
+</main>
 {% endblock %}
 HTML
 
-# ── static/.gitkeep ─────────────────────────────────────────
-touch "$PROJECT_DIR/static/.gitkeep"
+# ── assets/css/app.css (Tailwind v4 source) ─────────────────
+cat > "$PROJECT_DIR/assets/css/app.css" << 'CSS'
+@import "tailwindcss";
+@source "../../templates/**/*.html";
+CSS
+
+# ── static/css/app.css (Tailwind output) ────────────────────
+# Compile with: just css
+cat > "$PROJECT_DIR/static/css/app.css" << 'CSS'
+/* Run `just css` to compile Tailwind CSS */
+CSS
+
+if command -v tailwindcss >/dev/null 2>&1; then
+    echo "Compiling Tailwind CSS..."
+    (cd "$PROJECT_DIR" && tailwindcss -i assets/css/app.css -o static/css/app.css --minify 2>/dev/null) || true
+fi
+
+# ── locales/en/common.yaml ──────────────────────────────────
+cat > "$PROJECT_DIR/locales/en/common.yaml" << 'YAML'
+app_name: My App
+welcome: Welcome
+home: Home
+YAML
 
 # ── src/handlers/home.rs ────────────────────────────────────
 cat > "$PROJECT_DIR/src/handlers/home.rs" << 'RUST'
