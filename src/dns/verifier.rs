@@ -51,7 +51,7 @@ pub(crate) struct Inner {
 /// # }
 /// ```
 pub struct DomainVerifier {
-    pub(crate) inner: Arc<Inner>,
+    inner: Arc<Inner>,
 }
 
 impl Clone for DomainVerifier {

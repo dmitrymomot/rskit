@@ -39,6 +39,7 @@ async fn start_test_server(
 
 #[tokio::test]
 async fn hyper_client_post_reaches_server() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let (url, handle) = start_test_server(200).await;
     let client = HyperClient::new(Duration::from_secs(5));
 
@@ -61,6 +62,7 @@ async fn hyper_client_post_reaches_server() {
 
 #[tokio::test]
 async fn hyper_client_timeout_on_slow_server() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let url = format!("http://127.0.0.1:{}", addr.port());
@@ -83,6 +85,7 @@ async fn hyper_client_timeout_on_slow_server() {
 
 #[tokio::test]
 async fn end_to_end_send_and_verify() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let (url, handle) = start_test_server(200).await;
     let sender = WebhookSender::new(HyperClient::new(Duration::from_secs(5)));
     let secret = WebhookSecret::new(b"e2e-test-secret".to_vec());

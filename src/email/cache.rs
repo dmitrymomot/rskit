@@ -41,7 +41,10 @@ impl<S: TemplateSource> TemplateSource for CachedSource<S> {
         );
 
         {
-            let mut cache = self.cache.lock().unwrap();
+            let mut cache = self
+                .cache
+                .lock()
+                .expect("email template cache lock poisoned");
             if let Some(cached) = cache.get(&key) {
                 return Ok(cached.clone());
             }
@@ -50,7 +53,10 @@ impl<S: TemplateSource> TemplateSource for CachedSource<S> {
         let content = self.inner.load(name, locale, default_locale)?;
 
         {
-            let mut cache = self.cache.lock().unwrap();
+            let mut cache = self
+                .cache
+                .lock()
+                .expect("email template cache lock poisoned");
             cache.put(key, content.clone());
         }
 

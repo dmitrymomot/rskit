@@ -134,11 +134,11 @@ impl ShardedMap {
 
         // Try read lock first — fast path for existing keys
         {
-            let read = shard.read().unwrap();
+            let read = shard.read().expect("rate limit shard lock poisoned");
             if read.contains_key(key) {
                 drop(read);
                 // Need write lock to mutate the bucket
-                let mut write = shard.write().unwrap();
+                let mut write = shard.write().expect("rate limit shard lock poisoned");
                 if let Some(bucket) = write.get_mut(key) {
                     return bucket.check(per_second, burst_size);
                 }
@@ -147,7 +147,11 @@ impl ShardedMap {
 
         // Check total keys BEFORE acquiring the write lock
         if max_keys > 0 {
-            let total: usize = self.shards.iter().map(|s| s.read().unwrap().len()).sum();
+            let total: usize = self
+                .shards
+                .iter()
+                .map(|s| s.read().expect("rate limit shard lock poisoned").len())
+                .sum();
             if total >= max_keys {
                 return CheckResult::Rejected {
                     retry_after_secs: 1.0,
@@ -156,7 +160,7 @@ impl ShardedMap {
         }
 
         // Write lock — insert new key
-        let mut write = shard.write().unwrap();
+        let mut write = shard.write().expect("rate limit shard lock poisoned");
         // Re-check after acquiring write lock (race condition)
         if let Some(bucket) = write.get_mut(key) {
             return bucket.check(per_second, burst_size);
@@ -177,7 +181,7 @@ impl ShardedMap {
         let now = Instant::now();
 
         for shard in &self.shards {
-            let mut write = shard.write().unwrap();
+            let mut write = shard.write().expect("rate limit shard lock poisoned");
             write.retain(|_, bucket| now.duration_since(bucket.last_refill) < max_idle);
         }
     }

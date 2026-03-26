@@ -99,6 +99,7 @@ mod tests {
 
     #[test]
     fn hyper_client_creates_without_panic() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let _ = HyperClient::new(Duration::from_secs(30));
     }
 }

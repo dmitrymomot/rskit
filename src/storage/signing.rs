@@ -102,7 +102,8 @@ pub(crate) fn sign_request(params: &SigningParams) -> (String, Vec<(String, Stri
     let signing_key = derive_signing_key(params.secret_key, &date_stamp, params.region);
 
     // Signature
-    let signature = crate::encoding::hex::encode(&hmac_sha256(&signing_key, string_to_sign.as_bytes()));
+    let signature =
+        crate::encoding::hex::encode(&hmac_sha256(&signing_key, string_to_sign.as_bytes()));
 
     // Authorization header
     let authorization = format!(

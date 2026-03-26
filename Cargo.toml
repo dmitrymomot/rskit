@@ -9,6 +9,7 @@ readme = "README.md"
 keywords = ["web", "framework", "axum", "sqlite"]
 categories = ["web-programming::http-server"]
 rust-version = "1.92"
+exclude = [".claude", ".claude-plugin", "skills", "docs", ".github", "examples"]
 
 [features]
 default = []
@@ -144,3 +145,4 @@ maxminddb = { version = "0.27", optional = true }
 tokio = { version = "1", features = ["full", "test-util"] }
 tempfile = "3"
 serial_test = "3"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }

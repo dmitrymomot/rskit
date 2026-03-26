@@ -68,7 +68,8 @@ pub(crate) fn presign_url(params: &PresignParams) -> String {
 
     // Derive signing key and compute signature
     let signing_key = derive_signing_key(params.secret_key, &date_stamp, params.region);
-    let signature = crate::encoding::hex::encode(&hmac_sha256(&signing_key, string_to_sign.as_bytes()));
+    let signature =
+        crate::encoding::hex::encode(&hmac_sha256(&signing_key, string_to_sign.as_bytes()));
 
     format!("{base_url}?{query_string}&X-Amz-Signature={signature}")
 }
