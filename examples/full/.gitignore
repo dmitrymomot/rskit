@@ -1,5 +1,0 @@
-/target
-/data/*.db
-/data/*.db-*
-.env
-Cargo.lock
