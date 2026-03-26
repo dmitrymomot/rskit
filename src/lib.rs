@@ -128,6 +128,9 @@ pub use geolocation::{GeoLayer, GeoLocator, GeolocationConfig, Location};
 #[cfg(feature = "qrcode")]
 pub use qrcode::{Ecl, QrCode, QrError, QrStyle};
 
+#[cfg(all(feature = "qrcode", feature = "templates"))]
+pub use qrcode::qr_svg_function;
+
 // Re-exports for user convenience
 pub use axum;
 pub use serde;
