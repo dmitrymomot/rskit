@@ -4,84 +4,21 @@
 
 [![CI](https://github.com/dmitrymomot/modo/actions/workflows/ci.yml/badge.svg)](https://github.com/dmitrymomot/modo/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
+![Rust](https://img.shields.io/badge/rust-1.92+-orange.svg)
 
-Single crate, zero proc macros. Handlers are plain `async fn`, routes use axum's `Router` directly, services are wired explicitly in `main()`, and database queries use raw sqlx. Built on [axum 0.8](https://github.com/tokio-rs/axum) with full access to the axum/tower ecosystem.
+One crate. Zero proc macros. Everything you need to ship a real app — sessions, auth, background jobs, email, storage — without stitching together 15 crates and writing the glue yourself.
 
-## Design
+Built on [axum 0.8](https://github.com/tokio-rs/axum), so you keep full access to the axum/tower ecosystem. Handlers are plain `async fn`. Routes use axum's `Router`. Database queries use raw sqlx. No magic, no code generation, no framework lock-in.
 
-- **One crate** — `cargo add modo`, feature-flag what you need
-- **Plain functions** — handlers are `async fn`, no macro magic
-- **Explicit wiring** — routes, services, and middleware composed in `main()`
-- **Raw sqlx** — no ORM, no generated models, just SQL
-- **Feature flags** — optional modules enabled only when needed
+## Why modo
 
-## Modules
+**You need 15+ crates for a real Rust web app.** Sessions, auth, background jobs, config, email, flash messages, rate limiting, CORS, CSRF — each one is a separate crate with its own patterns, its own wiring, and its own test setup. modo gives you all of it in one import.
 
-### Always available
+**Proc macros slow you down.** They increase compile times, hide control flow, and make errors cryptic. modo uses zero proc macros. Handlers are plain functions. Routes are axum routes. What you see is what runs.
 
-| Module       | Description                                                                              |
-| ------------ | ---------------------------------------------------------------------------------------- |
-| `config`     | YAML config with `${VAR}` / `${VAR:default}` env var substitution, loaded per `APP_ENV`  |
-| `db`         | SQLite via sqlx — `Pool`, `ReadPool`, `WritePool` newtypes with `Reader`/`Writer` traits |
-| `server`     | Configurable HTTP server with graceful shutdown                                          |
-| `error`      | `Error` type with status + message + optional source; `Result<T>` alias                  |
-| `extractor`  | `Service<T>` (registry), `JsonRequest<T>` / `FormRequest<T>` (request bodies)            |
-| `session`    | Cookie-based sessions with database backend, sliding expiry, multi-device                |
-| `tenant`     | Multi-tenancy via subdomain, header, path, or custom resolver                            |
-| `rbac`       | Role-based access control with `RoleExtractor` trait and guard middleware                |
-| `job`        | Persistent background job queue with retries and exponential backoff                     |
-| `cron`       | Cron scheduling with `croner` (5/6-field expressions)                                    |
-| `flash`      | Cookie-based flash messages (signed, read-once-and-clear)                                |
-| `cache`      | In-memory LRU cache                                                                      |
-| `encoding`   | Base32 and base64url encode/decode                                                       |
-| `id`         | ULID and short time-sortable ID generation                                               |
-| `ip`         | Client IP extraction with trusted proxy support                                          |
-| `middleware` | Rate limiting, request tracing, CORS, compression                                        |
-| `runtime`    | `Task` trait + `run!` macro for sequential graceful shutdown                             |
-| `sanitize`   | `Sanitize` trait for input sanitization                                                  |
-| `validate`   | `Validate` trait with `ValidationError`                                                  |
-| `cookie`     | Signed/private cookie jar utilities                                                      |
-| `tracing`    | Structured logging with `tracing`                                                        |
+**Wiring everything together is the real work.** Config loading, service injection, middleware ordering, graceful shutdown — the framework should handle this, not you. With modo, it's one `Registry`, one `run!` macro, and you're done.
 
-### Feature-gated
-
-| Feature        | Module        | Description                                                                             |
-| -------------- | ------------- | --------------------------------------------------------------------------------------- |
-| `auth`         | `auth::oauth` | OAuth2 (GitHub, Google) with pluggable `OAuthProvider` trait                            |
-| `auth`         | `auth::jwt`   | JWT encode/decode with HMAC signing, middleware, bearer extraction, optional revocation |
-| `templates`    | `template`    | MiniJinja templates with i18n, HTMX support, flash message integration                  |
-| `sse`          | `sse`         | Server-Sent Events broadcasting with named channels                                     |
-| `email`        | `email`       | Markdown-to-HTML email rendering with SMTP transport                                    |
-| `storage`      | `storage`     | S3-compatible object storage with ACL support and upload-from-URL                       |
-| `webhooks`     | `webhook`     | Outbound webhook delivery with Standard Webhooks signing                                |
-| `dns`          | `dns`         | DNS TXT/CNAME verification for custom domain validation                                 |
-| `geolocation`  | `geolocation` | MaxMind GeoIP2 location lookup with middleware                                          |
-| `sentry`       | —             | Sentry error tracking integration                                                       |
-| `test-helpers` | `testing`     | Test utilities (`TestDb`, `TestApp`, etc.)                                              |
-
-## Quick start
-
-```toml
-[dependencies]
-modo = "0.1"
-```
-
-Enable features as needed:
-
-```toml
-[dependencies]
-modo = { version = "0.1", features = ["templates", "auth"] }
-```
-
-Or enable everything:
-
-```toml
-[dependencies]
-modo = { version = "0.1", features = ["full"] }
-```
-
-### Minimal example
+## Quick look
 
 ```rust
 use modo::{Config, Result};
@@ -104,23 +41,155 @@ async fn main() -> Result<()> {
 }
 ```
 
-## Development
+## What's included
 
-```sh
-cargo check              # type check
-cargo test               # run tests (default features)
-cargo test --all-features # run all tests
-cargo clippy --all-features --tests -- -D warnings  # lint
-cargo fmt --check        # format check
+### Config that just works
+
+YAML files with `${ENV_VAR}` and `${ENV_VAR:default}` substitution, loaded per `APP_ENV`. No builder, no manual env parsing, no `.env` ceremony.
+
+```yaml
+# config/production.yaml
+server:
+  port: ${PORT:8080}
+database:
+  url: ${DATABASE_URL}
 ```
+
+```rust
+let config: Config = modo::config::load("config/")?;
+```
+
+### Database without an ORM
+
+SQLite via sqlx. `Pool`, `ReadPool`, `WritePool` newtypes enforce read/write separation at the type level. Upgrade from one pool to split pools without changing handler signatures.
+
+```rust
+let pool = db::connect(&config.database).await?;
+db::migrate("migrations/", &pool).await?;
+```
+
+### Sessions with zero glue code
+
+Database-backed, signed cookies, sliding expiry, multi-device, fingerprinting. The middleware handles the full request/response lifecycle — you just call methods.
+
+```rust
+async fn login(session: Session, JsonRequest(form): JsonRequest<LoginForm>) -> Result<()> {
+    // ... validate credentials ...
+    session.authenticate(user_id).await
+}
+
+async fn dashboard(session: Session) -> Result<String> {
+    let uid = session.user_id().ok_or(Error::unauthorized("not logged in"))?;
+    Ok(format!("Welcome, {uid}"))
+}
+```
+
+### Auth without a framework
+
+Password hashing (Argon2id), TOTP (Google Authenticator compatible), one-time codes, backup codes, JWT with middleware, OAuth2 (GitHub, Google) — all plain functions and types, no annotations.
+
+```rust
+let hash = auth::password::hash(password, &PasswordConfig::default()).await?;
+let valid = auth::password::verify(password, &hash).await?;
+
+let totp = Totp::from_base32(secret, &TotpConfig::default())?;
+let ok = totp.verify(user_code);
+```
+
+### Background jobs as plain functions
+
+SQLite-backed queue with retries, exponential backoff, timeouts, scheduled execution, and idempotent enqueue. Handlers use the same extraction pattern as HTTP routes.
+
+```rust
+async fn send_email(Payload(p): Payload<Email>, Service(mailer): Service<Mailer>) -> Result<()> {
+    mailer.send(&p.to, &p.body).await
+}
+
+let worker = Worker::builder(&config.job, &registry)
+    .register("send_email", send_email)
+    .start().await;
+
+Enqueuer::new(&pool).enqueue("send_email", &payload).await?;
+```
+
+### Graceful shutdown in one line
+
+The `run!` macro waits for SIGTERM/SIGINT, then shuts down each component in declaration order. No cancellation tokens, no orchestration code.
+
+```rust
+modo::run!(worker, server).await
+```
+
+### Dependency injection without macros
+
+`Registry` is a typed map. `.add()` at startup, `Service<T>` in handlers. No `#[inject]`, no container config, no runtime reflection.
+
+```rust
+let mut registry = Registry::new();
+registry.add(pool);
+registry.add(mailer);
+
+// In any handler:
+async fn list_users(Service(pool): Service<Pool>) -> Result<Json<Vec<User>>> { ... }
+```
+
+### Request extraction with auto-sanitization
+
+`JsonRequest<T>`, `FormRequest<T>`, and `Query<T>` call your `Sanitize` impl before the handler runs. Define it once, applied everywhere.
+
+### Middleware you'd write anyway
+
+Rate limiting, CORS, CSRF, compression, security headers, request tracing, panic catching, error handler — all included with sensible defaults. All standard Tower layers, not a custom system.
+
+### And the rest
+
+| Module        | What it does                                                     |
+| ------------- | ---------------------------------------------------------------- |
+| `template`    | MiniJinja with i18n, HTMX detection, flash message integration   |
+| `sse`         | Server-Sent Events with named broadcast channels                 |
+| `email`       | Markdown-to-HTML email rendering with SMTP                       |
+| `storage`     | S3-compatible object storage with ACL and upload-from-URL        |
+| `webhook`     | Outbound webhook delivery with Standard Webhooks signing         |
+| `dns`         | TXT/CNAME verification for custom domain validation              |
+| `geolocation` | MaxMind GeoIP2 location lookup with middleware                   |
+| `rbac`        | Role-based access control with guard middleware                  |
+| `tenant`      | Multi-tenancy via subdomain, header, path, or custom resolver    |
+| `flash`       | Signed, read-once cookie flash messages                          |
+| `cron`        | Cron scheduling (5/6-field expressions)                          |
+| `health`      | `/_live` and `/_ready` health check endpoints                    |
+| `cache`       | In-memory LRU cache                                              |
+| `testing`     | `TestDb`, `TestApp`, `TestSession` — in-process, no server needed|
+
+## Feature flags
+
+Everything above the table is always available. The table modules are opt-in:
+
+```toml
+[dependencies]
+modo = { version = "0.1", features = ["auth", "templates"] }
+```
+
+| Feature        | Modules                                              |
+| -------------- | ---------------------------------------------------- |
+| `auth`         | password, otp, totp, backup codes, jwt, oauth        |
+| `templates`    | MiniJinja engine with i18n and static file serving    |
+| `sse`          | Server-Sent Events broadcasting                      |
+| `email`        | Markdown email rendering + SMTP                      |
+| `storage`      | S3-compatible object storage                         |
+| `webhooks`     | Outbound webhook delivery                            |
+| `dns`          | DNS domain verification                              |
+| `geolocation`  | MaxMind GeoIP2 lookup                                |
+| `sentry`       | Sentry error tracking                                |
+| `test-helpers` | TestDb, TestApp, TestSession                         |
+| `full`         | All of the above                                     |
+
+## Re-exports
+
+modo re-exports `axum`, `serde`, `sqlx`, and `tokio` so you don't need to version-match them yourself.
 
 ## Claude Code Plugin
 
-The `modo-dev` plugin gives Claude Code knowledge of modo's APIs, conventions, and patterns so it can help you build applications with the framework.
-
-### Install
-
-Inside an active Claude Code session, run:
+The `modo-dev` plugin gives Claude Code full knowledge of modo's APIs and conventions.
 
 ```
 /plugin marketplace add dmitrymomot/modo
@@ -128,15 +197,17 @@ Inside an active Claude Code session, run:
 /reload-plugins
 ```
 
-### Usage
+Once installed, it activates automatically when you build with modo. Or invoke it with `/modo-dev`.
 
-Once installed, the `modo-dev` skill activates automatically when you ask Claude Code to build something with modo. You can also invoke it explicitly:
+## Development
 
+```sh
+cargo check                                        # type check
+cargo test                                         # run tests
+cargo test --all-features                          # run all tests
+cargo clippy --all-features --tests -- -D warnings # lint
+cargo fmt --check                                  # format check
 ```
-/modo-dev
-```
-
-The skill covers handlers, routing, middleware, database, sessions, auth, RBAC, templates, SSE, jobs, cron, email, storage, webhooks, DNS verification, geolocation, multi-tenancy, flash messages, configuration, and testing.
 
 ## License
 
