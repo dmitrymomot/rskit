@@ -48,7 +48,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - Tracing fields: always snake_case (`user_id`, `session_id`, `job_id`)
 - Pluggable backends: wrap with `Arc<dyn Trait>` (not `Box`)
 - Cache: `src/cache/` module provides `LruCache` — always available, no feature gate
-- Encoding: `src/encoding/` module provides `base32` and `base64url` encode/decode — always available, no feature gate
+- Encoding: `src/encoding/` module provides `base32`, `base64url` encode/decode, and `hex` encode + `sha256` helper — always available, no feature gate
 - Rate limiting: custom `KeyExtractor` trait in `src/middleware/rate_limit.rs` — `PeerIpKeyExtractor` for IP-based, `GlobalKeyExtractor` for shared bucket; `rate_limit()` and `rate_limit_with()` accept `CancellationToken` for cleanup shutdown
 - Config: `trusted_proxies` is a top-level config field (not under `session`) — parsed into `Vec<IpNet>` at startup for `ClientIpLayer`
 

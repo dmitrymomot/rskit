@@ -343,7 +343,7 @@ Defined in `Cargo.toml`. Default is empty (no optional features enabled).
 | Feature        | What it enables                                          | Dependencies                                                                                |
 | -------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `full`         | All optional features below                              | (meta)                                                                                      |
-| `auth`         | OAuth 2.0 (Google, GitHub), JWT, Argon2 password hashing | `argon2`, `hmac`, `sha1`, `subtle`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util` |
+| `auth`         | OAuth 2.0 (Google, GitHub), JWT, Argon2 password hashing | `argon2`, `hmac`, `sha1`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util`           |
 | `templates`    | MiniJinja template engine with i18n                      | `minijinja`, `minijinja-contrib`, `intl_pluralrules`, `unic-langid`                         |
 | `sse`          | Server-Sent Events broadcaster                           | `futures-util`                                                                              |
 | `email`        | SMTP email delivery with Markdown-to-HTML                | `lettre`, `pulldown-cmark`                                                                  |

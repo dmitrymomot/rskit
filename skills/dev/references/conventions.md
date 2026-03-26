@@ -551,10 +551,28 @@ let encoded = base64url::encode(b"Hello");   // "SGVsbG8"
 let decoded = base64url::decode("SGVsbG8")?; // b"Hello"
 ```
 
+### `encoding::hex`
+
+Lowercase hex encoding with a SHA-256 convenience helper.
+
+```rust
+fn encode(bytes: &[u8]) -> String
+fn sha256(data: impl AsRef<[u8]>) -> String
+```
+
+```rust
+use modo::encoding::hex;
+
+let hex_str = hex::encode(b"\xde\xad");       // "dead"
+let hash = hex::sha256(b"hello");              // 64-char lowercase hex
+```
+
+`encode` produces lowercase hex. `sha256` computes SHA-256 and returns the digest as lowercase hex (equivalent to `hex::encode(Sha256::digest(data))`).
+
 ### Gotchas
 
 - These are modo's own implementations, NOT the `base64` crate. The `base64` crate is used separately for standard base64 in the webhooks feature.
-- No padding characters are produced or accepted by either codec.
+- No padding characters are produced or accepted by the base32/base64url codecs.
 
 ---
 
