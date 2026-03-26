@@ -29,7 +29,7 @@ impl Ecl {
 /// A generated QR code ready for SVG rendering.
 #[derive(Debug)]
 pub struct QrCode {
-    pub(crate) qr: fast_qr::QRCode,
+    pub(super) qr: fast_qr::QRCode,
 }
 
 impl QrCode {
