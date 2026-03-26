@@ -21,11 +21,7 @@ pub(crate) fn render_svg(qr: &fast_qr::QRCode, style: &QrStyle) -> Result<String
     .unwrap();
 
     // Background
-    write!(
-        svg,
-        r#"<rect fill="{bg}" width="100%" height="100%"/>"#,
-    )
-    .unwrap();
+    write!(svg, r#"<rect fill="{bg}" width="100%" height="100%"/>"#,).unwrap();
 
     // Render the three finder patterns as grouped elements
     render_finder(style, &mut svg, &fg, 0, 0)?; // top-left
@@ -63,8 +59,11 @@ fn is_finder_region(row: usize, col: usize, size: usize) -> bool {
 fn render_module(svg: &mut String, shape: &ModuleShape, x: f64, y: f64, m: f64, fg: &str) {
     match shape {
         ModuleShape::Square => {
-            write!(svg, r#"<rect x="{x}" y="{y}" width="{m}" height="{m}" fill="{fg}"/>"#)
-                .unwrap();
+            write!(
+                svg,
+                r#"<rect x="{x}" y="{y}" width="{m}" height="{m}" fill="{fg}"/>"#
+            )
+            .unwrap();
         }
         ModuleShape::RoundedSquare { radius } => {
             let r = radius.clamp(0.0, 0.5) as f64 * m;
@@ -115,20 +114,29 @@ fn render_finder(
         FinderShape::Square => {
             // Outer 7×7
             let s7 = 7.0 * m;
-            write!(svg, r#"<rect x="{x}" y="{y}" width="{s7}" height="{s7}" fill="{fg}"/>"#)
-                .unwrap();
+            write!(
+                svg,
+                r#"<rect x="{x}" y="{y}" width="{s7}" height="{s7}" fill="{fg}"/>"#
+            )
+            .unwrap();
             // Middle 5×5 (background gap)
             let s5 = 5.0 * m;
             let x5 = x + m;
             let y5 = y + m;
-            write!(svg, r#"<rect x="{x5}" y="{y5}" width="{s5}" height="{s5}" fill="{bg}"/>"#)
-                .unwrap();
+            write!(
+                svg,
+                r#"<rect x="{x5}" y="{y5}" width="{s5}" height="{s5}" fill="{bg}"/>"#
+            )
+            .unwrap();
             // Inner 3×3
             let s3 = 3.0 * m;
             let x3 = x + 2.0 * m;
             let y3 = y + 2.0 * m;
-            write!(svg, r#"<rect x="{x3}" y="{y3}" width="{s3}" height="{s3}" fill="{fg}"/>"#)
-                .unwrap();
+            write!(
+                svg,
+                r#"<rect x="{x3}" y="{y3}" width="{s3}" height="{s3}" fill="{fg}"/>"#
+            )
+            .unwrap();
         }
         FinderShape::Rounded => {
             let r_outer = m * 0.5;
@@ -266,7 +274,10 @@ mod tests {
         };
         let svg = render_svg(&qr.qr, &style).unwrap();
         let circle_count = svg.matches("<circle").count();
-        assert!(circle_count > 3, "expected data circles, got {circle_count}");
+        assert!(
+            circle_count > 3,
+            "expected data circles, got {circle_count}"
+        );
     }
 
     #[test]
@@ -321,7 +332,10 @@ mod tests {
         let g_end = svg.rfind("</g>").unwrap() + 4;
         let finder_section = &svg[g_start..g_end];
         let circle_count = finder_section.matches("<circle").count();
-        assert_eq!(circle_count, 9, "expected 9 finder circles, got {circle_count}");
+        assert_eq!(
+            circle_count, 9,
+            "expected 9 finder circles, got {circle_count}"
+        );
     }
 
     #[test]

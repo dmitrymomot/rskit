@@ -45,10 +45,7 @@ mod tests {
 
     #[test]
     fn all_variants_have_unique_codes() {
-        let variants = [
-            QrError::DataTooLong,
-            QrError::InvalidColor("#bad".into()),
-        ];
+        let variants = [QrError::DataTooLong, QrError::InvalidColor("#bad".into())];
         let mut codes: Vec<&str> = variants.iter().map(|v| v.code()).collect();
         let len_before = codes.len();
         codes.sort();
@@ -58,10 +55,7 @@ mod tests {
 
     #[test]
     fn all_codes_start_with_qrcode_prefix() {
-        let variants = [
-            QrError::DataTooLong,
-            QrError::InvalidColor("x".into()),
-        ];
+        let variants = [QrError::DataTooLong, QrError::InvalidColor("x".into())];
         for v in &variants {
             assert!(
                 v.code().starts_with("qrcode:"),

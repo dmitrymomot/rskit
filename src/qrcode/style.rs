@@ -53,10 +53,7 @@ impl Color {
                         if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
                             return Err(QrError::InvalidColor(s.to_string()));
                         }
-                        let expanded: String = hex
-                            .chars()
-                            .flat_map(|c| [c, c])
-                            .collect();
+                        let expanded: String = hex.chars().flat_map(|c| [c, c]).collect();
                         Ok(format!("#{expanded}"))
                     }
                     6 => {

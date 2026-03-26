@@ -95,8 +95,16 @@ mod tests {
 
     #[test]
     fn higher_ecl_may_produce_larger_qr() {
-        let low = QrCode::with_ecl("Hello, World! This is some test data for QR codes.", Ecl::Low).unwrap();
-        let high = QrCode::with_ecl("Hello, World! This is some test data for QR codes.", Ecl::High).unwrap();
+        let low = QrCode::with_ecl(
+            "Hello, World! This is some test data for QR codes.",
+            Ecl::Low,
+        )
+        .unwrap();
+        let high = QrCode::with_ecl(
+            "Hello, World! This is some test data for QR codes.",
+            Ecl::High,
+        )
+        .unwrap();
         assert!(high.size() >= low.size());
     }
 

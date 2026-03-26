@@ -16,8 +16,8 @@ use crate::qrcode::style::{Color, FinderShape, ModuleShape, QrStyle};
 /// ```jinja
 /// {{ qr_svg(data="otpauth://totp/...", fg="#1a1a2e") }}
 /// ```
-pub fn qr_svg_function() -> impl Fn(&[Value]) -> Result<Value, minijinja::Error> + Send + Sync + 'static
-{
+pub fn qr_svg_function()
+-> impl Fn(&[Value]) -> Result<Value, minijinja::Error> + Send + Sync + 'static {
     move |args: &[Value]| {
         let kwargs = match args.first() {
             Some(v) if v.kind() == minijinja::value::ValueKind::Map => v.clone(),
@@ -47,8 +47,10 @@ pub fn qr_svg_function() -> impl Fn(&[Value]) -> Result<Value, minijinja::Error>
         let bg = get_str_attr(&kwargs, "bg").unwrap_or_else(|| "#ffffff".into());
 
         // Optional: shapes
-        let module_shape_str = get_str_attr(&kwargs, "module_shape").unwrap_or_else(|| "rounded".into());
-        let finder_shape_str = get_str_attr(&kwargs, "finder_shape").unwrap_or_else(|| "rounded".into());
+        let module_shape_str =
+            get_str_attr(&kwargs, "module_shape").unwrap_or_else(|| "rounded".into());
+        let finder_shape_str =
+            get_str_attr(&kwargs, "finder_shape").unwrap_or_else(|| "rounded".into());
 
         // Optional: radius
         let radius = get_f64_attr(&kwargs, "radius").unwrap_or(0.3) as f32;
@@ -162,9 +164,10 @@ mod tests {
 
     #[test]
     fn custom_finder_shape_circle() {
-        let result =
-            render_template(r#"{{ qr_svg(data="test", finder_shape="circle", module_shape="square") }}"#)
-                .unwrap();
+        let result = render_template(
+            r#"{{ qr_svg(data="test", finder_shape="circle", module_shape="square") }}"#,
+        )
+        .unwrap();
         assert!(result.contains("<circle"));
     }
 
