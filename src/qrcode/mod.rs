@@ -16,11 +16,11 @@
 //! let svg = qr.to_svg(&QrStyle::default());
 //! ```
 
-// mod code;
+mod code;
 mod error;
-// mod render;
+mod render;
 mod style;
 
-// pub use code::{Ecl, QrCode};
+pub use code::{Ecl, QrCode};
 pub use error::QrError;
 pub use style::{Color, FinderShape, ModuleShape, QrStyle};
