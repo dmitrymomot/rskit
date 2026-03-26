@@ -151,6 +151,21 @@ When Templates is selected, also add to the `setup` recipe body:
     just css
 ```
 
+### Conditional: Geolocation (add when Geolocation is selected)
+
+```makefile
+# Download or update GeoIP city database (DB-IP Lite, CC BY 4.0)
+geoip-download:
+    mkdir -p data
+    curl -sL "https://cdn.jsdelivr.net/npm/dbip-city-lite/dbip-city-lite.mmdb.gz" | gunzip > data/GeoLite2-City.mmdb
+    @echo "GeoIP database downloaded to data/GeoLite2-City.mmdb"
+```
+
+When Geolocation is selected, also add to the `setup` recipe body:
+```makefile
+    just geoip-download
+```
+
 ### Conditional: Docker services (add when docker-compose.yml exists)
 
 ```makefile
@@ -259,6 +274,7 @@ Add component-specific entries as documented in each component's section in `com
 /target
 /data/*.db
 /data/*.db-*
+/data/*.mmdb
 .env
 Cargo.lock
 
@@ -388,6 +404,13 @@ just css-watch        # Watch and recompile CSS
 ```
 ````
 
+If Geolocation:
+````
+```bash
+just geoip-download  # Download/update GeoIP city database
+```
+````
+
 If Docker services:
 ````
 ```bash
@@ -408,7 +431,7 @@ Example for full-stack:
 - **SSE** — Server-Sent Events broadcaster
 - **Webhooks** — Outbound webhook delivery with Standard Webhooks signing
 - **DNS** — Domain verification via TXT/CNAME records
-- **Geolocation** — MaxMind GeoIP2 IP-to-location lookups
+- **Geolocation** — IP-to-location lookups (DB-IP City Lite, auto-downloaded)
 - **Sentry** — Crash reporting and performance monitoring
 - **Jobs** — Background job queue with retries
 - **Cron** — Async cron scheduler for recurring tasks

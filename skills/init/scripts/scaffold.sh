@@ -76,6 +76,7 @@ cat > "$PROJECT_DIR/.gitignore" << 'GIT'
 /target
 /data/*.db
 /data/*.db-*
+/data/*.mmdb
 .env
 Cargo.lock
 

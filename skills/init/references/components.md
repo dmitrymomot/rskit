@@ -768,8 +768,10 @@ geolocation:
 
 ### Notes
 
-- The user must download the MaxMind GeoLite2-City.mmdb file themselves
-- Mention this in the post-generation instructions
+- The generated justfile includes a `geoip-download` recipe that downloads DB-IP City Lite (CC BY 4.0, no registration)
+- `just setup` automatically downloads the database when Geolocation is selected
+- The database file lives at `data/GeoLite2-City.mmdb` (gitignored via `data/*.db*` pattern — add `data/GeoLite2-City.mmdb` to `.gitignore` if not already covered)
+- To use MaxMind's official GeoLite2 instead, register at https://www.maxmind.com/en/geolite2/signup and use `geoipupdate` or curl with your API key
 
 ---
 

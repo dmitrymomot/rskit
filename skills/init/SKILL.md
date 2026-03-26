@@ -221,7 +221,6 @@ just dev         # Run the app with auto-reload
    - Implement `RoleExtractor` trait (if RBAC selected)
    - Implement `TenantResolver` trait (if multi-tenancy selected)
    - Register job handlers in main.rs (if jobs selected)
-   - Download MaxMind GeoLite2-City.mmdb (if geolocation selected)
 
 ### Important Rules
 
