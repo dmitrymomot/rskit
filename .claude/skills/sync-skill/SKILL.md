@@ -7,10 +7,18 @@ disable-model-invocation: true
 
 # Sync Modo Skill References
 
-You are updating the modo skill references (`skills/dev/`) to match the
-current state of the codebase. This is a verification and correction task — not creative writing.
+You are updating the modo skill references to match the current state of the codebase.
+This is a verification and correction task — not creative writing.
+
+**Output directory:** `skills/dev/` at the project root (NOT `.claude/skills/dev/`).
+Reference files go in `skills/dev/references/`, the topic index is `skills/dev/SKILL.md`.
+All paths in this document are relative to the project root unless stated otherwise.
 
 ## Hard Rules
+
+0. **Write to `skills/dev/`, never `.claude/skills/dev/`.** The skill definition lives in
+   `.claude/skills/sync-skill/` but its OUTPUT goes to `skills/dev/` at the project root.
+   These are different directories. Double-check every file path before writing.
 
 1. **Source code is the only truth.** Every type, method, field, variant, and trait bound you
    write in a reference doc must exist in the source. If you cannot point to a `pub` item in
@@ -155,7 +163,7 @@ together. Use this agent prompt template:
 
 ### Phase 2: Compare in Both Directions
 
-Read the current reference doc from `skills/dev/references/`.
+Read the current reference doc from `skills/dev/references/` (project root, NOT `.claude/`).
 
 **First-time creation:** If no reference doc exists yet for a module, skip Direction B
 (reference→source) since there's nothing to compare. All inventory items are MISSING by
@@ -204,6 +212,10 @@ confirm it exists in your Phase 1 inventory (which was extracted directly from s
 
 Now apply the verified changes to the reference doc. Rules:
 
+**Path reminder:** All reference files go in `skills/dev/references/` at the project root.
+When dispatching subagents to write files, use the absolute path
+`<project_root>/skills/dev/references/<name>.md` — never `.claude/skills/dev/`.
+
 1. **Add MISSING items** — place them in the appropriate section, matching the existing style.
    Look at how neighboring items are documented and follow the same pattern.
 
@@ -228,6 +240,10 @@ Now apply the verified changes to the reference doc. Rules:
     - Prose explaining behavior, error cases, edge cases under each method
 - `## Gotchas` section at the bottom for non-obvious behavior
 - Code examples use realistic patterns, not toy examples
+
+**For full syncs:** Writing agents may be dispatched in parallel for different reference files.
+Each agent prompt MUST include the full output path (`skills/dev/references/<name>.md` relative
+to the project root). The orchestrator writes files — agents doing inventory are read-only.
 
 ### Phase 4: Verify Completeness
 
