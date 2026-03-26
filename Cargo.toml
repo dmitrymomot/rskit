@@ -13,7 +13,7 @@ exclude = [".claude", ".claude-plugin", "skills", "docs", ".github", "examples",
 
 [features]
 default = []
-full = ["templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns", "geolocation"]
+full = ["templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns", "geolocation", "qrcode"]
 sentry = ["dep:sentry", "dep:sentry-tracing"]
 templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
 sse = ["dep:futures-util"]
@@ -35,6 +35,7 @@ webhooks-test = ["webhooks"]
 dns = ["dep:simple-dns"]
 dns-test = ["dns"]
 geolocation = ["dep:maxminddb"]
+qrcode = ["dep:fast_qr"]
 test-helpers = []
 
 [dependencies]
@@ -140,6 +141,9 @@ simple-dns = { version = "0.11", optional = true }
 
 # Geolocation (optional, gated by "geolocation" feature)
 maxminddb = { version = "0.27", optional = true }
+
+# QR code (optional, gated by "qrcode" feature)
+fast_qr = { version = "0.13", optional = true, default-features = false }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

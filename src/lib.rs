@@ -72,6 +72,9 @@ pub mod dns;
 #[cfg(feature = "geolocation")]
 pub mod geolocation;
 
+#[cfg(feature = "qrcode")]
+pub mod qrcode;
+
 #[cfg(feature = "test-helpers")]
 pub mod testing;
 
@@ -121,6 +124,9 @@ pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verifi
 
 #[cfg(feature = "geolocation")]
 pub use geolocation::{GeoLayer, GeoLocator, GeolocationConfig, Location};
+
+#[cfg(feature = "qrcode")]
+pub use qrcode::{Ecl, QrCode, QrError, QrStyle};
 
 // Re-exports for user convenience
 pub use axum;
