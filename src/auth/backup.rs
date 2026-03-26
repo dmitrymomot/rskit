@@ -1,4 +1,3 @@
-use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
 const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
@@ -58,6 +57,5 @@ fn normalize(code: &str) -> String {
 }
 
 fn sha256_hex(input: &str) -> String {
-    let digest = Sha256::digest(input.as_bytes());
-    crate::encoding::hex::encode(&digest)
+    crate::encoding::hex::sha256(input)
 }

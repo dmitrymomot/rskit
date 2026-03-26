@@ -1,5 +1,5 @@
 use hmac::{Hmac, Mac};
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -17,11 +17,8 @@ pub(crate) struct SigningParams<'a> {
     pub now: chrono::DateTime<chrono::Utc>,
 }
 
-/// SHA-256 hash of data, returned as lowercase hex.
 pub(crate) fn sha256_hex(data: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    hex_encode(&hasher.finalize())
+    crate::encoding::hex::sha256(data)
 }
 
 /// URI-encode per AWS spec. Encodes everything except A-Za-z0-9_.-~.
@@ -105,7 +102,7 @@ pub(crate) fn sign_request(params: &SigningParams) -> (String, Vec<(String, Stri
     let signing_key = derive_signing_key(params.secret_key, &date_stamp, params.region);
 
     // Signature
-    let signature = hex_encode(&hmac_sha256(&signing_key, string_to_sign.as_bytes()));
+    let signature = crate::encoding::hex::encode(&hmac_sha256(&signing_key, string_to_sign.as_bytes()));
 
     // Authorization header
     let authorization = format!(
@@ -130,10 +127,6 @@ pub(crate) fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
     let mut mac = HmacSha256::new_from_slice(key).expect("HMAC accepts any key length");
     mac.update(data);
     mac.finalize().into_bytes().to_vec()
-}
-
-pub(crate) fn hex_encode(bytes: &[u8]) -> String {
-    crate::encoding::hex::encode(bytes)
 }
 
 #[cfg(test)]
@@ -237,21 +230,6 @@ mod tests {
             ),
             "auth header: {auth}"
         );
-    }
-
-    #[test]
-    fn hex_encode_empty() {
-        assert_eq!(hex_encode(&[]), "");
-    }
-
-    #[test]
-    fn hex_encode_known_bytes() {
-        assert_eq!(hex_encode(&[0xde, 0xad, 0xbe, 0xef]), "deadbeef");
-    }
-
-    #[test]
-    fn hex_encode_all_zeros() {
-        assert_eq!(hex_encode(&[0, 0, 0, 0]), "00000000");
     }
 
     #[test]

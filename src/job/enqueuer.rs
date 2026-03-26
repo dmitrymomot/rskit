@@ -203,7 +203,7 @@ fn compute_payload_hash(name: &str, payload_json: &str) -> String {
     hasher.update(name.as_bytes());
     hasher.update(b"\0");
     hasher.update(payload_json.as_bytes());
-    format!("{:x}", hasher.finalize())
+    crate::encoding::hex::encode(&hasher.finalize())
 }
 
 #[cfg(test)]

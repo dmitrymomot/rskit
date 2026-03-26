@@ -1,4 +1,3 @@
-use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
 /// Generates a numeric one-time password of `length` digits.
@@ -36,6 +35,5 @@ pub fn verify(code: &str, hash: &str) -> bool {
 }
 
 fn sha256_hex(input: &str) -> String {
-    let digest = Sha256::digest(input.as_bytes());
-    crate::encoding::hex::encode(&digest)
+    crate::encoding::hex::sha256(input)
 }

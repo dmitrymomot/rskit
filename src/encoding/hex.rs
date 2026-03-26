@@ -1,4 +1,6 @@
-use std::fmt::Write;
+use sha2::{Digest as _, Sha256};
+
+const HEX_TABLE: &[u8; 16] = b"0123456789abcdef";
 
 /// Encode a byte slice as a lowercase hexadecimal string.
 ///
@@ -11,11 +13,18 @@ use std::fmt::Write;
 /// assert_eq!(hex::encode(b""), "");
 /// ```
 pub fn encode(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        write!(s, "{b:02x}").expect("writing to String cannot fail");
+    let mut buf = Vec::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        buf.push(HEX_TABLE[(b >> 4) as usize]);
+        buf.push(HEX_TABLE[(b & 0x0f) as usize]);
     }
-    s
+    // SAFETY: every byte written is from HEX_TABLE which contains only ASCII.
+    unsafe { String::from_utf8_unchecked(buf) }
+}
+
+/// SHA-256 hash of `data`, returned as a 64-character lowercase hex string.
+pub fn sha256(data: impl AsRef<[u8]>) -> String {
+    encode(&Sha256::digest(data.as_ref()))
 }
 
 #[cfg(test)]

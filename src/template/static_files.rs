@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use sha2::{Digest, Sha256};
-
 pub(crate) fn compute_hashes(static_path: &Path) -> crate::Result<HashMap<String, String>> {
     let mut hashes = HashMap::new();
     if static_path.exists() {
@@ -28,9 +26,7 @@ fn walk_dir(base: &Path, dir: &Path, hashes: &mut HashMap<String, String>) -> cr
                 crate::Error::internal(format!("Failed to read {}: {e}", path.display()))
             })?;
 
-            let mut hasher = Sha256::new();
-            hasher.update(&content);
-            let hash = format!("{:x}", hasher.finalize());
+            let hash = crate::encoding::hex::sha256(&content);
             let short_hash = hash[..8].to_string();
 
             let relative = path
