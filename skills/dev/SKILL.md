@@ -172,6 +172,7 @@ All paths are relative to the `references/` directory inside this skill folder.
 | DNS TXT/CNAME verification                                                                          | `references/dns.md`         |
 | MaxMind GeoIP2 location lookup                                                                      | `references/geolocation.md` |
 | Test helpers (TestDb, TestApp, etc.)                                                                | `references/testing.md`     |
+| QR code generation with SVG rendering                                                              | `references/qrcode.md`      |
 
 ## Common Multi-Module Workflows
 

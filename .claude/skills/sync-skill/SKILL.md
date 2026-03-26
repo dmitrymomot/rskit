@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Sync Modo Skill References
 
-You are updating the modo Claude plugin skill (`claude-plugin/skills/modo/`) to match the
+You are updating the modo skill references (`skills/dev/`) to match the
 current state of the codebase. This is a verification and correction task — not creative writing.
 
 ## Hard Rules
@@ -78,6 +78,7 @@ src/geolocation/    → geolocation.md
 src/runtime/        → handlers.md
 src/tracing/        → config.md
 src/testing/        → testing.md
+src/qrcode/         → qrcode.md
 ```
 
 ## Process
@@ -141,16 +142,25 @@ Also read and inventory:
 Group by reference file — all modules that map to the same reference file should be inventoried
 together. Use this agent prompt template:
 
-> Inventory every public API item in [source directories] of /Users/dmitrymomot/Dev/modo.
+> Inventory every public API item in [source directories] (relative to the project root).
 > Read every .rs file completely. For each file, list every `pub` item: structs (with all pub
-> fields and derives), enums (with all variants), traits (with all method signatures), impl
-> blocks (with all pub methods and their full signatures), free functions, type aliases, and
-> constants. Skip `pub(crate)` and private items. Format as a flat list per source file.
+> fields, types, and derives), enums (with all variants and their fields), traits (with all
+> method signatures including `async`, `&self`, all param names with types, and return types),
+> impl blocks (with all pub methods — each must show the COMPLETE signature: `pub fn name(&self,
+> param: Type) -> ReturnType` or `pub async fn name(&self, param: Type) -> ReturnType`), free
+> functions (complete signatures), type aliases, and constants. Skip `pub(crate)` and private
+> items. CRITICAL: never abbreviate signatures — write every parameter with its type and the
+> full return type. Format as a flat list per source file.
 > Also read the relevant sections of `src/lib.rs` for re-exports.
 
 ### Phase 2: Compare in Both Directions
 
-Read the current reference doc from `claude-plugin/skills/modo/references/`.
+Read the current reference doc from `skills/dev/references/`.
+
+**First-time creation:** If no reference doc exists yet for a module, skip Direction B
+(reference→source) since there's nothing to compare. All inventory items are MISSING by
+definition. Proceed directly to Phase 3 to create the reference doc. Phase 4 verification
+still applies — spot-check 3 signatures from the newly written doc against source.
 
 **Direction A — Source → Reference (find undocumented items):**
 
@@ -213,7 +223,8 @@ Now apply the verified changes to the reference doc. Rules:
 - `## TypeName` sections separated by `---`, each containing:
     - Brief description (one line)
     - Rust code block showing struct/enum definition with derives
-    - `### method_name(params) -> ReturnType` subsections for methods
+    - `### method_name(&self, param: Type) -> ReturnType` subsections for methods
+    - Include `async` in the heading for async methods: `### async method_name(...)`
     - Prose explaining behavior, error cases, edge cases under each method
 - `## Gotchas` section at the bottom for non-obvious behavior
 - Code examples use realistic patterns, not toy examples
@@ -239,7 +250,7 @@ After editing, run a mechanical check:
 
 ### Phase 5: Update SKILL.md and CLAUDE.md
 
-1. Check the topic index table in `claude-plugin/skills/modo/SKILL.md` — verify every row
+1. Check the topic index table in `skills/dev/SKILL.md` — verify every row
    matches the actual reference files that exist.
 
 2. If you changed an API pattern in a reference, check if `CLAUDE.md` conventions or gotchas
