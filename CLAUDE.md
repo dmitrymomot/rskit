@@ -64,6 +64,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - **Plan 17 (Storage ACL + Upload from URL):** DONE — `src/storage/` extended with `Acl` enum on `PutOptions`, `x-amz-acl` S3 header, `PutFromUrlInput`, `put_from_url()` / `put_from_url_with()` with streaming fetch and 30s timeout. Feature-gated under `storage`
 - **Plan 18 (DNS Verification):** DONE — `src/dns/` module with `DomainVerifier` (`check_txt()`, `check_cname()`, `verify_domain()`), `DnsConfig`, `DnsError`, `DomainStatus`, `generate_verification_token()`. Uses `simple-dns` 0.11 for packet parsing, raw UDP transport. Feature-gated under `dns` (39 unit + 5 integration tests)
 - **Plan 19 (Client IP + Geolocation):** DONE — `src/ip/` shared module (always available) with `ClientIp` extractor + `ClientIpLayer` middleware; `src/geolocation/` with `GeoLocator` service, `Location` struct, `GeoLayer` middleware. Session refactored to use shared `ClientIp`. Feature-gated under `geolocation` (28 unit + 0 integration tests)
+- **Plan 20 (QR Code):** DONE — `src/qrcode/` module with `QrCode`, `QrStyle`, `Ecl`, customizable SVG rendering (4 module shapes, 3 finder shapes, colors), `qr_svg_function()` template helper. Feature-gated under `qrcode` (62 unit tests)
 
 ## Gotchas
 
@@ -127,6 +128,7 @@ Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plai
 - `SessionLayer` must be re-exported from `src/session/mod.rs` — needed by test helpers and any code that programmatically creates session layers
 - MiniJinja: URLs/HTML must use `Value::from_safe_string()`; registrations consume by move (`Box<dyn FnOnce>`)
 - `simple-dns` 0.11 for DNS packet parsing (dns feature) — `TXT::attributes()` returns `HashMap<String, Option<String>>`, `CNAME` is tuple struct `CNAME(pub Name<'a>)`
+- `fast_qr` 0.13 for QR matrix generation (qrcode feature) — `QRBuilder::new(data).ecl(ecl).build()` returns `QRCode`; access modules via `qr[row][col].value()` (true = dark); `Module::module_type()` returns `ModuleType` for cell classification
 - `maxminddb` 0.27 for geolocation — two-step API: `reader.lookup(ip)` → `LookupResult`, then `.decode::<T>()` returns `Option<T>`. Error enum is `MaxMindDbError` (not `MaxMindDBError`), `#[non_exhaustive]`. `geoip2::City` has non-optional nested structs with typed `Names` having `.english: Option<&str>` (not `BTreeMap` — don't use `.get("en")`)
 
 ### Storage
