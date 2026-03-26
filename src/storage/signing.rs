@@ -133,12 +133,7 @@ pub(crate) fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
 }
 
 pub(crate) fn hex_encode(bytes: &[u8]) -> String {
-    use std::fmt::Write;
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        write!(s, "{b:02x}").unwrap();
-    }
-    s
+    crate::encoding::hex::encode(bytes)
 }
 
 #[cfg(test)]

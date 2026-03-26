@@ -59,9 +59,5 @@ fn normalize(code: &str) -> String {
 
 fn sha256_hex(input: &str) -> String {
     let digest = Sha256::digest(input.as_bytes());
-    let mut s = String::with_capacity(digest.len() * 2);
-    for b in digest {
-        s.push_str(&format!("{b:02x}"));
-    }
-    s
+    crate::encoding::hex::encode(&digest)
 }

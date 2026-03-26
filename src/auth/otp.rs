@@ -37,13 +37,5 @@ pub fn verify(code: &str, hash: &str) -> bool {
 
 fn sha256_hex(input: &str) -> String {
     let digest = Sha256::digest(input.as_bytes());
-    hex_encode(&digest)
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        s.push_str(&format!("{b:02x}"));
-    }
-    s
+    crate::encoding::hex::encode(&digest)
 }

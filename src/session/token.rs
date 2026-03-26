@@ -1,5 +1,5 @@
 use sha2::{Digest, Sha256};
-use std::fmt::{self, Write};
+use std::fmt;
 
 /// A cryptographically random 32-byte session token.
 ///
@@ -41,11 +41,7 @@ impl SessionToken {
     ///
     /// This is the value written into the session cookie.
     pub fn as_hex(&self) -> String {
-        let mut s = String::with_capacity(64);
-        for b in &self.0 {
-            write!(s, "{b:02x}").expect("writing to String cannot fail");
-        }
-        s
+        crate::encoding::hex::encode(&self.0)
     }
 
     /// Compute the SHA-256 hash of the token and return it as a 64-character
@@ -56,11 +52,7 @@ impl SessionToken {
     /// users.
     pub fn hash(&self) -> String {
         let digest = Sha256::digest(self.0);
-        let mut s = String::with_capacity(64);
-        for b in digest {
-            write!(s, "{b:02x}").expect("writing to String cannot fail");
-        }
-        s
+        crate::encoding::hex::encode(&digest)
     }
 }
 

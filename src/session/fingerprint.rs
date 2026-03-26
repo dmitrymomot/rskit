@@ -1,7 +1,6 @@
 //! Browser fingerprinting for session hijacking detection.
 
 use sha2::{Digest, Sha256};
-use std::fmt::Write;
 
 /// Compute a SHA-256 fingerprint from three request headers.
 ///
@@ -24,9 +23,5 @@ pub fn compute_fingerprint(
     hasher.update(b"\x00");
     hasher.update(accept_encoding.as_bytes());
     let digest = hasher.finalize();
-    let mut s = String::with_capacity(64);
-    for b in digest {
-        write!(s, "{b:02x}").expect("writing to String cannot fail");
-    }
-    s
+    crate::encoding::hex::encode(&digest)
 }
