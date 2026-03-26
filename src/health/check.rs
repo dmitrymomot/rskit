@@ -86,41 +86,24 @@ impl Default for HealthChecks {
 
 use crate::db;
 
-/// Checks pool health by attempting to acquire a connection.
-impl HealthCheck for db::Pool {
-    fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        Box::pin(async {
-            self.acquire()
-                .await
-                .map_err(|e| crate::Error::internal("pool health check failed").chain(e))?;
-            Ok(())
-        })
-    }
+macro_rules! impl_pool_health_check {
+    ($ty:ty, $msg:literal) => {
+        impl HealthCheck for $ty {
+            fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
+                Box::pin(async {
+                    self.acquire()
+                        .await
+                        .map_err(|e| crate::Error::internal($msg).chain(e))?;
+                    Ok(())
+                })
+            }
+        }
+    };
 }
 
-/// Checks read pool health by attempting to acquire a connection.
-impl HealthCheck for db::ReadPool {
-    fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        Box::pin(async {
-            self.acquire()
-                .await
-                .map_err(|e| crate::Error::internal("read pool health check failed").chain(e))?;
-            Ok(())
-        })
-    }
-}
-
-/// Checks write pool health by attempting to acquire a connection.
-impl HealthCheck for db::WritePool {
-    fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        Box::pin(async {
-            self.acquire()
-                .await
-                .map_err(|e| crate::Error::internal("write pool health check failed").chain(e))?;
-            Ok(())
-        })
-    }
-}
+impl_pool_health_check!(db::Pool, "pool health check failed");
+impl_pool_health_check!(db::ReadPool, "read pool health check failed");
+impl_pool_health_check!(db::WritePool, "write pool health check failed");
 
 #[cfg(test)]
 mod tests {
