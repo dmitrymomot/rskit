@@ -123,7 +123,7 @@ For each selected component that has a script, run it in this order:
 | Jobs (or Cron) | `bash "<skill-dir>/scripts/init_jobs.sh" "<project_dir>"` |
 | Email | `bash "<skill-dir>/scripts/init_email.sh" "<project_dir>"` |
 
-Note: `download_assets.sh` downloads htmx, htmx-sse, and alpine.js. It runs after `init_templates.sh` which creates the `static/js/` directory. `init_templates.sh` also compiles Tailwind CSS if the `tailwindcss` CLI is available.
+Note: `download_assets.sh` downloads htmx, htmx-sse, and alpine.js. It runs after `init_templates.sh` which creates the `assets/static/js/` directory. `init_templates.sh` also compiles Tailwind CSS if the `tailwindcss` CLI is available.
 
 #### 4c: Generate dynamic files
 
@@ -156,7 +156,7 @@ These files depend on the selected components — generate each with `Write`. Re
 8. **`justfile`** — Assemble from base recipes + conditional recipe blocks based on selected components. See `references/files.md` for the full template with `command -v` guards on external tools. The `setup` recipe body is assembled conditionally (include `just assets-download` and `just css` if Templates, `just docker-up` if Docker services).
 
 9. **`Dockerfile`** — Base template from `references/files.md`, plus conditional `COPY` lines:
-   - If templates: `COPY templates/ /app/templates/`, `COPY static/ /app/static/`, `COPY locales/ /app/locales/`
+   - If templates: `COPY templates/ /app/templates/`, `COPY assets/static/ /app/assets/static/`, `COPY locales/ /app/locales/`
    - If email: `COPY emails/ /app/emails/`
 
 10. **`docker-compose.yml`** (only if Email or Storage selected) — Assemble service blocks from `references/components.md`.
@@ -234,7 +234,7 @@ just dev         # Run the app with auto-reload
 - `.env.example` has safe defaults for development, no real secrets
 - Rust edition is `2024`, rust-version is `"1.92"`
 - HTML templates use ONLY Tailwind CSS utility classes — no custom CSS, no inline styles
-- Static JS assets (htmx, alpine) are vendored in `static/js/` and committed to the repo
+- Static JS assets (htmx, alpine) are vendored in `assets/static/js/` and committed to the repo
 - Justfile recipes that depend on external tools (`cargo-watch`, `tailwindcss`, `docker`) must guard with `command -v` checks
 
 ## References

@@ -315,7 +315,7 @@ Insert these at the correct position in the middleware chain:
 ```yaml
 template:
   templates_path: templates
-  static_path: static
+  static_path: assets/static
   static_url_prefix: /static
   locales_path: locales
 ```
@@ -378,11 +378,11 @@ Same as development (paths are relative to the binary).
 {% endblock %}
 ```
 
-**static/css/app.css:** Tailwind CSS output (compiled by `init_templates.sh` if `tailwindcss` CLI is available, otherwise run `just css`)
+**assets/static/css/app.css:** Tailwind CSS output (compiled by `init_templates.sh` if `tailwindcss` CLI is available, otherwise run `just css`)
 
-**static/js/:** directory for vendored JS (htmx, alpine — downloaded by `download_assets.sh`)
+**assets/static/js/:** directory for vendored JS (htmx, alpine — downloaded by `download_assets.sh`)
 
-**assets/css/app.css:** Tailwind v4 source file (created by `init_templates.sh`)
+**assets/src/app.css:** Tailwind v4 source file (created by `init_templates.sh`)
 
 **locales/en/common.yaml:** base translations (created by `init_templates.sh`)
 

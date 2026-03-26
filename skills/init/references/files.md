@@ -128,21 +128,21 @@ db-reset:
 ```makefile
 # Download vendored JS assets (htmx, alpine)
 assets-download:
-    mkdir -p static/js
-    curl -sL https://unpkg.com/htmx.org@2/dist/htmx.min.js -o static/js/htmx.min.js
-    curl -sL https://unpkg.com/htmx-ext-sse@2/sse.js -o static/js/htmx-sse.js
-    curl -sL https://unpkg.com/alpinejs@3/dist/cdn.min.js -o static/js/alpine.min.js
-    @echo "Assets downloaded to static/js/"
+    mkdir -p assets/static/js
+    curl -sL https://unpkg.com/htmx.org@2/dist/htmx.min.js -o assets/static/js/htmx.min.js
+    curl -sL https://unpkg.com/htmx-ext-sse@2/sse.js -o assets/static/js/htmx-sse.js
+    curl -sL https://unpkg.com/alpinejs@3/dist/cdn.min.js -o assets/static/js/alpine.min.js
+    @echo "Assets downloaded to assets/static/js/"
 
 # Compile Tailwind CSS
 css:
     @command -v tailwindcss >/dev/null 2>&1 || { echo "Error: tailwindcss CLI not found. See: https://tailwindcss.com/docs/installation/tailwindcss-cli"; exit 1; }
-    tailwindcss -i assets/css/app.css -o static/css/app.css --minify
+    tailwindcss -i assets/src/app.css -o assets/static/css/app.css --minify
 
 # Watch and recompile CSS on changes
 css-watch:
     @command -v tailwindcss >/dev/null 2>&1 || { echo "Error: tailwindcss CLI not found. See: https://tailwindcss.com/docs/installation/tailwindcss-cli"; exit 1; }
-    tailwindcss -i assets/css/app.css -o static/css/app.css --watch
+    tailwindcss -i assets/src/app.css -o assets/static/css/app.css --watch
 ```
 
 When Templates is selected, also add to the `setup` recipe body:
@@ -172,6 +172,7 @@ When Geolocation is selected, also add to the `setup` recipe body:
 # Start Docker services
 docker-up:
     @command -v docker >/dev/null 2>&1 || { echo "Error: docker not found"; exit 1; }
+    @docker info >/dev/null 2>&1 || { echo "Error: Docker daemon is not running. Start Docker and retry."; exit 1; }
     docker compose up -d
 
 # Stop Docker services
@@ -183,9 +184,9 @@ docker-logs *ARGS:
     docker compose logs -f {{ ARGS }}
 ```
 
-When Docker services exist, also add to the `setup` recipe body:
+When Docker services exist, also add to the `setup` recipe body (prefixed with `-` to not block setup if Docker is unavailable):
 ```makefile
-    just docker-up
+    -just docker-up
 ```
 
 ---
@@ -216,7 +217,7 @@ Conditionally add these COPY lines based on selected components:
 ```dockerfile
 # If templates selected:
 COPY templates/ /app/templates/
-COPY static/ /app/static/
+COPY assets/static/ /app/assets/static/
 COPY locales/ /app/locales/
 
 # If email selected:

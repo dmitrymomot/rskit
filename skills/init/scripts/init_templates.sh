@@ -3,7 +3,7 @@
 # Usage: init_templates.sh <project_dir>
 #
 # Creates: templates/base.html, templates/home.html,
-#          static/css/app.css, assets/css/app.css,
+#          assets/static/css/app.css, assets/src/app.css,
 #          locales/en/common.yaml,
 #          src/handlers/home.rs, src/routes/home.rs
 
@@ -11,7 +11,7 @@ set -euo pipefail
 
 PROJECT_DIR="${1:?Usage: init_templates.sh <project_dir>}"
 
-mkdir -p "$PROJECT_DIR"/{templates,static/css,static/js,assets/css,locales/en}
+mkdir -p "$PROJECT_DIR"/{templates,assets/static/css,assets/static/js,assets/src,locales/en}
 
 # ── templates/base.html ─────────────────────────────────────
 cat > "$PROJECT_DIR/templates/base.html" << 'HTML'
@@ -65,21 +65,21 @@ cat > "$PROJECT_DIR/templates/home.html" << 'HTML'
 {% endblock %}
 HTML
 
-# ── assets/css/app.css (Tailwind v4 source) ─────────────────
-cat > "$PROJECT_DIR/assets/css/app.css" << 'CSS'
+# ── assets/src/app.css (Tailwind v4 source) ─────────────────
+cat > "$PROJECT_DIR/assets/src/app.css" << 'CSS'
 @import "tailwindcss";
 @source "../../templates/**/*.html";
 CSS
 
-# ── static/css/app.css (Tailwind output) ────────────────────
+# ── assets/static/css/app.css (Tailwind output) ────────────────────
 # Compile with: just css
-cat > "$PROJECT_DIR/static/css/app.css" << 'CSS'
+cat > "$PROJECT_DIR/assets/static/css/app.css" << 'CSS'
 /* Run `just css` to compile Tailwind CSS */
 CSS
 
 if command -v tailwindcss >/dev/null 2>&1; then
     echo "Compiling Tailwind CSS..."
-    (cd "$PROJECT_DIR" && tailwindcss -i assets/css/app.css -o static/css/app.css --minify 2>/dev/null) || true
+    (cd "$PROJECT_DIR" && tailwindcss -i assets/src/app.css -o assets/static/css/app.css --minify 2>/dev/null) || true
 fi
 
 # ── locales/en/common.yaml ──────────────────────────────────
