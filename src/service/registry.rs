@@ -13,9 +13,11 @@ use std::sync::Arc;
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```
 /// use modo::service::Registry;
 ///
+/// # struct MyService;
+/// # impl MyService { fn new() -> Self { Self } }
 /// let mut registry = Registry::new();
 /// registry.add(MyService::new());
 /// let state = registry.into_state();

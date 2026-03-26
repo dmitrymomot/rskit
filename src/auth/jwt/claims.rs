@@ -9,7 +9,11 @@ use serde::{Deserialize, Serialize};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
+/// use modo::auth::jwt::Claims;
+/// use serde::{Serialize, Deserialize};
+/// use std::time::Duration;
+///
 /// #[derive(Serialize, Deserialize, Clone)]
 /// struct MyClaims {
 ///     role: String,

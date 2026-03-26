@@ -9,12 +9,16 @@ use std::time::Duration;
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```
 /// use modo::sse::Event;
 ///
+/// # fn example() -> modo::Result<()> {
 /// let event = Event::new("evt_01", "message")?.data("Hello, world!");
+/// # let status = serde_json::json!({"ok": true});
 /// let event = Event::new(modo::id::short(), "status")?.json(&status)?;
 /// let event = Event::new(modo::id::short(), "update")?.html("<div>new</div>");
+/// # Ok(())
+/// # }
 /// ```
 #[must_use]
 #[derive(Debug, Clone)]

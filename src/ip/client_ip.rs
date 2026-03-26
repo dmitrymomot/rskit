@@ -10,7 +10,9 @@ use crate::error::Error;
 /// Inserted into request extensions by [`ClientIpLayer`](super::ClientIpLayer).
 /// Use as an axum extractor in handlers:
 ///
-/// ```ignore
+/// ```
+/// use modo::ClientIp;
+///
 /// async fn handler(ClientIp(ip): ClientIp) -> String {
 ///     ip.to_string()
 /// }

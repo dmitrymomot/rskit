@@ -12,10 +12,10 @@ use crate::service::AppState;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
 /// use modo::Service;
 ///
-/// struct MyService { /* ... */ }
+/// struct MyService;
 ///
 /// async fn handler(Service(svc): Service<MyService>) {
 ///     // svc is Arc<MyService>

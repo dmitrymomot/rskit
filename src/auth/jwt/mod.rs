@@ -4,27 +4,22 @@
 //!
 //! # Quick start
 //!
-//! ```ignore
+//! ```
 //! use modo::auth::jwt::{JwtConfig, JwtEncoder, JwtDecoder, JwtLayer, Claims};
 //! use serde::{Serialize, Deserialize};
 //!
 //! #[derive(Clone, Serialize, Deserialize)]
 //! struct MyClaims { role: String }
 //!
-//! let config = JwtConfig {
-//!     secret: "my-secret".into(),
-//!     default_expiry: Some(3600),
-//!     leeway: 0,
-//!     issuer: None,
-//!     audience: None,
-//! };
+//! let config = JwtConfig::new("my-super-secret-key-for-signing-tokens");
 //! let encoder = JwtEncoder::from_config(&config);
 //! let decoder = JwtDecoder::from_config(&config);
 //!
 //! // Encode
 //! let claims = Claims::new(MyClaims { role: "admin".into() })
 //!     .with_sub("user_123")
-//!     .with_iat_now();
+//!     .with_iat_now()
+//!     .with_exp_in(std::time::Duration::from_secs(3600));
 //! let token = encoder.encode(&claims).unwrap();
 //!
 //! // Decode

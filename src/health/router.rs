@@ -16,8 +16,11 @@ use super::HealthChecks;
 ///
 /// # Example
 ///
-/// ```ignore
-/// let app = Router::new()
+/// ```
+/// use modo::service::Registry;
+///
+/// let state = Registry::new().into_state();
+/// let app: axum::Router = axum::Router::new()
 ///     .merge(modo::health::router())
 ///     .with_state(state);
 /// ```

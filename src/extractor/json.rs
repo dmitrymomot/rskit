@@ -12,9 +12,9 @@ use crate::sanitize::Sanitize;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
 /// use modo::extractor::JsonRequest;
-/// use modo::sanitize::Sanitize;
+/// use modo::Sanitize;
 /// use serde::Deserialize;
 ///
 /// #[derive(Deserialize)]

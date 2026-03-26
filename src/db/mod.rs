@@ -11,15 +11,15 @@
 //!
 //! # Quick start
 //!
-//! ```ignore
+//! ```no_run
+//! # async fn example() -> modo::Result<()> {
 //! use modo::db::{self, SqliteConfig};
 //!
-//! let config = SqliteConfig {
-//!     path: "data/app.db".to_string(),
-//!     ..Default::default()
-//! };
+//! let config = SqliteConfig::default();
 //! let pool = db::connect(&config).await?;
 //! db::migrate("migrations", &pool).await?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! # Graceful shutdown

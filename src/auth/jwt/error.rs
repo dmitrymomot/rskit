@@ -7,7 +7,7 @@ use std::fmt;
 ///
 /// # Error identity pattern
 ///
-/// ```ignore
+/// ```
 /// use modo::auth::jwt::JwtError;
 ///
 /// let err = modo::Error::unauthorized("unauthorized")

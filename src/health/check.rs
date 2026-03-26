@@ -36,12 +36,11 @@ where
 ///
 /// # Example
 ///
-/// ```ignore
-/// use modo::health::HealthChecks;
+/// ```
+/// use modo::HealthChecks;
 ///
 /// let checks = HealthChecks::new()
-///     .check("read_pool", read_pool.clone())
-///     .check("write_pool", write_pool.clone())
+///     .check_fn("database", || async { Ok(()) })
 ///     .check_fn("redis", || async { Ok(()) });
 /// ```
 pub struct HealthChecks {

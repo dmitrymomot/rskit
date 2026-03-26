@@ -20,14 +20,16 @@ use tower::{Layer, Service};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
+/// use axum::{Router, routing::get};
+/// use axum::response::IntoResponse;
+///
 /// async fn render_error(err: modo::Error, parts: http::request::Parts) -> axum::response::Response {
-///     use axum::response::IntoResponse;
 ///     (err.status(), err.message().to_string()).into_response()
 /// }
 ///
-/// let app = Router::new()
-///     .route("/", get(handler))
+/// let app: Router = Router::new()
+///     .route("/", get(|| async { "ok" }))
 ///     .layer(modo::middleware::error_handler(render_error));
 /// ```
 pub fn error_handler<F, Fut>(handler: F) -> ErrorHandlerLayer<F>

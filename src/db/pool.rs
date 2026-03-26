@@ -73,10 +73,14 @@ impl ReadPool {
     /// Use this to share an existing in-memory pool as a read pool without
     /// creating a second connection (in-memory databases cannot be split):
     ///
-    /// ```ignore
-    /// let pool = db::connect(&config).await?;
-    /// let read_pool = db::ReadPool::new((*pool).clone());
-    /// let write_pool = db::WritePool::new((*pool).clone());
+    /// ```no_run
+    /// # async fn example() -> modo::Result<()> {
+    /// # let config = modo::db::SqliteConfig::default();
+    /// let pool = modo::db::connect(&config).await?;
+    /// let read_pool = modo::db::ReadPool::new((*pool).clone());
+    /// let write_pool = modo::db::WritePool::new((*pool).clone());
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new(pool: InnerPool) -> Self {
         Self(pool)

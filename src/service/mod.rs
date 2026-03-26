@@ -8,25 +8,28 @@
 //!
 //! # Typical startup flow
 //!
-//! ```rust,ignore
+//! ```
 //! use modo::service::{AppState, Registry};
 //!
+//! # struct MyDbPool;
+//! # struct MyEmailClient;
 //! let mut registry = Registry::new();
-//! registry.add(my_db_pool);
-//! registry.add(my_email_client);
+//! registry.add(MyDbPool);
+//! registry.add(MyEmailClient);
 //!
 //! let state: AppState = registry.into_state();
-//! let app = axum::Router::new()
-//!     .route("/", axum::routing::get(handler))
+//! let app: axum::Router = axum::Router::new()
+//!     .route("/", axum::routing::get(|| async { "ok" }))
 //!     .with_state(state);
 //! ```
 //!
 //! Inside handlers, use the [`Service<T>`](crate::extractor::Service) extractor to
 //! retrieve a registered service:
 //!
-//! ```rust,ignore
+//! ```
 //! use modo::Service;
 //!
+//! # struct MyPool;
 //! async fn handler(Service(pool): Service<MyPool>) { /* … */ }
 //! ```
 

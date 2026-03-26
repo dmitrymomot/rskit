@@ -162,11 +162,14 @@ struct BroadcasterInner<K, T> {
 ///
 /// # Construction
 ///
-/// ```rust,ignore
+/// ```
 /// use modo::sse::{Broadcaster, SseConfig};
 ///
+/// # #[derive(Clone)]
+/// # struct ChatMessage;
 /// let chat: Broadcaster<String, ChatMessage> =
 ///     Broadcaster::new(128, SseConfig::default());
+/// # let mut registry = modo::service::Registry::new();
 /// registry.add(chat);
 /// ```
 ///

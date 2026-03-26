@@ -11,9 +11,13 @@ use futures_util::{Stream, StreamExt};
 ///
 /// Import the trait and call `cast_events` on any compatible stream:
 ///
-/// ```rust,ignore
-/// use modo::sse::{Event, SseStreamExt};
+/// ```
+/// use modo::sse::{Broadcaster, Event, SseConfig, SseStreamExt};
 ///
+/// # #[derive(Clone, serde::Serialize)]
+/// # struct Item { value: i32 }
+/// let bc: Broadcaster<String, Item> = Broadcaster::new(64, SseConfig::default());
+/// let key = "topic".to_string();
 /// let stream = bc.subscribe(&key).cast_events(|item| {
 ///     Event::new(modo::id::short(), "update")?.json(&item)
 /// });

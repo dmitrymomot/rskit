@@ -14,13 +14,16 @@
 //!
 //! ## Stream from a broadcast channel
 //!
-//! ```rust,ignore
+//! ```
 //! use modo::sse::{Broadcaster, Event, LagPolicy, SseConfig, SseStreamExt};
 //! use modo::Service;
 //!
+//! # #[derive(Clone, serde::Serialize)]
+//! # struct Notification { msg: String }
 //! // Register a broadcaster as a service in main()
 //! let notifications: Broadcaster<String, Notification> =
 //!     Broadcaster::new(64, SseConfig::default());
+//! # let mut registry = modo::service::Registry::new();
 //! registry.add(notifications);
 //!
 //! // Subscribe in a handler
@@ -39,11 +42,14 @@
 //!
 //! ## Imperative channel (monitoring)
 //!
-//! ```rust,ignore
+//! ```
 //! use modo::sse::{Broadcaster, Event};
 //! use modo::Service;
 //! use std::time::Duration;
 //!
+//! # #[derive(Clone, serde::Serialize)]
+//! # struct Status { ok: bool }
+//! # async fn check_health() -> Status { Status { ok: true } }
 //! async fn health(
 //!     Service(bc): Service<Broadcaster<String, Status>>,
 //! ) -> axum::response::Response {
@@ -59,10 +65,15 @@
 //!
 //! ## HTML partials (HTMX)
 //!
-//! ```rust,ignore
+//! ```
 //! use modo::sse::{Broadcaster, Event, LagPolicy, SseStreamExt};
 //! use modo::Service;
+//! # use axum::extract::Path;
 //!
+//! # #[derive(Clone, serde::Serialize)]
+//! # struct ChatMessage { text: String }
+//! # struct Renderer;
+//! # impl Renderer { fn render(&self, _tpl: &str, _data: &ChatMessage) -> modo::Result<String> { Ok(String::new()) } }
 //! async fn chat(
 //!     Path(room_id): Path<String>,
 //!     Service(bc): Service<Broadcaster<String, ChatMessage>>,
