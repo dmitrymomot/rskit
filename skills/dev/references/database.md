@@ -125,7 +125,7 @@ Accepts `Pool`, `ReadPool`, or `WritePool` (each has `impl From<T> for ManagedPo
 
 ## Configuration (`SqliteConfig`)
 
-`#[non_exhaustive]`. Loaded from YAML. `db::Config` is a type alias for `SqliteConfig`.
+`#[non_exhaustive]`. Loaded from YAML. `db::Config` is a type alias for `SqliteConfig` (re-exported as `pub type Config = SqliteConfig`). Derives `Debug`, `Clone`, `Deserialize`.
 
 Key defaults:
 
