@@ -145,14 +145,8 @@ fn hotp(secret: &[u8], counter: u64, digits: u32) -> u32 {
 }
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut result = 0u8;
-    for (x, y) in a.iter().zip(b.iter()) {
-        result |= x ^ y;
-    }
-    result == 0
+    use subtle::ConstantTimeEq;
+    a.ct_eq(b).into()
 }
 
 fn urlencoding_encode(s: &str) -> String {

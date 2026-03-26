@@ -13,7 +13,7 @@ use serde::Deserialize;
 ///   audience: "api"
 /// ```
 #[non_exhaustive]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct JwtConfig {
     /// HMAC secret used for signing and verifying tokens.
@@ -31,18 +31,6 @@ pub struct JwtConfig {
     /// Required audience (`aud`). When set, `JwtDecoder::decode()` rejects tokens
     /// whose `aud` does not match.
     pub audience: Option<String>,
-}
-
-impl Default for JwtConfig {
-    fn default() -> Self {
-        Self {
-            secret: String::new(),
-            default_expiry: None,
-            leeway: 0,
-            issuer: None,
-            audience: None,
-        }
-    }
 }
 
 impl JwtConfig {
