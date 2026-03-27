@@ -11,10 +11,8 @@ use super::config::ClientConfig;
 use super::request::RequestBuilder;
 
 /// Type alias for the hyper HTTPS client used internally.
-pub(crate) type InnerHttpsClient = legacy::Client<
-    hyper_rustls::HttpsConnector<legacy::connect::HttpConnector>,
-    Full<Bytes>,
->;
+pub(crate) type InnerHttpsClient =
+    legacy::Client<hyper_rustls::HttpsConnector<legacy::connect::HttpConnector>, Full<Bytes>>;
 
 /// Shared inner state for [`Client`].
 pub(crate) struct ClientInner {

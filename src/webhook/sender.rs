@@ -116,7 +116,13 @@ impl WebhookSender {
                 .map_err(|_| Error::internal("generated invalid webhook-signature header"))?,
         );
 
-        client::post(&self.inner.client, url, headers, Bytes::copy_from_slice(body)).await
+        client::post(
+            &self.inner.client,
+            url,
+            headers,
+            Bytes::copy_from_slice(body),
+        )
+        .await
     }
 }
 
@@ -131,9 +137,7 @@ mod tests {
     use super::*;
 
     /// Start a minimal HTTP server that captures the request and returns the given status.
-    async fn start_test_server(
-        response_status: u16,
-    ) -> (String, tokio::task::JoinHandle<String>) {
+    async fn start_test_server(response_status: u16) -> (String, tokio::task::JoinHandle<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let url = format!("http://127.0.0.1:{}", addr.port());
@@ -256,10 +260,7 @@ mod tests {
         let sender = WebhookSender::new(test_client());
         let secret = WebhookSecret::new(b"key".to_vec());
 
-        let response = sender
-            .send(&url, "msg_1", b"{}", &[&secret])
-            .await
-            .unwrap();
+        let response = sender.send(&url, "msg_1", b"{}", &[&secret]).await.unwrap();
         assert_eq!(response.status, StatusCode::GONE);
 
         handle.await.unwrap();

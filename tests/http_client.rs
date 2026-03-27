@@ -137,7 +137,9 @@ async fn post_json_body() {
 
     let (url, handle) = start_server(OK_EMPTY).await;
     let client = Client::default();
-    let body = Body { name: "modo".into() };
+    let body = Body {
+        name: "modo".into(),
+    };
     let resp = client.post(&url).json(&body).send().await.unwrap();
     assert_eq!(resp.status(), http::StatusCode::OK);
 
@@ -219,8 +221,7 @@ async fn error_for_status_passes_2xx() {
 async fn retry_on_503() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let (url, _handle) =
-        start_multi_server(vec![SERVICE_UNAVAILABLE, OK_EMPTY]).await;
+    let (url, _handle) = start_multi_server(vec![SERVICE_UNAVAILABLE, OK_EMPTY]).await;
 
     let client = Client::builder()
         .max_retries(2)
@@ -338,7 +339,11 @@ async fn content_length_from_headers() {
     let client = Client::default();
     let resp = client.get(&url).send().await.unwrap();
     let cl = resp.content_length();
-    assert_eq!(cl, Some(11), "content_length should be 11 for 'hello world'");
+    assert_eq!(
+        cl,
+        Some(11),
+        "content_length should be 11 for 'hello world'"
+    );
 }
 
 /// Client has 30s default timeout; per-request override of 100ms fires quickly.
@@ -356,9 +361,7 @@ async fn per_request_timeout_override() {
         tokio::time::sleep(Duration::from_secs(60)).await;
     });
 
-    let client = Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build();
+    let client = Client::builder().timeout(Duration::from_secs(30)).build();
 
     let start = std::time::Instant::now();
     let result = client

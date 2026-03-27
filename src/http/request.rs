@@ -56,7 +56,11 @@ impl RequestBuilder {
     }
 
     /// Append a single header.
-    pub fn header(mut self, name: http::header::HeaderName, value: http::header::HeaderValue) -> Self {
+    pub fn header(
+        mut self,
+        name: http::header::HeaderName,
+        value: http::header::HeaderValue,
+    ) -> Self {
         self.headers.insert(name, value);
         self
     }
@@ -127,9 +131,10 @@ impl RequestBuilder {
                 );
             }
             Err(e) => {
-                self.body = Some(Err(
-                    Error::internal(format!("failed to serialize request body: {e}")).chain(e),
-                ));
+                self.body = Some(Err(Error::internal(format!(
+                    "failed to serialize request body: {e}"
+                ))
+                .chain(e)));
             }
         }
         self
@@ -146,9 +151,10 @@ impl RequestBuilder {
                 );
             }
             Err(e) => {
-                self.body = Some(Err(
-                    Error::internal(format!("failed to serialize request body: {e}")).chain(e),
-                ));
+                self.body = Some(Err(Error::internal(format!(
+                    "failed to serialize request body: {e}"
+                ))
+                .chain(e)));
             }
         }
         self

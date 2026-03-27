@@ -88,7 +88,9 @@ pub use extractor::Service;
 pub use flash::{Flash, FlashEntry, FlashLayer};
 pub use health::{HealthCheck, HealthChecks};
 #[cfg(feature = "http-client")]
-pub use http::{Client as HttpClient, ClientBuilder as HttpClientBuilder, ClientConfig as HttpClientConfig};
+pub use http::{
+    Client as HttpClient, ClientBuilder as HttpClientBuilder, ClientConfig as HttpClientConfig,
+};
 pub use ip::{ClientIp, ClientIpLayer};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;

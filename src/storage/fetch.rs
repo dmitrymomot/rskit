@@ -43,11 +43,13 @@ pub(crate) async fn fetch_url(
         .body(Full::new(Bytes::new()))
         .map_err(|e| Error::internal(format!("failed to build request: {e}")))?;
 
-    let response =
-        tokio::time::timeout(Duration::from_secs(30), client.raw_client().request(request))
-        .await
-        .map_err(|_| Error::internal("URL fetch timed out"))?
-        .map_err(|e| Error::internal(format!("failed to fetch URL: {e}")))?;
+    let response = tokio::time::timeout(
+        Duration::from_secs(30),
+        client.raw_client().request(request),
+    )
+    .await
+    .map_err(|_| Error::internal("URL fetch timed out"))?
+    .map_err(|e| Error::internal(format!("failed to fetch URL: {e}")))?;
 
     let status = response.status();
     if !status.is_success() {
