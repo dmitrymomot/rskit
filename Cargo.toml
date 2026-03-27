@@ -1,43 +1,152 @@
-[workspace]
-resolver = "2"
-members = [
-  "modo",
-  "modo-macros",
-  "modo-db",
-  "modo-db-macros",
-  "modo-email",
-  "modo-jobs",
-  "modo-jobs-macros",
-  "modo-session",
-  "modo-auth",
-  "modo-tenant",
-  "modo-upload",
-  "modo-upload-macros",
-  "modo-cli",
-  "modo-sqlite",
-  "modo-sqlite-macros",
-  "examples/*",
-]
-
-[workspace.package]
-version = "0.3.3"
+[package]
+name = "modo"
+version = "0.1.0"
+edition = "2024"
+description = "Rust web framework for small monolithic apps"
 license = "Apache-2.0"
 repository = "https://github.com/dmitrymomot/modo"
+readme = "README.md"
+keywords = ["web", "framework", "axum", "sqlite"]
+categories = ["web-programming::http-server"]
+rust-version = "1.92"
+exclude = [".claude", ".claude-plugin", "skills", "docs", ".github", "examples", "CLAUDE.md", "justfile", "tests"]
 
-[workspace.dependencies]
-modo = { path = "modo", version = "0.3" }
-modo-macros = { path = "modo-macros", version = "0.3" }
-modo-db = { path = "modo-db", version = "0.3" }
-modo-db-macros = { path = "modo-db-macros", version = "0.3" }
-modo-email = { path = "modo-email", version = "0.3" }
-modo-jobs = { path = "modo-jobs", version = "0.3" }
-modo-jobs-macros = { path = "modo-jobs-macros", version = "0.3" }
-modo-session = { path = "modo-session", version = "0.3" }
-modo-auth = { path = "modo-auth", version = "0.3" }
-modo-tenant = { path = "modo-tenant", version = "0.3" }
-modo-upload = { path = "modo-upload", version = "0.3" }
-modo-upload-macros = { path = "modo-upload-macros", version = "0.3" }
-modo-sqlite = { path = "modo-sqlite", version = "0.3" }
-modo-sqlite-macros = { path = "modo-sqlite-macros", version = "0.3" }
-inventory = "0.3"
+[features]
+default = []
+full = ["templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns", "geolocation", "qrcode"]
+sentry = ["dep:sentry", "dep:sentry-tracing"]
+templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
+sse = ["dep:futures-util"]
+auth = [
+  "dep:argon2",
+  "dep:hmac",
+  "dep:sha1",
+  "dep:hyper",
+  "dep:hyper-rustls",
+  "dep:hyper-util",
+  "dep:http-body-util",
+]
+email = ["dep:lettre", "dep:pulldown-cmark"]
+email-test = ["email"]
+storage = ["dep:hmac", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
+storage-test = ["storage"]
+webhooks = ["dep:hmac", "dep:base64", "dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
+webhooks-test = ["webhooks"]
+dns = ["dep:simple-dns"]
+dns-test = ["dns"]
+geolocation = ["dep:maxminddb"]
+qrcode = ["dep:fast_qr"]
+test-helpers = []
+
+[dependencies]
+# Web
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1", features = ["rt", "sync", "time", "net", "signal", "macros"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+croner = "3"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = [
+  "compression-full",
+  "catch-panic",
+  "trace",
+  "cors",
+  "request-id",
+  "set-header",
+  "sensitive-headers",
+  "fs",
+] }
+
+axum-extra = { version = "0.12", features = ["cookie-signed", "cookie-private", "multipart"] }
+cookie = { version = "0.18", features = ["signed"] }
+
+# Database
+sqlx = { version = "0.8", features = [
+  "runtime-tokio",
+  "chrono",
+  "migrate",
+  "derive",
+  "sqlite",
+], default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 serde_yaml_ng = "0.10"
+serde_urlencoded = "0.7"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Utilities
+rand = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+http = "1"
+regex = "1"
+sha2 = "0.10"
+ipnet = "2"
+bytes = "1"
+sentry = { version = "0.47", optional = true, default-features = false, features = [
+  "backtrace",
+  "contexts",
+  "panic",
+  "reqwest",
+  "rustls",
+] }
+sentry-tracing = { version = "0.47", optional = true }
+
+# Auth (optional, gated by "auth" feature)
+argon2 = { version = "0.5", optional = true }
+hmac = { version = "0.12", optional = true }
+sha1 = { version = "0.10", optional = true }
+subtle = "2"
+hyper = { version = "1", optional = true }
+hyper-rustls = { version = "0.27", optional = true, default-features = false, features = [
+  "ring",
+  "http1",
+  "tls12",
+  "logging",
+  "webpki-roots",
+] }
+hyper-util = { version = "0.1", optional = true, features = ["client-legacy", "http1", "tokio"] }
+http-body-util = { version = "0.1", optional = true }
+base64 = { version = "0.22", optional = true }
+
+# Email (optional, gated by "email" feature)
+lettre = { version = "0.11", optional = true, default-features = false, features = [
+  "smtp-transport",
+  "tokio1",
+  "builder",
+  "hostname",
+  "tokio1-rustls",
+  "ring",
+  "webpki-roots",
+] }
+pulldown-cmark = { version = "0.13", optional = true }
+# Templates (optional, gated by "templates" feature)
+minijinja = { version = "2", optional = true, features = ["loader"] }
+minijinja-contrib = { version = "2", optional = true }
+intl_pluralrules = { version = "7", optional = true }
+unic-langid = { version = "0.9", optional = true }
+
+# SSE (optional, gated by "sse" feature)
+futures-util = { version = "0.3", optional = true }
+
+# DNS (optional, gated by "dns" feature)
+simple-dns = { version = "0.11", optional = true }
+
+# Geolocation (optional, gated by "geolocation" feature)
+maxminddb = { version = "0.27", optional = true }
+
+# QR code (optional, gated by "qrcode" feature)
+fast_qr = { version = "0.13", optional = true, default-features = false }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+tempfile = "3"
+serial_test = "3"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }

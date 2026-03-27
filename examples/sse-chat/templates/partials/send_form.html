@@ -1,5 +1,0 @@
-{# examples/sse-chat/templates/partials/send_form.html #}
-<form class="message-form" id="send-form" hx-post="/chat/{{ room }}/send" hx-target="#send-form" hx-swap="outerHTML">
-    <input type="text" name="text" placeholder="Type a message..." required autocomplete="off" autofocus />
-    <button type="submit">Send</button>
-</form>

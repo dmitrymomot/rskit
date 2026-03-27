@@ -1,186 +1,299 @@
 ---
 name: sync-skill
 description: Recompile the modo skill and references by verifying them against current crate source code. Use when crate APIs have changed and skill docs need updating.
-argument-hint: "[crate-name ...]"
+argument-hint: "[module-name ...]"
 disable-model-invocation: true
 ---
 
 # Sync Modo Skill References
 
-You are updating the modo Claude plugin skill (`claude-plugin/skills/modo/`) to match the
-current state of the codebase. This is a verification and correction task — not creative writing.
+You are updating the modo skill references to match the current state of the codebase.
+This is a verification and correction task — not creative writing.
 
-## Principles
+**Output directory:** `skills/dev/` at the project root (NOT `.claude/skills/dev/`).
+Reference files go in `skills/dev/references/`, the topic index is `skills/dev/SKILL.md`.
+All paths in this document are relative to the project root unless stated otherwise.
 
-1. **The proc macro output is the contract.** Read `modo-macros/src/`, `modo-db-macros/src/`,
-   `modo-jobs-macros/src/`, `modo-upload-macros/src/` to understand what code is generated.
-   The generated method signatures, trait impls, and struct shapes are what users interact with.
+## Hard Rules
 
-2. **Never trust examples as source of truth.** Examples in `examples/` may lag behind crate
-   APIs. Always verify against the actual crate source (`modo/src/`, `modo-db/src/`, etc.).
+0. **Write to `skills/dev/`, never `.claude/skills/dev/`.** The skill definition lives in
+   `.claude/skills/sync-skill/` but its OUTPUT goes to `skills/dev/` at the project root.
+   These are different directories. Double-check every file path before writing.
 
-3. **Document the generated API, not just macro attributes.** Users need to know what methods
-   appear on their structs after macro expansion — show exact signatures.
+1. **Source code is the only truth.** Every type, method, field, variant, and trait bound you
+   write in a reference doc must exist in the source. If you cannot point to a `pub` item in
+   a `.rs` file, it does not belong in the reference.
 
-4. **Remove line number references.** They rot immediately. Use type names and function names
-   that can be grepped instead.
+2. **Never generate from memory or training data.** You will be tempted to fill in methods that
+   "should" exist based on patterns you've seen. Do not. Read the actual file, find the actual
+   `pub fn`, and copy the actual signature. If a method doesn't appear in the source, it doesn't
+   exist — even if it "makes sense" for it to.
 
-5. **Verify every claim.** Every struct field, default value, method signature, enum variant,
-   and trait bound in the reference must match the source code exactly.
+3. **Inventory before editing.** You must produce a complete list of every public item from source
+   files _before_ you touch a reference doc. This catches missing items that a casual read misses.
 
-6. **Check macro attribute parsers, not just doc comments.** The parser source (e.g.
-   `parse_name_attr` in utils.rs) defines what syntax is accepted. Doc comments may show
-   wrong syntax.
+4. **Two-direction comparison.** Check source→reference (find undocumented APIs) AND
+   reference→source (find stale/hallucinated items). Both directions matter equally.
 
-7. **Re-export lists must be exhaustive or explicitly partial.** When a reference says "current
-   public re-exports," verify every item against `lib.rs`. Missing items cause unnecessary
-   manual imports downstream.
+5. **Preserve reference style.** Match the format of the existing reference doc exactly —
+   section structure, heading levels, code block style, separator usage. Do not "improve" the
+   formatting or reorganize sections.
 
-## Process
+6. **Remove line number references.** They rot immediately. Use type and function names only.
 
-### Step 1: Identify what changed
+7. **Re-export lists must be exhaustive.** Verify every item against `src/lib.rs` and the
+   module's `mod.rs`. Missing re-exports cause confusion downstream.
+
+8. **Check feature gates.** Modules behind `#[cfg(feature = "X")]` must document which feature
+   flag enables them. Always-available modules must NOT claim a feature gate.
+
+## Module → Reference Mapping
 
 $ARGUMENTS
 
-If no specific crate is given, check all crates:
+If no specific module is given, sync all modules:
 
 ```
-modo/           → conventions.md, handlers.md, config.md, templates-htmx.md, testing.md
-modo-db/        → database.md
-modo-db-macros/ → database.md (generated code section)
-modo-jobs/      → jobs.md
-modo-jobs-macros/ → jobs.md
-modo-email/     → email.md
-modo-auth/      → auth-sessions.md
-modo-session/   → auth-sessions.md
-modo-tenant/    → tenant.md
-modo-upload/    → upload.md
-modo-upload-macros/ → upload.md
-modo-macros/    → SKILL.md (macro cheat sheet), handlers.md, conventions.md
+src/error/          → conventions.md (error handling section)
+src/extractor/      → conventions.md (extractors section)
+src/service/        → conventions.md (registry section)
+src/sanitize/       → conventions.md
+src/validate/       → conventions.md
+src/id/             → conventions.md
+src/encoding/       → conventions.md
+src/cache/          → conventions.md
+src/config/         → config.md
+src/db/             → database.md
+src/server/         → handlers.md
+src/middleware/      → handlers.md
+src/ip/             → handlers.md
+src/session/        → sessions.md
+src/flash/          → sessions.md
+src/cookie/         → sessions.md
+src/auth/           → auth.md
+src/rbac/           → auth.md
+src/job/            → jobs.md
+src/cron/           → jobs.md
+src/tenant/         → tenant.md
+src/template/       → templates.md
+src/sse/            → sse.md
+src/email/          → email.md
+src/storage/        → storage.md
+src/webhook/        → webhooks.md
+src/dns/            → dns.md
+src/health/         → conventions.md
+src/geolocation/    → geolocation.md
+src/runtime/        → handlers.md
+src/tracing/        → config.md
+src/testing/        → testing.md
+src/qrcode/         → qrcode.md
 ```
 
-### Step 2: Build crate docs
+## Process
 
-Before reading source, build the rustdoc for the target crates. This gives you the
-compiler-verified public API surface — every public type, trait, method, and re-export:
+### Phase 0: Validate Mapping
+
+Before inventorying, confirm the Module → Reference Mapping table is complete:
+
+1. List every `src/*/` directory that contains a `mod.rs`.
+2. Compare against the mapping table above.
+3. If any source module is missing from the table, determine which reference file it
+   belongs to (based on topic affinity with existing mappings) and add it before proceeding.
+
+This catches modules added since the last sync-skill update.
+
+### Phase 1: Inventory the Public API
+
+For each module being synced, read every `.rs` file in the source directory and its
+subdirectories. Produce a structured inventory of every public item:
+
+**What counts as "public API" — enumerate all of these:**
+
+- `pub struct` — name, generic params, derive macros, `#[non_exhaustive]` if present, every `pub` field with type
+- `pub enum` — name, `#[non_exhaustive]` if present, every variant with fields (note `#[default]` variant)
+- `pub trait` — name, supertraits, every method with full signature (async/sync, params, return type, generic bounds)
+- `pub fn` (free functions) — full signature
+- `impl` blocks on public types — every `pub fn` / `pub async fn` with full signature
+- **Constructors deserve extra attention:** `new()`, `from_*()`, `with_*()`, `default_*()` builder
+  methods are the most commonly missed items. After listing all `impl` methods, double-check that
+  every constructor is included.
+- `pub type` aliases
+- `pub const` / `pub static`
+- `pub use` re-exports in `mod.rs`
+- Trait implementations for public types that affect API surface (`Default`, `From`, `FromRequestParts`, `IntoResponse`, `Display`, etc.)
+
+**What to skip:** `pub(crate)` items, private items, test-only items (`#[cfg(test)]`).
+
+**Format the inventory as a flat list per source file:**
+
+```
+src/dns/config.rs:
+  - pub struct DnsConfig { pub nameserver: String, pub txt_prefix: String, pub timeout_ms: u64 }
+  - impl DnsConfig: pub fn new(nameserver: impl Into<String>) -> Self
+  - impl DnsConfig: pub fn parse_nameserver(&self) -> Result<SocketAddr>
+  - impl Default for DnsConfig
+  - #[non_exhaustive], #[derive(Debug, Clone, Deserialize)]
+
+src/dns/verifier.rs:
+  - pub struct DomainVerifier (Arc<Inner> pattern)
+  - impl DomainVerifier: pub fn from_config(config: &DnsConfig) -> Result<Self>
+  - impl DomainVerifier: pub async fn check_txt(&self, domain: &str, expected_token: &str) -> Result<bool>
+  ...
+```
+
+Also read and inventory:
+
+- `src/lib.rs` — all `pub use` re-exports for the module's feature flag
+- `Cargo.toml` — the feature flag definition and its dependencies
+
+**For full syncs:** Spawn parallel agents to inventory different module groups simultaneously.
+Group by reference file — all modules that map to the same reference file should be inventoried
+together. Use this agent prompt template:
+
+> Inventory every public API item in [source directories] (relative to the project root).
+> Read every .rs file completely. For each file, list every `pub` item: structs (with all pub
+> fields, types, and derives), enums (with all variants and their fields), traits (with all
+> method signatures including `async`, `&self`, all param names with types, and return types),
+> impl blocks (with all pub methods — each must show the COMPLETE signature: `pub fn name(&self,
+> param: Type) -> ReturnType` or `pub async fn name(&self, param: Type) -> ReturnType`), free
+> functions (complete signatures), type aliases, and constants. Skip `pub(crate)` and private
+> items. CRITICAL: never abbreviate signatures — write every parameter with its type and the
+> full return type. Format as a flat list per source file.
+> Also read the relevant sections of `src/lib.rs` for re-exports.
+
+### Phase 2: Compare in Both Directions
+
+Read the current reference doc from `skills/dev/references/` (project root, NOT `.claude/`).
+
+**First-time creation:** If no reference doc exists yet for a module, skip Direction B
+(reference→source) since there's nothing to compare. All inventory items are MISSING by
+definition. Proceed directly to Phase 3 to create the reference doc. Phase 4 verification
+still applies — spot-check 3 signatures from the newly written doc against source.
+
+**Direction A — Source → Reference (find undocumented items):**
+
+Go through every item in your Phase 1 inventory. For each one, check if it's documented in the
+reference. Mark items as:
+
+- DOCUMENTED — present and signature matches
+- MISSING — not in reference at all
+- WRONG — present but signature/type/field doesn't match source
+
+**Direction B — Reference → Source (find stale/hallucinated items):**
+
+Go through every type, method, field, and variant mentioned in the reference doc. For each one,
+confirm it exists in your Phase 1 inventory (which was extracted directly from source). Mark items as:
+
+- VERIFIED — exists in source with matching signature
+- STALE — was in source before but has been removed or renamed
+- HALLUCINATED — never existed in source (this is the critical one to catch)
+
+**Produce a diff summary before editing:**
+
+```
+## dns.md Sync Report
+
+### Missing from reference (source → reference):
+- DnsConfig::parse_nameserver(&self) -> Result<SocketAddr>  [src/dns/config.rs]
+
+### Stale in reference (reference → source):
+- DomainVerifier::lookup() — does not exist in source  [REMOVE]
+
+### Signature mismatches:
+- DomainVerifier::check_txt: reference says `(&self, &str) -> bool`, source says `(&self, &str, &str) -> Result<bool>`
+
+### Verified OK:
+- DnsConfig struct and all fields
+- DomainVerifier::from_config
+- ...
+```
+
+### Phase 3: Apply Edits
+
+Now apply the verified changes to the reference doc. Rules:
+
+**Path reminder:** All reference files go in `skills/dev/references/` at the project root.
+When dispatching subagents to write files, use the absolute path
+`<project_root>/skills/dev/references/<name>.md` — never `.claude/skills/dev/`.
+
+1. **Add MISSING items** — place them in the appropriate section, matching the existing style.
+   Look at how neighboring items are documented and follow the same pattern.
+
+2. **Remove STALE/HALLUCINATED items** — delete them completely. Do not comment them out.
+
+3. **Fix WRONG signatures** — update to match source exactly. Copy the signature character by
+   character if needed.
+
+4. **Do not rewrite sections that are VERIFIED OK.** Leave them alone.
+
+5. **Do not add commentary, opinions, or "improvements"** beyond what the source code warrants.
+
+**Reference doc format to maintain:**
+
+- Feature flag declaration at top (if applicable)
+- `## Public API` section with re-export list from `src/lib.rs`
+- `## TypeName` sections separated by `---`, each containing:
+    - Brief description (one line)
+    - Rust code block showing struct/enum definition with derives
+    - `### method_name(&self, param: Type) -> ReturnType` subsections for methods
+    - Include `async` in the heading for async methods: `### async method_name(...)`
+    - Prose explaining behavior, error cases, edge cases under each method
+- `## Gotchas` section at the bottom for non-obvious behavior
+- Code examples use realistic patterns, not toy examples
+
+**For full syncs:** Writing agents may be dispatched in parallel for different reference files.
+Each agent prompt MUST include the full output path (`skills/dev/references/<name>.md` relative
+to the project root). The orchestrator writes files — agents doing inventory are read-only.
+
+### Phase 4: Verify Completeness
+
+After editing, run a mechanical check:
+
+1. **Grep for public items** in the source files and count them:
+
+    ```bash
+    grep -rn "pub fn\|pub async fn\|pub struct\|pub enum\|pub trait\|pub type\|pub const" src/<module>/
+    ```
+
+2. **Compare the count** to what's in your reference doc. If the numbers don't match,
+   you missed something — go back to Phase 2.
+
+3. **Verify re-exports** — read `src/lib.rs` and confirm every re-exported item from this
+   module appears in the reference's "Public API" section.
+
+4. **Spot-check 3 method signatures** — pick 3 methods at random from the reference, re-read
+   the source file, and confirm the signature matches exactly. This catches copy errors.
+
+### Phase 5: Update SKILL.md and CLAUDE.md
+
+1. Check the topic index table in `skills/dev/SKILL.md` — verify every row
+   matches the actual reference files that exist.
+
+2. If you changed an API pattern in a reference, check if `CLAUDE.md` conventions or gotchas
+   need a corresponding update.
+
+3. If the module defines a config struct that is a field on `ModoConfig` (in `src/config/modo.rs`),
+   verify that `config.md` has a matching sub-config table with correct fields and defaults.
+
+### Phase 6: Verify with cargo
+
+After all fixes are applied, confirm the crate still builds:
 
 ```bash
-# All workspace crates
-cargo doc --workspace --no-deps
-
-# Specific crate
-cargo doc -p modo-db --no-deps
-
-# Include private items (useful for understanding internals)
-cargo doc -p modo-db --document-private-items --no-deps
+cargo check
+cargo clippy --all-features --tests -- -D warnings
 ```
 
-Generated docs land in `target/doc/<crate_name>/index.html`. Read the generated doc pages
-to get the authoritative public API. If `cargo doc` fails, that itself is a signal — fix
-the build first.
-
-### Step 3: Read the crate source
-
-For each crate being verified, read these files **completely**:
-
-- `src/lib.rs` — all public exports
-- Every `src/*.rs` file — all public types, traits, functions, method signatures
-- `Cargo.toml` — features, dependencies
-- `tests/*.rs` — usage patterns (secondary source)
-- The crate's README if it exists
-
-Use parallel Explore agents for different crates when verifying multiple at once.
-
-### Step 4: Read the current reference doc
-
-Read the corresponding reference file from `claude-plugin/skills/modo/references/`.
-
-### Step 5: Cross-reference and find inconsistencies
-
-For each claim in the reference doc, verify against source:
-
-- [ ] Struct fields and their types match
-- [ ] Default values verified against the `Default` impl or `#[serde(default)]` — not just the struct field type
-- [ ] Method signatures match (parameter types, return types)
-- [ ] Method signatures include correct `async` keyword (sync vs async matters)
-- [ ] Parameter ownership is correct (`T` vs `&T` vs `&mut T`)
-- [ ] Enum variants are complete and correctly named
-- [ ] Constant arrays and default lists (e.g. reserved subdomains, default cleanup statuses) match source values exactly
-- [ ] Import paths are correct
-- [ ] Feature gates are correctly documented
-- [ ] Code examples use current API (not deprecated patterns)
-- [ ] Version numbers in `Cargo.toml` snippets match `version.workspace` in root `Cargo.toml`
-- [ ] Setup/main examples include all required calls (`.config()`, `.managed_service()`, `.service()`) — compare against the crate README's quick-start block
-- [ ] Generated code descriptions match what macros actually produce
-- [ ] Gotchas are still accurate
-- [ ] Gotchas correctly classify errors as compile-time (macro rejection) vs runtime (panic/`Result::Err`) — check whether the macro validates the input at expansion time
-- [ ] Macro attribute syntax matches the parser, not just doc comments
-- [ ] `lib.rs` re-export lists in references are complete
-- [ ] Key Types / docs.rs tables list every type re-exported from `lib.rs` — diff table entries against `grep 'pub use' src/lib.rs` output
-- [ ] Macro-generated code compiles for each parameter kind (payload, `Service<T>`, `Db`, no-args) — trace the types through the generated setup statements
-- [ ] Prose that enumerates enum variants or states is exhaustive — prefer "not in X state" over listing every other variant
-
-### Step 6: Fix inconsistencies
-
-Apply fixes. Common issues to watch for:
-
-- **Raw SeaORM patterns where Record trait methods exist** — replace `Entity::find()`,
-  `ActiveModel { .. }.insert()` with domain-struct methods like `Todo::find_by_id()`,
-  `todo.insert()`.
-- **Missing new APIs** — new methods, traits, or types added to crates but not documented.
-- **Wrong macro attribute syntax** — verify against the macro's parser code, not doc comments.
-  E.g. `#[template_function]` only accepts `name = "alias"`, not `("alias")`.
-- **Wrong import paths in job/macro examples** — macro codegen uses internal paths
-  (e.g. `modo_jobs::__internal::modo_db::extractor::Db`). Verify user-facing imports
-  match: `modo_db::extractor::Db` (not `modo_db::Db`), `modo::extractor::Service`
-  (not `modo::Service`). Check the macro source `use` statements, not the README.
-- **Inventory force-include uses the wrong symbol** — force-include patterns must
-  reference the generated struct name (`SendWelcomeJob as _`), not the original
-  function name (`send_welcome as _`). Check what the macro actually exports.
-- **Cross-file type name consistency** — after renaming a type in one reference file,
-  grep all reference files for the old name: `grep -r "OldName" claude-plugin/skills/modo/`.
-  Type names like `ContextLayer`, `SessionStore`, etc. appear across multiple docs.
-- **Stale line number references** — remove them entirely.
-- **Incomplete type/export lists** — verify against `lib.rs` re-exports.
-- **Abstraction layer drift** — the crate may have added a higher-level API (like `Record`
-  trait) on top of a lower-level one (raw SeaORM). Always document the idiomatic higher-level
-  API as the primary pattern, with the lower-level as an escape hatch.
-- **Non-Rust terminology** — replace borrowed terms from other ecosystems (e.g. "goroutine",
-  "channel" when meaning tokio channel) with standard Rust/Tokio vocabulary.
-
-### Step 7: Update SKILL.md if needed
-
-Check the macro cheat sheet table in `SKILL.md` — verify every row against the actual
-proc macro source. Pay attention to:
-
-- Parameter names and types
-- Generated struct/function names
-- Feature gates
-- Brief descriptions accuracy
-
-### Step 8: Verify CLAUDE.md consistency
-
-Ensure `CLAUDE.md` conventions and gotchas still match what the references say. If you
-changed an API pattern in a reference, check if CLAUDE.md needs a corresponding update.
-
-### Step 9: Verify with cargo doc
-
-After all fixes are applied, rebuild docs to confirm nothing is broken:
-
-```bash
-# Rebuild docs — catches broken links, missing types, wrong paths
-cargo doc --workspace --no-deps 2>&1
-
-# If doc warnings appear, fix them before finishing
-```
+These commands verify the source code, not the references — but if you introduced
+inconsistencies in CLAUDE.md that affect how code is written, this catches downstream issues.
 
 ## Output
 
-After completing the sync, list:
+After completing the sync, report:
 
 1. Files modified
-2. Inconsistencies found and fixed (one line each)
-3. New sections or examples added
-4. `cargo doc` result (pass or issues found)
-5. Any items that need user clarification
-6. Code bugs discovered (not doc issues) — type mismatches, dead code paths, latent compile errors in macro codegen
+2. Items added to references (one line each, with source file)
+3. Items removed from references (one line each, with reason)
+4. Signature fixes applied
+5. `cargo check` / `cargo clippy` result
+6. Any items that need user clarification

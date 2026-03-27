@@ -1,9 +1,0 @@
-[package]
-name = "hello"
-version = "0.1.1"
-edition = "2024"
-publish = false
-
-[dependencies]
-modo.workspace = true
-serde = { version = "1", features = ["derive"] }

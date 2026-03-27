@@ -1,279 +1,214 @@
 # modo
 
-> **modo** (Latin: "way, method") — _the way_ to build web apps with Rust.
+> **modo** (Latin: "way, method") — a Rust web framework for small monolithic apps.
 
 [![CI](https://github.com/dmitrymomot/modo/actions/workflows/ci.yml/badge.svg)](https://github.com/dmitrymomot/modo/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
+![Rust](https://img.shields.io/badge/rust-1.92+-orange.svg)
 
-A batteries-included Rust framework for small monolithic web apps and APIs. Proc macros eliminate boilerplate, `inventory` auto-discovers routes at compile time, and the whole thing ships as a single binary. Built on [axum 0.8](https://github.com/tokio-rs/axum) with full access to the axum/tower ecosystem.
+One crate. Zero proc macros. Everything you need to ship a real app — sessions, auth, background jobs, email, storage — without stitching together 15 crates and writing the glue yourself.
 
-## Features
+Built on [axum 0.8](https://github.com/tokio-rs/axum), so you keep full access to the axum/tower ecosystem. Handlers are plain `async fn`. Routes use axum's `Router`. Database queries use raw sqlx. No magic, no code generation, no framework lock-in.
 
-- **Routing & Middleware** — `#[handler]`, `#[module]`, and `#[main]` macros wire up your app — routes auto-register via `inventory`, middleware stacks at global, module, and handler levels.
-- **Database** — SQLite and Postgres via feature flags. `#[entity]` macro generates SeaORM v2 models with auto-migration, timestamps, and built-in pagination.
-- **Sessions** — Database-backed sessions with cookie fingerprinting, sliding expiry, multi-device tracking, and LRU cleanup.
-- **Authentication** — `UserProvider` trait for pluggable auth. `Auth<U>` and `OptionalAuth<U>` extractors with Argon2id password hashing.
-- **Background Jobs** — Persistent job queue with retries and exponential backoff. Cron scheduling, graceful shutdown, and `inventory`-based auto-discovery.
-- **File Uploads** — `#[derive(FromMultipart)]` for declarative multipart parsing. Per-field validation (size, MIME type). Local and S3 storage backends via OpenDAL.
-- **Email** — Markdown-to-HTML templates with SMTP and Resend transports. Multi-tenant sender profiles and locale-aware rendering.
-- **Frontend** — MiniJinja templates, HTMX support, Server-Sent Events, CSRF protection, i18n, flash messages, and static file embedding.
+## Why modo
 
-## Quick Start
+**You need 15+ crates for a real Rust web app.** Sessions, auth, background jobs, config, email, flash messages, rate limiting, CORS, CSRF — each one is a separate crate with its own patterns, its own wiring, and its own test setup. modo gives you all of it in one import.
 
-Install the CLI:
+**Proc macros slow you down.** They increase compile times, hide control flow, and make errors cryptic. modo uses zero proc macros. Handlers are plain functions. Routes are axum routes. What you see is what runs.
 
-```sh
-cargo install modo-cli
-```
+**Wiring everything together is the real work.** Config loading, service injection, middleware ordering, graceful shutdown — the framework should handle this, not you. With modo, it's one `Registry`, one `run!` macro, and you're done.
 
-Scaffold a new project:
-
-```sh
-modo new my-app                       # web app (default)
-modo new my-app --postgres --s3       # web app with PostgreSQL + S3
-modo new my-api --template api        # JSON API
-modo new my-worker --template worker  # background worker
-modo new my-app --template minimal    # bare-bones, no database
-```
-
-| Template  | Description                                            | Database |
-| --------- | ------------------------------------------------------ | -------- |
-| `web`     | Full-stack with HTMX, Tailwind CSS, auth, jobs, email, uploads, i18n | Optional |
-| `api`     | JSON API with handlers and models                      | Optional |
-| `worker`  | Background job worker, no HTTP handlers                | Optional |
-| `minimal` | Bare-bones, config only                                | None     |
-
-Database defaults to SQLite. Pass `--postgres` for PostgreSQL. Pass `--s3` to use RustFS (S3-compatible) for file uploads in development (web template only).
-
-Then:
-
-```sh
-cd my-app
-just assets-download   # web template only — download HTMX, Alpine.js (first time)
-just dev               # start dev server
-```
-
-> **Note:** modo uses [`just`](https://github.com/casey/just) as its command runner. Install it with `cargo install just` or see the [installation docs](https://github.com/casey/just#installation).
-
-## Code Showcases
-
-<details>
-<summary><strong>Handler example</strong></summary>
+## Quick look
 
 ```rust
-use modo::HandlerResult;
-use modo::HttpError;
-use modo::extractor::FormReq;
+use modo::{Config, Result};
+use modo::axum::{Router, routing::get};
+use modo::runtime::Task;
 
-#[derive(serde::Deserialize, modo::Sanitize, modo::Validate)]
-struct ContactForm {
-    #[clean(trim, normalize_email)]
-    #[validate(required, email)]
-    email: String,
-
-    #[clean(trim, strip_html_tags)]
-    #[validate(required, min_length = 5, max_length = 1000)]
-    message: String,
+async fn hello() -> &'static str {
+    "Hello, modo!"
 }
 
-#[modo::handler(GET, "/")]
-async fn index(request_id: RequestId) -> String {
-    format!("Hello modo! (request: {request_id})")
-}
+#[tokio::main]
+async fn main() -> Result<()> {
+    let config: Config = modo::config::load("config/")?;
 
-#[modo::handler(GET, "/health")]
-async fn health() -> &'static str {
-    "ok"
-}
+    let app = Router::new()
+        .route("/", get(hello));
 
-#[modo::handler(GET, "/error")]
-async fn error_example() -> Result<&'static str, HttpError> {
-    Err(HttpError::NotFound)
-}
-
-#[modo::handler(POST, "/contact")]
-async fn contact(form: FormReq<ContactForm>) -> HandlerResult<&'static str> {
-    form.validate()?;
-    Ok("Thanks for your message!")
-}
-
-#[modo::main]
-async fn main(
-    app: modo::app::AppBuilder,
-    config: modo::config::AppConfig,
-) -> Result<(), Box<dyn std::error::Error>> {
-    app.config(config).run().await
+    let server = modo::server::http(app, &config.server).await?;
+    modo::run!(server).await
 }
 ```
 
-</details>
+## What's included
 
-<details>
-<summary><strong>Define a database entity</strong></summary>
+### Config that just works
+
+YAML files with `${ENV_VAR}` and `${ENV_VAR:default}` substitution, loaded per `APP_ENV`. No builder, no manual env parsing, no `.env` ceremony.
+
+```yaml
+# config/production.yaml
+server:
+  port: ${PORT:8080}
+database:
+  url: ${DATABASE_URL}
+```
 
 ```rust
-#[modo_db::entity(table = "todos")]
-#[entity(timestamps)]
-pub struct Todo {
-    #[entity(primary_key, auto = "ulid")]
-    pub id: String,
-    pub title: String,
-    #[entity(default_value = false)]
-    pub completed: bool,
-}
+let config: Config = modo::config::load("config/")?;
 ```
 
-The `#[entity]` macro generates a SeaORM v2 model, auto-migration, and column helpers. `timestamps` adds `created_at` / `updated_at` columns automatically.
+### Database without an ORM
 
-</details>
-
-<details>
-<summary><strong>Background jobs</strong></summary>
-
-Define jobs with the `#[job]` macro:
+SQLite via sqlx. `Pool`, `ReadPool`, `WritePool` newtypes enforce read/write separation at the type level. Upgrade from one pool to split pools without changing handler signatures.
 
 ```rust
-#[modo_jobs::job(queue = "default")]
-async fn say_hello(payload: GreetingPayload) -> HandlerResult<()> {
-    tracing::info!(name = %payload.name, "Hello, {}!", payload.name);
-    Ok(())
-}
-
-#[modo_jobs::job(cron = "0 */1 * * * *", timeout = "30s")]
-async fn heartbeat() -> HandlerResult<()> {
-    tracing::info!("heartbeat tick");
-    Ok(())
-}
+let pool = db::connect(&config.database).await?;
+db::migrate("migrations/", &pool).await?;
 ```
 
-Enqueue from a handler:
+### Sessions with zero glue code
+
+Database-backed, signed cookies, sliding expiry, multi-device, fingerprinting. The middleware handles the full request/response lifecycle — you just call methods.
 
 ```rust
-#[modo::handler(POST, "/jobs/greet")]
-async fn enqueue_greet(queue: JobQueue, input: Json<GreetingPayload>) -> JsonResult<Value> {
-    let job_id = SayHelloJob::enqueue(&queue, &input).await?;
-    Ok(Json(json!({ "job_id": job_id.to_string() })))
+async fn login(session: Session, JsonRequest(form): JsonRequest<LoginForm>) -> Result<()> {
+    // ... validate credentials ...
+    session.authenticate(user_id).await
+}
+
+async fn dashboard(session: Session) -> Result<String> {
+    let uid = session.user_id().ok_or(Error::unauthorized("not logged in"))?;
+    Ok(format!("Welcome, {uid}"))
 }
 ```
 
-</details>
+### Auth without a framework
 
-<details>
-<summary><strong>File uploads</strong></summary>
-
-Declare a multipart form with per-field validation:
+Password hashing (Argon2id), TOTP (Google Authenticator compatible), one-time codes, backup codes, JWT with middleware, OAuth2 (GitHub, Google) — all plain functions and types, no annotations.
 
 ```rust
-#[derive(FromMultipart, modo::Sanitize, modo::Validate)]
-pub struct ProfileForm {
-    #[upload(max_size = "5mb", accept = "image/*")]
-    pub avatar: UploadedFile,
+let hash = auth::password::hash(password, &PasswordConfig::default()).await?;
+let valid = auth::password::verify(password, &hash).await?;
 
-    #[clean(trim)]
-    #[validate(required, min_length = 2)]
-    pub name: String,
-
-    #[clean(trim, normalize_email)]
-    #[validate(required, email)]
-    pub email: String,
-}
+let totp = Totp::from_base32(secret, &TotpConfig::default())?;
+let ok = totp.verify(user_code);
 ```
 
-Handle the upload:
+### Background jobs as plain functions
+
+SQLite-backed queue with retries, exponential backoff, timeouts, scheduled execution, and idempotent enqueue. Handlers use the same extraction pattern as HTTP routes.
 
 ```rust
-#[modo::handler(POST, "/profile")]
-async fn update_profile(
-    storage: Service<Arc<dyn FileStorage>>,
-    form: MultipartForm<ProfileForm>,
-) -> JsonResult<serde_json::Value> {
-    form.validate()?;
-    let stored = storage.store("avatars", &form.avatar).await?;
-    Ok(modo::Json(serde_json::json!({
-        "name": form.name,
-        "avatar_path": stored.path,
-    })))
+async fn send_email(Payload(p): Payload<Email>, Service(mailer): Service<Mailer>) -> Result<()> {
+    mailer.send(&p.to, &p.body).await
 }
+
+let worker = Worker::builder(&config.job, &registry)
+    .register("send_email", send_email)
+    .start().await;
+
+Enqueuer::new(&pool).enqueue("send_email", &payload).await?;
 ```
 
-</details>
+### Graceful shutdown in one line
 
-<details>
-<summary><strong>Workspace Crates</strong></summary>
+The `run!` macro waits for SIGTERM/SIGINT, then shuts down each component in declaration order. No cancellation tokens, no orchestration code.
 
-| Crate                | Description                                                                  |
-| -------------------- | ---------------------------------------------------------------------------- |
-| `modo`               | Core — routing, middleware, cookies, config, services                        |
-| `modo-macros`        | Proc macros (`#[handler]`, `#[main]`, `#[module]`)                           |
-| `modo-db`            | Database layer — SQLite and Postgres via SeaORM v2                           |
-| `modo-db-macros`     | `#[entity]` proc macro for model and migration generation                    |
-| `modo-email`         | Email with Markdown templates, SMTP/Resend, multi-tenant sender profiles     |
-| `modo-jobs`          | Background job queue with retries, cron, and graceful shutdown               |
-| `modo-jobs-macros`   | `#[job]` proc macro for declarative job definition                           |
-| `modo-session`       | Database-backed sessions with fingerprinting and multi-device support        |
-| `modo-auth`          | Authentication — `UserProvider` trait, `Auth<U>` extractor, Argon2id         |
-| `modo-tenant`        | Multi-tenancy — subdomain/header/path resolution, template context injection |
-| `modo-upload`        | File uploads — local and S3 storage via OpenDAL                              |
-| `modo-upload-macros` | `#[derive(FromMultipart)]` proc macro                                        |
-| `modo-cli`           | CLI tool for scaffolding modo projects                                       |
+```rust
+modo::run!(worker, server).await
+```
 
-</details>
+### Dependency injection without macros
 
-<details>
-<summary><strong>Examples</strong></summary>
+`Registry` is a typed map. `.add()` at startup, `Service<T>` in handlers. No `#[inject]`, no container config, no runtime reflection.
 
-| Example         | Description                                             | Run                          |
-| --------------- | ------------------------------------------------------- | ---------------------------- |
-| `hello`         | Minimal app with handlers, validation, and sanitization | `cargo run -p hello`         |
-| `todo-api`      | RESTful JSON API with SQLite persistence                | `cargo run -p todo-api`      |
-| `jobs`          | Background job queue with cron scheduling               | `cargo run -p jobs`          |
-| `upload`        | File uploads with multipart parsing and storage         | `cargo run -p upload`        |
-| `templates`     | MiniJinja template rendering                            | `cargo run -p templates`     |
-| `sse-chat`      | Real-time chat with SSE, sessions, and CSRF             | `cargo run -p sse-chat`      |
-| `sse-dashboard` | Live-updating dashboard with SSE streaming              | `cargo run -p sse-dashboard` |
+```rust
+let mut registry = Registry::new();
+registry.add(pool);
+registry.add(mailer);
 
-</details>
+// In any handler:
+async fn list_users(Service(pool): Service<Pool>) -> Result<Json<Vec<User>>> { ... }
+```
 
-<details>
-<summary><strong>Feature Flags</strong></summary>
+### Request extraction with auto-sanitization
 
-The `modo` core crate has these optional features (all off by default):
+`JsonRequest<T>`, `FormRequest<T>`, and `Query<T>` call your `Sanitize` impl before the handler runs. Define it once, applied everywhere.
 
-| Flag           | Description                                        |
-| -------------- | -------------------------------------------------- |
-| `templates`    | MiniJinja template engine integration              |
-| `csrf`         | Double-submit signed-cookie CSRF protection        |
-| `i18n`         | Locale detection and internationalization          |
-| `sse`          | Server-Sent Events support                         |
-| `static-fs`    | Serve static files from a directory at runtime     |
-| `sentry`       | Sentry error tracking with request metadata        |
-| `static-embed` | Embed static files into the binary at compile time |
+### Middleware you'd write anyway
 
-</details>
+Rate limiting, CORS, CSRF, compression, security headers, request tracing, panic catching, error handler — all included with sensible defaults. All standard Tower layers, not a custom system.
 
-## Project Status
+### And the rest
 
-**Beta** — under active development. APIs may still change.
+| Module        | What it does                                                     |
+| ------------- | ---------------------------------------------------------------- |
+| `template`    | MiniJinja with i18n, HTMX detection, flash message integration   |
+| `sse`         | Server-Sent Events with named broadcast channels                 |
+| `email`       | Markdown-to-HTML email rendering with SMTP                       |
+| `storage`     | S3-compatible object storage with ACL and upload-from-URL        |
+| `webhook`     | Outbound webhook delivery with Standard Webhooks signing         |
+| `dns`         | TXT/CNAME verification for custom domain validation              |
+| `geolocation` | MaxMind GeoIP2 location lookup with middleware                   |
+| `rbac`        | Role-based access control with guard middleware                  |
+| `tenant`      | Multi-tenancy via subdomain, header, path, or custom resolver    |
+| `flash`       | Signed, read-once cookie flash messages                          |
+| `cron`        | Cron scheduling (5/6-field expressions)                          |
+| `health`      | `/_live` and `/_ready` health check endpoints                    |
+| `cache`       | In-memory LRU cache                                              |
+| `testing`     | `TestDb`, `TestApp`, `TestSession` — in-process, no server needed|
 
-Found a bug or have a feature request? [Open an issue](https://github.com/dmitrymomot/modo/issues).
+## Feature flags
+
+Everything above the table is always available. The table modules are opt-in:
+
+```toml
+[dependencies]
+modo = { version = "0.1", features = ["auth", "templates"] }
+```
+
+| Feature        | Modules                                              |
+| -------------- | ---------------------------------------------------- |
+| `auth`         | password, otp, totp, backup codes, jwt, oauth        |
+| `templates`    | MiniJinja engine with i18n and static file serving    |
+| `sse`          | Server-Sent Events broadcasting                      |
+| `email`        | Markdown email rendering + SMTP                      |
+| `storage`      | S3-compatible object storage                         |
+| `webhooks`     | Outbound webhook delivery                            |
+| `dns`          | DNS domain verification                              |
+| `geolocation`  | MaxMind GeoIP2 lookup                                |
+| `sentry`       | Sentry error tracking                                |
+| `test-helpers` | TestDb, TestApp, TestSession                         |
+| `full`         | All of the above                                     |
+
+## Re-exports
+
+modo re-exports `axum`, `serde`, `sqlx`, and `tokio` so you don't need to version-match them yourself.
 
 ## Claude Code Plugin
 
-Install the modo development plugin for Claude Code:
+The `modo-dev` plugin gives Claude Code full knowledge of modo's APIs and conventions.
 
-1. Add the modo marketplace:
-   ```sh
-   /plugin marketplace add dmitrymomot/modo
-   ```
+```
+/plugin marketplace add dmitrymomot/modo
+/plugin install modo-dev@dmitrymomot-modo
+/reload-plugins
+```
 
-2. Install the plugin:
-   ```sh
-   /plugin install modo-dev@modo
-   ```
+Once installed, it activates automatically when you build with modo. Or invoke it with `/modo-dev`.
 
-The plugin provides context-aware skills for building modo apps — handlers, database entities, jobs, templates, and more.
+## Development
+
+```sh
+cargo check                                        # type check
+cargo test                                         # run tests
+cargo test --all-features                          # run all tests
+cargo clippy --all-features --tests -- -D warnings # lint
+cargo fmt --check                                  # format check
+```
 
 ## License
 
-[Apache-2.0](LICENSE)
+Apache-2.0

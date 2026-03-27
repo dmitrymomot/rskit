@@ -1,75 +1,102 @@
-# modo v2
+# CLAUDE.md
 
-Clean rewrite of the modo Rust web framework. Single crate, no proc macros, plain functions, explicit wiring, raw sqlx.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Worktree Rules
+## Project
 
-- This is a git worktree on branch `worktree-modo-v2` — all work MUST happen here
-- NEVER switch to `main` — main has v1 code and must not be touched
-- All v1 crates, examples, and workspace config will be removed — we're building from scratch
-- Do NOT reference v1 patterns (SeaORM, inventory, proc macros, multi-crate workspace)
-
-## Design Philosophy
-
-- One crate (`modo`), zero proc macros
-- Handlers are plain `async fn` — no `#[handler]` macro, no signature rewriting
-- Routes use axum's `Router` directly — no auto-registration
-- Services wired explicitly in `main()` — no global discovery
-- Database uses raw sqlx — no ORM, no `Record` trait, no `ActiveModel`
-- All config structs have sensible `Default` implementations
-- Feature flags only for truly optional pieces (templates, SSE, OAuth)
-
-## Stack
-
-- Rust 2024 edition
-- axum 0.8, tower 0.5, tower-http 0.6
-- sqlx 0.8 (runtime-tokio, chrono, migrate)
-- tokio 1 (full)
-- serde 1, serde_json 1, serde_yaml_ng 0.10
-- tracing 0.1, tracing-subscriber 0.3
-- thiserror 2, anyhow 1
-- ulid 1, chrono 0.4
-- rand 0.10
-- Feature flags: `sqlite` (default) / `postgres` (mutually exclusive)
-- Future deps (not in foundation): axum-extra 0.12, opendal 0.55 (`services-s3`)
+modo — Rust web framework. Single crate, zero proc macros, plain `async fn` handlers, axum Router, raw sqlx, explicit wiring. Rust 2024 edition, MSRV 1.92.
 
 ## Commands
 
 - `cargo check` — type check
 - `cargo test` — run all tests
-- `cargo clippy -- -D warnings` — lint
-- `cargo fmt --check` — format check
-- `cargo fmt` — format code
+- `cargo test --features X` — test feature-gated module
+- `cargo clippy --features X --tests -- -D warnings` — lint (plain `cargo clippy` skips test code)
+- `cargo fmt` / `cargo fmt --check` — format
+
+## Workflow
+
+- `superpowers:brainstorming` skill before implementation
+- `superpowers:subagent-driven-development` skill for plan execution
 
 ## Conventions
 
-- File organization: `mod.rs` is ONLY for `mod` imports and re-exports — all code goes in separate files
-- File organization applies to `lib.rs` too — no trait defs, impl blocks, or functions; only `mod`, `pub use`, and re-exports
-- Handlers are plain async functions — no macros
-- Extractors: `Service<T>` reads from registry, `JsonRequest<T>` / `FormRequest<T>` for request bodies, `Path<T>` / `Query<T>` for params
-- Error handling: `modo::Error` with status + message + optional source; `modo::Result<T>` alias; `?` everywhere
+- NEVER use absolute paths — always relative to project root
+- `mod.rs` / `lib.rs` are ONLY for `mod` imports and re-exports — all code in separate files
+- `modo::Error` with status + message + optional source; `modo::Result<T>`; `?` everywhere
 - Error constructors: `Error::not_found()`, `Error::bad_request()`, `Error::internal()`, etc.
-- Response types: `Json<T>`, `Html<String>`, `Redirect`, `Response`
-- Service registry: `Registry` is `HashMap<TypeId, Arc<dyn Any>>` — `.add(value)` inserts, `Service<T>` extracts
-- Config: YAML with `${VAR}` / `${VAR:default}` env var substitution, loaded per `APP_ENV`
-- Database: `Pool`, `ReadPool`, `WritePool` newtypes; `connect()` / `connect_rw()` for pools
-- IDs: `src/id/` module — `id::ulid()` for full ULID (26 chars), `id::short()` for short time-sortable ID (13 chars, base36) — no UUID anywhere. Short ID ported from v1 (`modo-db/src/id.rs`): 42-bit ms timestamp | 22-bit random → base36
-- Runtime: `Task` trait + `run!` macro for sequential shutdown
-- Tracing fields: always snake_case (`user_id`, `session_id`, `job_id`)
-- Pluggable backends: wrap with `Arc<dyn Trait>` (not `Box`)
+- `Error::with_source(status, msg, src)` is a constructor — builder method is `.chain(src)`
+- Error identity: `.chain(e).with_code(e.code())` — `source_as::<T>()` pre-response, `error_code()` post-response
+- `Error` clone/response both drop `source` — use `error_code: Option<&'static str>` for identity across response boundary
+- IDs: `id::ulid()` (26 chars) or `id::short()` (13 chars, base36) — no UUID
+- Pluggable backends: `Arc<dyn Trait>` (not `Box`)
+- `Arc<Inner>` pattern — `Inner` struct/field must be private; never double-wrap
+- `std::sync::RwLock` (not tokio) for sync-only state — never hold across `.await`
+- Tracing fields: snake_case (`user_id`, `session_id`)
+- Config: YAML with `${VAR}` / `${VAR:default}` env substitution; `trusted_proxies` is top-level
+- Database: `Pool`/`ReadPool`/`WritePool` newtypes; `connect()` forces `max_connections=1` for `:memory:`; `connect_rw()` rejects `:memory:` — for in-memory tests share one `Pool` via `ReadPool::new()`/`WritePool::new()`
+- No TODOs, no workarounds — every declared field and API must be fully implemented
 
-## Key References
+## Feature Flags
 
-- Design spec: `docs/superpowers/specs/2026-03-19-modo-v2-design.md`
-- Foundation plan: `docs/superpowers/plans/2026-03-19-modo-v2-foundation.md`
+Feature-gated modules: `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`, `qrcode`, `sentry`. Always-available: cache, encoding, flash, ip, session, tenant, rbac, job, cron, testing (`test-helpers`).
+
+- Integration test files need `#![cfg(feature = "X")]`
+- Feature-gated modules for integration tests must use `pub mod` (not `pub(crate) mod`)
+- Companion test features (`X-test`) for dev-only code: `#[cfg_attr(not(any(test, feature = "X-test")), allow(dead_code))]`
+- `Cargo.lock` is gitignored (library crate)
 
 ## Gotchas
 
-- Rust 2024 edition: `std::env::set_var` / `remove_var` are `unsafe` — all tests must wrap in `unsafe {}` blocks
-- Config tests that modify env vars must use `serial_test` crate to avoid races
-- `run!` macro uses `$crate::tracing::info!` paths (not bare `tracing::`) for correct hygiene
-- `server::http()` accepts `Router` (i.e., `Router<()>`, after `.with_state()` has been called)
-- `sqlite` and `postgres` features are mutually exclusive — enforced via `compile_error!`
-- Postgres support is stubbed (config struct only) — full implementation deferred
-- `ReadPool` intentionally does NOT implement `AsPool` — prevents passing it to migration functions
-- Use official documentation only when researching dependencies
+### Middleware & Traits
+
+- Tower middleware: `Layer` + `Service`, manual `Clone`, `std::mem::swap` in `call()` — see `src/tenant/middleware.rs`
+- RPITIT traits (OAuthProvider, TenantResolver, RoleExtractor) are not object-safe — use concrete types
+- Traits behind `Arc<dyn Trait>` must use `Pin<Box<dyn Future>>` (not RPITIT) — see `src/dns/resolver.rs`
+- Middleware needing session: take `&mut Parts` so `Session::from_request_parts()` works
+- Guard/middleware errors use `Error::into_response()` — never construct raw HTTP responses
+
+### axum 0.8
+
+- Handlers in `#[tokio::test]` closures don't satisfy `Handler` bounds — use module-level `async fn`
+- `Option<MyExtractor>` needs explicit `OptionalFromRequestParts` impl
+- Path-dependent layers: `.route_layer()` not `.layer()`
+- `Router::layer()`: `L` and `L::Service` need `+ Sync`, error `Into<Infallible>`
+
+### Rust 2024
+
+- Prelude includes `Future` — no `use std::future::Future` needed
+- `set_var`/`remove_var` are `unsafe`; env-var tests need `serial_test` and must clean up BEFORE assertions
+- `mod foo` inside `foo/mod.rs` rejected by clippy — name file differently
+- Let-chains required for nested `if let` + `if`
+
+### SQLite
+
+- No `ON CONFLICT` with partial unique indexes — `INSERT` + catch `is_unique_violation()`
+- 999 bind params limit per query
+
+### Dependencies
+
+- YAML: `serde_yaml_ng` (not `serde_yaml`)
+- base64: `base64` crate for standard, `encoding::base64url` for RFC 4648 no-padding
+- rand: `rand::fill(&mut bytes)` not `rand::rng().fill_bytes()`
+- croner: `.with_seconds_optional()` for 6-field cron
+- Session: raw `cookie::CookieJar`, not `axum_extra` signed jar
+- MiniJinja: `Value::from_safe_string()` for URLs/HTML; registrations consume by move
+- Streaming HTTP: `BodyExt::frame()` loop, not `body.collect().await`
+- S3 keys: always `uri_encode(key, false)`
+
+### Design Decisions
+
+- RBAC is roles-only — app handles permissions in handler logic
+- Job priority via separate queues, not numeric priority
+- DB-backed modules don't ship migrations — end-apps own schemas
+- `TenantId::ApiKey` must be redacted in Display/Debug
+- `tracing()` middleware pre-declares `tenant_id = tracing::field::Empty` so tenant middleware can `record()` into it — new fields that middleware needs to fill must be added to `ModoMakeSpan`
+- Use official docs only when researching dependencies
+
+### Test Fixtures
+
+- `tests/fixtures/migrations/` — `TestDb::migrate()` tests
+- `tests/fixtures/GeoIP2-City-Test.mmdb` — geolocation tests
+- Types without `Debug` (pool newtypes, Storage): `.err().unwrap()` not `.unwrap_err()`

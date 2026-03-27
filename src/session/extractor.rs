@@ -1,0 +1,301 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+
+use axum::extract::FromRequestParts;
+use http::request::Parts;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+
+use crate::error::{Error, HttpError};
+
+use super::meta::SessionMeta;
+use super::store::{SessionData, Store};
+use super::token::SessionToken;
+
+#[derive(Clone)]
+pub(crate) enum SessionAction {
+    None,
+    Set(SessionToken),
+    Remove,
+}
+
+pub(crate) struct SessionState {
+    pub store: Store,
+    pub meta: SessionMeta,
+    pub current: Mutex<Option<SessionData>>,
+    pub dirty: AtomicBool,
+    pub action: Mutex<SessionAction>,
+}
+
+/// Axum extractor providing access to the current session.
+///
+/// `Session` is inserted into the request extensions by [`super::middleware::SessionLayer`].
+/// Extracting it in a handler does not require the user to be authenticated —
+/// call [`Session::is_authenticated`] or [`Session::user_id`] to check.
+///
+/// All read methods are synchronous (lock-free from the caller's perspective).
+/// Write methods that only modify in-memory data ([`Session::set`],
+/// [`Session::remove_key`]) are also synchronous. Methods that touch the
+/// database ([`Session::authenticate`], [`Session::logout`], etc.) are `async`.
+///
+/// # Panics
+///
+/// Panics if `SessionLayer` is not present in the middleware stack. Apply the
+/// layer with [`super::layer`] before using this extractor.
+pub struct Session {
+    state: Arc<SessionState>,
+}
+
+impl<S: Send + Sync> FromRequestParts<S> for Session {
+    type Rejection = Error;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let state = parts
+            .extensions
+            .get::<Arc<SessionState>>()
+            .cloned()
+            .ok_or_else(|| Error::internal("Session extractor requires session middleware"))?;
+
+        Ok(Self { state })
+    }
+}
+
+impl Session {
+    // --- Synchronous reads ---
+
+    /// Return the authenticated user's ID, or `None` if no session is active.
+    pub fn user_id(&self) -> Option<String> {
+        let guard = self.state.current.lock().expect("session mutex poisoned");
+        guard.as_ref().map(|s| s.user_id.clone())
+    }
+
+    /// Deserialise a value stored in the session under `key`.
+    ///
+    /// Returns `Ok(None)` when there is no active session or the key is absent.
+    pub fn get<T: DeserializeOwned>(&self, key: &str) -> crate::Result<Option<T>> {
+        let guard = self.state.current.lock().expect("session mutex poisoned");
+        let session = match guard.as_ref() {
+            Some(s) => s,
+            None => return Ok(None),
+        };
+        match session.data.get(key) {
+            Some(v) => {
+                let val = serde_json::from_value(v.clone()).map_err(|e| {
+                    Error::internal(format!("deserialize session key '{key}': {e}"))
+                })?;
+                Ok(Some(val))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Return `true` when a valid, authenticated session exists for this request.
+    pub fn is_authenticated(&self) -> bool {
+        let guard = self.state.current.lock().expect("session mutex poisoned");
+        guard.is_some()
+    }
+
+    /// Return a clone of the full session data, or `None` if unauthenticated.
+    pub fn current(&self) -> Option<SessionData> {
+        let guard = self.state.current.lock().expect("session mutex poisoned");
+        guard.clone()
+    }
+
+    // --- In-memory data writes (deferred) ---
+
+    /// Store a serialisable value under `key` in the session data.
+    ///
+    /// The change is held in memory and flushed to the database by the
+    /// middleware after the handler returns. No-op when there is no active
+    /// session.
+    pub fn set<T: Serialize>(&self, key: &str, value: &T) -> crate::Result<()> {
+        let mut guard = self.state.current.lock().expect("session mutex poisoned");
+        let session = match guard.as_mut() {
+            Some(s) => s,
+            None => return Ok(()), // no-op if no session
+        };
+        if let serde_json::Value::Object(ref mut map) = session.data {
+            map.insert(
+                key.to_string(),
+                serde_json::to_value(value)
+                    .map_err(|e| Error::internal(format!("serialize session value: {e}")))?,
+            );
+            self.state.dirty.store(true, Ordering::SeqCst);
+        }
+        Ok(())
+    }
+
+    /// Remove a key from the session data.
+    ///
+    /// No-op when there is no active session or the key does not exist.
+    /// The change is flushed to the database by the middleware after the
+    /// handler returns.
+    pub fn remove_key(&self, key: &str) {
+        let mut guard = self.state.current.lock().expect("session mutex poisoned");
+        if let Some(ref mut session) = *guard
+            && let serde_json::Value::Object(ref mut map) = session.data
+            && map.remove(key).is_some()
+        {
+            self.state.dirty.store(true, Ordering::SeqCst);
+        }
+    }
+
+    // --- Auth lifecycle (immediate DB writes) ---
+
+    /// Create a new authenticated session for `user_id` with empty data.
+    ///
+    /// If a session already exists, it is destroyed first (session fixation
+    /// prevention). A new token is generated and set on the cookie. Equivalent
+    /// to `authenticate_with(user_id, serde_json::json!({}))`.
+    pub async fn authenticate(&self, user_id: &str) -> crate::Result<()> {
+        self.authenticate_with(user_id, serde_json::json!({})).await
+    }
+
+    /// Create a new authenticated session for `user_id` with initial `data`.
+    ///
+    /// If a session already exists, it is destroyed first (session fixation
+    /// prevention). A new token is generated and set on the cookie.
+    pub async fn authenticate_with(
+        &self,
+        user_id: &str,
+        data: serde_json::Value,
+    ) -> crate::Result<()> {
+        // Destroy current session (fixation prevention)
+        let existing_id = {
+            let current = self.state.current.lock().expect("session mutex poisoned");
+            current.as_ref().map(|s| s.id.clone())
+        };
+        if let Some(id) = existing_id {
+            self.state.store.destroy(&id).await?;
+        }
+
+        let (session_data, token) = self
+            .state
+            .store
+            .create(&self.state.meta, user_id, Some(data))
+            .await?;
+
+        *self.state.current.lock().expect("session mutex poisoned") = Some(session_data);
+        *self.state.action.lock().expect("session mutex poisoned") = SessionAction::Set(token);
+        self.state.dirty.store(false, Ordering::SeqCst);
+        Ok(())
+    }
+
+    /// Issue a new session token and refresh the session expiry.
+    ///
+    /// Returns `401 Unauthorized` if there is no active session. Use this
+    /// after privilege escalation to prevent session fixation.
+    pub async fn rotate(&self) -> crate::Result<()> {
+        let session_id = {
+            let current = self.state.current.lock().expect("session mutex poisoned");
+            let session = current
+                .as_ref()
+                .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
+            session.id.clone()
+        };
+
+        let new_token = self.state.store.rotate_token(&session_id).await?;
+
+        let now = chrono::Utc::now();
+        let new_expires =
+            now + chrono::Duration::seconds(self.state.store.config().session_ttl_secs as i64);
+        self.state
+            .store
+            .touch(&session_id, now, new_expires)
+            .await?;
+
+        *self.state.action.lock().expect("session mutex poisoned") = SessionAction::Set(new_token);
+        Ok(())
+    }
+
+    /// Destroy the current session and clear the session cookie.
+    ///
+    /// No-op (succeeds silently) when there is no active session.
+    pub async fn logout(&self) -> crate::Result<()> {
+        let existing_id = {
+            let current = self.state.current.lock().expect("session mutex poisoned");
+            current.as_ref().map(|s| s.id.clone())
+        };
+        if let Some(id) = existing_id {
+            self.state.store.destroy(&id).await?;
+        }
+        *self.state.action.lock().expect("session mutex poisoned") = SessionAction::Remove;
+        *self.state.current.lock().expect("session mutex poisoned") = None;
+        Ok(())
+    }
+
+    /// Destroy all sessions for the current user and clear the session cookie.
+    ///
+    /// Returns `401 Unauthorized` if there is no active session.
+    pub async fn logout_all(&self) -> crate::Result<()> {
+        let existing_user_id = {
+            let current = self.state.current.lock().expect("session mutex poisoned");
+            current.as_ref().map(|s| s.user_id.clone())
+        };
+        if let Some(user_id) = existing_user_id {
+            self.state.store.destroy_all_for_user(&user_id).await?;
+        }
+        *self.state.action.lock().expect("session mutex poisoned") = SessionAction::Remove;
+        *self.state.current.lock().expect("session mutex poisoned") = None;
+        Ok(())
+    }
+
+    /// Destroy all sessions for the current user except the current one.
+    ///
+    /// Returns `401 Unauthorized` if there is no active session.
+    pub async fn logout_other(&self) -> crate::Result<()> {
+        let (user_id, session_id) = {
+            let current = self.state.current.lock().expect("session mutex poisoned");
+            let session = current
+                .as_ref()
+                .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
+            (session.user_id.clone(), session.id.clone())
+        };
+        self.state
+            .store
+            .destroy_all_except(&user_id, &session_id)
+            .await
+    }
+
+    /// Return all active sessions for the current user.
+    ///
+    /// Returns `401 Unauthorized` if there is no active session.
+    pub async fn list_my_sessions(&self) -> crate::Result<Vec<SessionData>> {
+        let user_id = {
+            let current = self.state.current.lock().expect("session mutex poisoned");
+            let session = current
+                .as_ref()
+                .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
+            session.user_id.clone()
+        };
+        self.state.store.list_for_user(&user_id).await
+    }
+
+    /// Revoke a specific session belonging to the current user.
+    ///
+    /// Returns `401 Unauthorized` if there is no active session and `404 Not
+    /// Found` if `id` does not belong to the current user (deliberately
+    /// indistinguishable to prevent enumeration).
+    pub async fn revoke(&self, id: &str) -> crate::Result<()> {
+        let current_user_id = {
+            let current = self.state.current.lock().expect("session mutex poisoned");
+            let session = current
+                .as_ref()
+                .ok_or_else(|| Error::from(HttpError::Unauthorized))?;
+            session.user_id.clone()
+        };
+
+        let target = self
+            .state
+            .store
+            .read(id)
+            .await?
+            .ok_or_else(|| Error::from(HttpError::NotFound))?;
+
+        if target.user_id != current_user_id {
+            return Err(Error::from(HttpError::NotFound));
+        }
+
+        self.state.store.destroy(id).await
+    }
+}

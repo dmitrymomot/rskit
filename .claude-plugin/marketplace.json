@@ -1,17 +1,21 @@
 {
-    "name": "modo",
-    "owner": {
-        "name": "Dmytro Momot"
-    },
-    "plugins": [
-        {
-            "name": "modo-dev",
-            "source": {
-                "source": "git-subdir",
-                "url": "https://github.com/dmitrymomot/modo.git",
-                "path": "claude-plugin"
-            },
-            "description": "Skills for building apps with the modo Rust web framework"
-        }
-    ]
+  "name": "dmitrymomot-modo",
+  "owner": {
+    "name": "Dmytro Momot"
+  },
+  "metadata": {
+    "description": "Skills for building applications with the modo Rust web framework"
+  },
+  "plugins": [
+    {
+      "name": "modo",
+      "source": ".",
+      "description": "Development reference and project scaffolding for modo v2",
+      "version": "0.1.0",
+      "author": { "name": "Dmytro Momot" },
+      "repository": "https://github.com/dmitrymomot/modo",
+      "license": "Apache-2.0",
+      "keywords": ["rust", "web-framework", "modo", "scaffolding"]
+    }
+  ]
 }

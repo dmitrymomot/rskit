@@ -1,5 +1,0 @@
-error: #[job] handlers must be async functions
- --> tests/ui/not_async.rs:4:1
-  |
-4 | fn sync_job() -> Result<(), modo::Error> {
-  | ^^
