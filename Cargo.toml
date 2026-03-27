@@ -1,5 +1,5 @@
 [package]
-name = "modo"
+name = "modo-rs"
 version = "0.1.0"
 edition = "2024"
 description = "Rust web framework for small monolithic apps"
@@ -10,6 +10,9 @@ keywords = ["web", "framework", "axum", "sqlite"]
 categories = ["web-programming::http-server"]
 rust-version = "1.92"
 exclude = [".claude", ".claude-plugin", "skills", "docs", ".github", "examples", "CLAUDE.md", "justfile", "tests"]
+
+[lib]
+name = "modo"
 
 [features]
 default = []

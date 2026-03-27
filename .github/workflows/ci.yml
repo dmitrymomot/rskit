@@ -107,11 +107,16 @@ jobs:
         id: version
         run: |
           LOCAL=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          REMOTE=$(curl -sf "https://crates.io/api/v1/crates/modo" \
-            | python3 -c "import sys,json; print(json.load(sys.stdin)['crate']['max_version'])" 2>/dev/null) || REMOTE=""
+          # Check against all versions (including yanked) — max_version ignores yanked
+          EXISTS=$(curl -sf "https://crates.io/api/v1/crates/modo-rs/versions" \
+            | python3 -c "
+          import sys, json
+          versions = [v['num'] for v in json.load(sys.stdin)['versions']]
+          print('true' if '$LOCAL' in versions else 'false')
+          " 2>/dev/null) || EXISTS="false"
           echo "local=$LOCAL" >> "$GITHUB_OUTPUT"
-          echo "remote=$REMOTE" >> "$GITHUB_OUTPUT"
-          if [ "$LOCAL" = "$REMOTE" ]; then
+          echo "exists=$EXISTS" >> "$GITHUB_OUTPUT"
+          if [ "$EXISTS" = "true" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
