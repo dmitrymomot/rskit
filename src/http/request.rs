@@ -57,7 +57,7 @@ impl RequestBuilder {
         }
     }
 
-    /// Append a single header.
+    /// Set a single header, replacing any existing value with the same name.
     pub fn header(
         mut self,
         name: http::header::HeaderName,

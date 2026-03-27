@@ -42,14 +42,22 @@ impl WebhookSender {
 
     /// Override the default `User-Agent` header sent with every request.
     ///
+    /// The value must be a valid HTTP header value (visible ASCII only, no
+    /// control characters). Invalid values are silently ignored.
+    ///
     /// # Panics
     ///
     /// Panics if called after the sender has been cloned. Call this immediately
     /// after [`WebhookSender::new`] before handing clones to other tasks.
     pub fn with_user_agent(mut self, user_agent: impl Into<String>) -> Self {
+        let ua = user_agent.into();
+        // Validate before storing — prevents panic in send().
+        if http::header::HeaderValue::from_str(&ua).is_err() {
+            return self;
+        }
         let inner =
             Arc::get_mut(&mut self.inner).expect("with_user_agent must be called before cloning");
-        inner.user_agent = user_agent.into();
+        inner.user_agent = ua;
         self
     }
 
@@ -96,7 +104,13 @@ impl WebhookSender {
 
         let mut headers = HeaderMap::new();
         headers.insert("content-type", "application/json".parse().unwrap());
-        headers.insert("user-agent", self.inner.user_agent.parse().unwrap());
+        headers.insert(
+            "user-agent",
+            self.inner
+                .user_agent
+                .parse()
+                .map_err(|_| Error::internal("invalid user-agent header value"))?,
+        );
         headers.insert(
             "webhook-id",
             signed

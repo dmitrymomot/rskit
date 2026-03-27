@@ -49,7 +49,7 @@ impl Client {
     /// Create a new client from the given configuration.
     pub fn new(config: &ClientConfig) -> Self {
         let mut http_connector = legacy::connect::HttpConnector::new();
-        http_connector.set_connect_timeout(Some(config.connect_timeout()));
+        http_connector.set_connect_timeout(config.connect_timeout());
 
         let connector = HttpsConnectorBuilder::new()
             .with_webpki_roots()
@@ -133,13 +133,13 @@ pub struct ClientBuilder {
 impl ClientBuilder {
     /// Set the default request timeout.
     pub fn timeout(mut self, d: Duration) -> Self {
-        self.config.timeout_secs = d.as_secs();
+        self.config.timeout_ms = d.as_millis() as u64;
         self
     }
 
     /// Set the TCP connect timeout.
     pub fn connect_timeout(mut self, d: Duration) -> Self {
-        self.config.connect_timeout_secs = d.as_secs();
+        self.config.connect_timeout_ms = d.as_millis() as u64;
         self
     }
 
