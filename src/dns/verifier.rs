@@ -83,7 +83,10 @@ impl DomainVerifier {
     /// Create a verifier with a custom resolver and TXT record prefix.
     ///
     /// Used by other in-crate modules to build a `DomainVerifier` backed by a
-    /// mock resolver for testing.
+    /// mock resolver for testing. Only called from `#[cfg(test)]` blocks in
+    /// other modules, so it has zero callers on the lib target — hence
+    /// `allow(dead_code)`. Cannot use `#[cfg(test)]` here because that would
+    /// make it invisible to other modules' test blocks.
     #[allow(dead_code)]
     pub(crate) fn with_resolver(
         resolver: impl DnsResolver + 'static,
