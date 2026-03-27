@@ -77,9 +77,9 @@ impl DomainRegistry {
                 created_at: now,
                 verified_at: None,
             }),
-            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
-                Err(Error::conflict("Domain is already verified by another tenant"))
-            }
+            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => Err(
+                Error::conflict("Domain is already verified by another tenant"),
+            ),
             Err(e) => Err(Error::internal(format!("register domain: {e}"))),
         }
     }
@@ -284,8 +284,7 @@ mod tests {
         )";
     const CREATE_INDEX_TD: &str =
         "CREATE INDEX idx_tenant_domains_tenant_domain ON tenant_domains(tenant_id, domain)";
-    const CREATE_INDEX_VERIFIED: &str =
-        "CREATE UNIQUE INDEX idx_tenant_domains_verified ON tenant_domains(domain) WHERE status = 'verified'";
+    const CREATE_INDEX_VERIFIED: &str = "CREATE UNIQUE INDEX idx_tenant_domains_verified ON tenant_domains(domain) WHERE status = 'verified'";
 
     /// Mock DNS resolver with mutable TXT record state.
     #[derive(Clone)]

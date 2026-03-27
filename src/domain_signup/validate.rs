@@ -22,7 +22,9 @@ pub(crate) fn validate_domain(domain: &str) -> Result<String> {
     }
 
     if !domain.contains('.') {
-        return Err(Error::bad_request("Invalid domain: must contain at least one dot"));
+        return Err(Error::bad_request(
+            "Invalid domain: must contain at least one dot",
+        ));
     }
 
     for label in domain.split('.') {
@@ -30,7 +32,9 @@ pub(crate) fn validate_domain(domain: &str) -> Result<String> {
             return Err(Error::bad_request("Invalid domain: empty label"));
         }
         if label.len() > 63 {
-            return Err(Error::bad_request("Invalid domain: label exceeds 63 characters"));
+            return Err(Error::bad_request(
+                "Invalid domain: label exceeds 63 characters",
+            ));
         }
         if label.starts_with('-') || label.ends_with('-') {
             return Err(Error::bad_request(
@@ -80,7 +84,10 @@ mod tests {
 
     #[test]
     fn valid_subdomain() {
-        assert_eq!(validate_domain("sub.example.com").unwrap(), "sub.example.com");
+        assert_eq!(
+            validate_domain("sub.example.com").unwrap(),
+            "sub.example.com"
+        );
     }
 
     #[test]
@@ -100,12 +107,18 @@ mod tests {
 
     #[test]
     fn valid_with_hyphens() {
-        assert_eq!(validate_domain("my-domain.co.uk").unwrap(), "my-domain.co.uk");
+        assert_eq!(
+            validate_domain("my-domain.co.uk").unwrap(),
+            "my-domain.co.uk"
+        );
     }
 
     #[test]
     fn valid_with_digits() {
-        assert_eq!(validate_domain("123.example.com").unwrap(), "123.example.com");
+        assert_eq!(
+            validate_domain("123.example.com").unwrap(),
+            "123.example.com"
+        );
     }
 
     // -- validate_domain: invalid inputs --
@@ -178,12 +191,18 @@ mod tests {
 
     #[test]
     fn email_valid_extracts_domain() {
-        assert_eq!(extract_email_domain("user@example.com").unwrap(), "example.com");
+        assert_eq!(
+            extract_email_domain("user@example.com").unwrap(),
+            "example.com"
+        );
     }
 
     #[test]
     fn email_valid_lowercases_domain() {
-        assert_eq!(extract_email_domain("user@Example.COM").unwrap(), "example.com");
+        assert_eq!(
+            extract_email_domain("user@Example.COM").unwrap(),
+            "example.com"
+        );
     }
 
     #[test]
