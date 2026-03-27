@@ -3,9 +3,10 @@ use sqlx::sqlite::SqliteArguments;
 
 /// Owned, cloneable representation of a single SQLite bind parameter.
 ///
-/// Used as the internal storage type for deferred query parameters.
-/// You should not need to construct this directly; use [`IntoSqliteValue`] impls.
-#[doc(hidden)]
+/// This type is `#[non_exhaustive]` — new variants may be added without
+/// a breaking change. You should not construct or match on this directly;
+/// use [`IntoSqliteValue`] impls via the builder `.bind()` method.
+#[non_exhaustive]
 #[derive(Clone, Debug)]
 pub enum SqliteValue {
     Null,
@@ -33,7 +34,9 @@ impl SqliteValue {
 }
 
 /// Convert a Rust value into a [`SqliteValue`] for deferred binding.
-#[doc(hidden)]
+///
+/// Implemented for common SQLite-compatible types: `bool`, `i32`, `i64`,
+/// `f32`, `f64`, `String`, `&str`, `Vec<u8>`, `&[u8]`, and `Option<T>`.
 pub trait IntoSqliteValue {
     fn into_sqlite_value(self) -> SqliteValue;
 }
@@ -53,6 +56,12 @@ impl IntoSqliteValue for i32 {
 impl IntoSqliteValue for i64 {
     fn into_sqlite_value(self) -> SqliteValue {
         SqliteValue::Int64(self)
+    }
+}
+
+impl IntoSqliteValue for f32 {
+    fn into_sqlite_value(self) -> SqliteValue {
+        SqliteValue::Double(self as f64)
     }
 }
 
@@ -130,6 +139,12 @@ mod tests {
     fn i64_converts_to_int64() {
         let val = 100i64.into_sqlite_value();
         assert!(matches!(val, SqliteValue::Int64(100)));
+    }
+
+    #[test]
+    fn f32_converts_to_double() {
+        let val = 1.5f32.into_sqlite_value();
+        assert!(matches!(val, SqliteValue::Double(v) if (v - 1.5).abs() < f64::EPSILON));
     }
 
     #[test]

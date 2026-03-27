@@ -1,4 +1,5 @@
 use serde::Serialize;
+use sqlx::Arguments;
 use sqlx::FromRow;
 use sqlx::sqlite::SqliteRow;
 
@@ -16,8 +17,6 @@ use super::value::{IntoSqliteValue, SqliteValue, build_args};
 pub struct Paginate {
     sql: String,
     args: Vec<SqliteValue>,
-    where_sql: Option<String>,
-    where_args: Vec<SqliteValue>,
 }
 
 impl Paginate {
@@ -27,22 +26,12 @@ impl Paginate {
         Self {
             sql: sql.to_owned(),
             args: Vec::new(),
-            where_sql: None,
-            where_args: Vec::new(),
         }
     }
 
     /// Bind a parameter matching a `?` placeholder in the SQL.
     pub fn bind(mut self, value: impl IntoSqliteValue) -> Self {
         self.args.push(value.into_sqlite_value());
-        self
-    }
-
-    /// Append a WHERE clause fragment (for future filter module integration).
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) fn where_clause(mut self, sql: &str, args: Vec<SqliteValue>) -> Self {
-        self.where_sql = Some(sql.to_owned());
-        self.where_args = args;
         self
     }
 
@@ -71,7 +60,6 @@ impl Paginate {
         // Data query
         let data_sql = self.data_sql();
         let mut data_args = self.all_args();
-        use sqlx::Arguments;
         data_args.add(req.per_page as i64).unwrap();
         data_args.add(req.offset() as i64).unwrap();
 
@@ -84,30 +72,21 @@ impl Paginate {
     }
 
     fn all_args(&self) -> sqlx::sqlite::SqliteArguments<'static> {
-        let combined: Vec<SqliteValue> = self
-            .args
-            .iter()
-            .chain(self.where_args.iter())
-            .cloned()
-            .collect();
-        build_args(&combined)
+        build_args(&self.args)
     }
 
     pub(crate) fn count_sql(&self) -> String {
-        let where_part = self.where_sql.as_deref().unwrap_or("");
-        format!("SELECT COUNT(*) FROM ({}{})", self.sql, where_part)
+        format!("SELECT COUNT(*) FROM ({})", self.sql)
     }
 
     pub(crate) fn data_sql(&self) -> String {
-        let where_part = self.where_sql.as_deref().unwrap_or("");
-        format!("{}{} LIMIT ? OFFSET ?", self.sql, where_part)
+        format!("{} LIMIT ? OFFSET ?", self.sql)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::page::value::IntoSqliteValue;
 
     #[test]
     fn count_sql_wraps_base_query() {
@@ -122,19 +101,5 @@ mod tests {
     fn data_sql_appends_limit_offset() {
         let p = Paginate::new("SELECT * FROM users");
         assert_eq!(p.data_sql(), "SELECT * FROM users LIMIT ? OFFSET ?");
-    }
-
-    #[test]
-    fn where_clause_inserted_between_base_and_limit() {
-        let p = Paginate::new("SELECT * FROM users")
-            .where_clause(" WHERE active = ?", vec!["true".into_sqlite_value()]);
-        assert_eq!(
-            p.data_sql(),
-            "SELECT * FROM users WHERE active = ? LIMIT ? OFFSET ?"
-        );
-        assert_eq!(
-            p.count_sql(),
-            "SELECT COUNT(*) FROM (SELECT * FROM users WHERE active = ?)"
-        );
     }
 }

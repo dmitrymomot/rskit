@@ -102,6 +102,7 @@ mod tests {
     #[test]
     fn page_metadata_beyond_last() {
         let page: Page<String> = Page::new(vec![], 5, 99, 2);
+        assert!(page.items.is_empty());
         assert_eq!(page.total_pages, 3);
         assert!(!page.has_next);
         assert!(page.has_prev);
