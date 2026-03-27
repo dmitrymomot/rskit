@@ -3,6 +3,7 @@
 > **modo** (Latin: "way, method") — a Rust web framework for small monolithic apps.
 
 [![CI](https://github.com/dmitrymomot/modo/actions/workflows/ci.yml/badge.svg)](https://github.com/dmitrymomot/modo/actions/workflows/ci.yml)
+[![docs.rs](https://img.shields.io/docsrs/modo-rs)](https://docs.rs/modo-rs)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Rust](https://img.shields.io/badge/rust-1.92+-orange.svg)
 
@@ -166,7 +167,7 @@ Everything above the table is always available. The table modules are opt-in:
 
 ```toml
 [dependencies]
-modo = { version = "0.1", features = ["auth", "templates"] }
+modo-rs = { version = "0.1", features = ["auth", "templates"] }
 ```
 
 | Feature        | Modules                                              |
