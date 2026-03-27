@@ -14,5 +14,6 @@
 //! ```
 
 mod types;
+mod validate;
 
 pub use types::{ClaimStatus, DomainClaim, TenantMatch};
