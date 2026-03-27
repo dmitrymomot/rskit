@@ -110,6 +110,7 @@ impl Client {
     ///
     /// Used internally by the storage module for AWS Signature V4 requests
     /// that need full control over request construction.
+    #[cfg_attr(not(feature = "storage"), allow(dead_code))]
     pub(crate) fn raw_client(&self) -> &InnerHttpsClient {
         &self.inner.client
     }
