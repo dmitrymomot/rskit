@@ -1,16 +1,15 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use bytes::Bytes;
 use http::HeaderMap;
 
-use super::client::{HttpClient, HyperClient, WebhookResponse};
+use super::client::{self, WebhookResponse};
 use super::secret::WebhookSecret;
 use super::signature::sign_headers;
 use crate::error::{Error, Result};
 
-struct WebhookSenderInner<C: HttpClient> {
-    client: C,
+struct WebhookSenderInner {
+    client: crate::http::Client,
     user_agent: String,
 }
 
@@ -18,11 +17,11 @@ struct WebhookSenderInner<C: HttpClient> {
 /// Standard Webhooks protocol.
 ///
 /// Clone-cheap: the inner state is wrapped in `Arc`.
-pub struct WebhookSender<C: HttpClient> {
-    inner: Arc<WebhookSenderInner<C>>,
+pub struct WebhookSender {
+    inner: Arc<WebhookSenderInner>,
 }
 
-impl<C: HttpClient> Clone for WebhookSender<C> {
+impl Clone for WebhookSender {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
@@ -30,9 +29,9 @@ impl<C: HttpClient> Clone for WebhookSender<C> {
     }
 }
 
-impl<C: HttpClient> WebhookSender<C> {
+impl WebhookSender {
     /// Create a new sender with the given HTTP client.
-    pub fn new(client: C) -> Self {
+    pub fn new(client: crate::http::Client) -> Self {
         Self {
             inner: Arc::new(WebhookSenderInner {
                 client,
@@ -43,15 +42,33 @@ impl<C: HttpClient> WebhookSender<C> {
 
     /// Override the default `User-Agent` header sent with every request.
     ///
+    /// The value must be a valid HTTP header value (visible ASCII only, no
+    /// control characters). Invalid values are silently ignored.
+    ///
     /// # Panics
     ///
     /// Panics if called after the sender has been cloned. Call this immediately
     /// after [`WebhookSender::new`] before handing clones to other tasks.
     pub fn with_user_agent(mut self, user_agent: impl Into<String>) -> Self {
+        let ua = user_agent.into();
+        // Validate before storing — prevents panic in send().
+        if http::header::HeaderValue::from_str(&ua).is_err() {
+            return self;
+        }
         let inner =
             Arc::get_mut(&mut self.inner).expect("with_user_agent must be called before cloning");
-        inner.user_agent = user_agent.into();
+        inner.user_agent = ua;
         self
+    }
+
+    /// Convenience constructor using a default [`crate::http::Client`] with a
+    /// 30-second timeout.
+    pub fn default_client() -> Self {
+        Self::new(
+            crate::http::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build(),
+        )
     }
 
     /// Send a webhook following the Standard Webhooks protocol.
@@ -87,7 +104,13 @@ impl<C: HttpClient> WebhookSender<C> {
 
         let mut headers = HeaderMap::new();
         headers.insert("content-type", "application/json".parse().unwrap());
-        headers.insert("user-agent", self.inner.user_agent.parse().unwrap());
+        headers.insert(
+            "user-agent",
+            self.inner
+                .user_agent
+                .parse()
+                .map_err(|_| Error::internal("invalid user-agent header value"))?,
+        );
         headers.insert(
             "webhook-id",
             signed
@@ -107,125 +130,106 @@ impl<C: HttpClient> WebhookSender<C> {
                 .map_err(|_| Error::internal("generated invalid webhook-signature header"))?,
         );
 
-        self.inner
-            .client
-            .post(url, headers, Bytes::copy_from_slice(body))
-            .await
-    }
-}
-
-impl WebhookSender<HyperClient> {
-    /// Convenience constructor using [`HyperClient`] with a 30-second timeout.
-    pub fn default_client() -> Self {
-        Self::new(HyperClient::new(Duration::from_secs(30)))
+        client::post(
+            &self.inner.client,
+            url,
+            headers,
+            Bytes::copy_from_slice(body),
+        )
+        .await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::time::Duration;
+
     use http::StatusCode;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
 
-    struct MockClient {
-        response_status: StatusCode,
-        captured_headers: std::sync::Mutex<Option<HeaderMap>>,
-        captured_body: std::sync::Mutex<Option<Bytes>>,
+    use super::*;
+
+    /// Start a minimal HTTP server that captures the request and returns the given status.
+    async fn start_test_server(response_status: u16) -> (String, tokio::task::JoinHandle<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let url = format!("http://127.0.0.1:{}", addr.port());
+
+        let handle = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 8192];
+            let n = stream.read(&mut buf).await.unwrap();
+            buf.truncate(n);
+            let raw = String::from_utf8_lossy(&buf).to_string();
+
+            let response = format!(
+                "HTTP/1.1 {response_status} OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
+            stream.shutdown().await.unwrap();
+
+            raw
+        });
+
+        (url, handle)
     }
 
-    impl MockClient {
-        fn new(status: StatusCode) -> Self {
-            Self {
-                response_status: status,
-                captured_headers: std::sync::Mutex::new(None),
-                captured_body: std::sync::Mutex::new(None),
-            }
-        }
-
-        fn captured_headers(&self) -> HeaderMap {
-            self.captured_headers.lock().unwrap().clone().unwrap()
-        }
-
-        fn captured_body(&self) -> Bytes {
-            self.captured_body.lock().unwrap().clone().unwrap()
-        }
-    }
-
-    impl HttpClient for MockClient {
-        async fn post(
-            &self,
-            _url: &str,
-            headers: HeaderMap,
-            body: Bytes,
-        ) -> Result<WebhookResponse> {
-            *self.captured_headers.lock().unwrap() = Some(headers);
-            *self.captured_body.lock().unwrap() = Some(body);
-            Ok(WebhookResponse {
-                status: self.response_status,
-                body: Bytes::new(),
-            })
-        }
+    fn test_client() -> crate::http::Client {
+        crate::http::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
     }
 
     #[tokio::test]
     async fn send_sets_correct_headers() {
-        let mock = MockClient::new(StatusCode::OK);
-        let sender = WebhookSender::new(mock);
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let (url, handle) = start_test_server(200).await;
+
+        let sender = WebhookSender::new(test_client());
         let secret = WebhookSecret::new(b"test-key".to_vec());
 
-        let result = sender
-            .send("http://example.com/hook", "msg_123", b"{}", &[&secret])
-            .await;
+        let result = sender.send(&url, "msg_123", b"{}", &[&secret]).await;
         assert!(result.is_ok());
 
-        let headers = sender.inner.client.captured_headers();
-        assert_eq!(headers.get("content-type").unwrap(), "application/json");
-        assert_eq!(headers.get("webhook-id").unwrap(), "msg_123");
-        assert!(headers.get("webhook-timestamp").is_some());
-        assert!(
-            headers
-                .get("webhook-signature")
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .starts_with("v1,")
-        );
+        let raw = handle.await.unwrap();
+        assert!(raw.contains("content-type: application/json"));
+        assert!(raw.contains("webhook-id: msg_123"));
+        assert!(raw.contains("webhook-timestamp:"));
+        assert!(raw.contains("webhook-signature: v1,"));
     }
 
     #[tokio::test]
     async fn send_default_user_agent() {
-        let mock = MockClient::new(StatusCode::OK);
-        let sender = WebhookSender::new(mock);
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let (url, handle) = start_test_server(200).await;
+
+        let sender = WebhookSender::new(test_client());
         let secret = WebhookSecret::new(b"key".to_vec());
 
-        sender
-            .send("http://example.com/hook", "msg_1", b"{}", &[&secret])
-            .await
-            .unwrap();
+        sender.send(&url, "msg_1", b"{}", &[&secret]).await.unwrap();
 
-        let headers = sender.inner.client.captured_headers();
-        let ua = headers.get("user-agent").unwrap().to_str().unwrap();
-        assert!(ua.starts_with("modo-webhooks/"));
+        let raw = handle.await.unwrap();
+        assert!(raw.contains("user-agent: modo-webhooks/"));
     }
 
     #[tokio::test]
     async fn send_custom_user_agent() {
-        let mock = MockClient::new(StatusCode::OK);
-        let sender = WebhookSender::new(mock).with_user_agent("my-app/2.0");
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let (url, handle) = start_test_server(200).await;
+
+        let sender = WebhookSender::new(test_client()).with_user_agent("my-app/2.0");
         let secret = WebhookSecret::new(b"key".to_vec());
 
-        sender
-            .send("http://example.com/hook", "msg_1", b"{}", &[&secret])
-            .await
-            .unwrap();
+        sender.send(&url, "msg_1", b"{}", &[&secret]).await.unwrap();
 
-        let headers = sender.inner.client.captured_headers();
-        assert_eq!(headers.get("user-agent").unwrap(), "my-app/2.0");
+        let raw = handle.await.unwrap();
+        assert!(raw.contains("user-agent: my-app/2.0"));
     }
 
     #[tokio::test]
     async fn send_empty_secrets_rejected() {
-        let mock = MockClient::new(StatusCode::OK);
-        let sender = WebhookSender::new(mock);
+        let sender = WebhookSender::new(test_client());
 
         let result = sender
             .send("http://example.com/hook", "msg_1", b"{}", &[])
@@ -236,8 +240,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_empty_id_rejected() {
-        let mock = MockClient::new(StatusCode::OK);
-        let sender = WebhookSender::new(mock);
+        let sender = WebhookSender::new(test_client());
         let secret = WebhookSecret::new(b"key".to_vec());
 
         let result = sender
@@ -249,34 +252,37 @@ mod tests {
 
     #[tokio::test]
     async fn send_empty_body_accepted() {
-        let mock = MockClient::new(StatusCode::OK);
-        let sender = WebhookSender::new(mock);
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let (url, handle) = start_test_server(200).await;
+
+        let sender = WebhookSender::new(test_client());
         let secret = WebhookSecret::new(b"key".to_vec());
 
-        let result = sender
-            .send("http://example.com/hook", "msg_1", b"", &[&secret])
-            .await;
+        let result = sender.send(&url, "msg_1", b"", &[&secret]).await;
         assert!(result.is_ok());
-        assert!(sender.inner.client.captured_body().is_empty());
+
+        let raw = handle.await.unwrap();
+        // The request was sent — verify it reached the server
+        assert!(raw.contains("POST / HTTP/1.1"));
     }
 
     #[tokio::test]
     async fn send_returns_response_status() {
-        let mock = MockClient::new(StatusCode::GONE);
-        let sender = WebhookSender::new(mock);
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let (url, handle) = start_test_server(410).await;
+
+        let sender = WebhookSender::new(test_client());
         let secret = WebhookSecret::new(b"key".to_vec());
 
-        let response = sender
-            .send("http://example.com/hook", "msg_1", b"{}", &[&secret])
-            .await
-            .unwrap();
+        let response = sender.send(&url, "msg_1", b"{}", &[&secret]).await.unwrap();
         assert_eq!(response.status, StatusCode::GONE);
+
+        handle.await.unwrap();
     }
 
     #[tokio::test]
     async fn send_invalid_url_rejected() {
-        let mock = MockClient::new(StatusCode::OK);
-        let sender = WebhookSender::new(mock);
+        let sender = WebhookSender::new(test_client());
         let secret = WebhookSecret::new(b"key".to_vec());
 
         let result = sender

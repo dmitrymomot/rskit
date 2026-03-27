@@ -107,8 +107,11 @@ impl Clone for Storage {
 }
 
 impl Storage {
-    /// Create from a bucket configuration (builds RemoteBackend).
-    pub fn new(config: &BucketConfig) -> Result<Self> {
+    /// Create from a bucket configuration using a shared HTTP client.
+    ///
+    /// This allows multiple `Storage` instances (and other modules) to share
+    /// the same connection pool and configuration.
+    pub fn with_client(config: &BucketConfig, client: crate::http::Client) -> Result<Self> {
         config.validate()?;
 
         let region = config
@@ -116,6 +119,7 @@ impl Storage {
             .clone()
             .unwrap_or_else(|| "us-east-1".to_string());
         let backend = RemoteBackend::new(
+            client,
             config.bucket.clone(),
             config.endpoint.clone(),
             config.access_key.clone(),
@@ -131,6 +135,13 @@ impl Storage {
                 max_file_size: config.max_file_size_bytes()?,
             }),
         })
+    }
+
+    /// Create from a bucket configuration (builds its own default HTTP client).
+    ///
+    /// For shared connection pooling, prefer [`Storage::with_client`].
+    pub fn new(config: &BucketConfig) -> Result<Self> {
+        Self::with_client(config, crate::http::Client::default())
     }
 
     /// In-memory storage for testing.
