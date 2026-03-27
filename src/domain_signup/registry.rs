@@ -54,9 +54,7 @@ impl DomainRegistry {
         let domain = validate::validate_domain(domain)?;
         let id = crate::id::ulid();
         let token = crate::dns::generate_verification_token();
-        let now = chrono::Utc::now()
-            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-            .to_string();
+        let now = chrono::Utc::now().to_rfc3339();
 
         match sqlx::query(
             "INSERT INTO tenant_domains (id, tenant_id, domain, verification_token, created_at) \
@@ -80,7 +78,7 @@ impl DomainRegistry {
                 verified_at: None,
             }),
             Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
-                Err(Error::conflict("Domain already verified by this tenant"))
+                Err(Error::conflict("Domain is already verified by another tenant"))
             }
             Err(e) => Err(Error::internal(format!("register domain: {e}"))),
         }
