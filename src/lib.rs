@@ -35,6 +35,7 @@ pub mod health;
 pub mod id;
 pub mod ip;
 pub mod middleware;
+pub mod page;
 pub mod runtime;
 pub mod sanitize;
 pub mod server;
@@ -92,6 +93,9 @@ pub use http::{
     Client as HttpClient, ClientBuilder as HttpClientBuilder, ClientConfig as HttpClientConfig,
 };
 pub use ip::{ClientIp, ClientIpLayer};
+pub use page::{
+    CursorPage, CursorPaginate, CursorRequest, Page, PageRequest, Paginate, PaginationConfig,
+};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
 pub use session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};

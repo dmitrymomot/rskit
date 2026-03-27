@@ -32,6 +32,8 @@ pub struct Config {
     /// Session TTL, cookie name, fingerprint validation, touch interval, and
     /// per-user session limit.
     pub session: crate::session::SessionConfig,
+    /// Pagination defaults (items per page, max page size).
+    pub pagination: crate::page::PaginationConfig,
     /// HTTP client settings (timeout, retries, user agent).
     /// Requires the `http-client` feature.
     #[cfg(feature = "http-client")]
