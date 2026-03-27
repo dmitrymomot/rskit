@@ -121,10 +121,7 @@ pub use template::{
 pub use storage::{Acl, BucketConfig, Buckets, PutFromUrlInput, PutInput, PutOptions, Storage};
 
 #[cfg(feature = "webhooks")]
-pub use webhook::{
-    HttpClient as WebhookHttpClient, HyperClient, SignedHeaders, WebhookResponse, WebhookSecret,
-    WebhookSender,
-};
+pub use webhook::{SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender};
 
 #[cfg(feature = "dns")]
 pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};

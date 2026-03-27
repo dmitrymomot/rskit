@@ -7,7 +7,7 @@ use http::StatusCode;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-use modo::webhook::{HttpClient, HyperClient, WebhookSecret, WebhookSender, verify_headers};
+use modo::webhook::{WebhookSecret, WebhookSender, verify_headers};
 
 /// Start a minimal HTTP server that captures the request and returns the given status.
 async fn start_test_server(
@@ -37,22 +37,31 @@ async fn start_test_server(
     (url, handle)
 }
 
+fn test_client() -> modo::http::Client {
+    modo::http::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+}
+
 #[tokio::test]
-async fn hyper_client_post_reaches_server() {
+async fn http_client_post_reaches_server() {
     let _ = rustls::crypto::ring::default_provider().install_default();
     let (url, handle) = start_test_server(200).await;
-    let client = HyperClient::new(Duration::from_secs(5));
+    let client = test_client();
 
     let mut headers = http::HeaderMap::new();
     headers.insert("content-type", "application/json".parse().unwrap());
     headers.insert("x-test", "hello".parse().unwrap());
 
     let response = client
-        .post(&url, headers, Bytes::from_static(b"test-body"))
+        .post(&url)
+        .headers(headers)
+        .body(Bytes::from_static(b"test-body"))
+        .send()
         .await
         .unwrap();
 
-    assert_eq!(response.status, StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::OK);
 
     let (raw_request, _) = handle.await.unwrap();
     assert!(raw_request.contains("POST / HTTP/1.1"));
@@ -61,7 +70,7 @@ async fn hyper_client_post_reaches_server() {
 }
 
 #[tokio::test]
-async fn hyper_client_timeout_on_slow_server() {
+async fn http_client_timeout_on_slow_server() {
     let _ = rustls::crypto::ring::default_provider().install_default();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -74,9 +83,13 @@ async fn hyper_client_timeout_on_slow_server() {
         drop(stream);
     });
 
-    let client = HyperClient::new(Duration::from_millis(100));
+    let client = modo::http::Client::builder().build();
+
     let result = client
-        .post(&url, http::HeaderMap::new(), Bytes::new())
+        .post(&url)
+        .body(Bytes::new())
+        .timeout(Duration::from_millis(100))
+        .send()
         .await;
 
     assert!(result.is_err());
@@ -87,7 +100,7 @@ async fn hyper_client_timeout_on_slow_server() {
 async fn end_to_end_send_and_verify() {
     let _ = rustls::crypto::ring::default_provider().install_default();
     let (url, handle) = start_test_server(200).await;
-    let sender = WebhookSender::new(HyperClient::new(Duration::from_secs(5)));
+    let sender = WebhookSender::new(test_client());
     let secret = WebhookSecret::new(b"e2e-test-secret".to_vec());
 
     let body = b"{\"event\":\"test\"}";
