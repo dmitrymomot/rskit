@@ -111,11 +111,13 @@ impl Storage {
     pub fn new(config: &BucketConfig) -> Result<Self> {
         config.validate()?;
 
+        let http_client = crate::http::Client::default();
         let region = config
             .region
             .clone()
             .unwrap_or_else(|| "us-east-1".to_string());
         let backend = RemoteBackend::new(
+            http_client,
             config.bucket.clone(),
             config.endpoint.clone(),
             config.access_key.clone(),

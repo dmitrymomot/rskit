@@ -105,6 +105,14 @@ impl Client {
     pub fn request(&self, method: http::Method, url: &str) -> RequestBuilder {
         RequestBuilder::new(self.inner.clone(), method, url)
     }
+
+    /// Access the underlying hyper client for pre-signed request dispatch.
+    ///
+    /// Used internally by the storage module for AWS Signature V4 requests
+    /// that need full control over request construction.
+    pub(crate) fn raw_client(&self) -> &InnerHttpsClient {
+        &self.inner.client
+    }
 }
 
 /// A fluent builder for constructing a [`Client`].

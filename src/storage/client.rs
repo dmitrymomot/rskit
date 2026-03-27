@@ -3,9 +3,6 @@ use std::time::Duration;
 use bytes::Bytes;
 use http::Uri;
 use http_body_util::{BodyExt, Full};
-use hyper_rustls::HttpsConnectorBuilder;
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
 
 use super::options::PutOptions;
 use super::presign::{PresignParams, presign_url};
@@ -13,10 +10,7 @@ use super::signing::{SigningParams, sign_request, uri_encode};
 use crate::error::{Error, Result};
 
 pub(crate) struct RemoteBackend {
-    client: Client<
-        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-        Full<Bytes>,
-    >,
+    client: crate::http::Client,
     bucket: String,
     endpoint: String,
     endpoint_host: String,
@@ -31,6 +25,7 @@ const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495
 
 impl RemoteBackend {
     pub fn new(
+        client: crate::http::Client,
         bucket: String,
         endpoint: String,
         access_key: String,
@@ -39,13 +34,6 @@ impl RemoteBackend {
         path_style: bool,
     ) -> Result<Self> {
         let endpoint_host = strip_scheme(&endpoint).to_string();
-
-        let connector = HttpsConnectorBuilder::new()
-            .with_webpki_roots()
-            .https_or_http()
-            .enable_http1()
-            .build();
-        let client = Client::builder(TokioExecutor::new()).build(connector);
 
         Ok(Self {
             client,
@@ -116,6 +104,7 @@ impl RemoteBackend {
 
         let response = self
             .client
+            .raw_client()
             .request(request)
             .await
             .map_err(|e| Error::internal(format!("PUT request failed: {e}")))?;
@@ -174,6 +163,7 @@ impl RemoteBackend {
 
         let response = self
             .client
+            .raw_client()
             .request(request)
             .await
             .map_err(|e| Error::internal(format!("DELETE request failed: {e}")))?;
@@ -232,6 +222,7 @@ impl RemoteBackend {
 
         let response = self
             .client
+            .raw_client()
             .request(request)
             .await
             .map_err(|e| Error::internal(format!("HEAD request failed: {e}")))?;
@@ -304,6 +295,7 @@ impl RemoteBackend {
 
             let response = self
                 .client
+                .raw_client()
                 .request(request)
                 .await
                 .map_err(|e| Error::internal(format!("LIST request failed: {e}")))?;
@@ -361,12 +353,7 @@ impl RemoteBackend {
         Ok(presign_url(&params))
     }
 
-    pub(crate) fn client(
-        &self,
-    ) -> &Client<
-        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-        Full<Bytes>,
-    > {
+    pub(crate) fn client(&self) -> &crate::http::Client {
         &self.client
     }
 
