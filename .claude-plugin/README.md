@@ -20,12 +20,30 @@ Interactive project scaffolding. Generates a complete, ready-to-run modo v2 appl
 
 Supports 4 app type presets (API service, Web application, Full stack, Custom) and 13 optional components.
 
+### deploy (`/modo:deploy`)
+
+Production deployment setup. Generates Dockerfile, Docker Swarm stack, GitHub Actions CI/CD, VPS bootstrap script, Caddy reverse proxy, and Litestream SQLite backup config.
+
+**Triggers:** "deploy", "production setup", "set up VPS", "CI/CD", "docker swarm", "deploy to server".
+
+### feedback (`/modo:feedback`)
+
+Quick GitHub issue creation from the current session. Pulls errors, context, and details from the conversation to create well-structured bug reports, feature requests, or improvement suggestions.
+
+**Triggers:** "file an issue", "report a bug", "feature request", "submit feedback", "something is broken".
+
+## Hooks
+
+### Feedback nudge (Stop)
+
+When a session encounters genuine modo framework errors (not routine user code mistakes), Claude will briefly mention `/modo:feedback` before wrapping up. Light touch — only triggers on clear framework-level issues.
+
 ## Installation
 
 Via marketplace:
 ```
 /plugin marketplace add dmitrymomot/modo
-/plugin install modo@dmitrymomot-modo
+/plugin install modo@modo-dev
 /reload-plugins
 ```
 
