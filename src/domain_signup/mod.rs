@@ -13,7 +13,9 @@
 //! modo = { version = "*", features = ["dns"] }
 //! ```
 
+mod registry;
 mod types;
 mod validate;
 
+pub use registry::DomainRegistry;
 pub use types::{ClaimStatus, DomainClaim, TenantMatch};
