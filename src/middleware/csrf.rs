@@ -6,7 +6,7 @@ use axum::body::Body;
 use axum::response::IntoResponse;
 use axum_extra::extract::cookie::Key;
 use cookie::{Cookie, CookieJar, SameSite};
-use http::{HeaderValue, Method, Request, Response, StatusCode};
+use http::{HeaderValue, Method, Request, Response};
 use serde::Deserialize;
 use tower::{Layer, Service};
 
@@ -228,10 +228,7 @@ where
                     let error = crate::error::Error::forbidden(format!(
                         "CSRF validation failed: missing or invalid {header_name}"
                     ));
-                    let mut response =
-                        (StatusCode::FORBIDDEN, error.message().to_string()).into_response();
-                    response.extensions_mut().insert(error);
-                    Ok(response)
+                    Ok(error.into_response())
                 })
             }
         }

@@ -41,7 +41,7 @@ test-helpers = []
 [dependencies]
 # Web
 axum = { version = "0.8", features = ["macros"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt", "sync", "time", "net", "signal", "macros"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 croner = "3"
 tower = { version = "0.5", features = ["util"] }

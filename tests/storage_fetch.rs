@@ -12,6 +12,6 @@ async fn put_from_url_memory_backend_returns_error() {
         i.filename = Some("file.jpg".into());
         i
     };
-    let err = storage.put_from_url(&input).await.err().unwrap();
+    let err = storage.put_from_url(&input).await.unwrap_err();
     assert_eq!(err.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }

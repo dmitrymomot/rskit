@@ -4,6 +4,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
+use subtle::ConstantTimeEq;
 
 use super::secret::WebhookSecret;
 use crate::error::{Error, Result};
@@ -30,7 +31,8 @@ pub fn verify(secret: &WebhookSecret, content: &[u8], signature: &str) -> bool {
     let mut mac =
         HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
     mac.update(content);
-    mac.verify_slice(&sig_bytes).is_ok()
+    let expected = mac.finalize().into_bytes();
+    expected.ct_eq(&sig_bytes).into()
 }
 
 /// The three Standard Webhooks headers produced by [`sign_headers`].

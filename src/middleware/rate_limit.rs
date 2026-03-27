@@ -8,7 +8,8 @@ use std::task::{Context, Poll};
 use std::time::Instant;
 
 use axum::body::Body;
-use http::{Request, Response, StatusCode};
+use axum::response::IntoResponse;
+use http::{Request, Response};
 use serde::Deserialize;
 use tokio_util::sync::CancellationToken;
 use tower::{Layer, Service};
@@ -307,12 +308,8 @@ where
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let Some(key) = self.extractor.extract(&req) else {
             // Cannot extract key — return 500
-            let modo_error = crate::error::Error::internal("unable to extract rate-limit key");
-            let mut response = Response::new(Body::from(
-                r#"{"error":{"status":500,"message":"unable to extract rate-limit key"}}"#,
-            ));
-            *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-            response.extensions_mut().insert(modo_error);
+            let response =
+                crate::error::Error::internal("unable to extract rate-limit key").into_response();
             return Box::pin(async move { Ok(response) });
         };
 
@@ -326,12 +323,10 @@ where
         match result {
             CheckResult::Rejected { retry_after_secs } => {
                 let retry_secs = retry_after_secs.ceil() as u64;
-                let modo_error =
-                    crate::error::Error::too_many_requests(format!("retry after {retry_secs}s"));
-                let mut response = Response::new(Body::from(format!(
-                    r#"{{"error":{{"status":429,"message":"too many requests","retry_after":{retry_secs}}}}}"#
-                )));
-                *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;
+                let error =
+                    crate::error::Error::too_many_requests(format!("retry after {retry_secs}s"))
+                        .with_details(serde_json::json!({"retry_after": retry_secs}));
+                let mut response = error.into_response();
 
                 if self.config.use_headers {
                     let headers = response.headers_mut();
@@ -340,7 +335,6 @@ where
                     headers.insert("x-ratelimit-remaining", 0u32.into());
                 }
 
-                response.extensions_mut().insert(modo_error);
                 Box::pin(async move { Ok(response) })
             }
             CheckResult::Allowed { remaining } => {
