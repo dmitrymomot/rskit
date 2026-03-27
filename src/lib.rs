@@ -73,6 +73,9 @@ pub mod webhook;
 #[cfg(feature = "dns")]
 pub mod dns;
 
+#[cfg(feature = "dns")]
+pub mod domain_signup;
+
 #[cfg(feature = "geolocation")]
 pub mod geolocation;
 
@@ -131,6 +134,9 @@ pub use webhook::{SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender};
 
 #[cfg(feature = "dns")]
 pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};
+
+#[cfg(feature = "dns")]
+pub use domain_signup::{ClaimStatus, DomainClaim, DomainRegistry, TenantMatch};
 
 #[cfg(feature = "geolocation")]
 pub use geolocation::{GeoLayer, GeoLocator, GeolocationConfig, Location};

@@ -80,6 +80,26 @@ impl DomainVerifier {
         })
     }
 
+    /// Create a verifier with a custom resolver and TXT record prefix.
+    ///
+    /// Used by other in-crate modules to build a `DomainVerifier` backed by a
+    /// mock resolver for testing. Only called from `#[cfg(test)]` blocks in
+    /// other modules, so it has zero callers on the lib target — hence
+    /// `allow(dead_code)`. Cannot use `#[cfg(test)]` here because that would
+    /// make it invisible to other modules' test blocks.
+    #[allow(dead_code)]
+    pub(crate) fn with_resolver(
+        resolver: impl DnsResolver + 'static,
+        txt_prefix: impl Into<String>,
+    ) -> Self {
+        Self {
+            inner: Arc::new(Inner {
+                resolver: Arc::new(resolver),
+                txt_prefix: txt_prefix.into(),
+            }),
+        }
+    }
+
     /// Check whether a TXT record matches the expected verification token.
     ///
     /// Looks up `{txt_prefix}.{domain}` and returns `true` if any TXT record
