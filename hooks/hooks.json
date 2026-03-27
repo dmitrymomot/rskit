@@ -7,8 +7,8 @@
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "Check if this session involved working with the modo Rust framework AND encountered clear framework-level problems — compiler errors from modo APIs, test failures in modo modules, unexpected panics, missing modo functionality, or incorrect framework behavior.\n\nDo NOT trigger for:\n- Normal development iteration (typos, user logic bugs, routine compiler errors from the user's own code)\n- Sessions where /modo:feedback was already mentioned\n- Sessions with no modo-related work\n\nIf the session hit a genuine modo framework issue that's worth reporting:\n{\"decision\": \"block\", \"reason\": \"Modo framework issue detected\", \"systemMessage\": \"Before wrapping up, briefly mention that the user can run /modo:feedback to quickly file a GitHub issue for the modo problem encountered in this session. One sentence, no pressure.\"}\n\nOtherwise:\n{\"decision\": \"approve\"}",
-            "timeout": 10
+            "prompt": "Check if this session involved working with the modo Rust framework AND encountered clear framework-level problems — compiler errors from modo APIs, test failures in modo modules, unexpected panics, missing modo functionality, or incorrect framework behavior.\n\nDo NOT trigger for:\n- Normal development iteration (typos, user logic bugs, routine compiler errors from the user's own code)\n- Sessions where /modo:feedback was already mentioned\n- Sessions with no modo-related work\n\nRespond with ONLY a JSON object, no other text.\n\nIf the session hit a genuine modo framework issue that's worth reporting:\n{\"decision\": \"block\", \"reason\": \"Modo framework issue detected\", \"systemMessage\": \"Before wrapping up, briefly mention that the user can run /modo:feedback to quickly file a GitHub issue for the modo problem encountered in this session. One sentence, no pressure.\"}\n\nOtherwise:\n{\"decision\": \"approve\"}",
+            "timeout": 30
           }
         ]
       }
