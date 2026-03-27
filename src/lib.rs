@@ -48,6 +48,9 @@ pub mod job;
 pub mod rbac;
 pub mod tenant;
 
+#[cfg(feature = "http-client")]
+pub mod http;
+
 #[cfg(feature = "auth")]
 pub mod auth;
 
@@ -80,6 +83,9 @@ pub mod testing;
 
 pub use config::Config;
 pub use error::{Error, Result};
+
+#[cfg(feature = "http-client")]
+pub use http::ClientConfig as HttpClientConfig;
 pub use extractor::Service;
 pub use flash::{Flash, FlashEntry, FlashLayer};
 pub use health::{HealthCheck, HealthChecks};
