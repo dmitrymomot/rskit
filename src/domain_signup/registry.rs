@@ -56,7 +56,7 @@ impl DomainRegistry {
         let token = crate::dns::generate_verification_token();
         let now = chrono::Utc::now().to_rfc3339();
 
-        match sqlx::query(
+        sqlx::query(
             "INSERT INTO tenant_domains (id, tenant_id, domain, verification_token, created_at) \
              VALUES (?, ?, ?, ?, ?)",
         )
@@ -67,21 +67,17 @@ impl DomainRegistry {
         .bind(&now)
         .execute(&*self.inner.pool)
         .await
-        {
-            Ok(_) => Ok(DomainClaim {
-                id,
-                tenant_id: tenant_id.to_owned(),
-                domain,
-                verification_token: token,
-                status: ClaimStatus::Pending,
-                created_at: now,
-                verified_at: None,
-            }),
-            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
-                Err(Error::conflict("Domain is already verified"))
-            }
-            Err(e) => Err(Error::internal(format!("register domain: {e}"))),
-        }
+        .map_err(|e| Error::internal(format!("register domain: {e}")))?;
+
+        Ok(DomainClaim {
+            id,
+            tenant_id: tenant_id.to_owned(),
+            domain,
+            verification_token: token,
+            status: ClaimStatus::Pending,
+            created_at: now,
+            verified_at: None,
+        })
     }
 
     /// Check DNS verification for a pending claim.
@@ -209,7 +205,7 @@ impl DomainRegistry {
     pub async fn list(&self, tenant_id: &str) -> Result<Vec<DomainClaim>> {
         let rows = sqlx::query_as::<_, DomainRow>(
             "SELECT id, tenant_id, domain, verification_token, status, created_at, verified_at \
-             FROM tenant_domains WHERE tenant_id = ?",
+             FROM tenant_domains WHERE tenant_id = ? ORDER BY created_at ASC",
         )
         .bind(tenant_id)
         .fetch_all(&*self.inner.pool)
