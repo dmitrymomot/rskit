@@ -2,7 +2,7 @@
 
 use axum::routing::get;
 use modo::page::{
-    CursorPage, CursorPaginate, CursorRequest, Page, Paginate, PageRequest, PaginationConfig,
+    CursorPage, CursorPaginate, CursorRequest, Page, PageRequest, Paginate, PaginationConfig,
 };
 use modo::testing::{TestApp, TestDb};
 
@@ -52,7 +52,10 @@ async fn offset_first_page() {
     let ids = seed_items(&db, 5).await;
     let pool = db.read_pool();
 
-    let req = PageRequest { page: 1, per_page: 2 };
+    let req = PageRequest {
+        page: 1,
+        per_page: 2,
+    };
     let page: Page<Item> = Paginate::new("SELECT * FROM items ORDER BY id ASC")
         .fetch(&pool, &req)
         .await
@@ -75,7 +78,10 @@ async fn offset_middle_page() {
     let ids = seed_items(&db, 5).await;
     let pool = db.read_pool();
 
-    let req = PageRequest { page: 2, per_page: 2 };
+    let req = PageRequest {
+        page: 2,
+        per_page: 2,
+    };
     let page: Page<Item> = Paginate::new("SELECT * FROM items ORDER BY id ASC")
         .fetch(&pool, &req)
         .await
@@ -94,7 +100,10 @@ async fn offset_last_page() {
     let ids = seed_items(&db, 5).await;
     let pool = db.read_pool();
 
-    let req = PageRequest { page: 3, per_page: 2 };
+    let req = PageRequest {
+        page: 3,
+        per_page: 2,
+    };
     let page: Page<Item> = Paginate::new("SELECT * FROM items ORDER BY id ASC")
         .fetch(&pool, &req)
         .await
@@ -112,7 +121,10 @@ async fn offset_beyond_last_page() {
     seed_items(&db, 3).await;
     let pool = db.read_pool();
 
-    let req = PageRequest { page: 99, per_page: 2 };
+    let req = PageRequest {
+        page: 99,
+        per_page: 2,
+    };
     let page: Page<Item> = Paginate::new("SELECT * FROM items ORDER BY id ASC")
         .fetch(&pool, &req)
         .await
@@ -128,7 +140,10 @@ async fn offset_empty_table() {
     let db = setup_db().await;
     let pool = db.read_pool();
 
-    let req = PageRequest { page: 1, per_page: 20 };
+    let req = PageRequest {
+        page: 1,
+        per_page: 20,
+    };
     let page: Page<Item> = Paginate::new("SELECT * FROM items")
         .fetch(&pool, &req)
         .await
@@ -153,7 +168,10 @@ async fn offset_with_bind_params() {
         .unwrap();
     let pool = db.read_pool();
 
-    let req = PageRequest { page: 1, per_page: 10 };
+    let req = PageRequest {
+        page: 1,
+        per_page: 10,
+    };
     let page: Page<Item> = Paginate::new("SELECT * FROM items WHERE name = ?")
         .bind("special")
         .fetch(&pool, &req)
@@ -172,7 +190,10 @@ async fn cursor_first_page_newest_first() {
     let ids = seed_items(&db, 5).await;
     let pool = db.read_pool();
 
-    let req = CursorRequest { after: None, per_page: 2 };
+    let req = CursorRequest {
+        after: None,
+        per_page: 2,
+    };
     let page: CursorPage<Item> = CursorPaginate::new("SELECT * FROM items")
         .fetch(&pool, &req)
         .await
@@ -193,7 +214,10 @@ async fn cursor_second_page_newest_first() {
     let pool = db.read_pool();
 
     // First page
-    let req = CursorRequest { after: None, per_page: 2 };
+    let req = CursorRequest {
+        after: None,
+        per_page: 2,
+    };
     let page1: CursorPage<Item> = CursorPaginate::new("SELECT * FROM items")
         .fetch(&pool, &req)
         .await
@@ -242,7 +266,10 @@ async fn cursor_empty_table() {
     let db = setup_db().await;
     let pool = db.read_pool();
 
-    let req = CursorRequest { after: None, per_page: 20 };
+    let req = CursorRequest {
+        after: None,
+        per_page: 20,
+    };
     let page: CursorPage<Item> = CursorPaginate::new("SELECT * FROM items")
         .fetch(&pool, &req)
         .await
@@ -259,7 +286,10 @@ async fn cursor_oldest_first() {
     let ids = seed_items(&db, 5).await;
     let pool = db.read_pool();
 
-    let req = CursorRequest { after: None, per_page: 2 };
+    let req = CursorRequest {
+        after: None,
+        per_page: 2,
+    };
     let page: CursorPage<Item> = CursorPaginate::new("SELECT * FROM items")
         .oldest_first()
         .fetch(&pool, &req)
@@ -307,7 +337,10 @@ async fn cursor_with_bind_params() {
         .unwrap();
     let pool = db.read_pool();
 
-    let req = CursorRequest { after: None, per_page: 10 };
+    let req = CursorRequest {
+        after: None,
+        per_page: 10,
+    };
     let page: CursorPage<Item> = CursorPaginate::new("SELECT * FROM items WHERE name = ?")
         .bind("special")
         .fetch(&pool, &req)

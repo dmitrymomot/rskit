@@ -121,10 +121,7 @@ mod tests {
     #[test]
     fn data_sql_appends_limit_offset() {
         let p = Paginate::new("SELECT * FROM users");
-        assert_eq!(
-            p.data_sql(),
-            "SELECT * FROM users LIMIT ? OFFSET ?"
-        );
+        assert_eq!(p.data_sql(), "SELECT * FROM users LIMIT ? OFFSET ?");
     }
 
     #[test]

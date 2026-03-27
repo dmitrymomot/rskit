@@ -145,41 +145,68 @@ mod tests {
     #[test]
     fn first_page_sql_newest_first() {
         let p = CursorPaginate::new("SELECT * FROM events");
-        let req = CursorRequest { after: None, per_page: 20 };
+        let req = CursorRequest {
+            after: None,
+            per_page: 20,
+        };
         let (sql, limit) = p.build_query(&req);
-        assert_eq!(sql, "SELECT * FROM (SELECT * FROM events) ORDER BY id DESC LIMIT ?");
+        assert_eq!(
+            sql,
+            "SELECT * FROM (SELECT * FROM events) ORDER BY id DESC LIMIT ?"
+        );
         assert_eq!(limit, 21);
     }
 
     #[test]
     fn next_page_sql_newest_first() {
         let p = CursorPaginate::new("SELECT * FROM events");
-        let req = CursorRequest { after: Some("abc".into()), per_page: 20 };
+        let req = CursorRequest {
+            after: Some("abc".into()),
+            per_page: 20,
+        };
         let (sql, _) = p.build_query(&req);
-        assert_eq!(sql, "SELECT * FROM (SELECT * FROM events) WHERE id < ? ORDER BY id DESC LIMIT ?");
+        assert_eq!(
+            sql,
+            "SELECT * FROM (SELECT * FROM events) WHERE id < ? ORDER BY id DESC LIMIT ?"
+        );
     }
 
     #[test]
     fn first_page_sql_oldest_first() {
         let p = CursorPaginate::new("SELECT * FROM events").oldest_first();
-        let req = CursorRequest { after: None, per_page: 10 };
+        let req = CursorRequest {
+            after: None,
+            per_page: 10,
+        };
         let (sql, _) = p.build_query(&req);
-        assert_eq!(sql, "SELECT * FROM (SELECT * FROM events) ORDER BY id ASC LIMIT ?");
+        assert_eq!(
+            sql,
+            "SELECT * FROM (SELECT * FROM events) ORDER BY id ASC LIMIT ?"
+        );
     }
 
     #[test]
     fn next_page_sql_oldest_first() {
         let p = CursorPaginate::new("SELECT * FROM events").oldest_first();
-        let req = CursorRequest { after: Some("abc".into()), per_page: 10 };
+        let req = CursorRequest {
+            after: Some("abc".into()),
+            per_page: 10,
+        };
         let (sql, _) = p.build_query(&req);
-        assert_eq!(sql, "SELECT * FROM (SELECT * FROM events) WHERE id > ? ORDER BY id ASC LIMIT ?");
+        assert_eq!(
+            sql,
+            "SELECT * FROM (SELECT * FROM events) WHERE id > ? ORDER BY id ASC LIMIT ?"
+        );
     }
 
     #[test]
     fn where_clause_included() {
         let p = CursorPaginate::new("SELECT * FROM events")
             .where_clause(" WHERE tenant_id = ?", vec!["t1".into_sqlite_value()]);
-        let req = CursorRequest { after: None, per_page: 5 };
+        let req = CursorRequest {
+            after: None,
+            per_page: 5,
+        };
         let (sql, _) = p.build_query(&req);
         assert_eq!(
             sql,
@@ -190,7 +217,10 @@ mod tests {
     #[test]
     fn limit_is_per_page_plus_one() {
         let p = CursorPaginate::new("SELECT * FROM events");
-        let req = CursorRequest { after: None, per_page: 5 };
+        let req = CursorRequest {
+            after: None,
+            per_page: 5,
+        };
         let (_, limit) = p.build_query(&req);
         assert_eq!(limit, 6);
     }

@@ -116,28 +116,40 @@ mod tests {
 
     #[test]
     fn page_request_zero_page_becomes_one() {
-        let req = PageRequest { page: 0, per_page: 10 };
+        let req = PageRequest {
+            page: 0,
+            per_page: 10,
+        };
         let req = req.clamp(&config());
         assert_eq!(req.page, 1);
     }
 
     #[test]
     fn page_request_per_page_zero_uses_default() {
-        let req = PageRequest { page: 1, per_page: 0 };
+        let req = PageRequest {
+            page: 1,
+            per_page: 0,
+        };
         let req = req.clamp(&config());
         assert_eq!(req.per_page, 20); // config default, not 1
     }
 
     #[test]
     fn page_request_per_page_over_max_clamped() {
-        let req = PageRequest { page: 1, per_page: 999 };
+        let req = PageRequest {
+            page: 1,
+            per_page: 999,
+        };
         let req = req.clamp(&config());
         assert_eq!(req.per_page, 100);
     }
 
     #[test]
     fn page_request_valid_values_unchanged() {
-        let req = PageRequest { page: 3, per_page: 50 };
+        let req = PageRequest {
+            page: 3,
+            per_page: 50,
+        };
         let req = req.clamp(&config());
         assert_eq!(req.page, 3);
         assert_eq!(req.per_page, 50);
@@ -145,13 +157,19 @@ mod tests {
 
     #[test]
     fn page_request_offset_calculation() {
-        let req = PageRequest { page: 3, per_page: 10 };
+        let req = PageRequest {
+            page: 3,
+            per_page: 10,
+        };
         assert_eq!(req.offset(), 20);
     }
 
     #[test]
     fn page_request_offset_first_page() {
-        let req = PageRequest { page: 1, per_page: 10 };
+        let req = PageRequest {
+            page: 1,
+            per_page: 10,
+        };
         assert_eq!(req.offset(), 0);
     }
 
@@ -165,14 +183,20 @@ mod tests {
 
     #[test]
     fn cursor_request_per_page_over_max_clamped() {
-        let req = CursorRequest { after: None, per_page: 500 };
+        let req = CursorRequest {
+            after: None,
+            per_page: 500,
+        };
         let req = req.clamp(&config());
         assert_eq!(req.per_page, 100);
     }
 
     #[test]
     fn cursor_request_per_page_zero_becomes_default() {
-        let req = CursorRequest { after: Some("abc".into()), per_page: 0 };
+        let req = CursorRequest {
+            after: Some("abc".into()),
+            per_page: 0,
+        };
         let req = req.clamp(&config());
         assert_eq!(req.per_page, 20);
         assert_eq!(req.after.as_deref(), Some("abc"));
@@ -180,8 +204,7 @@ mod tests {
 
     #[test]
     fn page_request_deserializes_from_query_string() {
-        let req: PageRequest =
-            serde_urlencoded::from_str("page=2&per_page=30").unwrap();
+        let req: PageRequest = serde_urlencoded::from_str("page=2&per_page=30").unwrap();
         assert_eq!(req.page, 2);
         assert_eq!(req.per_page, 30);
     }
@@ -195,16 +218,14 @@ mod tests {
 
     #[test]
     fn cursor_request_deserializes_from_query_string() {
-        let req: CursorRequest =
-            serde_urlencoded::from_str("after=01ABC&per_page=10").unwrap();
+        let req: CursorRequest = serde_urlencoded::from_str("after=01ABC&per_page=10").unwrap();
         assert_eq!(req.after.as_deref(), Some("01ABC"));
         assert_eq!(req.per_page, 10);
     }
 
     #[test]
     fn cursor_request_deserializes_without_after() {
-        let req: CursorRequest =
-            serde_urlencoded::from_str("per_page=10").unwrap();
+        let req: CursorRequest = serde_urlencoded::from_str("per_page=10").unwrap();
         assert!(req.after.is_none());
     }
 }

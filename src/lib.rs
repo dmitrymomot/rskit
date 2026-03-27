@@ -85,15 +85,15 @@ pub use extractor::Service;
 pub use flash::{Flash, FlashEntry, FlashLayer};
 pub use health::{HealthCheck, HealthChecks};
 pub use ip::{ClientIp, ClientIpLayer};
+pub use page::{
+    CursorPage, CursorPaginate, CursorRequest, Page, PageRequest, Paginate, PaginationConfig,
+};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
 pub use session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};
 pub use tenant::{
     HasTenantId, Tenant, TenantId, TenantLayer, TenantResolver, TenantStrategy,
     middleware as tenant_middleware,
-};
-pub use page::{
-    CursorPage, CursorPaginate, CursorRequest, Page, Paginate, PageRequest, PaginationConfig,
 };
 pub use validate::{Validate, ValidationError, Validator};
 
