@@ -194,7 +194,7 @@ The `modo-dev` plugin gives Claude Code full knowledge of modo's APIs and conven
 
 ```
 /plugin marketplace add dmitrymomot/modo
-/plugin install modo-dev@dmitrymomot-modo
+/plugin install modo@modo-dev
 /reload-plugins
 ```
 
