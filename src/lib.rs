@@ -48,6 +48,9 @@ pub mod job;
 pub mod rbac;
 pub mod tenant;
 
+#[cfg(feature = "http-client")]
+pub mod http;
+
 #[cfg(feature = "auth")]
 pub mod auth;
 
@@ -80,9 +83,14 @@ pub mod testing;
 
 pub use config::Config;
 pub use error::{Error, Result};
+
 pub use extractor::Service;
 pub use flash::{Flash, FlashEntry, FlashLayer};
 pub use health::{HealthCheck, HealthChecks};
+#[cfg(feature = "http-client")]
+pub use http::{
+    Client as HttpClient, ClientBuilder as HttpClientBuilder, ClientConfig as HttpClientConfig,
+};
 pub use ip::{ClientIp, ClientIpLayer};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
@@ -115,9 +123,7 @@ pub use template::{
 pub use storage::{Acl, BucketConfig, Buckets, PutFromUrlInput, PutInput, PutOptions, Storage};
 
 #[cfg(feature = "webhooks")]
-pub use webhook::{
-    HttpClient, HyperClient, SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender,
-};
+pub use webhook::{SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender};
 
 #[cfg(feature = "dns")]
 pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};

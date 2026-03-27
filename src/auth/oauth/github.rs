@@ -31,6 +31,7 @@ pub struct GitHub {
     config: OAuthProviderConfig,
     cookie_config: CookieConfig,
     key: Key,
+    http_client: crate::http::Client,
 }
 
 impl GitHub {
@@ -38,11 +39,17 @@ impl GitHub {
     ///
     /// `cookie_config` and `key` are used to sign the `_oauth_state` cookie that carries the
     /// PKCE verifier and state nonce across the redirect.
-    pub fn new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key) -> Self {
+    pub fn new(
+        config: &OAuthProviderConfig,
+        cookie_config: &CookieConfig,
+        key: &Key,
+        http_client: crate::http::Client,
+    ) -> Self {
         Self {
             config: config.clone(),
             cookie_config: cookie_config.clone(),
             key: key.clone(),
+            http_client,
         }
     }
 
@@ -100,6 +107,7 @@ impl OAuthProvider for GitHub {
         }
 
         let token: TokenResponse = client::post_form(
+            &self.http_client,
             TOKEN_URL,
             &[
                 ("client_id", &self.config.client_id),
@@ -111,7 +119,8 @@ impl OAuthProvider for GitHub {
         )
         .await?;
 
-        let raw: serde_json::Value = client::get_json(USER_URL, &token.access_token).await?;
+        let raw: serde_json::Value =
+            client::get_json(&self.http_client, USER_URL, &token.access_token).await?;
 
         let provider_user_id = raw["id"]
             .as_u64()
@@ -129,7 +138,8 @@ impl OAuthProvider for GitHub {
             verified: bool,
         }
 
-        let emails: Vec<GitHubEmail> = client::get_json(EMAILS_URL, &token.access_token).await?;
+        let emails: Vec<GitHubEmail> =
+            client::get_json(&self.http_client, EMAILS_URL, &token.access_token).await?;
 
         let primary = emails
             .iter()

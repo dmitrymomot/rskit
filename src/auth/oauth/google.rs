@@ -26,6 +26,7 @@ pub struct Google {
     config: OAuthProviderConfig,
     cookie_config: CookieConfig,
     key: Key,
+    http_client: crate::http::Client,
 }
 
 impl Google {
@@ -33,11 +34,17 @@ impl Google {
     ///
     /// `cookie_config` and `key` are used to sign the `_oauth_state` cookie that carries the
     /// PKCE verifier and state nonce across the redirect.
-    pub fn new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key) -> Self {
+    pub fn new(
+        config: &OAuthProviderConfig,
+        cookie_config: &CookieConfig,
+        key: &Key,
+        http_client: crate::http::Client,
+    ) -> Self {
         Self {
             config: config.clone(),
             cookie_config: cookie_config.clone(),
             key: key.clone(),
+            http_client,
         }
     }
 
@@ -95,6 +102,7 @@ impl OAuthProvider for Google {
         }
 
         let token: TokenResponse = client::post_form(
+            &self.http_client,
             TOKEN_URL,
             &[
                 ("grant_type", "authorization_code"),
@@ -107,7 +115,8 @@ impl OAuthProvider for Google {
         )
         .await?;
 
-        let raw: serde_json::Value = client::get_json(USERINFO_URL, &token.access_token).await?;
+        let raw: serde_json::Value =
+            client::get_json(&self.http_client, USERINFO_URL, &token.access_token).await?;
 
         let provider_user_id = raw["id"]
             .as_str()
