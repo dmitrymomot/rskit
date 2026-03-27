@@ -84,11 +84,11 @@ pub mod testing;
 pub use config::Config;
 pub use error::{Error, Result};
 
-#[cfg(feature = "http-client")]
-pub use http::ClientConfig as HttpClientConfig;
 pub use extractor::Service;
 pub use flash::{Flash, FlashEntry, FlashLayer};
 pub use health::{HealthCheck, HealthChecks};
+#[cfg(feature = "http-client")]
+pub use http::{Client as HttpClient, ClientBuilder as HttpClientBuilder, ClientConfig as HttpClientConfig};
 pub use ip::{ClientIp, ClientIpLayer};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
@@ -122,7 +122,8 @@ pub use storage::{Acl, BucketConfig, Buckets, PutFromUrlInput, PutInput, PutOpti
 
 #[cfg(feature = "webhooks")]
 pub use webhook::{
-    HttpClient, HyperClient, SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender,
+    HttpClient as WebhookHttpClient, HyperClient, SignedHeaders, WebhookResponse, WebhookSecret,
+    WebhookSender,
 };
 
 #[cfg(feature = "dns")]

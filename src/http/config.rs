@@ -35,7 +35,6 @@ impl Default for ClientConfig {
     }
 }
 
-#[allow(dead_code)]
 impl ClientConfig {
     /// Request timeout as a `Duration`. Returns `None` when `timeout_secs` is `0`.
     pub(crate) fn timeout(&self) -> Option<Duration> {

@@ -20,7 +20,7 @@ full = ["http-client", "templates", "sse", "auth", "sentry", "email", "storage",
 sentry = ["dep:sentry", "dep:sentry-tracing"]
 templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
 sse = ["dep:futures-util"]
-http-client = ["dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util"]
+http-client = ["dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util", "dep:base64"]
 auth = [
   "http-client",
   "dep:argon2",
@@ -31,7 +31,7 @@ email = ["dep:lettre", "dep:pulldown-cmark"]
 email-test = ["email"]
 storage = ["http-client", "dep:hmac"]
 storage-test = ["storage"]
-webhooks = ["http-client", "dep:hmac", "dep:base64"]
+webhooks = ["http-client", "dep:hmac"]
 webhooks-test = ["webhooks"]
 dns = ["dep:simple-dns"]
 dns-test = ["dns"]
