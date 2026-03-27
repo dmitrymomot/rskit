@@ -83,6 +83,80 @@ impl DomainRegistry {
             Err(e) => Err(Error::internal(format!("register domain: {e}"))),
         }
     }
+
+    /// Check DNS verification for a pending claim.
+    ///
+    /// If the TXT record at `_modo-verify.{domain}` matches the claim's token,
+    /// the claim transitions to `Verified`. If the 48-hour verification window
+    /// has expired, returns the claim with `Failed` status. If the DNS record
+    /// is not yet present, returns the claim as `Pending`.
+    ///
+    /// Returns `Error::not_found` if no claim exists with this id.
+    /// Returns `Error::conflict` if another tenant has already verified this
+    /// domain.
+    pub async fn verify(&self, id: &str) -> Result<DomainClaim> {
+        let row = sqlx::query_as::<_, DomainRow>(
+            "SELECT id, tenant_id, domain, verification_token, status, created_at, verified_at \
+             FROM tenant_domains WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&*self.inner.pool)
+        .await
+        .map_err(|e| Error::internal(format!("fetch domain claim: {e}")))?
+        .ok_or_else(|| Error::not_found("Domain claim not found"))?;
+
+        // Already verified — return as-is.
+        if row.status == "verified" {
+            return Ok(row_to_claim(row));
+        }
+
+        // Check expiry.
+        let created = chrono::DateTime::parse_from_rfc3339(&row.created_at)
+            .map_err(|e| Error::internal(format!("parse created_at: {e}")))?
+            .with_timezone(&chrono::Utc);
+        if chrono::Utc::now() - created > chrono::Duration::hours(VERIFICATION_DURATION_HOURS) {
+            return Ok(DomainClaim {
+                status: ClaimStatus::Failed,
+                ..row_to_claim(row)
+            });
+        }
+
+        // DNS check.
+        let verified = self
+            .inner
+            .verifier
+            .check_txt(&row.domain, &row.verification_token)
+            .await?;
+
+        if !verified {
+            return Ok(row_to_claim(row));
+        }
+
+        // Transition to verified.
+        let now = chrono::Utc::now().to_rfc3339();
+        match sqlx::query(
+            "UPDATE tenant_domains SET status = 'verified', verified_at = ? WHERE id = ?",
+        )
+        .bind(&now)
+        .bind(id)
+        .execute(&*self.inner.pool)
+        .await
+        {
+            Ok(_) => Ok(DomainClaim {
+                id: row.id,
+                tenant_id: row.tenant_id,
+                domain: row.domain,
+                verification_token: row.verification_token,
+                status: ClaimStatus::Verified,
+                created_at: row.created_at,
+                verified_at: Some(now),
+            }),
+            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
+                Err(Error::conflict("Domain already verified by another tenant"))
+            }
+            Err(e) => Err(Error::internal(format!("update domain status: {e}"))),
+        }
+    }
 }
 
 /// Internal row type for sqlx queries.
@@ -263,5 +337,108 @@ mod tests {
         let c2 = reg.register("tenant2", "example.com").await.unwrap();
         assert_ne!(c1.id, c2.id);
         assert_eq!(c1.domain, c2.domain);
+    }
+
+    // -- verify tests --
+
+    #[tokio::test]
+    async fn verify_success_transitions_to_verified() {
+        let (reg, mock) = setup().await;
+        let claim = reg.register("tenant1", "example.com").await.unwrap();
+
+        // Configure mock to return the generated token.
+        mock.set_txt(
+            &format!("_modo-verify.{}", claim.domain),
+            vec![claim.verification_token.clone()],
+        );
+
+        let verified = reg.verify(&claim.id).await.unwrap();
+        assert_eq!(verified.status, ClaimStatus::Verified);
+        assert!(verified.verified_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn verify_dns_miss_stays_pending() {
+        let (reg, _mock) = setup().await;
+        let claim = reg.register("tenant1", "example.com").await.unwrap();
+        // Mock has no TXT records → DNS miss.
+
+        let result = reg.verify(&claim.id).await.unwrap();
+        assert_eq!(result.status, ClaimStatus::Pending);
+        assert!(result.verified_at.is_none());
+    }
+
+    #[tokio::test]
+    async fn verify_expired_claim_returns_failed() {
+        let (reg, _mock) = setup().await;
+
+        // Insert a claim with a created_at in the distant past.
+        let id = crate::id::ulid();
+        let token = crate::dns::generate_verification_token();
+        sqlx::query(
+            "INSERT INTO tenant_domains (id, tenant_id, domain, verification_token, status, created_at) \
+             VALUES (?, ?, ?, ?, 'pending', ?)",
+        )
+        .bind(&id)
+        .bind("tenant1")
+        .bind("expired.com")
+        .bind(&token)
+        .bind("2020-01-01T00:00:00.000Z")
+        .execute(&*reg.inner.pool)
+        .await
+        .unwrap();
+
+        let result = reg.verify(&id).await.unwrap();
+        assert_eq!(result.status, ClaimStatus::Failed);
+    }
+
+    #[tokio::test]
+    async fn verify_already_verified_returns_as_is() {
+        let (reg, mock) = setup().await;
+        let claim = reg.register("tenant1", "example.com").await.unwrap();
+
+        mock.set_txt(
+            &format!("_modo-verify.{}", claim.domain),
+            vec![claim.verification_token.clone()],
+        );
+        let first = reg.verify(&claim.id).await.unwrap();
+        assert_eq!(first.status, ClaimStatus::Verified);
+
+        // Clear mock — second verify should still return Verified from DB.
+        mock.set_txt(&format!("_modo-verify.{}", claim.domain), vec![]);
+        let second = reg.verify(&claim.id).await.unwrap();
+        assert_eq!(second.status, ClaimStatus::Verified);
+    }
+
+    #[tokio::test]
+    async fn verify_not_found_returns_error() {
+        let (reg, _mock) = setup().await;
+        let err = reg.verify("nonexistent-id").await.unwrap_err();
+        assert_eq!(err.status(), http::StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn verify_conflict_when_domain_already_verified_by_other_tenant() {
+        let (reg, mock) = setup().await;
+
+        // Tenant 1 registers and verifies.
+        let c1 = reg.register("tenant1", "example.com").await.unwrap();
+        mock.set_txt(
+            &format!("_modo-verify.{}", c1.domain),
+            vec![c1.verification_token.clone()],
+        );
+        let v1 = reg.verify(&c1.id).await.unwrap();
+        assert_eq!(v1.status, ClaimStatus::Verified);
+
+        // Tenant 2 registers the same domain.
+        let c2 = reg.register("tenant2", "example.com").await.unwrap();
+        mock.set_txt(
+            &format!("_modo-verify.{}", c2.domain),
+            vec![c2.verification_token.clone()],
+        );
+
+        // Tenant 2 tries to verify → conflict.
+        let err = reg.verify(&c2.id).await.unwrap_err();
+        assert_eq!(err.status(), http::StatusCode::CONFLICT);
     }
 }
