@@ -57,9 +57,8 @@ where
     for attempt in 0..=policy.max_retries {
         let request = build_request()?;
         let method_str = request.method().to_string();
-        let url_str = url;
 
-        tracing::debug!(attempt, url = %url_str, method = %method_str, "http.request");
+        tracing::debug!(attempt, url = %url, method = %method_str, "http.request");
 
         match classify(send_once(client, request, url, timeout).await) {
             Attempt::Success(resp) => return Ok(resp),
