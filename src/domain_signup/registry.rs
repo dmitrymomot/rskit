@@ -4,7 +4,7 @@ use crate::db::Pool;
 use crate::dns::DomainVerifier;
 use crate::error::{Error, Result};
 
-use super::types::{ClaimStatus, DomainClaim};
+use super::types::{ClaimStatus, DomainClaim, TenantMatch};
 use super::validate;
 
 /// Hours before a pending domain claim expires.
@@ -156,6 +156,67 @@ impl DomainRegistry {
             }
             Err(e) => Err(Error::internal(format!("update domain status: {e}"))),
         }
+    }
+
+    /// Remove a domain claim by id.
+    ///
+    /// Idempotent — returns `Ok(())` even if no claim exists with this id.
+    pub async fn remove(&self, id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM tenant_domains WHERE id = ?")
+            .bind(id)
+            .execute(&*self.inner.pool)
+            .await
+            .map_err(|e| Error::internal(format!("remove domain: {e}")))?;
+        Ok(())
+    }
+
+    /// Shared query for lookup_domain and lookup_email.
+    async fn lookup_verified_domain(&self, domain: &str) -> Result<Option<TenantMatch>> {
+        let row = sqlx::query_as::<_, (String, String)>(
+            "SELECT tenant_id, domain FROM tenant_domains \
+             WHERE domain = ? AND status = 'verified'",
+        )
+        .bind(domain)
+        .fetch_optional(&*self.inner.pool)
+        .await
+        .map_err(|e| Error::internal(format!("lookup domain: {e}")))?;
+
+        Ok(row.map(|(tenant_id, domain)| TenantMatch { tenant_id, domain }))
+    }
+
+    /// Look up which tenant owns a verified domain.
+    ///
+    /// Validates the domain format. Returns `None` if no tenant has a verified
+    /// claim for this domain.
+    pub async fn lookup_domain(&self, domain: &str) -> Result<Option<TenantMatch>> {
+        let domain = validate::validate_domain(domain)?;
+        self.lookup_verified_domain(&domain).await
+    }
+
+    /// Look up which tenant owns the domain of a given email address.
+    ///
+    /// Validates the email format, extracts and lowercases the domain, then
+    /// checks for a verified claim. Returns `None` if no match.
+    pub async fn lookup_email(&self, email: &str) -> Result<Option<TenantMatch>> {
+        let domain = validate::extract_email_domain(email)?;
+        self.lookup_verified_domain(&domain).await
+    }
+
+    /// List all domain claims for a tenant.
+    ///
+    /// Returns claims in all states. Expired pending claims are returned with
+    /// `ClaimStatus::Failed`.
+    pub async fn list(&self, tenant_id: &str) -> Result<Vec<DomainClaim>> {
+        let rows = sqlx::query_as::<_, DomainRow>(
+            "SELECT id, tenant_id, domain, verification_token, status, created_at, verified_at \
+             FROM tenant_domains WHERE tenant_id = ?",
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.inner.pool)
+        .await
+        .map_err(|e| Error::internal(format!("list domains: {e}")))?;
+
+        Ok(rows.into_iter().map(row_to_claim).collect())
     }
 }
 
@@ -440,5 +501,166 @@ mod tests {
         // Tenant 2 tries to verify → conflict.
         let err = reg.verify(&c2.id).await.unwrap_err();
         assert_eq!(err.status(), http::StatusCode::CONFLICT);
+    }
+
+    // -- remove tests --
+
+    #[tokio::test]
+    async fn remove_deletes_claim() {
+        let (reg, _mock) = setup().await;
+        let claim = reg.register("tenant1", "example.com").await.unwrap();
+
+        reg.remove(&claim.id).await.unwrap();
+
+        let list = reg.list("tenant1").await.unwrap();
+        assert!(list.is_empty());
+    }
+
+    #[tokio::test]
+    async fn remove_idempotent_on_missing_id() {
+        let (reg, _mock) = setup().await;
+        reg.remove("nonexistent-id").await.unwrap();
+    }
+
+    // -- lookup_domain tests --
+
+    #[tokio::test]
+    async fn lookup_domain_finds_verified() {
+        let (reg, mock) = setup().await;
+        let claim = reg.register("tenant1", "example.com").await.unwrap();
+        mock.set_txt(
+            &format!("_modo-verify.{}", claim.domain),
+            vec![claim.verification_token.clone()],
+        );
+        reg.verify(&claim.id).await.unwrap();
+
+        let result = reg.lookup_domain("example.com").await.unwrap();
+        assert!(result.is_some());
+        let m = result.unwrap();
+        assert_eq!(m.tenant_id, "tenant1");
+        assert_eq!(m.domain, "example.com");
+    }
+
+    #[tokio::test]
+    async fn lookup_domain_ignores_pending() {
+        let (reg, _mock) = setup().await;
+        reg.register("tenant1", "example.com").await.unwrap();
+
+        let result = reg.lookup_domain("example.com").await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn lookup_domain_validates_input() {
+        let (reg, _mock) = setup().await;
+        let err = reg.lookup_domain("localhost").await.unwrap_err();
+        assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn lookup_domain_case_insensitive() {
+        let (reg, mock) = setup().await;
+        let claim = reg.register("tenant1", "example.com").await.unwrap();
+        mock.set_txt(
+            &format!("_modo-verify.{}", claim.domain),
+            vec![claim.verification_token.clone()],
+        );
+        reg.verify(&claim.id).await.unwrap();
+
+        let result = reg.lookup_domain("EXAMPLE.COM").await.unwrap();
+        assert!(result.is_some());
+    }
+
+    // -- lookup_email tests --
+
+    #[tokio::test]
+    async fn lookup_email_finds_match() {
+        let (reg, mock) = setup().await;
+        let claim = reg.register("tenant1", "example.com").await.unwrap();
+        mock.set_txt(
+            &format!("_modo-verify.{}", claim.domain),
+            vec![claim.verification_token.clone()],
+        );
+        reg.verify(&claim.id).await.unwrap();
+
+        let result = reg.lookup_email("user@example.com").await.unwrap();
+        assert!(result.is_some());
+        let m = result.unwrap();
+        assert_eq!(m.tenant_id, "tenant1");
+        assert_eq!(m.domain, "example.com");
+    }
+
+    #[tokio::test]
+    async fn lookup_email_case_insensitive() {
+        let (reg, mock) = setup().await;
+        let claim = reg.register("tenant1", "example.com").await.unwrap();
+        mock.set_txt(
+            &format!("_modo-verify.{}", claim.domain),
+            vec![claim.verification_token.clone()],
+        );
+        reg.verify(&claim.id).await.unwrap();
+
+        let result = reg.lookup_email("User@EXAMPLE.COM").await.unwrap();
+        assert!(result.is_some());
+    }
+
+    #[tokio::test]
+    async fn lookup_email_invalid_returns_bad_request() {
+        let (reg, _mock) = setup().await;
+        let err = reg.lookup_email("not-an-email").await.unwrap_err();
+        assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn lookup_email_no_match_returns_none() {
+        let (reg, _mock) = setup().await;
+        let result = reg.lookup_email("user@unknown.com").await.unwrap();
+        assert!(result.is_none());
+    }
+
+    // -- list tests --
+
+    #[tokio::test]
+    async fn list_returns_all_claims_for_tenant() {
+        let (reg, _mock) = setup().await;
+        reg.register("tenant1", "example.com").await.unwrap();
+        reg.register("tenant1", "example.org").await.unwrap();
+        reg.register("tenant2", "other.com").await.unwrap();
+
+        let list = reg.list("tenant1").await.unwrap();
+        assert_eq!(list.len(), 2);
+        assert!(list.iter().all(|c| c.tenant_id == "tenant1"));
+    }
+
+    #[tokio::test]
+    async fn list_computes_failed_for_expired() {
+        let (reg, _mock) = setup().await;
+
+        // Insert an expired claim directly.
+        let id = crate::id::ulid();
+        let token = crate::dns::generate_verification_token();
+        sqlx::query(
+            "INSERT INTO tenant_domains (id, tenant_id, domain, verification_token, status, created_at) \
+             VALUES (?, ?, ?, ?, 'pending', ?)",
+        )
+        .bind(&id)
+        .bind("tenant1")
+        .bind("expired.com")
+        .bind(&token)
+        .bind("2020-01-01T00:00:00.000Z")
+        .execute(&*reg.inner.pool)
+        .await
+        .unwrap();
+
+        let list = reg.list("tenant1").await.unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].status, ClaimStatus::Failed);
+    }
+
+    #[tokio::test]
+    async fn list_empty_for_unknown_tenant() {
+        let (reg, _mock) = setup().await;
+        let list = reg.list("unknown").await.unwrap();
+        assert!(list.is_empty());
     }
 }
