@@ -100,27 +100,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
 
       - name: Check if version changed
         id: version
         run: |
           LOCAL=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          # Check against all versions (including yanked) — max_version ignores yanked
           EXISTS=$(curl -sf "https://crates.io/api/v1/crates/modo-rs/versions" \
             | python3 -c "
           import sys, json
           versions = [v['num'] for v in json.load(sys.stdin)['versions']]
           print('true' if '$LOCAL' in versions else 'false')
           " 2>/dev/null) || EXISTS="false"
-          echo "local=$LOCAL" >> "$GITHUB_OUTPUT"
-          echo "exists=$EXISTS" >> "$GITHUB_OUTPUT"
           if [ "$EXISTS" = "true" ]; then
+            echo "Version $LOCAL already published, skipping."
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
+            echo "Version $LOCAL not found on crates.io, will publish."
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.version.outputs.changed == 'true'
+      - uses: Swatinem/rust-cache@v2
+        if: steps.version.outputs.changed == 'true'
 
       - name: Publish modo
         if: steps.version.outputs.changed == 'true'
