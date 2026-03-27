@@ -34,6 +34,7 @@ pub struct RequestBuilder {
     url: std::result::Result<http::Uri, Error>,
     headers: HeaderMap,
     body: Option<std::result::Result<Bytes, Error>>,
+    deferred_error: Option<Error>,
     timeout: Option<Duration>,
     max_retries: Option<u32>,
 }
@@ -50,6 +51,7 @@ impl RequestBuilder {
             url: url_result,
             headers: HeaderMap::new(),
             body: None,
+            deferred_error: None,
             timeout: None,
             max_retries: None,
         }
@@ -72,17 +74,21 @@ impl RequestBuilder {
     }
 
     /// Set a `Bearer` authorization header.
-    pub fn bearer_token(self, token: impl AsRef<str>) -> Self {
+    pub fn bearer_token(mut self, token: impl AsRef<str>) -> Self {
         let value = format!("Bearer {}", token.as_ref());
-        let hv = match http::header::HeaderValue::from_str(&value) {
-            Ok(v) => v,
-            Err(_) => return self,
-        };
-        self.header(http::header::AUTHORIZATION, hv)
+        match http::header::HeaderValue::from_str(&value) {
+            Ok(hv) => self.header(http::header::AUTHORIZATION, hv),
+            Err(e) => {
+                self.deferred_error = Some(
+                    Error::bad_request(format!("invalid bearer token header value: {e}")).chain(e),
+                );
+                self
+            }
+        }
     }
 
     /// Set a `Basic` authorization header from username and password.
-    pub fn basic_auth(self, username: &str, password: Option<&str>) -> Self {
+    pub fn basic_auth(mut self, username: &str, password: Option<&str>) -> Self {
         use base64::Engine;
         let credentials = match password {
             Some(pw) => format!("{username}:{pw}"),
@@ -90,18 +96,22 @@ impl RequestBuilder {
         };
         let encoded = base64::engine::general_purpose::STANDARD.encode(credentials);
         let value = format!("Basic {encoded}");
-        let hv = match http::header::HeaderValue::from_str(&value) {
-            Ok(v) => v,
-            Err(_) => return self,
-        };
-        self.header(http::header::AUTHORIZATION, hv)
+        match http::header::HeaderValue::from_str(&value) {
+            Ok(hv) => self.header(http::header::AUTHORIZATION, hv),
+            Err(e) => {
+                self.deferred_error = Some(
+                    Error::bad_request(format!("invalid basic auth header value: {e}")).chain(e),
+                );
+                self
+            }
+        }
     }
 
     /// Append query parameters to the URL.
     ///
     /// Parameters are URL-encoded and appended to any existing query string.
     pub fn query(mut self, params: &[(&str, &str)]) -> Self {
-        self.url = self.url.map(|uri| {
+        self.url = self.url.and_then(|uri| {
             let encoded = params
                 .iter()
                 .map(|(k, v)| format!("{}={}", urlencoding(k), urlencoding(v)))
@@ -109,13 +119,16 @@ impl RequestBuilder {
                 .join("&");
 
             if encoded.is_empty() {
-                return uri;
+                return Ok(uri);
             }
 
             let url = uri.to_string();
             let sep = if url.contains('?') { "&" } else { "?" };
             let new_url = format!("{url}{sep}{encoded}");
-            new_url.parse::<http::Uri>().unwrap_or(uri)
+            new_url.parse::<http::Uri>().map_err(|e| {
+                Error::bad_request(format!("invalid URL after appending query params: {e}"))
+                    .chain(e)
+            })
         });
         self
     }
@@ -182,6 +195,11 @@ impl RequestBuilder {
     pub async fn send(self) -> Result<Response> {
         // Check deferred URL error first.
         let uri = self.url?;
+
+        // Check deferred builder errors (auth header failures, etc.).
+        if let Some(e) = self.deferred_error {
+            return Err(e);
+        }
 
         // Check deferred body error next.
         let body_bytes = match self.body {

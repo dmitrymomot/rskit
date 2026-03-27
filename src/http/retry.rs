@@ -54,9 +54,6 @@ where
     let mut last_retryable_response: Option<Response> = None;
     let mut last_err: Option<Error> = None;
 
-    let method_str = ""; // extracted per-attempt below
-    let _ = method_str;
-
     for attempt in 0..=policy.max_retries {
         let request = build_request()?;
         let method_str = request.method().to_string();

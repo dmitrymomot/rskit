@@ -10,14 +10,25 @@ pub(crate) async fn post_form<T: DeserializeOwned>(
     url: &str,
     params: &[(&str, &str)],
 ) -> crate::Result<T> {
-    client
+    let resp = client
         .post(url)
+        .header(
+            http::header::ACCEPT,
+            http::header::HeaderValue::from_static("application/json"),
+        )
         .form(&params)
         .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await
+        .await?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(crate::Error::internal(format!(
+            "OAuth token exchange failed ({status}): {body}"
+        )));
+    }
+
+    resp.json().await
 }
 
 pub(crate) async fn get_json<T: DeserializeOwned>(
@@ -25,7 +36,7 @@ pub(crate) async fn get_json<T: DeserializeOwned>(
     url: &str,
     token: &str,
 ) -> crate::Result<T> {
-    client
+    let resp = client
         .get(url)
         .bearer_token(token)
         .header(
@@ -33,8 +44,15 @@ pub(crate) async fn get_json<T: DeserializeOwned>(
             http::header::HeaderValue::from_static("application/json"),
         )
         .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await
+        .await?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(crate::Error::internal(format!(
+            "OAuth API request failed ({status}): {body}"
+        )));
+    }
+
+    resp.json().await
 }

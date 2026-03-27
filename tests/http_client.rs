@@ -346,6 +346,20 @@ async fn content_length_from_headers() {
     );
 }
 
+/// `bearer_token` with invalid characters (newlines) returns a deferred error at `send()`.
+#[tokio::test]
+async fn bearer_token_invalid_chars_returns_error() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    let client = Client::default();
+    let result = client
+        .get("http://127.0.0.1:1")
+        .bearer_token("token\nwith\nnewlines")
+        .send()
+        .await;
+    assert!(result.is_err(), "expected error for invalid bearer token");
+}
+
 /// Client has 30s default timeout; per-request override of 100ms fires quickly.
 #[tokio::test]
 async fn per_request_timeout_override() {
