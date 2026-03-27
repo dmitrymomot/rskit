@@ -92,7 +92,9 @@ pub use tenant::{
     HasTenantId, Tenant, TenantId, TenantLayer, TenantResolver, TenantStrategy,
     middleware as tenant_middleware,
 };
-pub use page::PaginationConfig;
+pub use page::{
+    CursorPage, CursorPaginate, CursorRequest, Page, Paginate, PageRequest, PaginationConfig,
+};
 pub use validate::{Validate, ValidationError, Validator};
 
 #[cfg(feature = "auth")]
