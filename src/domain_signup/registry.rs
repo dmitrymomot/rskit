@@ -77,9 +77,9 @@ impl DomainRegistry {
                 created_at: now,
                 verified_at: None,
             }),
-            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => Err(
-                Error::conflict("Domain is already verified"),
-            ),
+            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
+                Err(Error::conflict("Domain is already verified"))
+            }
             Err(e) => Err(Error::internal(format!("register domain: {e}"))),
         }
     }

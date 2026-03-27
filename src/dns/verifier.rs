@@ -84,7 +84,7 @@ impl DomainVerifier {
     ///
     /// Used by other in-crate modules to build a `DomainVerifier` backed by a
     /// mock resolver for testing.
-    #[cfg_attr(not(any(test, feature = "dns-test")), allow(dead_code))]
+    #[allow(dead_code)]
     pub(crate) fn with_resolver(
         resolver: impl DnsResolver + 'static,
         txt_prefix: impl Into<String>,
