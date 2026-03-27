@@ -3,9 +3,6 @@ use std::time::Duration;
 use bytes::Bytes;
 use http::Uri;
 use http_body_util::{BodyExt, Full};
-use hyper_rustls::HttpsConnector;
-use hyper_util::client::legacy::Client;
-use hyper_util::client::legacy::connect::HttpConnector;
 
 use crate::error::{Error, Result};
 
@@ -28,13 +25,13 @@ fn validate_url(url: &str) -> Result<Uri> {
     }
 }
 
-/// Fetch a file from a URL using the provided hyper client.
+/// Fetch a file from a URL using the provided HTTP client.
 ///
 /// Streams the response body and aborts if `max_size` is exceeded.
 /// Returns the body bytes and content type from the response.
 /// Hard-coded 30s timeout. No redirect following.
 pub(crate) async fn fetch_url(
-    client: &Client<HttpsConnector<HttpConnector>, Full<Bytes>>,
+    client: &crate::http::Client,
     url: &str,
     max_size: Option<usize>,
 ) -> Result<FetchResult> {
@@ -46,10 +43,13 @@ pub(crate) async fn fetch_url(
         .body(Full::new(Bytes::new()))
         .map_err(|e| Error::internal(format!("failed to build request: {e}")))?;
 
-    let response = tokio::time::timeout(Duration::from_secs(30), client.request(request))
-        .await
-        .map_err(|_| Error::internal("URL fetch timed out"))?
-        .map_err(|e| Error::internal(format!("failed to fetch URL: {e}")))?;
+    let response = tokio::time::timeout(
+        Duration::from_secs(30),
+        client.raw_client().request(request),
+    )
+    .await
+    .map_err(|_| Error::internal("URL fetch timed out"))?
+    .map_err(|e| Error::internal(format!("failed to fetch URL: {e}")))?;
 
     let status = response.status();
     if !status.is_success() {
@@ -100,9 +100,6 @@ pub(crate) async fn fetch_url(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hyper_rustls::HttpsConnectorBuilder;
-    use hyper_util::client::legacy::Client;
-    use hyper_util::rt::TokioExecutor;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
@@ -138,17 +135,9 @@ mod tests {
         assert!(validate_url("not a url at all").is_err());
     }
 
-    fn build_test_client() -> Client<
-        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-        Full<Bytes>,
-    > {
+    fn build_test_client() -> crate::http::Client {
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let connector = HttpsConnectorBuilder::new()
-            .with_webpki_roots()
-            .https_or_http()
-            .enable_http1()
-            .build();
-        Client::builder(TokioExecutor::new()).build(connector)
+        crate::http::Client::default()
     }
 
     async fn start_server(

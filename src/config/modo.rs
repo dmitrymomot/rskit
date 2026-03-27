@@ -32,6 +32,13 @@ pub struct Config {
     /// Session TTL, cookie name, fingerprint validation, touch interval, and
     /// per-user session limit.
     pub session: crate::session::SessionConfig,
+    /// Pagination defaults (items per page, max page size).
+    pub pagination: crate::page::PaginationConfig,
+    /// HTTP client settings (timeout, retries, user agent).
+    /// Requires the `http-client` feature.
+    #[cfg(feature = "http-client")]
+    #[serde(default)]
+    pub http: crate::http::ClientConfig,
     /// Background job queue settings.
     pub job: crate::job::JobConfig,
     /// CIDR ranges of trusted reverse proxies used by [`crate::ip::ClientIpLayer`].
