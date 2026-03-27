@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Offset-paginated result set.
 ///
@@ -6,7 +6,7 @@ use serde::Serialize;
 /// through the full result set. Pages are **1-based**.
 ///
 /// Constructed by [`super::Paginate::fetch`] or manually via [`Page::new`].
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Page<T: Serialize> {
     pub items: Vec<T>,
     pub total: u64,
@@ -23,7 +23,7 @@ impl<T: Serialize> Page<T> {
         let total_pages = if total == 0 {
             0
         } else {
-            ((total + per_page as u64 - 1) / per_page as u64) as u32
+            total.div_ceil(per_page as u64) as u32
         };
         Self {
             items,
@@ -40,7 +40,7 @@ impl<T: Serialize> Page<T> {
 /// Cursor-paginated result set using ID-based keyset pagination.
 ///
 /// Constructed by [`super::CursorPaginate::fetch`] or manually via [`CursorPage::new`].
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CursorPage<T: Serialize> {
     pub items: Vec<T>,
     pub next: Option<String>,

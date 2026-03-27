@@ -48,7 +48,8 @@ impl CursorPaginate {
     }
 
     /// Append a WHERE clause fragment (for future filter module).
-    pub fn where_clause(mut self, sql: &str, args: Vec<SqliteValue>) -> Self {
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn where_clause(mut self, sql: &str, args: Vec<SqliteValue>) -> Self {
         self.where_sql = Some(sql.to_owned());
         self.where_args = args;
         self

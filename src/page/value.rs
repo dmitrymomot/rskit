@@ -2,8 +2,12 @@ use sqlx::Arguments;
 use sqlx::sqlite::SqliteArguments;
 
 /// Owned, cloneable representation of a single SQLite bind parameter.
+///
+/// Used as the internal storage type for deferred query parameters.
+/// You should not need to construct this directly; use [`IntoSqliteValue`] impls.
+#[doc(hidden)]
 #[derive(Clone, Debug)]
-pub(crate) enum SqliteValue {
+pub enum SqliteValue {
     Null,
     Bool(bool),
     Int(i32),
@@ -29,6 +33,7 @@ impl SqliteValue {
 }
 
 /// Convert a Rust value into a [`SqliteValue`] for deferred binding.
+#[doc(hidden)]
 pub trait IntoSqliteValue {
     fn into_sqlite_value(self) -> SqliteValue;
 }
@@ -129,8 +134,8 @@ mod tests {
 
     #[test]
     fn f64_converts_to_double() {
-        let val = 3.14f64.into_sqlite_value();
-        assert!(matches!(val, SqliteValue::Double(v) if (v - 3.14).abs() < f64::EPSILON));
+        let val = 1.5f64.into_sqlite_value();
+        assert!(matches!(val, SqliteValue::Double(v) if (v - 1.5).abs() < f64::EPSILON));
     }
 
     #[test]
