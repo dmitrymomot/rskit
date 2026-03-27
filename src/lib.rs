@@ -35,6 +35,7 @@ pub mod health;
 pub mod id;
 pub mod ip;
 pub mod middleware;
+pub mod page;
 pub mod runtime;
 pub mod sanitize;
 pub mod server;
@@ -91,6 +92,7 @@ pub use tenant::{
     HasTenantId, Tenant, TenantId, TenantLayer, TenantResolver, TenantStrategy,
     middleware as tenant_middleware,
 };
+pub use page::PaginationConfig;
 pub use validate::{Validate, ValidationError, Validator};
 
 #[cfg(feature = "auth")]
