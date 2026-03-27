@@ -20,7 +20,7 @@ pub struct Page<T: Serialize> {
 impl<T: Serialize> Page<T> {
     /// Build a `Page` from items, total count, current page, and page size.
     pub fn new(items: Vec<T>, total: u64, page: u32, per_page: u32) -> Self {
-        let total_pages = if total == 0 {
+        let total_pages = if total == 0 || per_page == 0 {
             0
         } else {
             total.div_ceil(per_page as u64) as u32
@@ -105,6 +105,12 @@ mod tests {
         assert_eq!(page.total_pages, 3);
         assert!(!page.has_next);
         assert!(page.has_prev);
+    }
+
+    #[test]
+    fn page_metadata_zero_per_page_does_not_panic() {
+        let page: Page<String> = Page::new(vec![], 5, 1, 0);
+        assert_eq!(page.total_pages, 0);
     }
 
     #[test]
