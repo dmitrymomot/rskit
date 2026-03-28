@@ -14,7 +14,9 @@ use serde::Deserialize;
 pub struct Config {
     /// HTTP server bind address and shutdown behaviour.
     pub server: crate::server::Config,
-    /// SQLite connection pool settings.
+    /// SQLite connection pool settings. Requires the `db` feature.
+    #[cfg(feature = "db")]
+    #[serde(default)]
     pub database: crate::db::Config,
     /// Log level, format, and optional Sentry integration.
     pub tracing: crate::tracing::Config,
@@ -30,16 +32,22 @@ pub struct Config {
     /// Token-bucket rate-limiting settings.
     pub rate_limit: crate::middleware::RateLimitConfig,
     /// Session TTL, cookie name, fingerprint validation, touch interval, and
-    /// per-user session limit.
+    /// per-user session limit. Requires the `db` feature.
+    #[cfg(feature = "db")]
+    #[serde(default)]
     pub session: crate::session::SessionConfig,
-    /// Pagination defaults (items per page, max page size).
+    /// Pagination defaults (items per page, max page size). Requires the `db` feature.
+    #[cfg(feature = "db")]
+    #[serde(default)]
     pub pagination: crate::page::PaginationConfig,
     /// HTTP client settings (timeout, retries, user agent).
     /// Requires the `http-client` feature.
     #[cfg(feature = "http-client")]
     #[serde(default)]
     pub http: crate::http::ClientConfig,
-    /// Background job queue settings.
+    /// Background job queue settings. Requires the `db` feature.
+    #[cfg(feature = "db")]
+    #[serde(default)]
     pub job: crate::job::JobConfig,
     /// CIDR ranges of trusted reverse proxies used by [`crate::ip::ClientIpLayer`].
     ///

@@ -83,28 +83,32 @@ impl Default for HealthChecks {
     }
 }
 
-use crate::db;
+#[cfg(feature = "db")]
+mod pool_health {
+    use super::*;
+    use crate::db;
 
-macro_rules! impl_pool_health_check {
-    ($ty:ty, $msg:literal) => {
-        impl HealthCheck for $ty {
-            fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-                Box::pin(async {
-                    self.acquire()
-                        .await
-                        .map_err(|e| crate::Error::internal($msg).chain(e))?;
-                    Ok(())
-                })
+    macro_rules! impl_pool_health_check {
+        ($ty:ty, $msg:literal) => {
+            impl HealthCheck for $ty {
+                fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
+                    Box::pin(async {
+                        self.acquire()
+                            .await
+                            .map_err(|e| crate::Error::internal($msg).chain(e))?;
+                        Ok(())
+                    })
+                }
             }
-        }
-    };
+        };
+    }
+
+    impl_pool_health_check!(db::Pool, "pool health check failed");
+    impl_pool_health_check!(db::ReadPool, "read pool health check failed");
+    impl_pool_health_check!(db::WritePool, "write pool health check failed");
 }
 
-impl_pool_health_check!(db::Pool, "pool health check failed");
-impl_pool_health_check!(db::ReadPool, "read pool health check failed");
-impl_pool_health_check!(db::WritePool, "write pool health check failed");
-
-#[cfg(test)]
+#[cfg(all(test, feature = "db"))]
 mod tests {
     use super::*;
     use crate::db::{Pool, ReadPool, WritePool};

@@ -26,6 +26,7 @@
 pub mod cache;
 pub mod config;
 pub mod cookie;
+#[cfg(feature = "db")]
 pub mod db;
 pub mod encoding;
 pub mod error;
@@ -35,16 +36,19 @@ pub mod health;
 pub mod id;
 pub mod ip;
 pub mod middleware;
+#[cfg(feature = "db")]
 pub mod page;
 pub mod runtime;
 pub mod sanitize;
 pub mod server;
 pub mod service;
+#[cfg(feature = "db")]
 pub mod session;
 pub mod tracing;
 pub mod validate;
 
 pub mod cron;
+#[cfg(feature = "db")]
 pub mod job;
 pub mod rbac;
 pub mod tenant;
@@ -99,11 +103,13 @@ pub use http::{
     Client as HttpClient, ClientBuilder as HttpClientBuilder, ClientConfig as HttpClientConfig,
 };
 pub use ip::{ClientIp, ClientIpLayer};
+#[cfg(feature = "db")]
 pub use page::{
     CursorPage, CursorPaginate, CursorRequest, Page, PageRequest, Paginate, PaginationConfig,
 };
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
+#[cfg(feature = "db")]
 pub use session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};
 pub use tenant::{
     HasTenantId, Tenant, TenantId, TenantLayer, TenantResolver, TenantStrategy,
@@ -154,5 +160,6 @@ pub use qrcode::qr_svg_function;
 pub use axum;
 pub use serde;
 pub use serde_json;
+#[cfg(feature = "db")]
 pub use sqlx;
 pub use tokio;

@@ -1,3 +1,5 @@
+#![cfg(feature = "db")]
+
 use modo::db;
 use modo::session::meta::SessionMeta;
 use modo::session::{SessionConfig, Store};
