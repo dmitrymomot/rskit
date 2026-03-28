@@ -158,8 +158,9 @@ docker compose down -v
 - Production deployment patterns
 - Turso cloud / remote replicas
 - FTS5 or Tantivy full-text search
-# Test change for skill evaluation
 
-## Additional Notes
+Performance benchmarking (e.g., write throughput comparison between SQLite and libSQL) is intentionally excluded from this experiment. The goal is strictly to validate Litestream backup compatibility with libSQL's WAL format. Performance evaluation will be a separate effort if this experiment passes.
 
-This section captures additional observations from the experiment.
+## Conclusion
+
+This experiment validates a single critical assumption: that Litestream can back up and restore a libSQL database — including vector columns and indexes — without data loss or corruption. If the verification steps pass (restored database produces identical query results), libSQL + Litestream is viable as modo's embedded database strategy with continuous S3 backup. If the restore fails or vectors are corrupted, the WAL format incompatibility would block libSQL adoption until Litestream adds explicit libSQL support.
