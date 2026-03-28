@@ -16,7 +16,7 @@ mod conn;
 pub use conn::{ConnExt, ConnQueryExt};
 
 mod managed;
-pub use managed::{managed, ManagedDatabase};
+pub use managed::{ManagedDatabase, managed};
 
 mod migrate;
 pub use migrate::migrate;
@@ -29,3 +29,6 @@ pub use filter::{FieldType, Filter, FilterSchema, ValidatedFilter};
 
 mod select;
 pub use select::SelectBuilder;
+
+// Re-export libsql for direct access
+pub use libsql;

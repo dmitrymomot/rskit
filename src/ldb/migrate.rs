@@ -28,12 +28,7 @@ pub async fn migrate(conn: &libsql::Connection, dir: &str) -> Result<()> {
             Error::internal(format!("failed to read migrations directory: {dir}")).chain(e)
         })?
         .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry
-                .path()
-                .extension()
-                .is_some_and(|ext| ext == "sql")
-        })
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "sql"))
         .collect();
     files.sort_by_key(|e| e.file_name());
 
@@ -64,9 +59,9 @@ pub async fn migrate(conn: &libsql::Connection, dir: &str) -> Result<()> {
         }
 
         // Apply migration
-        conn.execute_batch(&sql).await.map_err(|e| {
-            Error::internal(format!("failed to apply migration '{name}'")).chain(e)
-        })?;
+        conn.execute_batch(&sql)
+            .await
+            .map_err(|e| Error::internal(format!("failed to apply migration '{name}'")).chain(e))?;
 
         conn.execute(
             "INSERT INTO _migrations (name, checksum) VALUES (?1, ?2)",

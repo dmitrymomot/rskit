@@ -40,8 +40,7 @@ impl ConnExt for libsql::Connection {
         &self,
         sql: &str,
         params: impl IntoParams + Send,
-    ) -> impl std::future::Future<Output = std::result::Result<u64, libsql::Error>> + Send
-    {
+    ) -> impl std::future::Future<Output = std::result::Result<u64, libsql::Error>> + Send {
         self.execute(sql, params)
     }
 }
@@ -60,8 +59,7 @@ impl ConnExt for libsql::Transaction {
         &self,
         sql: &str,
         params: impl IntoParams + Send,
-    ) -> impl std::future::Future<Output = std::result::Result<u64, libsql::Error>> + Send
-    {
+    ) -> impl std::future::Future<Output = std::result::Result<u64, libsql::Error>> + Send {
         self.execute(sql, params)
     }
 }

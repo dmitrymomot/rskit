@@ -39,19 +39,13 @@ pub async fn connect(config: &Config) -> Result<Database> {
     .await
     .map_err(crate::error::Error::from)?;
 
-    conn.query(
-        &format!("PRAGMA busy_timeout={}", config.busy_timeout),
-        (),
-    )
-    .await
-    .map_err(crate::error::Error::from)?;
+    conn.query(&format!("PRAGMA busy_timeout={}", config.busy_timeout), ())
+        .await
+        .map_err(crate::error::Error::from)?;
 
-    conn.query(
-        &format!("PRAGMA cache_size=-{}", config.cache_size),
-        (),
-    )
-    .await
-    .map_err(crate::error::Error::from)?;
+    conn.query(&format!("PRAGMA cache_size=-{}", config.cache_size), ())
+        .await
+        .map_err(crate::error::Error::from)?;
 
     conn.query(&format!("PRAGMA mmap_size={}", config.mmap_size), ())
         .await

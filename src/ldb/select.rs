@@ -79,9 +79,7 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
             .map_err(Error::from)?;
 
         // Data query
-        let order_sql = order
-            .map(|o| format!(" ORDER BY {o}"))
-            .unwrap_or_default();
+        let order_sql = order.map(|o| format!(" ORDER BY {o}")).unwrap_or_default();
         let data_sql = format!(
             "{}{}{} LIMIT ? OFFSET ?",
             self.base_sql, where_sql, order_sql
@@ -169,9 +167,7 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
     pub async fn fetch_all<T: FromRow>(self) -> Result<Vec<T>> {
         let (where_sql, params) = self.build_where();
         let order = self.resolve_order();
-        let order_sql = order
-            .map(|o| format!(" ORDER BY {o}"))
-            .unwrap_or_default();
+        let order_sql = order.map(|o| format!(" ORDER BY {o}")).unwrap_or_default();
         let sql = format!("{}{}{}", self.base_sql, where_sql, order_sql);
 
         let mut rows = self

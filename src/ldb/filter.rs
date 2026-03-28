@@ -168,11 +168,7 @@ impl Filter {
                 Operator::In => {
                     let placeholders: Vec<String> =
                         cond.values.iter().map(|_| "?".to_string()).collect();
-                    clauses.push(format!(
-                        "{} IN ({})",
-                        cond.column,
-                        placeholders.join(", ")
-                    ));
+                    clauses.push(format!("{} IN ({})", cond.column, placeholders.join(", ")));
                     for val in &cond.values {
                         params.push(convert_value(val, field_type)?);
                     }

@@ -19,12 +19,8 @@ impl From<libsql::Error> for Error {
             libsql::Error::ConnectionFailed(msg) => {
                 Error::internal(format!("database connection failed: {msg}"))
             }
-            libsql::Error::InvalidColumnIndex => {
-                Error::internal("invalid column index")
-            }
-            libsql::Error::InvalidColumnType => {
-                Error::internal("invalid column type")
-            }
+            libsql::Error::InvalidColumnIndex => Error::internal("invalid column index"),
+            libsql::Error::InvalidColumnType => Error::internal("invalid column type"),
             _ => Error::internal("database error").chain(err),
         }
     }

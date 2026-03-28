@@ -180,7 +180,10 @@ async fn conn_ext_query_one() {
     seed_users(conn).await;
 
     let user: User = conn
-        .query_one("SELECT id, name, email FROM users WHERE id = ?1", libsql::params!["u1"])
+        .query_one(
+            "SELECT id, name, email FROM users WHERE id = ?1",
+            libsql::params!["u1"],
+        )
         .await
         .unwrap();
     assert_eq!(user.id, "u1");
@@ -593,7 +596,9 @@ async fn select_fetch_all_with_filter() {
     let schema = FilterSchema::new().field("status", FieldType::Text);
     let mut params = HashMap::new();
     params.insert("status".into(), vec!["active".into()]);
-    let filter = Filter::from_query_params(&params).validate(&schema).unwrap();
+    let filter = Filter::from_query_params(&params)
+        .validate(&schema)
+        .unwrap();
 
     let items: Vec<SimpleUser> = conn
         .select("SELECT id, name, status FROM items")
@@ -614,9 +619,14 @@ async fn select_page_with_filter() {
     let schema = FilterSchema::new().field("status", FieldType::Text);
     let mut params = HashMap::new();
     params.insert("status".into(), vec!["active".into()]);
-    let filter = Filter::from_query_params(&params).validate(&schema).unwrap();
+    let filter = Filter::from_query_params(&params)
+        .validate(&schema)
+        .unwrap();
 
-    let page_req = PageRequest { page: 1, per_page: 10 };
+    let page_req = PageRequest {
+        page: 1,
+        per_page: 10,
+    };
     let page: modo::ldb::Page<SimpleUser> = conn
         .select("SELECT id, name, status FROM items")
         .filter(filter)
@@ -641,7 +651,9 @@ async fn select_with_sort() {
         .sort_fields(&["name"]);
     let mut params = HashMap::new();
     params.insert("sort".into(), vec!["-name".into()]);
-    let filter = Filter::from_query_params(&params).validate(&schema).unwrap();
+    let filter = Filter::from_query_params(&params)
+        .validate(&schema)
+        .unwrap();
 
     let items: Vec<SimpleUser> = conn
         .select("SELECT id, name, status FROM items")
@@ -659,7 +671,10 @@ async fn select_no_filter() {
     let db = test_db_with_users().await;
     let conn = db.conn();
 
-    let page_req = PageRequest { page: 2, per_page: 20 };
+    let page_req = PageRequest {
+        page: 2,
+        per_page: 20,
+    };
     let page: modo::ldb::Page<SimpleUser> = conn
         .select("SELECT id, name, status FROM items")
         .page(page_req)
