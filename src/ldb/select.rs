@@ -156,11 +156,18 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
         let mut cursor_values: Vec<Option<String>> = Vec::new();
         let mut cursor_col_idx: Option<i32> = None;
         while let Some(row) = rows.next().await.map_err(Error::from)? {
-            let idx = *cursor_col_idx.get_or_insert_with(|| {
-                (0..row.column_count())
-                    .find(|&i| row.column_name(i) == Some(col))
-                    .unwrap_or(0)
-            });
+            if cursor_col_idx.is_none() {
+                cursor_col_idx = Some(
+                    (0..row.column_count())
+                        .find(|&i| row.column_name(i) == Some(col))
+                        .ok_or_else(|| {
+                            Error::internal(format!(
+                                "cursor column '{col}' not found in result set"
+                            ))
+                        })?,
+                );
+            }
+            let idx = cursor_col_idx.unwrap();
             cursor_values.push(row.get::<String>(idx).ok());
             items.push(T::from_row(&row)?);
         }

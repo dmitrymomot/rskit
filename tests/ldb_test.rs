@@ -792,3 +792,90 @@ async fn select_cursor_with_filter() {
     assert!(page.items.iter().all(|u| u.status == "active"));
     assert!(page.has_more); // 25 active items total, got 10
 }
+
+#[tokio::test]
+async fn select_cursor_custom_column() {
+    let db = test_db().await;
+    let conn = db.conn();
+
+    conn.execute(
+        "CREATE TABLE docs (ulid TEXT PRIMARY KEY, title TEXT NOT NULL)",
+        (),
+    )
+    .await
+    .unwrap();
+    for i in 0..30 {
+        conn.execute(
+            "INSERT INTO docs (ulid, title) VALUES (?1, ?2)",
+            libsql::params![format!("ulid_{i:04}"), format!("Doc {i}")],
+        )
+        .await
+        .unwrap();
+    }
+
+    let req = ldb::CursorRequest {
+        after: None,
+        per_page: 10,
+    };
+    let page: ldb::CursorPage<DocRow> = conn
+        .select("SELECT ulid, title FROM docs")
+        .cursor_column("ulid")
+        .cursor(req)
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 10);
+    assert!(page.has_more);
+    assert!(page.next_cursor.is_some());
+
+    // Second page using cursor
+    let req = ldb::CursorRequest {
+        after: page.next_cursor.clone(),
+        per_page: 10,
+    };
+    let page2: ldb::CursorPage<DocRow> = conn
+        .select("SELECT ulid, title FROM docs")
+        .cursor_column("ulid")
+        .cursor(req)
+        .await
+        .unwrap();
+
+    assert_eq!(page2.items.len(), 10);
+    assert!(page2.has_more);
+    // No overlap
+    let first_ids: Vec<_> = page.items.iter().map(|d| &d.ulid).collect();
+    assert!(!page2.items.iter().any(|d| first_ids.contains(&&d.ulid)));
+}
+
+#[derive(serde::Serialize)]
+struct DocRow {
+    ulid: String,
+    title: String,
+}
+
+impl FromRow for DocRow {
+    fn from_row(row: &libsql::Row) -> Result<Self> {
+        Ok(Self {
+            ulid: row.get(0)?,
+            title: row.get(1)?,
+        })
+    }
+}
+
+#[tokio::test]
+async fn select_cursor_missing_column_errors() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    let req = ldb::CursorRequest {
+        after: None,
+        per_page: 10,
+    };
+    let result: Result<ldb::CursorPage<SimpleUser>> = conn
+        .select("SELECT id, name, status FROM items")
+        .cursor_column("nonexistent")
+        .cursor(req)
+        .await;
+
+    assert!(result.is_err());
+}

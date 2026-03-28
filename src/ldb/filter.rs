@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::error::{Error, Result};
 
@@ -6,7 +6,7 @@ use crate::error::{Error, Result};
 #[derive(Default)]
 pub struct FilterSchema {
     fields: HashMap<String, FieldType>,
-    sort_fields: Vec<String>,
+    sort_fields: HashSet<String>,
 }
 
 /// Column type for validation.
@@ -39,7 +39,7 @@ impl FilterSchema {
     }
 
     fn is_sort_field(&self, name: &str) -> bool {
-        self.sort_fields.iter().any(|f| f == name)
+        self.sort_fields.contains(name)
     }
 }
 

@@ -81,18 +81,26 @@ pub async fn migrate(conn: &libsql::Connection, dir: &str) -> Result<()> {
         // Apply migration inside a transaction
         conn.execute("BEGIN", ()).await.map_err(Error::from)?;
 
-        conn.execute_batch(sql)
+        if let Err(e) = async {
+            conn.execute_batch(sql).await.map_err(|e| {
+                Error::internal(format!("failed to apply migration '{name}'")).chain(e)
+            })?;
+
+            conn.execute(
+                "INSERT INTO _migrations (name, checksum) VALUES (?1, ?2)",
+                libsql::params![name.clone(), checksum],
+            )
             .await
-            .map_err(|e| Error::internal(format!("failed to apply migration '{name}'")).chain(e))?;
+            .map_err(Error::from)?;
 
-        conn.execute(
-            "INSERT INTO _migrations (name, checksum) VALUES (?1, ?2)",
-            libsql::params![name.clone(), checksum],
-        )
+            conn.execute("COMMIT", ()).await.map_err(Error::from)?;
+            Ok::<(), Error>(())
+        }
         .await
-        .map_err(Error::from)?;
-
-        conn.execute("COMMIT", ()).await.map_err(Error::from)?;
+        {
+            let _ = conn.execute("ROLLBACK", ()).await;
+            return Err(e);
+        }
     }
 
     Ok(())
