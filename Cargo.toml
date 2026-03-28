@@ -15,8 +15,11 @@ exclude = [".claude", ".claude-plugin", "skills", "docs", ".github", "examples",
 name = "modo"
 
 [features]
-default = []
-full = ["http-client", "templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns", "geolocation", "qrcode"]
+default = ["db"]
+db = ["dep:sqlx"]
+full = ["db", "http-client", "templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns", "geolocation", "qrcode"]
+# Note: ldb is excluded from full — libsql and sqlx both bundle SQLite,
+# causing duplicate symbol linker errors when both are enabled.
 sentry = ["dep:sentry", "dep:sentry-tracing"]
 templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
 sse = ["dep:futures-util"]
@@ -37,6 +40,7 @@ dns = ["dep:simple-dns"]
 dns-test = ["dns"]
 geolocation = ["dep:maxminddb"]
 qrcode = ["dep:fast_qr"]
+ldb = ["dep:libsql", "dep:urlencoding"]
 test-helpers = []
 
 [dependencies]
@@ -61,13 +65,16 @@ axum-extra = { version = "0.12", features = ["cookie-signed", "cookie-private", 
 cookie = { version = "0.18", features = ["signed"] }
 
 # Database
-sqlx = { version = "0.8", features = [
+sqlx = { version = "0.8", optional = true, features = [
   "runtime-tokio",
   "chrono",
   "migrate",
   "derive",
   "sqlite",
 ], default-features = false }
+
+# libsql (optional, gated by "ldb" feature)
+libsql = { version = "0.9", optional = true, default-features = false, features = ["core"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -145,6 +152,9 @@ maxminddb = { version = "0.27", optional = true }
 
 # QR code (optional, gated by "qrcode" feature)
 fast_qr = { version = "0.13", optional = true, default-features = false }
+
+# URL encoding (optional, gated by "ldb" feature)
+urlencoding = { version = "2", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

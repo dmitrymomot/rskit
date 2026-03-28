@@ -1,3 +1,5 @@
+#![cfg(feature = "db")]
+
 use chrono::{Duration, Utc};
 use modo::db;
 use modo::job::{EnqueueOptions, EnqueueResult, Enqueuer};

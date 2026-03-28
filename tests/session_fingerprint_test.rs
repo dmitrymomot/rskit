@@ -1,3 +1,5 @@
+#![cfg(feature = "db")]
+
 use modo::session::fingerprint::compute_fingerprint;
 
 #[test]
