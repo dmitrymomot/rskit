@@ -108,6 +108,19 @@ mod pool_health {
     impl_pool_health_check!(db::WritePool, "write pool health check failed");
 }
 
+#[cfg(feature = "ldb")]
+impl HealthCheck for crate::ldb::Database {
+    fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
+        Box::pin(async {
+            self.conn()
+                .query("SELECT 1", ())
+                .await
+                .map_err(|e| crate::Error::internal("ldb health check failed").chain(e))?;
+            Ok(())
+        })
+    }
+}
+
 #[cfg(all(test, feature = "db"))]
 mod tests {
     use super::*;

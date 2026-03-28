@@ -18,6 +18,8 @@ name = "modo"
 default = ["db"]
 db = ["dep:sqlx"]
 full = ["db", "http-client", "templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns", "geolocation", "qrcode"]
+# Note: ldb is excluded from full — libsql and sqlx both bundle SQLite,
+# causing duplicate symbol linker errors when both are enabled.
 sentry = ["dep:sentry", "dep:sentry-tracing"]
 templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
 sse = ["dep:futures-util"]

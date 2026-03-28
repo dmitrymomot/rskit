@@ -8,7 +8,9 @@ pub trait FromRow: Sized {
     fn from_row(row: &libsql::Row) -> Result<Self>;
 }
 
-/// Column name → index lookup. Built once per query, reused for all rows.
+/// Column name → index lookup. Built from a single row's column metadata.
+/// When used inside a `FromRow` impl, this is constructed per row. For bulk
+/// queries, the `ConnQueryExt` helpers handle optimization internally.
 pub struct ColumnMap {
     map: HashMap<String, i32>,
 }
@@ -76,7 +78,9 @@ impl FromValue for String {
 impl FromValue for i32 {
     fn from_value(val: libsql::Value) -> Result<Self> {
         match val {
-            libsql::Value::Integer(i) => Ok(i as i32),
+            libsql::Value::Integer(i) => {
+                i32::try_from(i).map_err(|_| Error::internal("integer out of i32 range"))
+            }
             libsql::Value::Null => Err(Error::internal("unexpected null value")),
             _ => Err(Error::internal("invalid column type: expected integer")),
         }
@@ -86,7 +90,9 @@ impl FromValue for i32 {
 impl FromValue for u32 {
     fn from_value(val: libsql::Value) -> Result<Self> {
         match val {
-            libsql::Value::Integer(i) => Ok(i as u32),
+            libsql::Value::Integer(i) => {
+                u32::try_from(i).map_err(|_| Error::internal("integer out of u32 range"))
+            }
             libsql::Value::Null => Err(Error::internal("unexpected null value")),
             _ => Err(Error::internal("invalid column type: expected integer")),
         }
@@ -106,7 +112,9 @@ impl FromValue for i64 {
 impl FromValue for u64 {
     fn from_value(val: libsql::Value) -> Result<Self> {
         match val {
-            libsql::Value::Integer(i) => Ok(i as u64),
+            libsql::Value::Integer(i) => {
+                u64::try_from(i).map_err(|_| Error::internal("integer out of u64 range"))
+            }
             libsql::Value::Null => Err(Error::internal("unexpected null value")),
             _ => Err(Error::internal("invalid column type: expected integer")),
         }

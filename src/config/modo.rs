@@ -18,6 +18,10 @@ pub struct Config {
     #[cfg(feature = "db")]
     #[serde(default)]
     pub database: crate::db::Config,
+    /// libsql database settings. Requires the `ldb` feature.
+    #[cfg(feature = "ldb")]
+    #[serde(default)]
+    pub ldb: crate::ldb::Config,
     /// Log level, format, and optional Sentry integration.
     pub tracing: crate::tracing::Config,
     /// Signed cookie secret and attributes. When absent, signed/private cookies

@@ -3,7 +3,9 @@ use crate::error::{Error, Result};
 /// Run SQL migrations from a directory against a connection.
 ///
 /// Reads `*.sql` files sorted by filename, tracks applied migrations
-/// in a `_migrations` table with checksum verification.
+/// in a `_migrations` table with checksum verification. Each migration
+/// is applied inside a transaction so the schema change and the
+/// `_migrations` record are committed atomically.
 pub async fn migrate(conn: &libsql::Connection, dir: &str) -> Result<()> {
     // Create tracking table
     conn.execute(
@@ -17,26 +19,44 @@ pub async fn migrate(conn: &libsql::Connection, dir: &str) -> Result<()> {
     .await
     .map_err(Error::from)?;
 
-    // Read and sort migration files
-    let dir_path = std::path::Path::new(dir);
-    if !dir_path.exists() {
-        return Ok(()); // No migrations directory — nothing to do
+    // Read and sort migration files on a blocking thread
+    let dir_owned = dir.to_string();
+    let files = tokio::task::spawn_blocking(move || {
+        let dir_path = std::path::Path::new(&dir_owned);
+        if !dir_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut entries: Vec<std::fs::DirEntry> = std::fs::read_dir(dir_path)
+            .map_err(|e| {
+                Error::internal(format!("failed to read migrations directory: {dir_owned}"))
+                    .chain(e)
+            })?
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "sql"))
+            .collect();
+        entries.sort_by_key(|e| e.file_name());
+
+        let mut result: Vec<(String, String)> = Vec::with_capacity(entries.len());
+        for entry in entries {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let sql = std::fs::read_to_string(entry.path()).map_err(|e| {
+                Error::internal(format!("failed to read migration file: {name}")).chain(e)
+            })?;
+            result.push((name, sql));
+        }
+        Ok(result)
+    })
+    .await
+    .map_err(|e| Error::internal("migration task panicked").chain(e))?
+    as Result<Vec<(String, String)>>;
+
+    let files = files?;
+    if files.is_empty() {
+        return Ok(());
     }
 
-    let mut files: Vec<std::fs::DirEntry> = std::fs::read_dir(dir_path)
-        .map_err(|e| {
-            Error::internal(format!("failed to read migrations directory: {dir}")).chain(e)
-        })?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "sql"))
-        .collect();
-    files.sort_by_key(|e| e.file_name());
-
-    for entry in files {
-        let name = entry.file_name().to_string_lossy().to_string();
-        let sql = std::fs::read_to_string(entry.path()).map_err(|e| {
-            Error::internal(format!("failed to read migration file: {name}")).chain(e)
-        })?;
+    for (name, sql) in &files {
         let checksum = fnv1a_hex(sql.as_bytes());
 
         // Check if already applied
@@ -58,8 +78,10 @@ pub async fn migrate(conn: &libsql::Connection, dir: &str) -> Result<()> {
             continue; // Already applied
         }
 
-        // Apply migration
-        conn.execute_batch(&sql)
+        // Apply migration inside a transaction
+        conn.execute("BEGIN", ()).await.map_err(Error::from)?;
+
+        conn.execute_batch(sql)
             .await
             .map_err(|e| Error::internal(format!("failed to apply migration '{name}'")).chain(e))?;
 
@@ -69,6 +91,8 @@ pub async fn migrate(conn: &libsql::Connection, dir: &str) -> Result<()> {
         )
         .await
         .map_err(Error::from)?;
+
+        conn.execute("COMMIT", ()).await.map_err(Error::from)?;
     }
 
     Ok(())

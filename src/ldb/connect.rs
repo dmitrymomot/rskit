@@ -9,7 +9,7 @@ pub async fn connect(config: &Config) -> Result<Database> {
     if let Some(parent) = std::path::Path::new(&config.path).parent()
         && !parent.as_os_str().is_empty()
     {
-        std::fs::create_dir_all(parent).map_err(|e| {
+        tokio::fs::create_dir_all(parent).await.map_err(|e| {
             crate::error::Error::internal(format!(
                 "failed to create database directory: {parent:?}"
             ))

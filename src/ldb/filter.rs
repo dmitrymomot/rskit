@@ -5,7 +5,7 @@ use crate::error::{Error, Result};
 /// Defines allowed filter fields and sort fields for an endpoint.
 #[derive(Default)]
 pub struct FilterSchema {
-    fields: Vec<(String, FieldType)>,
+    fields: HashMap<String, FieldType>,
     sort_fields: Vec<String>,
 }
 
@@ -25,7 +25,7 @@ impl FilterSchema {
     }
 
     pub fn field(mut self, name: &str, typ: FieldType) -> Self {
-        self.fields.push((name.to_string(), typ));
+        self.fields.insert(name.to_string(), typ);
         self
     }
 
@@ -35,7 +35,7 @@ impl FilterSchema {
     }
 
     fn field_type(&self, name: &str) -> Option<FieldType> {
-        self.fields.iter().find(|(n, _)| n == name).map(|(_, t)| *t)
+        self.fields.get(name).copied()
     }
 
     fn is_sort_field(&self, name: &str) -> bool {

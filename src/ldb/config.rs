@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 /// Database configuration. All fields have sensible defaults.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     /// Database file path.
     #[serde(default = "defaults::path")]
