@@ -71,7 +71,7 @@ sqlx = { version = "0.8", features = [
 ], default-features = false }
 
 # libsql (optional, gated by "ldb" feature)
-libsql = { version = "0.9", optional = true, default-features = false }
+libsql = { version = "0.9", optional = true, default-features = false, features = ["core"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
