@@ -15,4 +15,5 @@ pub use from_row::{ColumnMap, FromRow, FromValue};
 mod conn;
 pub use conn::{ConnExt, ConnQueryExt};
 
-pub(crate) mod migrate;
+mod migrate;
+pub use migrate::migrate;

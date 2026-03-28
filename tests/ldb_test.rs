@@ -281,6 +281,68 @@ async fn conn_ext_works_on_transaction() {
     tx.commit().await.unwrap();
 }
 
+// -- Migration tests --
+
+#[tokio::test]
+async fn migrate_applies_sql_files_in_order() {
+    let db = test_db().await;
+    let conn = db.conn();
+
+    ldb::migrate(conn, "tests/fixtures/ldb_migrations")
+        .await
+        .unwrap();
+
+    // Verify table was created with bio column
+    conn.execute(
+        "INSERT INTO users (id, name, email, bio) VALUES ('u1', 'Alice', 'a@t.com', 'hello')",
+        (),
+    )
+    .await
+    .unwrap();
+
+    let mut rows = conn
+        .query("SELECT bio FROM users WHERE id = 'u1'", ())
+        .await
+        .unwrap();
+    let row = rows.next().await.unwrap().unwrap();
+    let bio: String = row.get(0).unwrap();
+    assert_eq!(bio, "hello");
+}
+
+#[tokio::test]
+async fn migrate_is_idempotent() {
+    let db = test_db().await;
+    let conn = db.conn();
+
+    ldb::migrate(conn, "tests/fixtures/ldb_migrations")
+        .await
+        .unwrap();
+    // Run again — should not error
+    ldb::migrate(conn, "tests/fixtures/ldb_migrations")
+        .await
+        .unwrap();
+
+    // Verify _migrations table has 2 entries
+    let mut rows = conn
+        .query("SELECT COUNT(*) FROM _migrations", ())
+        .await
+        .unwrap();
+    let row = rows.next().await.unwrap().unwrap();
+    let count: i64 = row.get(0).unwrap();
+    assert_eq!(count, 2);
+}
+
+#[tokio::test]
+async fn migrate_nonexistent_dir_is_ok() {
+    let db = test_db().await;
+    let conn = db.conn();
+
+    // Should not error — just skip
+    ldb::migrate(conn, "tests/fixtures/nonexistent")
+        .await
+        .unwrap();
+}
+
 // -- Test helpers --
 
 async fn test_db() -> ldb::Database {
