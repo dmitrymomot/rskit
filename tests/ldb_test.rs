@@ -1,6 +1,8 @@
 #![cfg(feature = "ldb")]
 
+use modo::error::Result;
 use modo::ldb;
+use modo::ldb::{ColumnMap, FromRow};
 
 #[tokio::test]
 async fn connect_in_memory() {
@@ -75,4 +77,123 @@ async fn database_is_clone() {
         .await
         .unwrap();
     assert!(rows.next().await.unwrap().is_some());
+}
+
+// -- FromRow / ColumnMap types --
+
+struct User {
+    id: String,
+    name: String,
+    email: String,
+}
+
+// Positional FromRow
+impl FromRow for User {
+    fn from_row(row: &libsql::Row) -> Result<Self> {
+        Ok(Self {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            email: row.get(2)?,
+        })
+    }
+}
+
+struct UserNamed {
+    id: String,
+    name: String,
+    email: String,
+}
+
+// Name-based FromRow
+impl FromRow for UserNamed {
+    fn from_row(row: &libsql::Row) -> Result<Self> {
+        let c = ColumnMap::from_row(row);
+        Ok(Self {
+            id: c.get(row, "id")?,
+            name: c.get(row, "name")?,
+            email: c.get(row, "email")?,
+        })
+    }
+}
+
+#[tokio::test]
+async fn from_row_positional() {
+    let db = test_db().await;
+    let conn = db.conn();
+    seed_users(conn).await;
+
+    let mut rows = conn
+        .query("SELECT id, name, email FROM users WHERE id = 'u1'", ())
+        .await
+        .unwrap();
+    let row = rows.next().await.unwrap().unwrap();
+    let user = User::from_row(&row).unwrap();
+    assert_eq!(user.id, "u1");
+    assert_eq!(user.name, "Alice");
+    assert_eq!(user.email, "alice@test.com");
+}
+
+#[tokio::test]
+async fn from_row_named() {
+    let db = test_db().await;
+    let conn = db.conn();
+    seed_users(conn).await;
+
+    // Different column order in SELECT — name-based still works
+    let mut rows = conn
+        .query("SELECT email, id, name FROM users WHERE id = 'u1'", ())
+        .await
+        .unwrap();
+    let row = rows.next().await.unwrap().unwrap();
+    let user = UserNamed::from_row(&row).unwrap();
+    assert_eq!(user.id, "u1");
+    assert_eq!(user.name, "Alice");
+    assert_eq!(user.email, "alice@test.com");
+}
+
+#[tokio::test]
+async fn column_map_missing_column_returns_error() {
+    let db = test_db().await;
+    let conn = db.conn();
+    seed_users(conn).await;
+
+    let mut rows = conn
+        .query("SELECT id FROM users WHERE id = 'u1'", ())
+        .await
+        .unwrap();
+    let row = rows.next().await.unwrap().unwrap();
+    let c = ColumnMap::from_row(&row);
+    let result: Result<String> = c.get(&row, "nonexistent");
+    assert!(result.is_err());
+}
+
+// -- Test helpers --
+
+async fn test_db() -> ldb::Database {
+    let config = ldb::Config {
+        path: ":memory:".to_string(),
+        ..Default::default()
+    };
+    ldb::connect(&config).await.unwrap()
+}
+
+async fn seed_users(conn: &libsql::Connection) {
+    conn.execute(
+        "CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL)",
+        (),
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "INSERT INTO users (id, name, email) VALUES ('u1', 'Alice', 'alice@test.com')",
+        (),
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "INSERT INTO users (id, name, email) VALUES ('u2', 'Bob', 'bob@test.com')",
+        (),
+    )
+    .await
+    .unwrap();
 }
