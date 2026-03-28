@@ -26,3 +26,6 @@ pub use page::{CursorPage, CursorRequest, Page, PageRequest, PaginationConfig};
 
 mod filter;
 pub use filter::{FieldType, Filter, FilterSchema, ValidatedFilter};
+
+mod select;
+pub use select::SelectBuilder;

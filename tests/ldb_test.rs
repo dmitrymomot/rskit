@@ -4,7 +4,9 @@ use std::collections::HashMap;
 
 use modo::error::Result;
 use modo::ldb;
-use modo::ldb::{ColumnMap, ConnQueryExt, FieldType, Filter, FilterSchema, FromRow};
+use modo::ldb::{
+    ColumnMap, ConnExt, ConnQueryExt, FieldType, Filter, FilterSchema, FromRow, PageRequest,
+};
 
 #[tokio::test]
 async fn connect_in_memory() {
@@ -541,4 +543,132 @@ async fn seed_users(conn: &libsql::Connection) {
     )
     .await
     .unwrap();
+}
+
+// -- SelectBuilder tests --
+
+#[derive(serde::Serialize)]
+struct SimpleUser {
+    id: String,
+    name: String,
+    status: String,
+}
+
+impl FromRow for SimpleUser {
+    fn from_row(row: &libsql::Row) -> modo::error::Result<Self> {
+        Ok(Self {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            status: row.get(2)?,
+        })
+    }
+}
+
+async fn test_db_with_users() -> ldb::Database {
+    let db = test_db().await;
+    let conn = db.conn();
+    conn.execute(
+        "CREATE TABLE items (id TEXT PRIMARY KEY, name TEXT NOT NULL, status TEXT NOT NULL)",
+        (),
+    )
+    .await
+    .unwrap();
+    for i in 0..50 {
+        let status = if i % 2 == 0 { "active" } else { "inactive" };
+        conn.execute(
+            "INSERT INTO items (id, name, status) VALUES (?1, ?2, ?3)",
+            libsql::params![format!("id_{i:04}"), format!("Item {i}"), status],
+        )
+        .await
+        .unwrap();
+    }
+    db
+}
+
+#[tokio::test]
+async fn select_fetch_all_with_filter() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    let schema = FilterSchema::new().field("status", FieldType::Text);
+    let mut params = HashMap::new();
+    params.insert("status".into(), vec!["active".into()]);
+    let filter = Filter::from_query_params(&params).validate(&schema).unwrap();
+
+    let items: Vec<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .filter(filter)
+        .fetch_all()
+        .await
+        .unwrap();
+
+    assert_eq!(items.len(), 25); // half are active
+    assert!(items.iter().all(|u| u.status == "active"));
+}
+
+#[tokio::test]
+async fn select_page_with_filter() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    let schema = FilterSchema::new().field("status", FieldType::Text);
+    let mut params = HashMap::new();
+    params.insert("status".into(), vec!["active".into()]);
+    let filter = Filter::from_query_params(&params).validate(&schema).unwrap();
+
+    let page_req = PageRequest { page: 1, per_page: 10 };
+    let page: modo::ldb::Page<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .filter(filter)
+        .page(page_req)
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 10);
+    assert_eq!(page.total, 25);
+    assert_eq!(page.total_pages, 3);
+    assert!(page.has_next);
+    assert!(!page.has_prev);
+}
+
+#[tokio::test]
+async fn select_with_sort() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    let schema = FilterSchema::new()
+        .field("status", FieldType::Text)
+        .sort_fields(&["name"]);
+    let mut params = HashMap::new();
+    params.insert("sort".into(), vec!["-name".into()]);
+    let filter = Filter::from_query_params(&params).validate(&schema).unwrap();
+
+    let items: Vec<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .filter(filter)
+        .fetch_all()
+        .await
+        .unwrap();
+
+    // Should be sorted by name DESC
+    assert!(items[0].name > items[1].name);
+}
+
+#[tokio::test]
+async fn select_no_filter() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    let page_req = PageRequest { page: 2, per_page: 20 };
+    let page: modo::ldb::Page<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .page(page_req)
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 20);
+    assert_eq!(page.total, 50);
+    assert_eq!(page.page, 2);
+    assert!(page.has_prev);
+    assert!(page.has_next);
 }

@@ -17,6 +17,13 @@ pub trait ConnExt: Sync {
         sql: &str,
         params: impl IntoParams + Send,
     ) -> impl std::future::Future<Output = std::result::Result<u64, libsql::Error>> + Send;
+
+    fn select<'a>(&'a self, sql: &str) -> super::select::SelectBuilder<'a, Self>
+    where
+        Self: Sized,
+    {
+        super::select::SelectBuilder::new(self, sql)
+    }
 }
 
 impl ConnExt for libsql::Connection {
