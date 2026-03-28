@@ -158,3 +158,4 @@ docker compose down -v
 - Production deployment patterns
 - Turso cloud / remote replicas
 - FTS5 or Tantivy full-text search
+# Test change for skill evaluation
