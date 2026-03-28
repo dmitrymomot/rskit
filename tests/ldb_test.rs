@@ -1,8 +1,10 @@
 #![cfg(feature = "ldb")]
 
+use std::collections::HashMap;
+
 use modo::error::Result;
 use modo::ldb;
-use modo::ldb::{ColumnMap, ConnQueryExt, FromRow};
+use modo::ldb::{ColumnMap, ConnQueryExt, FieldType, Filter, FilterSchema, FromRow};
 
 #[tokio::test]
 async fn connect_in_memory() {
@@ -405,6 +407,109 @@ async fn cursor_request_clamp() {
     };
     req.clamp(&config);
     assert_eq!(req.per_page, 100);
+}
+
+// -- Filter DSL tests --
+
+#[test]
+fn filter_eq_single_value() {
+    let schema = FilterSchema::new().field("status", FieldType::Text);
+    let mut params = HashMap::new();
+    params.insert("status".into(), vec!["active".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(validated.clauses.len(), 1);
+    assert_eq!(validated.clauses[0], "status = ?");
+    assert_eq!(validated.params.len(), 1);
+}
+
+#[test]
+fn filter_in_multiple_values() {
+    let schema = FilterSchema::new().field("status", FieldType::Text);
+    let mut params = HashMap::new();
+    params.insert("status".into(), vec!["active".into(), "pending".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(validated.clauses[0], "status IN (?, ?)");
+    assert_eq!(validated.params.len(), 2);
+}
+
+#[test]
+fn filter_operators() {
+    let schema = FilterSchema::new()
+        .field("age", FieldType::Int)
+        .field("name", FieldType::Text);
+
+    let mut params = HashMap::new();
+    params.insert("age.gte".into(), vec!["18".into()]);
+    params.insert("name.like".into(), vec!["john%".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(validated.clauses.len(), 2);
+    assert_eq!(validated.params.len(), 2);
+}
+
+#[test]
+fn filter_null_operator() {
+    let schema = FilterSchema::new().field("deleted_at", FieldType::Date);
+    let mut params = HashMap::new();
+    params.insert("deleted_at.null".into(), vec!["true".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(validated.clauses[0], "deleted_at IS NULL");
+    assert_eq!(validated.params.len(), 0);
+}
+
+#[test]
+fn filter_unknown_columns_ignored() {
+    let schema = FilterSchema::new().field("status", FieldType::Text);
+    let mut params = HashMap::new();
+    params.insert("status".into(), vec!["active".into()]);
+    params.insert("password".into(), vec!["secret".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(validated.clauses.len(), 1); // password ignored
+}
+
+#[test]
+fn filter_sort() {
+    let schema = FilterSchema::new()
+        .field("status", FieldType::Text)
+        .sort_fields(&["created_at", "name"]);
+
+    let mut params = HashMap::new();
+    params.insert("sort".into(), vec!["-created_at".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(validated.sort_clause, Some("created_at DESC".into()));
+}
+
+#[test]
+fn filter_sort_unknown_field_ignored() {
+    let schema = FilterSchema::new().sort_fields(&["name"]);
+    let mut params = HashMap::new();
+    params.insert("sort".into(), vec!["password".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(validated.sort_clause, None);
+}
+
+#[test]
+fn filter_int_type_validation() {
+    let schema = FilterSchema::new().field("age", FieldType::Int);
+    let mut params = HashMap::new();
+    params.insert("age".into(), vec!["not_a_number".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let result = filter.validate(&schema);
+    assert!(result.is_err());
 }
 
 // -- Test helpers --

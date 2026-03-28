@@ -37,7 +37,7 @@ dns = ["dep:simple-dns"]
 dns-test = ["dns"]
 geolocation = ["dep:maxminddb"]
 qrcode = ["dep:fast_qr"]
-ldb = ["dep:libsql"]
+ldb = ["dep:libsql", "dep:urlencoding"]
 test-helpers = []
 
 [dependencies]
@@ -149,6 +149,9 @@ maxminddb = { version = "0.27", optional = true }
 
 # QR code (optional, gated by "qrcode" feature)
 fast_qr = { version = "0.13", optional = true, default-features = false }
+
+# URL encoding (optional, gated by "ldb" feature)
+urlencoding = { version = "2", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
