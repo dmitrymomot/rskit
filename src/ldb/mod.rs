@@ -15,5 +15,8 @@ pub use from_row::{ColumnMap, FromRow, FromValue};
 mod conn;
 pub use conn::{ConnExt, ConnQueryExt};
 
+mod managed;
+pub use managed::{managed, ManagedDatabase};
+
 mod migrate;
 pub use migrate::migrate;
