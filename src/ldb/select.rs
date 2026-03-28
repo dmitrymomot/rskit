@@ -11,6 +11,7 @@ pub struct SelectBuilder<'a, C: ConnExt> {
     base_sql: String,
     filter: Option<ValidatedFilter>,
     order_by: Option<String>,
+    cursor_column: String,
 }
 
 impl<'a, C: ConnExt> SelectBuilder<'a, C> {
@@ -20,6 +21,7 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
             base_sql: sql.to_string(),
             filter: None,
             order_by: None,
+            cursor_column: "id".to_string(),
         }
     }
 
@@ -33,6 +35,16 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
     /// If a filter has a sort_clause, it takes precedence over this.
     pub fn order_by(mut self, order: &str) -> Self {
         self.order_by = Some(order.to_string());
+        self
+    }
+
+    /// Set the column used for cursor pagination (default: `"id"`).
+    ///
+    /// The column must appear in the SELECT list and be sortable (e.g., ULID,
+    /// timestamp, auto-increment). Cursor pagination will ORDER BY this column
+    /// ascending and use it for the `WHERE col > ?` condition.
+    pub fn cursor_column(mut self, col: &str) -> Self {
+        self.cursor_column = col.to_string();
         self
     }
 
@@ -102,20 +114,23 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
 
     /// Execute with cursor pagination. Returns CursorPage<T>.
     ///
-    /// Assumes the first column in the SELECT is the cursor ID (e.g., ULID).
+    /// Uses the configured cursor column (default `"id"`) for ordering and
+    /// the `WHERE col > ?` condition. Set a different column with
+    /// [`cursor_column`](Self::cursor_column).
     pub async fn cursor<T: FromRow + serde::Serialize>(
         self,
         req: CursorRequest,
     ) -> Result<CursorPage<T>> {
         let (where_sql, mut params) = self.build_where();
+        let col = &self.cursor_column;
 
         // Add cursor condition
         let cursor_condition = if let Some(ref after) = req.after {
             params.push(libsql::Value::from(after.clone()));
             if where_sql.is_empty() {
-                " WHERE id > ?".to_string()
+                format!(" WHERE {col} > ?")
             } else {
-                " AND id > ?".to_string()
+                format!(" AND {col} > ?")
             }
         } else {
             String::new()
@@ -124,7 +139,7 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
         // Fetch one extra to determine has_more
         let limit = req.per_page + 1;
         let sql = format!(
-            "{}{}{} ORDER BY id ASC LIMIT ?",
+            "{}{}{} ORDER BY {col} ASC LIMIT ?",
             self.base_sql, where_sql, cursor_condition
         );
         params.push(libsql::Value::from(limit));
@@ -135,22 +150,29 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
             .await
             .map_err(Error::from)?;
 
-        // Track IDs alongside items for cursor extraction
+        // Track cursor values alongside items for cursor extraction.
+        // Find the cursor column index dynamically on the first row.
         let mut items = Vec::new();
-        let mut ids: Vec<Option<String>> = Vec::new();
+        let mut cursor_values: Vec<Option<String>> = Vec::new();
+        let mut cursor_col_idx: Option<i32> = None;
         while let Some(row) = rows.next().await.map_err(Error::from)? {
-            ids.push(row.get::<String>(0).ok());
+            let idx = *cursor_col_idx.get_or_insert_with(|| {
+                (0..row.column_count())
+                    .find(|&i| row.column_name(i) == Some(col))
+                    .unwrap_or(0)
+            });
+            cursor_values.push(row.get::<String>(idx).ok());
             items.push(T::from_row(&row)?);
         }
 
         let has_more = items.len() as i64 > req.per_page;
         if has_more {
             items.pop();
-            ids.pop();
+            cursor_values.pop();
         }
 
         let next_cursor = if has_more {
-            ids.last().cloned().flatten()
+            cursor_values.last().cloned().flatten()
         } else {
             None
         };

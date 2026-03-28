@@ -687,3 +687,108 @@ async fn select_no_filter() {
     assert!(page.has_prev);
     assert!(page.has_next);
 }
+
+// -- Cursor pagination tests --
+
+#[tokio::test]
+async fn select_cursor_first_page() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    let req = ldb::CursorRequest {
+        after: None,
+        per_page: 10,
+    };
+    let page: ldb::CursorPage<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .cursor(req)
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 10);
+    assert!(page.has_more);
+    assert!(page.next_cursor.is_some());
+}
+
+#[tokio::test]
+async fn select_cursor_with_after() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    // Get first page
+    let req = ldb::CursorRequest {
+        after: None,
+        per_page: 10,
+    };
+    let first: ldb::CursorPage<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .cursor(req)
+        .await
+        .unwrap();
+
+    // Get second page using cursor
+    let req = ldb::CursorRequest {
+        after: first.next_cursor.clone(),
+        per_page: 10,
+    };
+    let second: ldb::CursorPage<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .cursor(req)
+        .await
+        .unwrap();
+
+    assert_eq!(second.items.len(), 10);
+    assert!(second.has_more);
+    // No overlap between pages
+    let first_ids: Vec<_> = first.items.iter().map(|u| &u.id).collect();
+    assert!(!second.items.iter().any(|u| first_ids.contains(&&u.id)));
+}
+
+#[tokio::test]
+async fn select_cursor_last_page() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    // Request more than available (50 items, request 100)
+    let req = ldb::CursorRequest {
+        after: None,
+        per_page: 100,
+    };
+    let page: ldb::CursorPage<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .cursor(req)
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 50);
+    assert!(!page.has_more);
+    assert!(page.next_cursor.is_none());
+}
+
+#[tokio::test]
+async fn select_cursor_with_filter() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    let schema = FilterSchema::new().field("status", FieldType::Text);
+    let mut params = HashMap::new();
+    params.insert("status".into(), vec!["active".into()]);
+    let filter = Filter::from_query_params(&params)
+        .validate(&schema)
+        .unwrap();
+
+    let req = ldb::CursorRequest {
+        after: None,
+        per_page: 10,
+    };
+    let page: ldb::CursorPage<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .filter(filter)
+        .cursor(req)
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 10);
+    assert!(page.items.iter().all(|u| u.status == "active"));
+    assert!(page.has_more); // 25 active items total, got 10
+}
