@@ -343,6 +343,70 @@ async fn migrate_nonexistent_dir_is_ok() {
         .unwrap();
 }
 
+// -- Managed shutdown --
+
+#[tokio::test]
+async fn managed_shutdown() {
+    let db = test_db().await;
+    let managed = ldb::managed(db);
+    // ManagedDatabase implements Task — shutdown should succeed
+    use modo::runtime::Task;
+    managed.shutdown().await.unwrap();
+}
+
+// -- Pagination --
+
+#[tokio::test]
+async fn page_request_clamp() {
+    let config = ldb::PaginationConfig {
+        default_per_page: 20,
+        max_per_page: 50,
+    };
+
+    let mut req = ldb::PageRequest {
+        page: 0,
+        per_page: 0,
+    };
+    req.clamp(&config);
+    assert_eq!(req.page, 1);
+    assert_eq!(req.per_page, 20);
+
+    let mut req = ldb::PageRequest {
+        page: 3,
+        per_page: 200,
+    };
+    req.clamp(&config);
+    assert_eq!(req.page, 3);
+    assert_eq!(req.per_page, 50);
+}
+
+#[tokio::test]
+async fn page_new_calculates_fields() {
+    let page: ldb::Page<String> = ldb::Page::new(vec!["a".into(), "b".into()], 5, 2, 2);
+    assert_eq!(page.total_pages, 3);
+    assert!(page.has_next);
+    assert!(page.has_prev);
+}
+
+#[tokio::test]
+async fn cursor_request_clamp() {
+    let config = ldb::PaginationConfig::default();
+
+    let mut req = ldb::CursorRequest {
+        after: None,
+        per_page: 0,
+    };
+    req.clamp(&config);
+    assert_eq!(req.per_page, 20);
+
+    let mut req = ldb::CursorRequest {
+        after: Some("abc".into()),
+        per_page: 999,
+    };
+    req.clamp(&config);
+    assert_eq!(req.per_page, 100);
+}
+
 // -- Test helpers --
 
 async fn test_db() -> ldb::Database {
