@@ -12,4 +12,7 @@ pub use connect::connect;
 mod from_row;
 pub use from_row::{ColumnMap, FromRow, FromValue};
 
+mod conn;
+pub use conn::{ConnExt, ConnQueryExt};
+
 pub(crate) mod migrate;

@@ -2,7 +2,7 @@
 
 use modo::error::Result;
 use modo::ldb;
-use modo::ldb::{ColumnMap, FromRow};
+use modo::ldb::{ColumnMap, ConnQueryExt, FromRow};
 
 #[tokio::test]
 async fn connect_in_memory() {
@@ -165,6 +165,120 @@ async fn column_map_missing_column_returns_error() {
     let c = ColumnMap::from_row(&row);
     let result: Result<String> = c.get(&row, "nonexistent");
     assert!(result.is_err());
+}
+
+// -- ConnExt / ConnQueryExt tests --
+
+#[tokio::test]
+async fn conn_ext_query_one() {
+    let db = test_db().await;
+    let conn = db.conn();
+    seed_users(conn).await;
+
+    let user: User = conn
+        .query_one("SELECT id, name, email FROM users WHERE id = ?1", libsql::params!["u1"])
+        .await
+        .unwrap();
+    assert_eq!(user.id, "u1");
+    assert_eq!(user.name, "Alice");
+}
+
+#[tokio::test]
+async fn conn_ext_query_one_not_found() {
+    let db = test_db().await;
+    let conn = db.conn();
+    seed_users(conn).await;
+
+    let result: modo::error::Result<User> = conn
+        .query_one(
+            "SELECT id, name, email FROM users WHERE id = ?1",
+            libsql::params!["nonexistent"],
+        )
+        .await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn conn_ext_query_optional() {
+    let db = test_db().await;
+    let conn = db.conn();
+    seed_users(conn).await;
+
+    let found: Option<User> = conn
+        .query_optional(
+            "SELECT id, name, email FROM users WHERE id = ?1",
+            libsql::params!["u1"],
+        )
+        .await
+        .unwrap();
+    assert!(found.is_some());
+
+    let missing: Option<User> = conn
+        .query_optional(
+            "SELECT id, name, email FROM users WHERE id = ?1",
+            libsql::params!["nonexistent"],
+        )
+        .await
+        .unwrap();
+    assert!(missing.is_none());
+}
+
+#[tokio::test]
+async fn conn_ext_query_all() {
+    let db = test_db().await;
+    let conn = db.conn();
+    seed_users(conn).await;
+
+    let users: Vec<User> = conn
+        .query_all("SELECT id, name, email FROM users ORDER BY id", ())
+        .await
+        .unwrap();
+    assert_eq!(users.len(), 2);
+    assert_eq!(users[0].id, "u1");
+    assert_eq!(users[1].id, "u2");
+}
+
+#[tokio::test]
+async fn conn_ext_query_one_map() {
+    let db = test_db().await;
+    let conn = db.conn();
+    seed_users(conn).await;
+
+    let name: String = conn
+        .query_one_map(
+            "SELECT name FROM users WHERE id = ?1",
+            libsql::params!["u1"],
+            |row| Ok(row.get::<String>(0)?),
+        )
+        .await
+        .unwrap();
+    assert_eq!(name, "Alice");
+}
+
+#[tokio::test]
+async fn conn_ext_works_on_transaction() {
+    let db = test_db().await;
+    let conn = db.conn();
+    seed_users(conn).await;
+
+    let tx = conn.transaction().await.unwrap();
+    tx.execute(
+        "INSERT INTO users (id, name, email) VALUES ('u3', 'Charlie', 'charlie@test.com')",
+        (),
+    )
+    .await
+    .unwrap();
+
+    let user: User = tx
+        .query_one(
+            "SELECT id, name, email FROM users WHERE id = ?1",
+            libsql::params!["u3"],
+        )
+        .await
+        .unwrap();
+    assert_eq!(user.name, "Charlie");
+
+    tx.commit().await.unwrap();
 }
 
 // -- Test helpers --
