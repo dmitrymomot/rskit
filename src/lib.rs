@@ -79,6 +79,9 @@ pub mod domain_signup;
 #[cfg(feature = "geolocation")]
 pub mod geolocation;
 
+#[cfg(feature = "ldb")]
+pub mod ldb;
+
 #[cfg(feature = "qrcode")]
 pub mod qrcode;
 
