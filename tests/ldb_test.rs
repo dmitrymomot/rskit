@@ -827,6 +827,13 @@ async fn select_cursor_custom_column() {
     assert_eq!(page.items.len(), 10);
     assert!(page.has_more);
     assert!(page.next_cursor.is_some());
+    // Verify ordering: first page should be ulid_0000..ulid_0009
+    assert_eq!(page.items[0].ulid, "ulid_0000");
+    assert_eq!(page.items[9].ulid, "ulid_0009");
+    // All items in ascending order
+    for w in page.items.windows(2) {
+        assert!(w[0].ulid < w[1].ulid);
+    }
 
     // Second page using cursor
     let req = ldb::CursorRequest {
