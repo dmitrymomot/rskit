@@ -159,3 +159,7 @@ docker compose down -v
 - Turso cloud / remote replicas
 - FTS5 or Tantivy full-text search
 # Test change for skill evaluation
+
+## Additional Notes
+
+This section captures additional observations from the experiment.
