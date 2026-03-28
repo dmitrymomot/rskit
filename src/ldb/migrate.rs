@@ -49,7 +49,7 @@ pub async fn migrate(conn: &libsql::Connection, dir: &str) -> Result<()> {
     })
     .await
     .map_err(|e| Error::internal("migration task panicked").chain(e))?
-    as Result<Vec<(String, String)>>;
+        as Result<Vec<(String, String)>>;
 
     let files = files?;
     if files.is_empty() {
