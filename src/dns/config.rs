@@ -71,8 +71,12 @@ impl DnsConfig {
     /// Parse `nameserver` into a [`SocketAddr`].
     ///
     /// If the address already contains a port it is used as-is; otherwise port
-    /// `53` is appended. Returns [`crate::Error`] with status 500 when the
-    /// address is not a valid IP or hostname+port.
+    /// `53` is appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with status 500 when the address is not a
+    /// valid IP or hostname+port.
     pub fn parse_nameserver(&self) -> Result<SocketAddr> {
         if let Ok(addr) = self.nameserver.parse::<SocketAddr>() {
             return Ok(addr);

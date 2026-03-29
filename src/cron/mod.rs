@@ -5,6 +5,17 @@
 //! custom derives required. Services are injected via the
 //! [`crate::service::Registry`] snapshot captured at scheduler build time.
 //!
+//! # Provides
+//!
+//! - [`Scheduler`] — running scheduler handle; implements
+//!   [`Task`](crate::runtime::Task) for clean shutdown.
+//! - [`SchedulerBuilder`] — builder returned by [`Scheduler::builder`].
+//! - [`CronOptions`] — per-job options (timeout).
+//! - [`Meta`] — job metadata injected into handler arguments.
+//! - [`CronContext`] — full execution context passed to handlers.
+//! - [`CronHandler`] — trait implemented automatically for matching `async fn`.
+//! - [`FromCronContext`] — trait for types extractable from [`CronContext`].
+//!
 //! # Schedule formats
 //!
 //! Three formats are accepted wherever a schedule string is required:

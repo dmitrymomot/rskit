@@ -6,6 +6,19 @@
 //! the subject line and optional layout. Variable substitution uses
 //! `{{var_name}}` placeholders throughout both frontmatter and body.
 //!
+//! # Provides
+//!
+//! - [`Mailer`] — renders templates and delivers email over SMTP.
+//! - [`EmailConfig`] / [`SmtpConfig`] / [`SmtpSecurity`] — configuration
+//!   (deserializes from YAML).
+//! - [`SendEmail`] — builder for composing an outgoing email.
+//! - [`SenderProfile`] — per-message `From` / `Reply-To` override.
+//! - [`RenderedEmail`] — output of [`Mailer::render`] (subject, HTML, text).
+//! - [`TemplateSource`] — trait for pluggable template loaders.
+//! - [`FileSource`] / [`CachedSource`] — filesystem loader and LRU-caching
+//!   wrapper.
+//! - [`ButtonType`] — button colour variants for email templates.
+//!
 //! # Template format
 //!
 //! ```text
