@@ -65,14 +65,15 @@ reads it.
 ```rust,no_run
 use modo::session::{self, SessionConfig, Store};
 use modo::cookie::{CookieConfig, key_from_config};
+use modo::db::Database;
 
 async fn build_app(
-    pool: impl modo::db::Reader + modo::db::Writer,
+    db: Database,
     session_cfg: SessionConfig,
     cookie_cfg: CookieConfig,
 ) -> modo::Result<axum::Router> {
     let key = key_from_config(&cookie_cfg)?;
-    let store = Store::new(&pool, session_cfg);
+    let store = Store::new(db, session_cfg);
     let session_layer = session::layer(store, &cookie_cfg, &key);
 
     let router = axum::Router::new()

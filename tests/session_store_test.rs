@@ -1,48 +1,65 @@
-#![cfg(feature = "db")]
+#![cfg(feature = "session")]
 
-use modo::db;
+use modo::db::{self, ConnExt};
 use modo::session::meta::SessionMeta;
 use modo::session::{SessionConfig, Store};
 
+const CREATE_TABLE_SQL: &str = "CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,
+    token_hash TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    ip_address TEXT NOT NULL,
+    user_agent TEXT NOT NULL,
+    device_name TEXT NOT NULL,
+    device_type TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    data TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    last_active_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+)";
+
 async fn setup_store() -> Store {
-    let config = {
-        let mut c = db::SqliteConfig::default();
-        c.path = ":memory:".to_string();
-        c
+    let config = db::Config {
+        path: ":memory:".into(),
+        ..Default::default()
     };
-    let pool = db::connect(&config).await.unwrap();
-
-    sqlx::query(
-        "CREATE TABLE sessions (
-            id TEXT PRIMARY KEY,
-            token_hash TEXT NOT NULL UNIQUE,
-            user_id TEXT NOT NULL,
-            ip_address TEXT NOT NULL,
-            user_agent TEXT NOT NULL,
-            device_name TEXT NOT NULL,
-            device_type TEXT NOT NULL,
-            fingerprint TEXT NOT NULL,
-            data TEXT NOT NULL DEFAULT '{}',
-            created_at TEXT NOT NULL,
-            last_active_at TEXT NOT NULL,
-            expires_at TEXT NOT NULL
-        )",
-    )
-    .execute(&*pool)
-    .await
-    .unwrap();
-
-    sqlx::query("CREATE INDEX idx_sessions_user_id ON sessions(user_id)")
-        .execute(&*pool)
+    let db = db::connect(&config).await.unwrap();
+    db.conn().execute_raw(CREATE_TABLE_SQL, ()).await.unwrap();
+    db.conn()
+        .execute_raw("CREATE INDEX idx_sessions_user_id ON sessions(user_id)", ())
         .await
         .unwrap();
-
-    sqlx::query("CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)")
-        .execute(&*pool)
+    db.conn()
+        .execute_raw(
+            "CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)",
+            (),
+        )
         .await
         .unwrap();
+    Store::new(db, SessionConfig::default())
+}
 
-    Store::new(&pool, SessionConfig::default())
+async fn setup_store_with_config(session_config: SessionConfig) -> (Store, db::Database) {
+    let config = db::Config {
+        path: ":memory:".into(),
+        ..Default::default()
+    };
+    let db = db::connect(&config).await.unwrap();
+    db.conn().execute_raw(CREATE_TABLE_SQL, ()).await.unwrap();
+    db.conn()
+        .execute_raw("CREATE INDEX idx_sessions_user_id ON sessions(user_id)", ())
+        .await
+        .unwrap();
+    db.conn()
+        .execute_raw(
+            "CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)",
+            (),
+        )
+        .await
+        .unwrap();
+    let store = Store::new(db.clone(), session_config);
+    (store, db)
 }
 
 fn test_meta() -> SessionMeta {
@@ -200,27 +217,7 @@ async fn test_lru_eviction() {
         c.max_sessions_per_user = 2;
         c
     };
-    let db_config = {
-        let mut c = db::SqliteConfig::default();
-        c.path = ":memory:".to_string();
-        c
-    };
-    let pool = db::connect(&db_config).await.unwrap();
-    sqlx::query(
-        "CREATE TABLE sessions (
-            id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
-            user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
-            user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
-            device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,
-            data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
-            last_active_at TEXT NOT NULL, expires_at TEXT NOT NULL
-        )",
-    )
-    .execute(&*pool)
-    .await
-    .unwrap();
-
-    let store = Store::new(&pool, config);
+    let (store, _db) = setup_store_with_config(config).await;
     let meta = test_meta();
 
     let (s1, _) = store.create(&meta, "user-1", None).await.unwrap();
@@ -265,43 +262,16 @@ async fn test_list_for_user_ordered_by_last_active() {
 
 #[tokio::test]
 async fn test_cleanup_expired_deletes_rows() {
-    let config = {
-        let mut c = db::SqliteConfig::default();
-        c.path = ":memory:".to_string();
-        c
-    };
-    let pool = db::connect(&config).await.unwrap();
-    sqlx::query(
-        "CREATE TABLE sessions (
-            id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
-            user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
-            user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
-            device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,
-            data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
-            last_active_at TEXT NOT NULL, expires_at TEXT NOT NULL
-        )",
-    )
-    .execute(&*pool)
-    .await
-    .unwrap();
-    sqlx::query("CREATE INDEX idx_sessions_user_id ON sessions(user_id)")
-        .execute(&*pool)
-        .await
-        .unwrap();
-    sqlx::query("CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)")
-        .execute(&*pool)
-        .await
-        .unwrap();
-
-    let store = Store::new(&pool, SessionConfig::default());
+    let (store, db) = setup_store_with_config(SessionConfig::default()).await;
     let meta = test_meta();
     let (session, _) = store.create(&meta, "user-1", None).await.unwrap();
 
     // Manually expire the session
-    sqlx::query("UPDATE sessions SET expires_at = ? WHERE id = ?")
-        .bind("2020-01-01T00:00:00+00:00")
-        .bind(&session.id)
-        .execute(&*pool)
+    db.conn()
+        .execute_raw(
+            "UPDATE sessions SET expires_at = ?1 WHERE id = ?2",
+            libsql::params!["2020-01-01T00:00:00+00:00", session.id.as_str()],
+        )
         .await
         .unwrap();
 
@@ -314,40 +284,12 @@ async fn test_cleanup_expired_deletes_rows() {
 
 #[tokio::test]
 async fn test_max_sessions_per_user_one() {
-    let config = {
-        let mut c = db::SqliteConfig::default();
-        c.path = ":memory:".to_string();
-        c
-    };
-    let pool = db::connect(&config).await.unwrap();
-    sqlx::query(
-        "CREATE TABLE sessions (
-            id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
-            user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
-            user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
-            device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,
-            data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
-            last_active_at TEXT NOT NULL, expires_at TEXT NOT NULL
-        )",
-    )
-    .execute(&*pool)
-    .await
-    .unwrap();
-    sqlx::query("CREATE INDEX idx_sessions_user_id ON sessions(user_id)")
-        .execute(&*pool)
-        .await
-        .unwrap();
-    sqlx::query("CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)")
-        .execute(&*pool)
-        .await
-        .unwrap();
-
     let session_config = {
         let mut c = SessionConfig::default();
         c.max_sessions_per_user = 1;
         c
     };
-    let store = Store::new(&pool, session_config);
+    let (store, _db) = setup_store_with_config(session_config).await;
     let meta = test_meta();
 
     let (_s1, _) = store.create(&meta, "user-1", None).await.unwrap();
@@ -360,43 +302,16 @@ async fn test_max_sessions_per_user_one() {
 
 #[tokio::test]
 async fn test_list_for_user_excludes_expired() {
-    let config = {
-        let mut c = db::SqliteConfig::default();
-        c.path = ":memory:".to_string();
-        c
-    };
-    let pool = db::connect(&config).await.unwrap();
-    sqlx::query(
-        "CREATE TABLE sessions (
-            id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
-            user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
-            user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
-            device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,
-            data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
-            last_active_at TEXT NOT NULL, expires_at TEXT NOT NULL
-        )",
-    )
-    .execute(&*pool)
-    .await
-    .unwrap();
-    sqlx::query("CREATE INDEX idx_sessions_user_id ON sessions(user_id)")
-        .execute(&*pool)
-        .await
-        .unwrap();
-    sqlx::query("CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)")
-        .execute(&*pool)
-        .await
-        .unwrap();
-
-    let store = Store::new(&pool, SessionConfig::default());
+    let (store, db) = setup_store_with_config(SessionConfig::default()).await;
     let meta = test_meta();
     let (session, _) = store.create(&meta, "user-1", None).await.unwrap();
 
     // Manually expire the session
-    sqlx::query("UPDATE sessions SET expires_at = ? WHERE id = ?")
-        .bind("2020-01-01T00:00:00+00:00")
-        .bind(&session.id)
-        .execute(&*pool)
+    db.conn()
+        .execute_raw(
+            "UPDATE sessions SET expires_at = ?1 WHERE id = ?2",
+            libsql::params!["2020-01-01T00:00:00+00:00", session.id.as_str()],
+        )
         .await
         .unwrap();
 
@@ -406,43 +321,16 @@ async fn test_list_for_user_excludes_expired() {
 
 #[tokio::test]
 async fn test_read_by_token_returns_none_for_expired() {
-    let config = {
-        let mut c = db::SqliteConfig::default();
-        c.path = ":memory:".to_string();
-        c
-    };
-    let pool = db::connect(&config).await.unwrap();
-    sqlx::query(
-        "CREATE TABLE sessions (
-            id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
-            user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
-            user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
-            device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,
-            data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
-            last_active_at TEXT NOT NULL, expires_at TEXT NOT NULL
-        )",
-    )
-    .execute(&*pool)
-    .await
-    .unwrap();
-    sqlx::query("CREATE INDEX idx_sessions_user_id ON sessions(user_id)")
-        .execute(&*pool)
-        .await
-        .unwrap();
-    sqlx::query("CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)")
-        .execute(&*pool)
-        .await
-        .unwrap();
-
-    let store = Store::new(&pool, SessionConfig::default());
+    let (store, db) = setup_store_with_config(SessionConfig::default()).await;
     let meta = test_meta();
     let (session, token) = store.create(&meta, "user-1", None).await.unwrap();
 
     // Manually expire the session
-    sqlx::query("UPDATE sessions SET expires_at = ? WHERE id = ?")
-        .bind("2020-01-01T00:00:00+00:00")
-        .bind(&session.id)
-        .execute(&*pool)
+    db.conn()
+        .execute_raw(
+            "UPDATE sessions SET expires_at = ?1 WHERE id = ?2",
+            libsql::params!["2020-01-01T00:00:00+00:00", session.id.as_str()],
+        )
         .await
         .unwrap();
 

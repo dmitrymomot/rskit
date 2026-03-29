@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::db::{InnerPool, Reader, Writer};
+use crate::db::{ColumnMap, ConnExt, ConnQueryExt, Database, FromRow};
 use crate::error::{Error, Result};
 
 use super::config::SessionConfig;
@@ -40,37 +40,19 @@ pub struct SessionData {
 
 /// Low-level SQLite-backed session store.
 ///
-/// Wraps a read pool and a write pool and exposes async methods for all
-/// session CRUD operations. Consumed by [`super::middleware::SessionLayer`]
-/// and available to handlers via [`super::extractor::Session`].
+/// Wraps a [`Database`] handle and exposes async methods for all session CRUD
+/// operations. Consumed by [`super::middleware::SessionLayer`] and available
+/// to handlers via [`super::extractor::Session`].
 #[derive(Clone)]
 pub struct Store {
-    reader: InnerPool,
-    writer: InnerPool,
+    db: Database,
     config: SessionConfig,
 }
 
 impl Store {
-    /// Create a store using a single pool for both reads and writes.
-    ///
-    /// Use this when the database connection already combines both roles
-    /// (e.g. a local SQLite file or an in-memory pool shared via
-    /// `ReadPool::new()` / `WritePool::new()`).
-    pub fn new(pool: &(impl Reader + Writer), config: SessionConfig) -> Self {
-        Self {
-            reader: pool.read_pool().clone(),
-            writer: pool.write_pool().clone(),
-            config,
-        }
-    }
-
-    /// Create a store with separate read and write pools.
-    pub fn new_rw(reader: &impl Reader, writer: &impl Writer, config: SessionConfig) -> Self {
-        Self {
-            reader: reader.read_pool().clone(),
-            writer: writer.write_pool().clone(),
-            config,
-        }
+    /// Create a store from a [`Database`] handle and session configuration.
+    pub fn new(db: Database, config: SessionConfig) -> Self {
+        Self { db, config }
     }
 
     /// Return the session configuration for this store.
@@ -84,14 +66,17 @@ impl Store {
     pub async fn read_by_token(&self, token: &SessionToken) -> Result<Option<SessionData>> {
         let hash = token.hash();
         let now = Utc::now().to_rfc3339();
-        let row = sqlx::query_as::<_, SessionRow>(&format!(
-            "SELECT {SESSION_COLUMNS} FROM sessions WHERE token_hash = ? AND expires_at > ?"
-        ))
-        .bind(&hash)
-        .bind(&now)
-        .fetch_optional(&self.reader)
-        .await
-        .map_err(|e| Error::internal(format!("read session by token: {e}")))?;
+        let row: Option<SessionRow> = self
+            .db
+            .conn()
+            .query_optional(
+                &format!(
+                    "SELECT {SESSION_COLUMNS} FROM sessions \
+                     WHERE token_hash = ?1 AND expires_at > ?2"
+                ),
+                libsql::params![hash, now],
+            )
+            .await?;
 
         row.map(row_to_session_data).transpose()
     }
@@ -100,13 +85,14 @@ impl Store {
     ///
     /// Returns `None` if no session with that ID exists.
     pub async fn read(&self, id: &str) -> Result<Option<SessionData>> {
-        let row = sqlx::query_as::<_, SessionRow>(&format!(
-            "SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?"
-        ))
-        .bind(id)
-        .fetch_optional(&self.reader)
-        .await
-        .map_err(|e| Error::internal(format!("read session: {e}")))?;
+        let row: Option<SessionRow> = self
+            .db
+            .conn()
+            .query_optional(
+                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
+                libsql::params![id],
+            )
+            .await?;
 
         row.map(row_to_session_data).transpose()
     }
@@ -114,24 +100,27 @@ impl Store {
     /// List all active (non-expired) sessions for a user, ordered by most recently active.
     pub async fn list_for_user(&self, user_id: &str) -> Result<Vec<SessionData>> {
         let now = Utc::now().to_rfc3339();
-        let rows = sqlx::query_as::<_, SessionRow>(&format!(
-            "SELECT {SESSION_COLUMNS} FROM sessions WHERE user_id = ? AND expires_at > ? \
-                 ORDER BY last_active_at DESC"
-        ))
-        .bind(user_id)
-        .bind(&now)
-        .fetch_all(&self.reader)
-        .await
-        .map_err(|e| Error::internal(format!("list sessions: {e}")))?;
+        let rows: Vec<SessionRow> = self
+            .db
+            .conn()
+            .query_all(
+                &format!(
+                    "SELECT {SESSION_COLUMNS} FROM sessions \
+                     WHERE user_id = ?1 AND expires_at > ?2 \
+                     ORDER BY last_active_at DESC"
+                ),
+                libsql::params![user_id, now],
+            )
+            .await?;
 
         rows.into_iter().map(row_to_session_data).collect()
     }
 
     /// Create a new session for the given user.
     ///
-    /// Runs inside a transaction. After inserting, enforces the
-    /// `max_sessions_per_user` limit by evicting the oldest session(s) when
-    /// the limit is exceeded.
+    /// Inserts the session row then trims excess sessions when the
+    /// `max_sessions_per_user` limit is exceeded by evicting the oldest
+    /// session(s).
     ///
     /// Returns the newly-created `SessionData` and the raw `SessionToken` that
     /// must be placed in the cookie.
@@ -152,40 +141,48 @@ impl Store {
         let now_str = now.to_rfc3339();
         let expires_str = expires_at.to_rfc3339();
 
-        let mut txn = self
-            .writer
-            .begin()
+        // Insert session
+        self.db
+            .conn()
+            .execute_raw(
+                "INSERT INTO sessions \
+                 (id, token_hash, user_id, ip_address, user_agent, device_name, device_type, \
+                  fingerprint, data, created_at, last_active_at, expires_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                libsql::params![
+                    id.as_str(),
+                    token_hash.as_str(),
+                    user_id,
+                    meta.ip_address.as_str(),
+                    meta.user_agent.as_str(),
+                    meta.device_name.as_str(),
+                    meta.device_type.as_str(),
+                    meta.fingerprint.as_str(),
+                    data_str.as_str(),
+                    now_str.as_str(),
+                    now_str.as_str(),
+                    expires_str.as_str()
+                ],
+            )
             .await
-            .map_err(|e| Error::internal(format!("begin transaction: {e}")))?;
+            .map_err(|e| Error::internal(format!("insert session: {e}")))?;
 
-        sqlx::query(
-            "INSERT INTO sessions \
-             (id, token_hash, user_id, ip_address, user_agent, device_name, device_type, \
-              fingerprint, data, created_at, last_active_at, expires_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(&id)
-        .bind(&token_hash)
-        .bind(user_id)
-        .bind(&meta.ip_address)
-        .bind(&meta.user_agent)
-        .bind(&meta.device_name)
-        .bind(&meta.device_type)
-        .bind(&meta.fingerprint)
-        .bind(&data_str)
-        .bind(&now_str)
-        .bind(&now_str)
-        .bind(&expires_str)
-        .execute(&mut *txn)
-        .await
-        .map_err(|e| Error::internal(format!("insert session: {e}")))?;
-
-        self.enforce_session_limit(user_id, &now_str, &mut txn)
-            .await?;
-
-        txn.commit()
+        // Trim excess sessions
+        let max = self.config.max_sessions_per_user as i64;
+        self.db
+            .conn()
+            .execute_raw(
+                "DELETE FROM sessions WHERE id IN (\
+                     SELECT id FROM sessions \
+                     WHERE user_id = ?1 AND expires_at > ?2 \
+                     ORDER BY last_active_at ASC \
+                     LIMIT MAX(0, (SELECT COUNT(*) FROM sessions \
+                                   WHERE user_id = ?3 AND expires_at > ?4) - ?5)\
+                 )",
+                libsql::params![user_id, now_str.as_str(), user_id, now_str.as_str(), max],
+            )
             .await
-            .map_err(|e| Error::internal(format!("commit transaction: {e}")))?;
+            .map_err(|e| Error::internal(format!("evict excess sessions: {e}")))?;
 
         let session_data = SessionData {
             id,
@@ -206,9 +203,9 @@ impl Store {
 
     /// Delete a session by its ULID identifier.
     pub async fn destroy(&self, id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM sessions WHERE id = ?")
-            .bind(id)
-            .execute(&self.writer)
+        self.db
+            .conn()
+            .execute_raw("DELETE FROM sessions WHERE id = ?1", libsql::params![id])
             .await
             .map_err(|e| Error::internal(format!("destroy session: {e}")))?;
         Ok(())
@@ -216,9 +213,12 @@ impl Store {
 
     /// Delete all sessions belonging to a user.
     pub async fn destroy_all_for_user(&self, user_id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM sessions WHERE user_id = ?")
-            .bind(user_id)
-            .execute(&self.writer)
+        self.db
+            .conn()
+            .execute_raw(
+                "DELETE FROM sessions WHERE user_id = ?1",
+                libsql::params![user_id],
+            )
             .await
             .map_err(|e| Error::internal(format!("destroy all sessions for user: {e}")))?;
         Ok(())
@@ -228,10 +228,12 @@ impl Store {
     ///
     /// Used to implement "log out other devices".
     pub async fn destroy_all_except(&self, user_id: &str, keep_id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM sessions WHERE user_id = ? AND id != ?")
-            .bind(user_id)
-            .bind(keep_id)
-            .execute(&self.writer)
+        self.db
+            .conn()
+            .execute_raw(
+                "DELETE FROM sessions WHERE user_id = ?1 AND id != ?2",
+                libsql::params![user_id, keep_id],
+            )
             .await
             .map_err(|e| Error::internal(format!("destroy all except: {e}")))?;
         Ok(())
@@ -244,10 +246,12 @@ impl Store {
     pub async fn rotate_token(&self, id: &str) -> Result<SessionToken> {
         let new_token = SessionToken::generate();
         let new_hash = new_token.hash();
-        sqlx::query("UPDATE sessions SET token_hash = ? WHERE id = ?")
-            .bind(&new_hash)
-            .bind(id)
-            .execute(&self.writer)
+        self.db
+            .conn()
+            .execute_raw(
+                "UPDATE sessions SET token_hash = ?1 WHERE id = ?2",
+                libsql::params![new_hash, id],
+            )
             .await
             .map_err(|e| Error::internal(format!("rotate token: {e}")))?;
         Ok(new_token)
@@ -266,16 +270,15 @@ impl Store {
     ) -> Result<()> {
         let data_str = serde_json::to_string(data)
             .map_err(|e| Error::internal(format!("serialize session data: {e}")))?;
-        sqlx::query(
-            "UPDATE sessions SET data = ?, last_active_at = ?, expires_at = ? WHERE id = ?",
-        )
-        .bind(&data_str)
-        .bind(now.to_rfc3339())
-        .bind(expires_at.to_rfc3339())
-        .bind(id)
-        .execute(&self.writer)
-        .await
-        .map_err(|e| Error::internal(format!("flush session: {e}")))?;
+        self.db
+            .conn()
+            .execute_raw(
+                "UPDATE sessions SET data = ?1, last_active_at = ?2, expires_at = ?3 \
+                 WHERE id = ?4",
+                libsql::params![data_str, now.to_rfc3339(), expires_at.to_rfc3339(), id],
+            )
+            .await
+            .map_err(|e| Error::internal(format!("flush session: {e}")))?;
         Ok(())
     }
 
@@ -289,11 +292,12 @@ impl Store {
         now: DateTime<Utc>,
         expires_at: DateTime<Utc>,
     ) -> Result<()> {
-        sqlx::query("UPDATE sessions SET last_active_at = ?, expires_at = ? WHERE id = ?")
-            .bind(now.to_rfc3339())
-            .bind(expires_at.to_rfc3339())
-            .bind(id)
-            .execute(&self.writer)
+        self.db
+            .conn()
+            .execute_raw(
+                "UPDATE sessions SET last_active_at = ?1, expires_at = ?2 WHERE id = ?3",
+                libsql::params![now.to_rfc3339(), expires_at.to_rfc3339(), id],
+            )
             .await
             .map_err(|e| Error::internal(format!("touch session: {e}")))?;
         Ok(())
@@ -305,44 +309,19 @@ impl Store {
     /// via a cron job) to keep the table small.
     pub async fn cleanup_expired(&self) -> Result<u64> {
         let now = Utc::now().to_rfc3339();
-        let result = sqlx::query("DELETE FROM sessions WHERE expires_at < ?")
-            .bind(&now)
-            .execute(&self.writer)
+        let affected = self
+            .db
+            .conn()
+            .execute_raw(
+                "DELETE FROM sessions WHERE expires_at < ?1",
+                libsql::params![now],
+            )
             .await
-            .map_err(|e| Error::internal(format!("cleanup expired sessions: {e}")))?;
-        Ok(result.rows_affected())
-    }
-
-    async fn enforce_session_limit(
-        &self,
-        user_id: &str,
-        now: &str,
-        txn: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    ) -> Result<()> {
-        let max = self.config.max_sessions_per_user as i64;
-
-        sqlx::query(
-            "DELETE FROM sessions WHERE id IN (\
-                 SELECT id FROM sessions \
-                 WHERE user_id = ? AND expires_at > ? \
-                 ORDER BY last_active_at ASC \
-                 LIMIT MAX(0, (SELECT COUNT(*) FROM sessions WHERE user_id = ? AND expires_at > ?) - ?)\
-             )",
-        )
-        .bind(user_id)
-        .bind(now)
-        .bind(user_id)
-        .bind(now)
-        .bind(max)
-        .execute(&mut **txn)
-        .await
-        .map_err(|e| Error::internal(format!("evict excess sessions: {e}")))?;
-
-        Ok(())
+            .map_err(Error::from)?;
+        Ok(affected)
     }
 }
 
-#[derive(sqlx::FromRow)]
 struct SessionRow {
     id: String,
     user_id: String,
@@ -355,6 +334,25 @@ struct SessionRow {
     created_at: String,
     last_active_at: String,
     expires_at: String,
+}
+
+impl FromRow for SessionRow {
+    fn from_row(row: &libsql::Row) -> Result<Self> {
+        let cols = ColumnMap::from_row(row);
+        Ok(Self {
+            id: cols.get(row, "id")?,
+            user_id: cols.get(row, "user_id")?,
+            ip_address: cols.get(row, "ip_address")?,
+            user_agent: cols.get(row, "user_agent")?,
+            device_name: cols.get(row, "device_name")?,
+            device_type: cols.get(row, "device_type")?,
+            fingerprint: cols.get(row, "fingerprint")?,
+            data: cols.get(row, "data")?,
+            created_at: cols.get(row, "created_at")?,
+            last_active_at: cols.get(row, "last_active_at")?,
+            expires_at: cols.get(row, "expires_at")?,
+        })
+    }
 }
 
 fn row_to_session_data(row: SessionRow) -> Result<SessionData> {

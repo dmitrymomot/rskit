@@ -1,4 +1,4 @@
-#![cfg(feature = "db")]
+#![cfg(feature = "session")]
 
 use modo::session::SessionToken;
 
