@@ -15,7 +15,12 @@ type HmacSha256 = Hmac<Sha256>;
 /// for use inside `JwtDecoder`.
 pub trait TokenVerifier: Send + Sync {
     /// Verifies that `signature` was produced by signing `header_payload`
-    /// with the same key. Returns `Err` with `jwt:invalid_signature` on mismatch.
+    /// with the same key.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::unauthorized` with `jwt:invalid_signature` when the
+    /// signature does not match.
     fn verify(&self, header_payload: &[u8], signature: &[u8]) -> Result<()>;
     /// Returns the JWT algorithm name used in the token header (e.g., `"HS256"`).
     fn algorithm_name(&self) -> &str;
@@ -27,6 +32,11 @@ pub trait TokenVerifier: Send + Sync {
 /// for use inside `JwtEncoder`.
 pub trait TokenSigner: TokenVerifier {
     /// Signs `header_payload` and returns the raw signature bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::internal` with `jwt:signing_failed` if the HMAC key is
+    /// invalid.
     fn sign(&self, header_payload: &[u8]) -> Result<Vec<u8>>;
 }
 

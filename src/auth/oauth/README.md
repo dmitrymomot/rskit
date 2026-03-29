@@ -54,18 +54,18 @@ use modo::auth::oauth::{GitHub, Google, OAuthConfig, OAuthProviderConfig};
 use modo::cookie::{CookieConfig, key_from_config};
 use modo::service::Registry;
 
-fn build_router(oauth_cfg: &OAuthConfig, cookie_cfg: &CookieConfig) -> Router {
+fn build_router(oauth_cfg: &OAuthConfig, cookie_cfg: &CookieConfig, http_client: modo::http::Client) -> Router {
     let key = key_from_config(cookie_cfg).expect("cookie secret must be at least 64 chars");
 
     let mut registry = Registry::new();
     registry.add(key.clone());
 
     if let Some(cfg) = &oauth_cfg.google {
-        let google = Google::new(cfg, cookie_cfg, &key);
+        let google = Google::new(cfg, cookie_cfg, &key, http_client.clone());
         registry.add(google);
     }
     if let Some(cfg) = &oauth_cfg.github {
-        let github = GitHub::new(cfg, cookie_cfg, &key);
+        let github = GitHub::new(cfg, cookie_cfg, &key, http_client.clone());
         registry.add(github);
     }
 

@@ -32,6 +32,10 @@ pub trait OAuthProvider: Send + Sync {
     /// Generates a PKCE verifier, a state nonce, and a signed cookie that binds them to this
     /// provider. Returns an [`AuthorizationRequest`] that implements [`axum::response::IntoResponse`]
     /// — return it directly from an axum handler to redirect the user.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the authorization URL cannot be constructed.
     fn authorize_url(&self) -> crate::Result<AuthorizationRequest>;
 
     /// Exchanges an authorization code for a [`UserProfile`].
@@ -39,6 +43,11 @@ pub trait OAuthProvider: Send + Sync {
     /// Validates that `params.state` matches the nonce stored in `state` and that
     /// `state.provider` matches this provider's [`name`](OAuthProvider::name). Performs the token
     /// exchange and fetches the user's profile from the provider API.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::bad_request` if the state nonce or provider does not match.
+    /// Returns `Error::internal` if the token exchange or profile fetch fails.
     fn exchange(
         &self,
         params: &CallbackParams,

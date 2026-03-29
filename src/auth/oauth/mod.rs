@@ -6,6 +6,18 @@
 //!
 //! Requires the `auth` feature flag.
 //!
+//! # Provides
+//!
+//! - [`OAuthProvider`] — trait for implementing custom OAuth 2.0 providers
+//! - [`Google`] — built-in Google provider (scopes: `openid`, `email`, `profile`)
+//! - [`GitHub`] — built-in GitHub provider (scopes: `user:email`, `read:user`)
+//! - [`OAuthConfig`] — top-level YAML configuration for all providers
+//! - [`OAuthProviderConfig`] — per-provider credentials and settings
+//! - [`AuthorizationRequest`] — `IntoResponse` redirect that sets the `_oauth_state` cookie
+//! - [`OAuthState`] — axum extractor that reads and verifies the `_oauth_state` cookie
+//! - [`CallbackParams`] — deserialized `?code=…&state=…` query params
+//! - [`UserProfile`] — normalized user profile returned after a successful exchange
+//!
 //! # Flow overview
 //!
 //! 1. **Login route** — call [`OAuthProvider::authorize_url`] and return the

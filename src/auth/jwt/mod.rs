@@ -2,6 +2,23 @@
 //!
 //! Requires the `auth` feature.
 //!
+//! # Provides
+//!
+//! - [`Claims`] — JWT claims with registered and custom fields; axum extractor
+//! - [`JwtConfig`] — YAML-deserialized configuration (secret, expiry, leeway, issuer, audience)
+//! - [`JwtEncoder`] — signs and produces JWT token strings (HS256)
+//! - [`JwtDecoder`] — verifies signatures and validates claims
+//! - [`JwtLayer`] — Tower middleware that enforces JWT auth on axum routes
+//! - [`Bearer`] — standalone axum extractor for the raw Bearer token string
+//! - [`JwtError`] — typed error enum with static `code()` strings
+//! - [`Revocation`] — trait for pluggable async token revocation backends
+//! - [`TokenSource`] — trait for pluggable token extraction locations
+//! - [`BearerSource`], [`CookieSource`], [`QuerySource`], [`HeaderSource`] — built-in token sources
+//! - [`HmacSigner`] — HMAC-SHA256 implementation of [`TokenSigner`] and [`TokenVerifier`]
+//! - [`TokenSigner`] — trait for JWT signing
+//! - [`TokenVerifier`] — trait for JWT signature verification
+//! - [`ValidationConfig`] — runtime validation policy (leeway, issuer, audience)
+//!
 //! # Quick start
 //!
 //! ```

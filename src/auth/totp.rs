@@ -59,6 +59,8 @@ impl Totp {
 
     /// Creates a `Totp` from a base32-encoded secret string.
     ///
+    /// # Errors
+    ///
     /// Returns `Error::bad_request` if the string is not valid base32.
     pub fn from_base32(encoded: &str, config: &TotpConfig) -> crate::Result<Self> {
         let bytes = crate::encoding::base32::decode(encoded)

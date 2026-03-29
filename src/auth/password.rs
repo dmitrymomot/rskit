@@ -40,6 +40,11 @@ impl Default for PasswordConfig {
 /// algorithm, parameters, salt, and hash — suitable for storage in a database.
 ///
 /// Requires feature `"auth"`.
+///
+/// # Errors
+///
+/// Returns `Error::internal` if the Argon2id parameters are invalid or the
+/// blocking task panics.
 pub async fn hash(password: &str, config: &PasswordConfig) -> crate::Result<String> {
     let config = config.clone();
     let password = password.to_string();
@@ -55,6 +60,11 @@ pub async fn hash(password: &str, config: &PasswordConfig) -> crate::Result<Stri
 /// malformed hash string.
 ///
 /// Requires feature `"auth"`.
+///
+/// # Errors
+///
+/// Returns `Error::internal` if the hash string is structurally invalid (not
+/// PHC-formatted) or the blocking task panics.
 pub async fn verify(password: &str, hash: &str) -> crate::Result<bool> {
     let password = password.to_string();
     let hash = hash.to_string();

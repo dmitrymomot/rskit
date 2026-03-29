@@ -17,5 +17,10 @@ use crate::Result;
 /// - `Err(_)`: token rejected with `jwt:revocation_check_failed` (fail-closed).
 pub trait Revocation: Send + Sync {
     /// Returns `Ok(true)` if the token identified by `jti` has been revoked.
+    ///
+    /// # Errors
+    ///
+    /// Returning `Err` causes the middleware to reject the request with
+    /// `jwt:revocation_check_failed` (fail-closed behavior).
     fn is_revoked(&self, jti: &str) -> Pin<Box<dyn Future<Output = Result<bool>> + Send + '_>>;
 }

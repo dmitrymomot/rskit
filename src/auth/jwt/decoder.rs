@@ -65,6 +65,13 @@ impl JwtDecoder {
     /// 8. Check `aud` (if `require_audience` is configured)
     ///
     /// Clock skew tolerance (`leeway`) is applied to steps 5 and 6.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::unauthorized` with a [`JwtError`](super::JwtError) source for:
+    /// malformed tokens, invalid headers, algorithm mismatch, invalid signatures,
+    /// expired tokens, not-yet-valid tokens, issuer mismatch, or audience mismatch.
+    /// Missing `exp` is treated as expired.
     pub fn decode<T: DeserializeOwned>(&self, token: &str) -> Result<Claims<T>> {
         let parts: Vec<&str> = token.splitn(4, '.').collect();
         if parts.len() != 3 {
