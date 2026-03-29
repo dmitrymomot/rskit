@@ -63,6 +63,11 @@ impl Store {
     /// Look up an active (non-expired) session by its token hash.
     ///
     /// Returns `None` if no matching session exists or the session has expired.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails or the stored data cannot
+    /// be deserialised.
     pub async fn read_by_token(&self, token: &SessionToken) -> Result<Option<SessionData>> {
         let hash = token.hash();
         let now = Utc::now().to_rfc3339();
@@ -84,6 +89,11 @@ impl Store {
     /// Look up a session by its ULID identifier (ignores expiry).
     ///
     /// Returns `None` if no session with that ID exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails or the stored data cannot
+    /// be deserialised.
     pub async fn read(&self, id: &str) -> Result<Option<SessionData>> {
         let row: Option<SessionRow> = self
             .db
@@ -98,6 +108,11 @@ impl Store {
     }
 
     /// List all active (non-expired) sessions for a user, ordered by most recently active.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails or the stored data cannot
+    /// be deserialised.
     pub async fn list_for_user(&self, user_id: &str) -> Result<Vec<SessionData>> {
         let now = Utc::now().to_rfc3339();
         let rows: Vec<SessionRow> = self
@@ -124,6 +139,11 @@ impl Store {
     ///
     /// Returns the newly-created `SessionData` and the raw `SessionToken` that
     /// must be placed in the cookie.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the session data cannot be serialised or the
+    /// database insert/eviction query fails.
     pub async fn create(
         &self,
         meta: &SessionMeta,
@@ -202,6 +222,10 @@ impl Store {
     }
 
     /// Delete a session by its ULID identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database delete fails.
     pub async fn destroy(&self, id: &str) -> Result<()> {
         self.db
             .conn()
@@ -212,6 +236,10 @@ impl Store {
     }
 
     /// Delete all sessions belonging to a user.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database delete fails.
     pub async fn destroy_all_for_user(&self, user_id: &str) -> Result<()> {
         self.db
             .conn()
@@ -227,6 +255,10 @@ impl Store {
     /// Delete all sessions for a user except the one with the given ID.
     ///
     /// Used to implement "log out other devices".
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database delete fails.
     pub async fn destroy_all_except(&self, user_id: &str, keep_id: &str) -> Result<()> {
         self.db
             .conn()
@@ -243,6 +275,10 @@ impl Store {
     ///
     /// Returns the new [`SessionToken`]. The middleware will write this token
     /// to the session cookie on the response.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails.
     pub async fn rotate_token(&self, id: &str) -> Result<SessionToken> {
         let new_token = SessionToken::generate();
         let new_hash = new_token.hash();
@@ -261,6 +297,11 @@ impl Store {
     ///
     /// Called by the middleware at the end of a request when the session was
     /// marked dirty.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the session data cannot be serialised or the
+    /// database update fails.
     pub async fn flush(
         &self,
         id: &str,
@@ -286,6 +327,10 @@ impl Store {
     ///
     /// Called by the middleware when the touch interval has elapsed but the
     /// session data is not dirty.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails.
     pub async fn touch(
         &self,
         id: &str,
@@ -307,6 +352,10 @@ impl Store {
     ///
     /// Returns the number of rows deleted. Schedule this periodically (e.g.
     /// via a cron job) to keep the table small.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database delete fails.
     pub async fn cleanup_expired(&self) -> Result<u64> {
         let now = Utc::now().to_rfc3339();
         let affected = self

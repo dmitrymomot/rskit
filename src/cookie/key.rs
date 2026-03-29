@@ -6,10 +6,12 @@ use super::CookieConfig;
 
 /// Derive an HMAC signing [`Key`] from a [`CookieConfig`].
 ///
+/// # Errors
+///
 /// Returns [`Error::internal`] if `config.secret` is shorter than 64 characters,
 /// which is the minimum required by the underlying HMAC implementation.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```rust,no_run
 /// use modo::cookie::{CookieConfig, key_from_config};

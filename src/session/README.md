@@ -8,7 +8,7 @@ lifecycle: loading the session on the request path, validating the browser
 fingerprint, flushing dirty data after the handler runs, and setting or
 clearing the session cookie.
 
-This module is always available — no feature flag required.
+Requires the **`session`** feature flag (transitively enables `db`).
 
 ## Schema
 
@@ -219,3 +219,12 @@ async fn cleanup_job(store: Store) -> modo::Result<u64> {
 | `SessionToken`  | Opaque 32-byte random token; redacted in `Debug`/`Display`    |
 | `Store`         | Low-level SQLite store; use directly for background jobs      |
 | `SessionLayer`  | Tower layer; apply to a `Router` to enable session support    |
+| `layer`         | Convenience constructor for `SessionLayer`                    |
+
+## Submodules
+
+| Module        | Purpose                                                      |
+| ------------- | ------------------------------------------------------------ |
+| `device`      | User-agent parsing helpers (`parse_device_name`, `parse_device_type`) |
+| `fingerprint` | Browser fingerprinting for session hijacking detection (`compute_fingerprint`) |
+| `meta`        | Request metadata (`SessionMeta`) derived from headers        |

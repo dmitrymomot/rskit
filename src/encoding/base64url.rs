@@ -41,8 +41,12 @@ pub fn encode(bytes: &[u8]) -> String {
 /// Decodes a base64url-encoded string.
 ///
 /// No padding characters (`=`) are expected or accepted. Returns an empty `Vec`
-/// when `encoded` is empty. Returns [`crate::Error::bad_request`] if any
-/// character falls outside the RFC 4648 base64url alphabet (`A–Za–z0–9-_`).
+/// when `encoded` is empty.
+///
+/// # Errors
+///
+/// Returns [`crate::Error::bad_request`] if any character falls outside the
+/// RFC 4648 base64url alphabet (`A–Za–z0–9-_`).
 ///
 /// # Examples
 ///

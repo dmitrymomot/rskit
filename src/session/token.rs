@@ -22,6 +22,8 @@ impl SessionToken {
 
     /// Decode a session token from a 64-character lowercase hex string.
     ///
+    /// # Errors
+    ///
     /// Returns `Err` if the string is not exactly 64 characters or contains
     /// non-hexadecimal characters.
     pub fn from_hex(s: &str) -> Result<Self, &'static str> {
