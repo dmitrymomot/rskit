@@ -26,7 +26,7 @@ happen automatically.
 
 ```rust
 use modo::extractor::JsonRequest;
-use modo::sanitize::Sanitize;
+use modo::Sanitize;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -49,7 +49,7 @@ async fn create(JsonRequest(body): JsonRequest<CreateItem>) {
 
 ```rust
 use modo::extractor::FormRequest;
-use modo::sanitize::Sanitize;
+use modo::Sanitize;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -73,7 +73,7 @@ async fn login(FormRequest(form): FormRequest<LoginForm>) {
 
 ```rust
 use modo::extractor::Query;
-use modo::sanitize::Sanitize;
+use modo::Sanitize;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -100,7 +100,7 @@ sanitized into `T`; file fields are accessible through the [`Files`] map.
 
 ```rust
 use modo::extractor::{MultipartRequest, Files};
-use modo::sanitize::Sanitize;
+use modo::Sanitize;
 use modo::Result;
 use serde::Deserialize;
 

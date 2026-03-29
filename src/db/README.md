@@ -17,8 +17,9 @@ modo = { version = "...", features = ["db"] }
 | `connect`          | Opens a database, applies PRAGMAs, optionally runs migrations            |
 | `migrate`          | Runs `*.sql` migrations with checksum tracking                           |
 | `ManagedDatabase`  | Wrapper for graceful shutdown via `modo::run!`                           |
+| `managed`          | Wraps a `Database` into a `ManagedDatabase`                              |
 | `ConnExt`          | Low-level `query_raw`/`execute_raw` trait for Connection and Transaction |
-| `ConnQueryExt`     | High-level `query_one`/`query_all`/`query_optional` helpers              |
+| `ConnQueryExt`     | High-level `query_one`/`query_all`/`query_optional` + `_map` variants    |
 | `SelectBuilder`    | Composable query builder with filter + sort + pagination                 |
 | `FromRow`          | Trait for converting a `libsql::Row` into a Rust struct                  |
 | `FromValue`        | Trait for converting a `libsql::Value` into a concrete type              |
@@ -32,6 +33,9 @@ modo = { version = "...", features = ["db"] }
 | `CursorRequest`    | Cursor pagination extractor (`?after=<cursor>&per_page=N`)               |
 | `CursorPage`       | Cursor page response with next_cursor/has_more                           |
 | `PaginationConfig` | Configurable defaults and limits for pagination extractors               |
+| `JournalMode`      | SQLite journal mode enum (WAL, Delete, Truncate, Memory, Off)            |
+| `SynchronousMode`  | SQLite synchronous mode enum (Off, Normal, Full, Extra)                  |
+| `TempStore`        | SQLite temp store location enum (Default, File, Memory)                  |
 
 The `libsql` crate is also re-exported for direct access to low-level types
 like `libsql::params!`, `libsql::Value`, `libsql::Connection`, and
@@ -41,7 +45,7 @@ like `libsql::params!`, `libsql::Value`, `libsql::Connection`, and
 
 ### Connecting
 
-```rust,ignore
+```rust,no_run
 use modo::db;
 
 let config = db::Config::default();
@@ -53,7 +57,7 @@ let db = db::connect(&config).await?;
 
 ### Managed shutdown
 
-```rust,ignore
+```rust,no_run
 use modo::db;
 
 let db = db::connect(&db::Config::default()).await?;
@@ -63,7 +67,7 @@ let task = db::managed(db.clone());
 
 ### Implementing FromRow
 
-```rust,ignore
+```rust,no_run
 use modo::db::{FromRow, ColumnMap};
 use modo::Result;
 
@@ -87,7 +91,7 @@ impl FromRow for User {
 
 ### Querying with ConnQueryExt
 
-```rust,ignore
+```rust,no_run
 use modo::db::ConnQueryExt;
 
 // Single row (returns Error::not_found if missing)
@@ -109,19 +113,29 @@ let users: Vec<User> = db.conn().query_all(
 ).await?;
 ```
 
+### Querying with closures (\_map variants)
+
+```rust,no_run
+use modo::db::{ConnQueryExt, ColumnMap};
+
+// Map rows with a closure instead of implementing FromRow
+let name: String = db.conn().query_one_map(
+    "SELECT name FROM users WHERE id = ?1",
+    libsql::params!["user_abc"],
+    |row| {
+        let cols = ColumnMap::from_row(row);
+        cols.get::<String>(row, "name")
+    },
+).await?;
+
+// Also available: query_optional_map, query_all_map
+```
+
 ### SelectBuilder with filtering and pagination
 
-```rust,ignore
-use modo::db::{ConnExt, Filter, FilterSchema, FieldType, PageRequest};
+```rust,no_run
+use modo::db::{self, ConnExt, Filter, FilterSchema, FieldType, PageRequest};
 
-// Define which fields can be filtered/sorted
-let schema = FilterSchema::new()
-    .field("name", FieldType::Text)
-    .field("age", FieldType::Int)
-    .field("active", FieldType::Bool)
-    .sort_fields(&["name", "age", "created_at"]);
-
-// In an axum handler:
 async fn list_users(
     filter: Filter,
     page_req: PageRequest,
@@ -147,12 +161,13 @@ async fn list_users(
 
 ### Cursor pagination
 
-```rust,ignore
+```rust,no_run
 use modo::db::{ConnExt, CursorRequest};
 
 let cursor_page = db.conn()
     .select("SELECT id, name FROM users")
     .cursor_column("id")    // default is "id"
+    .oldest_first()          // default is newest-first (DESC)
     .cursor::<User>(cursor_req)
     .await?;
 // cursor_page.next_cursor contains the cursor for the next page
@@ -160,7 +175,7 @@ let cursor_page = db.conn()
 
 ### Migrations
 
-```rust,ignore
+```rust,no_run
 use modo::db;
 
 // Migrations run automatically if Config::migrations is set:

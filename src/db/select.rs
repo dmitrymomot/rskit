@@ -142,6 +142,10 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
     /// By default orders descending (newest-first). Use
     /// [`oldest_first`](Self::oldest_first) to switch to ascending order.
     /// The cursor column can be changed with [`cursor_column`](Self::cursor_column).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query or row conversion fails.
     pub async fn cursor<T: FromRow + serde::Serialize>(
         self,
         req: CursorRequest,

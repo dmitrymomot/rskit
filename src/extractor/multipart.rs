@@ -35,6 +35,10 @@ impl UploadedFile {
     /// Reads the entire field body into memory. Prefer using [`MultipartRequest`]
     /// rather than calling this directly; it is public for advanced use cases
     /// that need to process fields individually.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `400 Bad Request` error if the field body cannot be read.
     pub async fn from_field(
         field: axum_extra::extract::multipart::Field,
     ) -> crate::error::Result<Self> {
@@ -98,7 +102,7 @@ impl std::fmt::Debug for Files {
 }
 
 impl Files {
-    /// Create a `Files` collection from a pre-built map.
+    /// Create a [`Files`] collection from a pre-built map.
     pub fn from_map(map: HashMap<String, Vec<UploadedFile>>) -> Self {
         Self(map)
     }

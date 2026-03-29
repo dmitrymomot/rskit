@@ -30,7 +30,7 @@ assert_eq!(id.len(), 26);          // always 26 characters
 assert_eq!(id, id.to_uppercase()); // always uppercase
 ```
 
-Store in a `TEXT` column (`CHAR(26)` also works for fixed-width storage)s
+Store in a `TEXT` column (`CHAR(26)` also works for fixed-width storage).
 
 ### Short ID — slugs and user-visible codes
 
