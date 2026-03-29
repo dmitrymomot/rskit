@@ -3,10 +3,10 @@ use std::time::Duration;
 use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 
-use crate::db::InnerPool;
+use crate::db::{ConnExt, Database};
 
 pub(crate) async fn cleanup_loop(
-    writer: InnerPool,
+    db: Database,
     interval_secs: u64,
     retention_secs: u64,
     cancel: CancellationToken,
@@ -20,17 +20,16 @@ pub(crate) async fn cleanup_loop(
                 let threshold =
                     (Utc::now() - chrono::Duration::seconds(retention_secs as i64)).to_rfc3339();
 
-                match sqlx::query(
+                match db.conn().execute_raw(
                     "DELETE FROM jobs \
-                     WHERE status IN ('completed', 'dead', 'cancelled') AND updated_at < ?",
+                     WHERE status IN ('completed', 'dead', 'cancelled') AND updated_at < ?1",
+                    libsql::params![threshold.as_str()],
                 )
-                .bind(&threshold)
-                .execute(&writer)
                 .await
                 {
-                    Ok(result) if result.rows_affected() > 0 => {
+                    Ok(count) if count > 0 => {
                         tracing::info!(
-                            count = result.rows_affected(),
+                            count = count,
                             "cleaned up terminal jobs"
                         );
                     }

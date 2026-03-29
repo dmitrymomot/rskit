@@ -1,7 +1,7 @@
-#![cfg(feature = "db")]
+#![cfg(feature = "job")]
 
 use chrono::{Duration, Utc};
-use modo::db;
+use modo::db::{self, ConnExt, ConnQueryExt, FromValue};
 use modo::job::{EnqueueOptions, EnqueueResult, Enqueuer};
 use serde::Serialize;
 
@@ -28,17 +28,16 @@ CREATE UNIQUE INDEX idx_jobs_payload_hash
     ON jobs(payload_hash)
     WHERE payload_hash IS NOT NULL AND status IN ('pending', 'running')";
 
-async fn setup() -> (Enqueuer, db::Pool) {
-    let config = {
-        let mut c = db::SqliteConfig::default();
-        c.path = ":memory:".to_string();
-        c
+async fn setup() -> (Enqueuer, db::Database) {
+    let config = db::Config {
+        path: ":memory:".to_string(),
+        ..Default::default()
     };
-    let pool = db::connect(&config).await.unwrap();
-    sqlx::query(CREATE_TABLE).execute(&*pool).await.unwrap();
-    sqlx::query(CREATE_INDEX).execute(&*pool).await.unwrap();
-    let enqueuer = Enqueuer::new(&pool);
-    (enqueuer, pool)
+    let db = db::connect(&config).await.unwrap();
+    db.conn().execute_raw(CREATE_TABLE, ()).await.unwrap();
+    db.conn().execute_raw(CREATE_INDEX, ()).await.unwrap();
+    let enqueuer = Enqueuer::new(db.clone());
+    (enqueuer, db)
 }
 
 #[derive(Serialize)]
@@ -48,7 +47,7 @@ struct TestPayload {
 
 #[tokio::test]
 async fn enqueue_inserts_pending_job() {
-    let (enqueuer, pool) = setup().await;
+    let (enqueuer, db) = setup().await;
     let id = enqueuer
         .enqueue(
             "send_email",
@@ -59,22 +58,32 @@ async fn enqueue_inserts_pending_job() {
         .await
         .unwrap();
 
-    let row: (String, String, String, i64) =
-        sqlx::query_as("SELECT name, queue, status, attempt FROM jobs WHERE id = ?")
-            .bind(&id)
-            .fetch_one(&*pool)
-            .await
-            .unwrap();
+    let (name, queue, status, attempt): (String, String, String, i32) = db
+        .conn()
+        .query_one_map(
+            "SELECT name, queue, status, attempt FROM jobs WHERE id = ?1",
+            libsql::params![id.as_str()],
+            |row| {
+                Ok((
+                    String::from_value(row.get_value(0).map_err(modo::Error::from)?)?,
+                    String::from_value(row.get_value(1).map_err(modo::Error::from)?)?,
+                    String::from_value(row.get_value(2).map_err(modo::Error::from)?)?,
+                    i32::from_value(row.get_value(3).map_err(modo::Error::from)?)?,
+                ))
+            },
+        )
+        .await
+        .unwrap();
 
-    assert_eq!(row.0, "send_email");
-    assert_eq!(row.1, "default");
-    assert_eq!(row.2, "pending");
-    assert_eq!(row.3, 0);
+    assert_eq!(name, "send_email");
+    assert_eq!(queue, "default");
+    assert_eq!(status, "pending");
+    assert_eq!(attempt, 0);
 }
 
 #[tokio::test]
 async fn enqueue_at_sets_future_run_at() {
-    let (enqueuer, pool) = setup().await;
+    let (enqueuer, db) = setup().await;
     let future = Utc::now() + Duration::hours(1);
     let id = enqueuer
         .enqueue_at(
@@ -87,9 +96,16 @@ async fn enqueue_at_sets_future_run_at() {
         .await
         .unwrap();
 
-    let (run_at_str,): (String,) = sqlx::query_as("SELECT run_at FROM jobs WHERE id = ?")
-        .bind(&id)
-        .fetch_one(&*pool)
+    let run_at_str: String = db
+        .conn()
+        .query_one_map(
+            "SELECT run_at FROM jobs WHERE id = ?1",
+            libsql::params![id.as_str()],
+            |row| {
+                let val = row.get_value(0).map_err(modo::Error::from)?;
+                String::from_value(val)
+            },
+        )
         .await
         .unwrap();
 
@@ -99,7 +115,7 @@ async fn enqueue_at_sets_future_run_at() {
 
 #[tokio::test]
 async fn enqueue_with_custom_queue() {
-    let (enqueuer, pool) = setup().await;
+    let (enqueuer, db) = setup().await;
     let id = enqueuer
         .enqueue_with(
             "send_email",
@@ -114,9 +130,16 @@ async fn enqueue_with_custom_queue() {
         .await
         .unwrap();
 
-    let (queue,): (String,) = sqlx::query_as("SELECT queue FROM jobs WHERE id = ?")
-        .bind(&id)
-        .fetch_one(&*pool)
+    let queue: String = db
+        .conn()
+        .query_one_map(
+            "SELECT queue FROM jobs WHERE id = ?1",
+            libsql::params![id.as_str()],
+            |row| {
+                let val = row.get_value(0).map_err(modo::Error::from)?;
+                String::from_value(val)
+            },
+        )
         .await
         .unwrap();
 
@@ -125,7 +148,7 @@ async fn enqueue_with_custom_queue() {
 
 #[tokio::test]
 async fn enqueue_unique_creates_first_time() {
-    let (enqueuer, _pool) = setup().await;
+    let (enqueuer, _db) = setup().await;
     let result = enqueuer
         .enqueue_unique(
             "send_email",
@@ -141,7 +164,7 @@ async fn enqueue_unique_creates_first_time() {
 
 #[tokio::test]
 async fn enqueue_unique_detects_duplicate() {
-    let (enqueuer, _pool) = setup().await;
+    let (enqueuer, _db) = setup().await;
     let payload = TestPayload {
         user_id: "u1".into(),
     };
@@ -161,7 +184,7 @@ async fn enqueue_unique_detects_duplicate() {
 
 #[tokio::test]
 async fn enqueue_unique_allows_different_payload() {
-    let (enqueuer, _pool) = setup().await;
+    let (enqueuer, _db) = setup().await;
 
     let r1 = enqueuer
         .enqueue_unique(
@@ -188,7 +211,7 @@ async fn enqueue_unique_allows_different_payload() {
 
 #[tokio::test]
 async fn enqueue_unique_with_custom_queue() {
-    let (enqueuer, pool) = setup().await;
+    let (enqueuer, db) = setup().await;
     let result = enqueuer
         .enqueue_unique_with(
             "send_email",
@@ -205,12 +228,12 @@ async fn enqueue_unique_with_custom_queue() {
 
     assert!(matches!(result, EnqueueResult::Created(_)));
 
-    let (queue,): (String,) = sqlx::query_as("SELECT queue FROM jobs LIMIT 1")
-        .bind(match &result {
-            EnqueueResult::Created(id) => id,
-            _ => unreachable!(),
+    let queue: String = db
+        .conn()
+        .query_one_map("SELECT queue FROM jobs LIMIT 1", (), |row| {
+            let val = row.get_value(0).map_err(modo::Error::from)?;
+            String::from_value(val)
         })
-        .fetch_one(&*pool)
         .await
         .unwrap();
 
@@ -219,7 +242,7 @@ async fn enqueue_unique_with_custom_queue() {
 
 #[tokio::test]
 async fn cancel_pending_job_succeeds() {
-    let (enqueuer, _pool) = setup().await;
+    let (enqueuer, _db) = setup().await;
     let id = enqueuer
         .enqueue("test", &serde_json::json!({}))
         .await
@@ -231,14 +254,14 @@ async fn cancel_pending_job_succeeds() {
 
 #[tokio::test]
 async fn cancel_nonexistent_job_returns_false() {
-    let (enqueuer, _pool) = setup().await;
+    let (enqueuer, _db) = setup().await;
     let cancelled = enqueuer.cancel("nonexistent").await.unwrap();
     assert!(!cancelled);
 }
 
 #[tokio::test]
 async fn cancel_already_cancelled_returns_false() {
-    let (enqueuer, _pool) = setup().await;
+    let (enqueuer, _db) = setup().await;
     let id = enqueuer
         .enqueue("test", &serde_json::json!({}))
         .await

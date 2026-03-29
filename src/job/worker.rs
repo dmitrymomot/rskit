@@ -8,7 +8,7 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::db::{InnerPool, Writer};
+use crate::db::{ConnExt, ConnQueryExt, Database, FromValue};
 use crate::error::Result;
 use crate::service::{Registry, RegistrySnapshot};
 
@@ -56,7 +56,7 @@ struct HandlerEntry {
 pub struct WorkerBuilder {
     config: JobConfig,
     registry: Arc<RegistrySnapshot>,
-    writer: InnerPool,
+    db: Database,
     handlers: HashMap<String, HandlerEntry>,
 }
 
@@ -116,7 +116,7 @@ impl WorkerBuilder {
 
         // Spawn poll loop
         let poll_handle = tokio::spawn(poll_loop(
-            self.writer.clone(),
+            self.db.clone(),
             self.registry.clone(),
             handlers.clone(),
             handler_names,
@@ -127,7 +127,7 @@ impl WorkerBuilder {
 
         // Spawn stale reaper
         let reaper_handle = tokio::spawn(reaper_loop(
-            self.writer.clone(),
+            self.db.clone(),
             self.config.stale_threshold_secs,
             self.config.stale_reaper_interval_secs,
             cancel.clone(),
@@ -136,7 +136,7 @@ impl WorkerBuilder {
         // Spawn cleanup (if configured)
         let cleanup_handle = if let Some(ref cleanup) = self.config.cleanup {
             Some(tokio::spawn(cleanup_loop(
-                self.writer.clone(),
+                self.db.clone(),
                 cleanup.interval_secs,
                 cleanup.retention_secs,
                 cancel.clone(),
@@ -173,17 +173,17 @@ pub struct Worker {
 impl Worker {
     /// Create a [`WorkerBuilder`] from config and service registry.
     ///
-    /// Panics if a [`crate::db::WritePool`] is not registered in `registry`.
+    /// Panics if a [`Database`](crate::db::Database) is not registered in `registry`.
     pub fn builder(config: &JobConfig, registry: &Registry) -> WorkerBuilder {
         let snapshot = registry.snapshot();
-        let writer = snapshot
-            .get::<crate::db::WritePool>()
-            .expect("WritePool must be registered before building Worker");
+        let db = snapshot
+            .get::<Database>()
+            .expect("Database must be registered before building Worker");
 
         WorkerBuilder {
             config: config.clone(),
             registry: snapshot,
-            writer: writer.write_pool().clone(),
+            db: (*db).clone(),
             handlers: HashMap::new(),
         }
     }
@@ -204,8 +204,17 @@ impl crate::runtime::Task for Worker {
     }
 }
 
+/// A job row claimed from the database during polling.
+struct ClaimedJob {
+    id: String,
+    name: String,
+    queue: String,
+    payload: String,
+    attempt: i32,
+}
+
 async fn poll_loop(
-    writer: InnerPool,
+    db: Database,
     registry: Arc<RegistrySnapshot>,
     handlers: Arc<HashMap<String, HandlerEntry>>,
     handler_names: Vec<String>,
@@ -216,19 +225,21 @@ async fn poll_loop(
     let poll_interval = Duration::from_secs(poll_interval_secs);
 
     // Precompute the SQL template once — handler_names never changes after start.
-    let placeholders: String = handler_names
+    let placeholders: Vec<String> = handler_names
         .iter()
-        .map(|_| "?")
-        .collect::<Vec<_>>()
-        .join(", ");
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 5))
+        .collect();
+    let placeholders_str = placeholders.join(", ");
+    let limit_param = handler_names.len() + 5;
     let claim_sql = format!(
         "UPDATE jobs SET status = 'running', attempt = attempt + 1, \
-         started_at = ?, updated_at = ? \
+         started_at = ?1, updated_at = ?2 \
          WHERE id IN (\
              SELECT id FROM jobs \
-             WHERE status = 'pending' AND run_at <= ? \
-             AND queue = ? AND name IN ({placeholders}) \
-             ORDER BY run_at ASC LIMIT ?\
+             WHERE status = 'pending' AND run_at <= ?3 \
+             AND queue = ?4 AND name IN ({placeholders_str}) \
+             ORDER BY run_at ASC LIMIT ?{limit_param}\
          ) RETURNING id, name, queue, payload, attempt",
     );
 
@@ -248,19 +259,30 @@ async fn poll_loop(
                         continue;
                     }
 
-                    let mut query =
-                        sqlx::query_as::<_, (String, String, String, String, i32)>(&claim_sql)
-                            .bind(&now_str)
-                            .bind(&now_str)
-                            .bind(&now_str)
-                            .bind(&queue_config.name);
-
+                    let mut params: Vec<libsql::Value> = vec![
+                        libsql::Value::Text(now_str.clone()),       // ?1 started_at
+                        libsql::Value::Text(now_str.clone()),       // ?2 updated_at
+                        libsql::Value::Text(now_str.clone()),       // ?3 run_at <=
+                        libsql::Value::Text(queue_config.name.clone()), // ?4 queue =
+                    ];
                     for name in &handler_names {
-                        query = query.bind(name);
+                        params.push(libsql::Value::Text(name.clone()));
                     }
-                    query = query.bind(slots as i32);
+                    params.push(libsql::Value::Integer(slots as i64)); // LIMIT
 
-                    let claimed = match query.fetch_all(&writer).await {
+                    let claimed = match db.conn().query_all_map(
+                        &claim_sql,
+                        params,
+                        |row| {
+                            Ok(ClaimedJob {
+                                id: String::from_value(row.get_value(0).map_err(crate::Error::from)?)?,
+                                name: String::from_value(row.get_value(1).map_err(crate::Error::from)?)?,
+                                queue: String::from_value(row.get_value(2).map_err(crate::Error::from)?)?,
+                                payload: String::from_value(row.get_value(3).map_err(crate::Error::from)?)?,
+                                attempt: i32::from_value(row.get_value(4).map_err(crate::Error::from)?)?,
+                            })
+                        },
+                    ).await {
                         Ok(rows) => rows,
                         Err(e) => {
                             tracing::error!(error = %e, queue = %queue_config.name, "failed to claim jobs");
@@ -268,16 +290,16 @@ async fn poll_loop(
                         }
                     };
 
-                    for (job_id, job_name, job_queue, payload, attempt) in claimed {
-                        let Some(entry) = handlers.get(&job_name) else {
-                            tracing::warn!(job_name = %job_name, "no handler registered");
+                    for job in claimed {
+                        let Some(entry) = handlers.get(&job.name) else {
+                            tracing::warn!(job_name = %job.name, "no handler registered");
                             continue;
                         };
 
                         let permit = match semaphore.clone().try_acquire_owned() {
                             Ok(p) => p,
                             Err(_) => {
-                                tracing::warn!(job_id = %job_id, "no permit available, job will be reaped");
+                                tracing::warn!(job_id = %job.id, "no permit available, job will be reaped");
                                 break;
                             }
                         };
@@ -286,23 +308,25 @@ async fn poll_loop(
                         let max_attempts = entry.options.max_attempts;
                         let timeout_secs = entry.options.timeout_secs;
                         let reg = registry.clone();
-                        let w = writer.clone();
+                        let db_clone = db.clone();
+                        let job_id = job.id.clone();
+                        let job_name = job.name.clone();
 
                         let deadline =
                             tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
 
                         let meta = Meta {
-                            id: job_id.clone(),
-                            name: job_name.clone(),
-                            queue: job_queue,
-                            attempt: attempt as u32,
+                            id: job.id,
+                            name: job.name,
+                            queue: job.queue,
+                            attempt: job.attempt as u32,
                             max_attempts,
                             deadline: Some(deadline),
                         };
 
                         let ctx = JobContext {
                             registry: reg,
-                            payload,
+                            payload: job.payload,
                             meta,
                         };
 
@@ -317,14 +341,11 @@ async fn poll_loop(
 
                             match result {
                                 Ok(Ok(())) => {
-                                    let _ = sqlx::query(
+                                    let _ = db_clone.conn().execute_raw(
                                         "UPDATE jobs SET status = 'completed', \
-                                         completed_at = ?, updated_at = ? WHERE id = ?",
+                                         completed_at = ?1, updated_at = ?2 WHERE id = ?3",
+                                        libsql::params![now_str.as_str(), now_str.as_str(), job_id.as_str()],
                                     )
-                                    .bind(&now_str)
-                                    .bind(&now_str)
-                                    .bind(&job_id)
-                                    .execute(&w)
                                     .await;
 
                                     tracing::info!(
@@ -336,10 +357,10 @@ async fn poll_loop(
                                 Ok(Err(e)) => {
                                     let error_msg = format!("{e}");
                                     handle_job_failure(
-                                        &w,
+                                        &db_clone,
                                         &job_id,
                                         &job_name,
-                                        attempt as u32,
+                                        job.attempt as u32,
                                         max_attempts,
                                         &error_msg,
                                         &now_str,
@@ -348,10 +369,10 @@ async fn poll_loop(
                                 }
                                 Err(_) => {
                                     handle_job_failure(
-                                        &w,
+                                        &db_clone,
                                         &job_id,
                                         &job_name,
-                                        attempt as u32,
+                                        job.attempt as u32,
                                         max_attempts,
                                         "timeout",
                                         &now_str,
@@ -370,7 +391,7 @@ async fn poll_loop(
 }
 
 async fn handle_job_failure(
-    writer: &InnerPool,
+    db: &Database,
     job_id: &str,
     job_name: &str,
     attempt: u32,
@@ -379,16 +400,14 @@ async fn handle_job_failure(
     now_str: &str,
 ) {
     if attempt >= max_attempts {
-        let _ = sqlx::query(
-            "UPDATE jobs SET status = 'dead', \
-             failed_at = ?, error_message = ?, updated_at = ? WHERE id = ?",
-        )
-        .bind(now_str)
-        .bind(error_msg)
-        .bind(now_str)
-        .bind(job_id)
-        .execute(writer)
-        .await;
+        let _ = db
+            .conn()
+            .execute_raw(
+                "UPDATE jobs SET status = 'dead', \
+                 failed_at = ?1, error_message = ?2, updated_at = ?3 WHERE id = ?4",
+                libsql::params![now_str, error_msg, now_str, job_id],
+            )
+            .await;
 
         tracing::error!(
             job_id = %job_id,
@@ -401,18 +420,15 @@ async fn handle_job_failure(
         let delay_secs = std::cmp::min(5u64 * 2u64.pow(attempt - 1), 3600);
         let retry_at = (Utc::now() + chrono::Duration::seconds(delay_secs as i64)).to_rfc3339();
 
-        let _ = sqlx::query(
-            "UPDATE jobs SET status = 'pending', \
-             run_at = ?, started_at = NULL, \
-             failed_at = ?, error_message = ?, updated_at = ? WHERE id = ?",
-        )
-        .bind(&retry_at)
-        .bind(now_str)
-        .bind(error_msg)
-        .bind(now_str)
-        .bind(job_id)
-        .execute(writer)
-        .await;
+        let _ = db
+            .conn()
+            .execute_raw(
+                "UPDATE jobs SET status = 'pending', \
+                 run_at = ?1, started_at = NULL, \
+                 failed_at = ?2, error_message = ?3, updated_at = ?4 WHERE id = ?5",
+                libsql::params![retry_at.as_str(), now_str, error_msg, now_str, job_id],
+            )
+            .await;
 
         tracing::warn!(
             job_id = %job_id,
