@@ -181,7 +181,13 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
                 );
             }
             let idx = cursor_col_idx.unwrap();
-            cursor_values.push(row.get::<String>(idx).ok());
+            let cursor_val = match row.get_value(idx) {
+                Ok(libsql::Value::Text(s)) => Some(s),
+                Ok(libsql::Value::Integer(n)) => Some(n.to_string()),
+                Ok(libsql::Value::Real(f)) => Some(f.to_string()),
+                _ => None,
+            };
+            cursor_values.push(cursor_val);
             items.push(T::from_row(&row)?);
         }
 

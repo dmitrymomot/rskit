@@ -103,6 +103,7 @@ pub struct Filter {
 ///
 /// Produced by [`Filter::validate`]. Contains parameterized WHERE clauses
 /// and an optional ORDER BY clause. Used by [`SelectBuilder`](super::SelectBuilder).
+#[non_exhaustive]
 pub struct ValidatedFilter {
     /// WHERE clause fragments (joined with `AND`).
     pub clauses: Vec<String>,
@@ -197,7 +198,10 @@ impl Filter {
         let mut clauses = Vec::new();
         let mut params: Vec<libsql::Value> = Vec::new();
 
-        for cond in &self.conditions {
+        let mut conditions = self.conditions.clone();
+        conditions.sort_by(|a, b| a.column.cmp(&b.column));
+
+        for cond in &conditions {
             let Some(field_type) = schema.field_type(&cond.column) else {
                 continue; // Unknown column — silently ignore
             };
@@ -280,10 +284,13 @@ fn convert_value(val: &str, field_type: FieldType) -> Result<libsql::Value> {
                 .map_err(|_| Error::bad_request(format!("invalid float value: '{val}'")))?;
             Ok(libsql::Value::from(n))
         }
-        FieldType::Bool => {
-            let b = matches!(val, "true" | "1" | "yes");
-            Ok(libsql::Value::from(b as i32))
-        }
+        FieldType::Bool => match val {
+            "true" | "1" | "yes" => Ok(libsql::Value::from(1_i32)),
+            "false" | "0" | "no" => Ok(libsql::Value::from(0_i32)),
+            _ => Err(Error::bad_request(format!(
+                "invalid boolean value: '{val}' (expected true/false, 1/0, yes/no)"
+            ))),
+        },
     }
 }
 
