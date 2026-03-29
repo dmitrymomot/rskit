@@ -109,8 +109,10 @@ impl LocaleResolver for CookieResolver {
 /// Reads the `"locale"` key from the session's JSON data. Requires
 /// [`SessionLayer`](crate::session::SessionLayer) to be installed before this resolver
 /// runs in the middleware stack.
+#[cfg(feature = "session")]
 pub struct SessionResolver;
 
+#[cfg(feature = "session")]
 impl LocaleResolver for SessionResolver {
     fn resolve(&self, parts: &Parts) -> Option<String> {
         let state = parts
@@ -186,7 +188,7 @@ pub(crate) fn default_chain(
     config: &TemplateConfig,
     available_locales: &[String],
 ) -> Vec<Arc<dyn LocaleResolver>> {
-    vec![
+    let mut chain: Vec<Arc<dyn LocaleResolver>> = vec![
         Arc::new(QueryParamResolver::new(
             &config.locale_query_param,
             available_locales,
@@ -195,14 +197,16 @@ pub(crate) fn default_chain(
             &config.locale_cookie,
             available_locales,
         )),
-        Arc::new(SessionResolver),
-        Arc::new(AcceptLanguageResolver::new(
-            &available_locales
-                .iter()
-                .map(|s| s.as_str())
-                .collect::<Vec<_>>(),
-        )),
-    ]
+    ];
+    #[cfg(feature = "session")]
+    chain.push(Arc::new(SessionResolver));
+    chain.push(Arc::new(AcceptLanguageResolver::new(
+        &available_locales
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>(),
+    )));
+    chain
 }
 
 pub(crate) fn resolve_locale(chain: &[Arc<dyn LocaleResolver>], parts: &Parts) -> Option<String> {

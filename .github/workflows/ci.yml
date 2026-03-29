@@ -48,7 +48,6 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --features full --tests -- -D warnings
-      - run: cargo clippy --no-default-features --features ldb --tests -- -D warnings
 
   test:
     name: Test
@@ -81,20 +80,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        feature: [auth, templates, sse, email, storage, webhooks, dns, geolocation, sentry, test-helpers, ldb]
+        feature: [auth, templates, sse, email, storage, webhooks, dns, geolocation, sentry, test-helpers, session, job]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Check
-        if: matrix.feature != 'ldb'
         run: cargo check --features ${{ matrix.feature }}
-      - name: Check (ldb, no default features)
-        if: matrix.feature == 'ldb'
-        run: cargo check --no-default-features --features ldb
-      - name: Test (ldb)
-        if: matrix.feature == 'ldb'
-        run: cargo test --no-default-features --features ldb
 
   publish:
     name: Publish to crates.io
