@@ -1,4 +1,4 @@
-#![cfg(feature = "db")]
+#![cfg(feature = "job")]
 
 use modo::job::JobConfig;
 

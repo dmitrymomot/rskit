@@ -16,10 +16,10 @@ name = "modo"
 
 [features]
 default = ["db"]
-db = ["dep:sqlx"]
-full = ["db", "http-client", "templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns", "geolocation", "qrcode"]
-# Note: ldb is excluded from full — libsql and sqlx both bundle SQLite,
-# causing duplicate symbol linker errors when both are enabled.
+db = ["dep:libsql", "dep:urlencoding"]
+session = ["db"]
+job = ["db"]
+full = ["db", "session", "job", "http-client", "templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns", "geolocation", "qrcode"]
 sentry = ["dep:sentry", "dep:sentry-tracing"]
 templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
 sse = ["dep:futures-util"]
@@ -40,8 +40,7 @@ dns = ["dep:simple-dns"]
 dns-test = ["dns"]
 geolocation = ["dep:maxminddb"]
 qrcode = ["dep:fast_qr"]
-ldb = ["dep:libsql", "dep:urlencoding"]
-test-helpers = []
+test-helpers = ["db"]
 
 [dependencies]
 # Web
@@ -64,16 +63,7 @@ tower-http = { version = "0.6", features = [
 axum-extra = { version = "0.12", features = ["cookie-signed", "cookie-private", "multipart"] }
 cookie = { version = "0.18", features = ["signed"] }
 
-# Database
-sqlx = { version = "0.8", optional = true, features = [
-  "runtime-tokio",
-  "chrono",
-  "migrate",
-  "derive",
-  "sqlite",
-], default-features = false }
-
-# libsql (optional, gated by "ldb" feature)
+# Database (libsql, gated by "db" feature)
 libsql = { version = "0.9", optional = true, default-features = false, features = ["core"] }
 
 # Serialization
@@ -153,7 +143,7 @@ maxminddb = { version = "0.27", optional = true }
 # QR code (optional, gated by "qrcode" feature)
 fast_qr = { version = "0.13", optional = true, default-features = false }
 
-# URL encoding (optional, gated by "ldb" feature)
+# URL encoding (optional, gated by "db" feature)
 urlencoding = { version = "2", optional = true }
 
 [dev-dependencies]

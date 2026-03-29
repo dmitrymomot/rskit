@@ -1,152 +1,227 @@
-# modo::db
+# db
 
-SQLite database layer for the modo web framework. Provides connection pooling,
-migration support, and type-safe pool wrappers built on top of
-[sqlx](https://crates.io/crates/sqlx).
+Lightweight libsql (SQLite) database layer with typed row mapping,
+composable query building, filtering, and pagination.
 
-## Key Types
+```toml
+[dependencies]
+modo = { version = "...", features = ["db"] }
+```
 
-| Type / Trait      | Purpose                                                               |
-| ----------------- | --------------------------------------------------------------------- |
-| `SqliteConfig`    | Pool configuration (path, limits, PRAGMAs). Also aliased as `Config`. |
-| `Pool`            | Single pool for both reads and writes.                                |
-| `ReadPool`        | Read-only handle; does not implement `Writer`.                        |
-| `WritePool`       | Write-capable handle; defaults to one connection.                     |
-| `Reader`          | Trait providing `read_pool() -> &InnerPool`.                          |
-| `Writer`          | Trait providing `write_pool() -> &InnerPool`.                         |
-| `ManagedPool`     | Pool wrapper that implements `Task` for graceful shutdown.            |
-| `JournalMode`     | SQLite `PRAGMA journal_mode` enum.                                    |
-| `SynchronousMode` | SQLite `PRAGMA synchronous` enum.                                     |
-| `TempStore`       | SQLite `PRAGMA temp_store` enum.                                      |
-| `PoolOverrides`   | Per-pool PRAGMA overrides for read/write split configurations.        |
+## Key types
+
+| Type               | Purpose                                                                  |
+| ------------------ | ------------------------------------------------------------------------ |
+| `Database`         | Clone-able, Arc-wrapped single-connection handle                         |
+| `Config`           | YAML-deserializable database configuration with PRAGMA defaults          |
+| `connect`          | Opens a database, applies PRAGMAs, optionally runs migrations            |
+| `migrate`          | Runs `*.sql` migrations with checksum tracking                           |
+| `ManagedDatabase`  | Wrapper for graceful shutdown via `modo::run!`                           |
+| `ConnExt`          | Low-level `query_raw`/`execute_raw` trait for Connection and Transaction |
+| `ConnQueryExt`     | High-level `query_one`/`query_all`/`query_optional` helpers              |
+| `SelectBuilder`    | Composable query builder with filter + sort + pagination                 |
+| `FromRow`          | Trait for converting a `libsql::Row` into a Rust struct                  |
+| `FromValue`        | Trait for converting a `libsql::Value` into a concrete type              |
+| `ColumnMap`        | Column name-to-index lookup for name-based row access                    |
+| `Filter`           | Raw parsed filter from query string (axum extractor)                     |
+| `FilterSchema`     | Declares allowed filter and sort fields for an endpoint                  |
+| `ValidatedFilter`  | Schema-validated filter safe for SQL generation                          |
+| `FieldType`        | Column type enum for filter value validation                             |
+| `PageRequest`      | Offset pagination extractor (`?page=N&per_page=N`)                       |
+| `Page`             | Offset page response with total/has_next/has_prev                        |
+| `CursorRequest`    | Cursor pagination extractor (`?after=<cursor>&per_page=N`)               |
+| `CursorPage`       | Cursor page response with next_cursor/has_more                           |
+| `PaginationConfig` | Configurable defaults and limits for pagination extractors               |
+
+The `libsql` crate is also re-exported for direct access to low-level types
+like `libsql::params!`, `libsql::Value`, `libsql::Connection`, and
+`libsql::Transaction`.
 
 ## Usage
 
-### Single pool (simple apps)
+### Connecting
 
-```rust
-use modo::db::{self, SqliteConfig};
+```rust,ignore
+use modo::db;
 
-let config = SqliteConfig {
-    path: "data/app.db".to_string(),
+let config = db::Config::default();
+// Default: data/app.db, WAL mode, foreign keys on,
+// busy_timeout=5000ms, cache_size=16384KB, mmap_size=256MB
+
+let db = db::connect(&config).await?;
+```
+
+### Managed shutdown
+
+```rust,ignore
+use modo::db;
+
+let db = db::connect(&db::Config::default()).await?;
+let task = db::managed(db.clone());
+// Register `task` with modo::run!() for graceful shutdown
+```
+
+### Implementing FromRow
+
+```rust,ignore
+use modo::db::{FromRow, ColumnMap};
+use modo::Result;
+
+struct User {
+    id: String,
+    name: String,
+    age: Option<i32>,
+}
+
+impl FromRow for User {
+    fn from_row(row: &libsql::Row) -> Result<Self> {
+        let cols = ColumnMap::from_row(row);
+        Ok(Self {
+            id: cols.get(row, "id")?,
+            name: cols.get(row, "name")?,
+            age: cols.get(row, "age")?,
+        })
+    }
+}
+```
+
+### Querying with ConnQueryExt
+
+```rust,ignore
+use modo::db::ConnQueryExt;
+
+// Single row (returns Error::not_found if missing)
+let user: User = db.conn().query_one(
+    "SELECT id, name, age FROM users WHERE id = ?1",
+    libsql::params!["user_abc"],
+).await?;
+
+// Optional row
+let maybe_user: Option<User> = db.conn().query_optional(
+    "SELECT id, name, age FROM users WHERE id = ?1",
+    libsql::params!["user_abc"],
+).await?;
+
+// All matching rows
+let users: Vec<User> = db.conn().query_all(
+    "SELECT id, name, age FROM users ORDER BY name",
+    (),
+).await?;
+```
+
+### SelectBuilder with filtering and pagination
+
+```rust,ignore
+use modo::db::{ConnExt, Filter, FilterSchema, FieldType, PageRequest};
+
+// Define which fields can be filtered/sorted
+let schema = FilterSchema::new()
+    .field("name", FieldType::Text)
+    .field("age", FieldType::Int)
+    .field("active", FieldType::Bool)
+    .sort_fields(&["name", "age", "created_at"]);
+
+// In an axum handler:
+async fn list_users(
+    filter: Filter,
+    page_req: PageRequest,
+    db: axum::Extension<db::Database>,
+) -> modo::Result<axum::Json<db::Page<User>>> {
+    let schema = FilterSchema::new()
+        .field("name", FieldType::Text)
+        .field("age", FieldType::Int)
+        .sort_fields(&["name", "age"]);
+
+    let validated = filter.validate(&schema)?;
+
+    let page = db.conn()
+        .select("SELECT id, name, age FROM users")
+        .filter(validated)
+        .order_by("\"created_at\" DESC")
+        .page::<User>(page_req)
+        .await?;
+
+    Ok(axum::Json(page))
+}
+```
+
+### Cursor pagination
+
+```rust,ignore
+use modo::db::{ConnExt, CursorRequest};
+
+let cursor_page = db.conn()
+    .select("SELECT id, name FROM users")
+    .cursor_column("id")    // default is "id"
+    .cursor::<User>(cursor_req)
+    .await?;
+// cursor_page.next_cursor contains the cursor for the next page
+```
+
+### Migrations
+
+```rust,ignore
+use modo::db;
+
+// Migrations run automatically if Config::migrations is set:
+let config = db::Config {
+    migrations: Some("migrations".to_string()),
     ..Default::default()
 };
+let db = db::connect(&config).await?;
 
-let pool = db::connect(&config).await?;
-db::migrate("migrations", &pool).await?;
-
-// Pool derefs to sqlx::SqlitePool for direct query use.
-let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
-    .fetch_one(&*pool)
-    .await?;
+// Or run manually against a connection:
+db::migrate(db.conn(), "migrations").await?;
 ```
 
-### Read/write split
-
-```rust
-use modo::db::{self, SqliteConfig};
-
-let config = SqliteConfig {
-    path: "data/app.db".to_string(),
-    ..Default::default()
-};
-
-let (reader, writer) = db::connect_rw(&config).await?;
-db::migrate("migrations", &writer).await?;
-
-// writer: serialized writes (max_connections = 1 by default)
-sqlx::query("INSERT INTO users (id, name) VALUES (?, ?)")
-    .bind("01HX...")
-    .bind("Alice")
-    .execute(&*writer)
-    .await?;
-
-// reader: concurrent reads
-let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
-    .fetch_one(&*reader)
-    .await?;
-```
-
-### In-memory databases (tests)
-
-`connect_rw` rejects `:memory:` because each SQLite connection gets its own
-isolated database. Share a single pool via `ReadPool::new` / `WritePool::new`:
-
-```rust
-use modo::db::{self, ReadPool, SqliteConfig, WritePool};
-
-let config = SqliteConfig {
-    path: ":memory:".to_string(),
-    ..Default::default()
-};
-
-let pool = db::connect(&config).await?;
-let reader = ReadPool::new((*pool).clone());
-let writer = WritePool::new((*pool).clone());
-```
-
-### Graceful shutdown
-
-Wrap a pool with `managed` to participate in the `modo::run!` shutdown sequence:
-
-```rust
-use modo::db::{self, SqliteConfig};
-
-let pool = db::connect(&config).await?;
-let managed = db::managed(pool.clone());
-
-// pool is still usable after this; managed is consumed by the shutdown sequence
-modo::run!(server, managed).await
-```
-
-`managed` accepts `Pool`, `ReadPool`, or `WritePool`. For a read/write split,
-wrap each pool separately.
+Migration files are `*.sql` files in the directory, sorted by filename.
+Each migration is tracked in a `_migrations` table with a checksum.
+Modified files after application produce an error.
 
 ## Configuration
 
-`SqliteConfig` deserializes from YAML. All fields are optional — unset fields
-fall back to the defaults shown below.
-
 ```yaml
 database:
-    path: data/app.db # default: "data/app.db"
-    max_connections: 10 # default: 10
-    min_connections: 1 # default: 1
-    acquire_timeout_secs: 30 # default: 30
-    idle_timeout_secs: 600 # default: 600
-    max_lifetime_secs: 1800 # default: 1800
-    journal_mode: WAL # DELETE | TRUNCATE | PERSIST | MEMORY | WAL | OFF
-    synchronous: NORMAL # OFF | NORMAL | FULL | EXTRA
-    foreign_keys: true # default: true
-    busy_timeout: 5000 # milliseconds, default: 5000
-    cache_size: -2000 # KiB when negative; default: -2000 (2 MB)
-    # mmap_size: 268435456       # bytes, optional
-    # temp_store: MEMORY         # DEFAULT | FILE | MEMORY, optional
-    # wal_autocheckpoint: 1000   # pages, optional
-
-    # Fine-tune read pool (used by connect_rw)
-    reader:
-        busy_timeout: 1000
-        cache_size: -16000
-        mmap_size: 268435456
-
-    # Fine-tune write pool (used by connect_rw)
-    writer:
-        max_connections: 1
-        busy_timeout: 2000
-        cache_size: -16000
-        mmap_size: 268435456
+    path: "data/app.db"
+    migrations: "migrations" # optional — run on connect
+    busy_timeout: 5000 # ms
+    cache_size: 16384 # KB (PRAGMA cache_size = -N)
+    mmap_size: 268435456 # bytes (256 MB)
+    journal_mode: wal # wal | delete | truncate | memory | off
+    synchronous: normal # off | normal | full | extra
+    foreign_keys: true
+    temp_store: memory # default | file | memory
 ```
 
-## Error mapping
+## Filter query string syntax
 
-`sqlx::Error` is automatically converted to `modo::Error` with appropriate
-HTTP status codes:
+| Pattern                          | SQL                              |
+| -------------------------------- | -------------------------------- |
+| `?status=active`                 | `WHERE "status" = ?`             |
+| `?status=active&status=inactive` | `WHERE "status" IN (?, ?)`       |
+| `?age.gt=18`                     | `WHERE "age" > ?`                |
+| `?age.gte=18`                    | `WHERE "age" >= ?`               |
+| `?age.lt=65`                     | `WHERE "age" < ?`                |
+| `?age.lte=65`                    | `WHERE "age" <= ?`               |
+| `?name.like=%smith%`             | `WHERE "name" LIKE ?`            |
+| `?name.ne=admin`                 | `WHERE "name" != ?`              |
+| `?deleted_at.null=true`          | `WHERE "deleted_at" IS NULL`     |
+| `?deleted_at.null=false`         | `WHERE "deleted_at" IS NOT NULL` |
+| `?sort=name`                     | `ORDER BY "name" ASC`            |
+| `?sort=-name`                    | `ORDER BY "name" DESC`           |
 
-| sqlx error                  | HTTP status | message                 |
-| --------------------------- | ----------- | ----------------------- |
-| `RowNotFound`               | 404         | "record not found"      |
-| unique constraint violation | 409         | "record already exists" |
-| foreign key violation       | 400         | "foreign key violation" |
-| `PoolTimedOut`              | 500         | "database pool timeout" |
-| all others                  | 500         | "database error"        |
+Unknown fields and operators are silently ignored. Type mismatches
+return a 400 error.
+
+## Error handling
+
+`libsql::Error` is automatically converted to `modo::Error` with
+appropriate HTTP status codes:
+
+| SQLite error                  | HTTP status               |
+| ----------------------------- | ------------------------- |
+| Unique/primary key constraint | 409 Conflict              |
+| Foreign key violation         | 400 Bad Request           |
+| Query returned no rows        | 404 Not Found             |
+| Connection failure            | 500 Internal Server Error |
+| Other errors                  | 500 Internal Server Error |
