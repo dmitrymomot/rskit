@@ -12,11 +12,13 @@ Wraps [`tracing_subscriber`](https://docs.rs/tracing-subscriber) with a simple Y
 
 ## Key Types
 
-| Type           | Description                                                                                         |
+| Type / Item    | Description                                                                                         |
 | -------------- | --------------------------------------------------------------------------------------------------- |
 | `Config`       | Log level and output format; optionally embeds `SentryConfig` when the `sentry` feature is enabled. |
-| `TracingGuard` | RAII guard that keeps the subscriber and Sentry client alive. Implements `Task` and `Default`.      |
-| `SentryConfig` | Sentry DSN, environment tag, and sampling rates. Only present with the `sentry` feature.            |
+| `init`         | Initialises the global tracing subscriber and optional Sentry client; returns `TracingGuard`.        |
+| `TracingGuard` | RAII guard that keeps the subscriber and Sentry client alive. Implements `Task` and `Default`.       |
+| `SentryConfig` | Sentry DSN, environment tag, and sampling rates. Only present with the `sentry` feature.             |
+| `info!` etc.   | Re-exports of `tracing::{debug, error, info, trace, warn}` for convenience.                          |
 
 ## Usage
 

@@ -3,7 +3,8 @@
 //! This module configures [`tracing_subscriber`] at application startup.
 //! Call [`init`] once from `main` — typically before starting the HTTP
 //! server — and hold the returned [`TracingGuard`] for the lifetime of
-//! the process.
+//! the process. The standard tracing macros ([`info!`], [`debug!`],
+//! [`warn!`], [`error!`], [`trace!`]) are re-exported for convenience.
 //!
 //! ## Log format
 //!

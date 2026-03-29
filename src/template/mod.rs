@@ -13,17 +13,18 @@
 //!   handler values override middleware values on key conflicts.
 //! - [`HxRequest`] — infallible extractor that detects whether the request carries the
 //!   `HX-Request: true` header.
+//! - [`context`] — re-export of [`minijinja::context!`] for building template data in
+//!   handlers.
 //! - Locale resolution chain: [`LocaleResolver`] trait plus built-in resolvers
-//!   ([`QueryParamResolver`], [`CookieResolver`], [`SessionResolver`],
-//!   [`AcceptLanguageResolver`]).
+//!   ([`QueryParamResolver`], [`CookieResolver`], [`AcceptLanguageResolver`], and
+//!   `SessionResolver` when the **`session`** feature is also enabled).
 //!
 //! Requires the **`templates`** feature flag.
 //!
 //! # Quick start
 //!
 //! ```rust,no_run
-//! use std::sync::Arc;
-//! use modo::template::{Engine, EngineBuilder, TemplateConfig, TemplateContextLayer};
+//! use modo::template::{Engine, TemplateConfig, TemplateContextLayer};
 //!
 //! // Build the engine once at startup
 //! let engine = Engine::builder()
