@@ -18,6 +18,7 @@ pub struct SelectBuilder<'a, C: ConnExt> {
     filter: Option<ValidatedFilter>,
     order_by: Option<String>,
     cursor_column: String,
+    cursor_desc: bool,
 }
 
 impl<'a, C: ConnExt> SelectBuilder<'a, C> {
@@ -28,6 +29,7 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
             filter: None,
             order_by: None,
             cursor_column: "id".to_string(),
+            cursor_desc: true,
         }
     }
 
@@ -51,6 +53,16 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
     /// ascending and use it for the `WHERE col > ?` condition.
     pub fn cursor_column(mut self, col: &str) -> Self {
         self.cursor_column = col.to_string();
+        self
+    }
+
+    /// Use ascending (oldest-first) cursor ordering instead of the default DESC.
+    ///
+    /// By default cursor pagination orders descending (newest-first), which is the
+    /// common pattern for feeds and timelines. Call this to switch to ascending
+    /// order when you need chronological (oldest-first) traversal.
+    pub fn oldest_first(mut self) -> Self {
+        self.cursor_desc = false;
         self
     }
 
@@ -127,9 +139,9 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
 
     /// Execute with cursor pagination. Returns [`CursorPage<T>`].
     ///
-    /// Uses the configured cursor column (default `"id"`) for ordering and
-    /// the `WHERE col > ?` condition. Set a different column with
-    /// [`cursor_column`](Self::cursor_column).
+    /// By default orders descending (newest-first). Use
+    /// [`oldest_first`](Self::oldest_first) to switch to ascending order.
+    /// The cursor column can be changed with [`cursor_column`](Self::cursor_column).
     pub async fn cursor<T: FromRow + serde::Serialize>(
         self,
         req: CursorRequest,
@@ -137,13 +149,19 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
         let (where_sql, mut params) = self.build_where();
         let col = &self.cursor_column;
 
+        let (op, dir) = if self.cursor_desc {
+            ("<", "DESC")
+        } else {
+            (">", "ASC")
+        };
+
         // Add cursor condition
         let cursor_condition = if let Some(ref after) = req.after {
             params.push(libsql::Value::from(after.clone()));
             if where_sql.is_empty() {
-                format!(" WHERE \"{col}\" > ?")
+                format!(" WHERE \"{col}\" {op} ?")
             } else {
-                format!(" AND \"{col}\" > ?")
+                format!(" AND \"{col}\" {op} ?")
             }
         } else {
             String::new()
@@ -152,7 +170,7 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
         // Fetch one extra to determine has_more
         let limit = req.per_page + 1;
         let sql = format!(
-            "{}{}{} ORDER BY \"{col}\" ASC LIMIT ?",
+            "{}{}{} ORDER BY \"{col}\" {dir} LIMIT ?",
             self.base_sql, where_sql, cursor_condition
         );
         params.push(libsql::Value::from(limit));

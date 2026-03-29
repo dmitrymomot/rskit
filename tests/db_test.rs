@@ -821,6 +821,7 @@ async fn select_cursor_custom_column() {
     let page: db::CursorPage<DocRow> = conn
         .select("SELECT ulid, title FROM docs")
         .cursor_column("ulid")
+        .oldest_first()
         .cursor(req)
         .await
         .unwrap();
@@ -844,6 +845,7 @@ async fn select_cursor_custom_column() {
     let page2: db::CursorPage<DocRow> = conn
         .select("SELECT ulid, title FROM docs")
         .cursor_column("ulid")
+        .oldest_first()
         .cursor(req)
         .await
         .unwrap();
@@ -886,6 +888,52 @@ async fn select_cursor_missing_column_errors() {
         .await;
 
     assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn cursor_newest_first() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    // Default is newest-first (DESC) — should return highest IDs first
+    let page: db::CursorPage<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .cursor(db::CursorRequest { after: None, per_page: 5 })
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 5);
+    assert!(page.has_more);
+    // First item should have the highest ID (newest) — id_0049 > id_0000
+    assert!(
+        page.items[0].id > page.items[4].id,
+        "newest-first: first ID should be greater than last, got {} and {}",
+        page.items[0].id,
+        page.items[4].id
+    );
+}
+
+#[tokio::test]
+async fn cursor_oldest_first() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    let page: db::CursorPage<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .oldest_first()
+        .cursor(db::CursorRequest { after: None, per_page: 5 })
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 5);
+    assert!(page.has_more);
+    // First item should have the lowest ID (oldest) — id_0000 < id_0049
+    assert!(
+        page.items[0].id < page.items[4].id,
+        "oldest-first: first ID should be less than last, got {} and {}",
+        page.items[0].id,
+        page.items[4].id
+    );
 }
 
 // -- SelectBuilder fetch_one / fetch_optional tests --
