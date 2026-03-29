@@ -160,15 +160,19 @@ impl Filter {
             match &cond.operator {
                 Operator::IsNull(is_null) => {
                     if *is_null {
-                        clauses.push(format!("{} IS NULL", cond.column));
+                        clauses.push(format!("\"{}\" IS NULL", cond.column));
                     } else {
-                        clauses.push(format!("{} IS NOT NULL", cond.column));
+                        clauses.push(format!("\"{}\" IS NOT NULL", cond.column));
                     }
                 }
                 Operator::In => {
                     let placeholders: Vec<String> =
                         cond.values.iter().map(|_| "?".to_string()).collect();
-                    clauses.push(format!("{} IN ({})", cond.column, placeholders.join(", ")));
+                    clauses.push(format!(
+                        "\"{}\" IN ({})",
+                        cond.column,
+                        placeholders.join(", ")
+                    ));
                     for val in &cond.values {
                         params.push(convert_value(val, field_type)?);
                     }
@@ -184,7 +188,7 @@ impl Filter {
                         Operator::Like => "LIKE",
                         _ => unreachable!(),
                     };
-                    clauses.push(format!("{} {} ?", cond.column, sql_op));
+                    clauses.push(format!("\"{}\" {} ?", cond.column, sql_op));
                     let val = cond.values.first().ok_or_else(|| {
                         Error::bad_request(format!("missing value for filter '{}'", cond.column))
                     })?;
@@ -202,7 +206,7 @@ impl Filter {
             };
             if schema.is_sort_field(field) {
                 let direction = if desc { "DESC" } else { "ASC" };
-                Some(format!("{field} {direction}"))
+                Some(format!("\"{field}\" {direction}"))
             } else {
                 None // Unknown sort field — ignore
             }

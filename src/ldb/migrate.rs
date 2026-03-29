@@ -98,7 +98,9 @@ pub async fn migrate(conn: &libsql::Connection, dir: &str) -> Result<()> {
         }
         .await
         {
-            let _ = conn.execute("ROLLBACK", ()).await;
+            if let Err(rb_err) = conn.execute("ROLLBACK", ()).await {
+                tracing::error!(error = %rb_err, "rollback failed after migration error");
+            }
             return Err(e);
         }
     }

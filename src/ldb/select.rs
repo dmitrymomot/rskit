@@ -128,9 +128,9 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
         let cursor_condition = if let Some(ref after) = req.after {
             params.push(libsql::Value::from(after.clone()));
             if where_sql.is_empty() {
-                format!(" WHERE {col} > ?")
+                format!(" WHERE \"{col}\" > ?")
             } else {
-                format!(" AND {col} > ?")
+                format!(" AND \"{col}\" > ?")
             }
         } else {
             String::new()
@@ -139,7 +139,7 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
         // Fetch one extra to determine has_more
         let limit = req.per_page + 1;
         let sql = format!(
-            "{}{}{} ORDER BY {col} ASC LIMIT ?",
+            "{}{}{} ORDER BY \"{col}\" ASC LIMIT ?",
             self.base_sql, where_sql, cursor_condition
         );
         params.push(libsql::Value::from(limit));
