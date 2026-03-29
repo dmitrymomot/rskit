@@ -114,17 +114,15 @@ jobs:
         id: version
         run: |
           LOCAL=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          EXISTS=$(curl -sf "https://crates.io/api/v1/crates/modo-rs/versions" \
-            | python3 -c "
-          import sys, json
-          versions = [v['num'] for v in json.load(sys.stdin)['versions']]
-          print('true' if '$LOCAL' in versions else 'false')
-          " 2>/dev/null) || EXISTS="false"
-          if [ "$EXISTS" = "true" ]; then
+          echo "Local version: $LOCAL"
+          HTTP_CODE=$(curl -s -o /tmp/crate.json -w '%{http_code}' \
+            -H 'User-Agent: modo-ci (github.com/dmitrymomot/modo)' \
+            "https://crates.io/api/v1/crates/modo-rs/$LOCAL")
+          if [ "$HTTP_CODE" = "200" ]; then
             echo "Version $LOCAL already published, skipping."
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Version $LOCAL not found on crates.io, will publish."
+            echo "Version $LOCAL not found on crates.io (HTTP $HTTP_CODE), will publish."
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -137,4 +135,13 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish
+        run: |
+          cargo publish 2>&1 | tee /tmp/publish.log
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            if grep -q 'already exists' /tmp/publish.log; then
+              echo "Version already exists on crates.io, skipping."
+              exit 0
+            fi
+            exit $status
+          fi
