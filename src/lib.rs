@@ -105,6 +105,9 @@ pub use tenant::{
 };
 pub use validate::{Validate, ValidationError, Validator};
 
+#[cfg(all(feature = "db", feature = "dns"))]
+pub use tenant::domain::{ClaimStatus, DomainClaim, DomainService, TenantMatch};
+
 #[cfg(feature = "auth")]
 pub use auth::oauth::{
     AuthorizationRequest, CallbackParams, GitHub, Google, OAuthConfig, OAuthProvider,

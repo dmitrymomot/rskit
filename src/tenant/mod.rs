@@ -23,6 +23,9 @@
 //! | [`path_prefix`] | [`PathPrefixStrategy`] | `TenantId::Slug` (rewrites URI) |
 //! | [`path_param`] | [`PathParamStrategy`] | `TenantId::Slug` (requires `route_layer`) |
 
+#[cfg(all(feature = "db", feature = "dns"))]
+pub mod domain;
+
 mod extractor;
 mod id;
 mod middleware;
