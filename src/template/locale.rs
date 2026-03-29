@@ -301,6 +301,7 @@ mod tests {
         assert_eq!(resolver.resolve(&parts), Some("en".into()));
     }
 
+    #[cfg(feature = "session")]
     #[test]
     fn session_resolver_returns_none_without_session() {
         let resolver = SessionResolver;
@@ -374,6 +375,7 @@ mod tests {
         let config = TemplateConfig::default();
         let available = vec!["en".into(), "uk".into()];
         let chain = default_chain(&config, &available);
-        assert_eq!(chain.len(), 4);
+        let expected = if cfg!(feature = "session") { 4 } else { 3 };
+        assert_eq!(chain.len(), expected);
     }
 }

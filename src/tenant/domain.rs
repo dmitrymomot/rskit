@@ -535,20 +535,21 @@ impl DomainService {
 
     /// Check that the domain claim exists and is verified.
     async fn require_verified(&self, id: &str) -> Result<()> {
-        let row: DomainRow = self
+        let status: String = self
             .inner
             .db
             .conn()
-            .query_one(
-                "SELECT id, tenant_id, domain, verification_token, status, \
-             use_for_email, use_for_routing, created_at, verified_at \
-             FROM tenant_domains WHERE id = ?1",
+            .query_one_map(
+                "SELECT status FROM tenant_domains WHERE id = ?1",
                 db::libsql::params![id],
+                |row| {
+                    let val = row.get_value(0).map_err(Error::from)?;
+                    db::FromValue::from_value(val)
+                },
             )
             .await?;
 
-        let claim = row.into_claim()?;
-        if claim.status != ClaimStatus::Verified {
+        if status != "verified" {
             return Err(Error::bad_request(
                 "domain must be verified before enabling features",
             ));
