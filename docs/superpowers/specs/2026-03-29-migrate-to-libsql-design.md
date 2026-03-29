@@ -95,7 +95,10 @@ DomainService methods:
 - `enable_routing(id)` / `disable_routing(id)` — toggle custom domain routing capability
 - `lookup_email_domain(email)` — find tenant by email domain (checks `use_for_email`)
 - `lookup_routing_domain(domain)` — find tenant by custom domain (checks `use_for_routing`)
+- `resolve_tenant(domain)` — resolve custom domain to tenant_id (for use as `TenantResolver` backend)
 - `list(tenant_id)` — list all claims for tenant
+
+Tenant resolution integration: `DomainService` provides `resolve_tenant(domain) -> Result<Option<String>>` which returns the `tenant_id` for a verified domain with `use_for_routing = true`. This is the lookup backend that a `TenantResolver` implementation uses when handling `TenantId::Domain` from the domain/subdomain_or_domain strategies.
 
 Port all sqlx queries to `ConnQueryExt`. Replace `sqlx::FromRow` with ldb's `FromRow`. No dedicated feature flag — `DomainService` is opt-in via service registration; the tenant module itself is always available, and `DomainService` requires `db` at the call site.
 
