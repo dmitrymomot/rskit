@@ -13,8 +13,9 @@
 //! modo = "0.1"
 //! ```
 //!
-//! Enable optional modules via feature flags: `templates`, `auth`, `sse`,
-//! `email`, `storage`, `webhooks`, `dns`, `geolocation`, `sentry`.
+//! Enable optional modules via feature flags: `http-client`, `templates`,
+//! `auth`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`,
+//! `qrcode`, `sentry`.
 //!
 //! Or enable everything:
 //!
