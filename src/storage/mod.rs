@@ -31,16 +31,14 @@
 //! # use bytes::Bytes;
 //!
 //! # fn example() -> modo::Result<()> {
-//! let config = BucketConfig {
-//!     bucket: "my-bucket".into(),
-//!     endpoint: "https://s3.amazonaws.com".into(),
-//!     access_key: "AKIAIOSFODNN7EXAMPLE".into(),
-//!     secret_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into(),
-//!     region: Some("us-east-1".into()),
-//!     public_url: Some("https://cdn.example.com".into()),
-//!     max_file_size: Some("10mb".into()),
-//!     ..Default::default()
-//! };
+//! let mut config = BucketConfig::default();
+//! config.bucket = "my-bucket".into();
+//! config.endpoint = "https://s3.amazonaws.com".into();
+//! config.access_key = "AKIAIOSFODNN7EXAMPLE".into();
+//! config.secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into();
+//! config.region = Some("us-east-1".into());
+//! config.public_url = Some("https://cdn.example.com".into());
+//! config.max_file_size = Some("10mb".into());
 //! let storage = Storage::new(&config)?;
 //! # Ok(())
 //! # }
