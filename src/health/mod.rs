@@ -1,6 +1,16 @@
 //! Health check endpoints for liveness and readiness probes.
 //!
-//! Provides two endpoints:
+//! # Provides
+//!
+//! - [`router()`] — returns a `Router<AppState>` with `/_live` and `/_ready` mounted.
+//! - [`HealthCheck`] — trait for types that can verify their own readiness.
+//! - [`HealthChecks`] — fluent builder that collects named checks; registered in
+//!   the service registry.
+//!
+//! When the `db` feature is enabled, [`Database`](crate::db::Database) implements
+//! [`HealthCheck`] automatically.
+//!
+//! # Endpoints
 //!
 //! - `/_live` — always returns 200 OK (liveness probe)
 //! - `/_ready` — runs registered health checks concurrently, returns 200 if

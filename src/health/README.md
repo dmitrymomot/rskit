@@ -15,7 +15,7 @@ Registers two routes on an axum `Router`:
 | `HealthChecks` | Fluent builder that collects named checks; registered in the service registry |
 | `router()` | Returns a `Router<AppState>` with `/_live` and `/_ready` mounted |
 
-`db::Database` implements `HealthCheck` out of the box — it verifies health by executing a simple query on the connection.
+When the `db` feature is enabled, `db::Database` implements `HealthCheck` out of the box — it verifies health by executing a simple query on the connection.
 
 ## Usage
 
