@@ -1,4 +1,4 @@
-# validate
+# modo::validate
 
 Input validation for request data in the `modo` web framework.
 
