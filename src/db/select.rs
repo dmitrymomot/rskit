@@ -198,7 +198,7 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
                         })?,
                 );
             }
-            let idx = cursor_col_idx.unwrap();
+            let idx = cursor_col_idx.expect("cursor column index was set on first row");
             let cursor_val = match row.get_value(idx) {
                 Ok(libsql::Value::Text(s)) => Some(s),
                 Ok(libsql::Value::Integer(n)) => Some(n.to_string()),

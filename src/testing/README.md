@@ -54,6 +54,7 @@ async fn test_service() {
 
 ```rust
 use modo::testing::TestDb;
+use modo::db::{ConnExt, Database};
 
 #[tokio::test]
 async fn test_db() {
@@ -62,8 +63,13 @@ async fn test_db() {
         .exec("CREATE TABLE items (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
         .await;
 
-    sqlx::query("INSERT INTO items (id, name) VALUES ('1', 'Alice')")
-        .execute(&*db.pool())
+    let database: Database = db.db();
+    database
+        .conn()
+        .execute_raw(
+            "INSERT INTO items (id, name) VALUES ('1', 'Alice')",
+            (),
+        )
         .await
         .unwrap();
 }

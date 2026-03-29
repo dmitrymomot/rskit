@@ -276,6 +276,31 @@ impl DomainService {
     /// record at `_modo-verify.{domain}` with the returned token value.
     pub async fn register(&self, tenant_id: &str, domain: &str) -> Result<DomainClaim> {
         let domain = validate_domain(domain)?;
+
+        // Return an existing pending claim for the same tenant+domain instead
+        // of creating a duplicate row.
+        let existing: Option<DomainRow> = self
+            .inner
+            .db
+            .conn()
+            .query_optional(
+                "SELECT id, tenant_id, domain, verification_token, status, \
+                 use_for_email, use_for_routing, created_at, verified_at \
+                 FROM tenant_domains \
+                 WHERE tenant_id = ?1 AND domain = ?2 AND status = 'pending' \
+                 LIMIT 1",
+                libsql::params![tenant_id, domain.as_str()],
+            )
+            .await?;
+
+        if let Some(row) = existing {
+            let claim = row.into_claim_with_expiry()?;
+            if claim.status == ClaimStatus::Pending {
+                return Ok(claim);
+            }
+            // Expired — fall through and create a fresh claim.
+        }
+
         let id = id::ulid();
         let token = generate_verification_token();
         let now = Utc::now().to_rfc3339();
@@ -286,7 +311,7 @@ impl DomainService {
             .execute_raw(
                 "INSERT INTO tenant_domains (id, tenant_id, domain, verification_token, status, created_at) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                db::libsql::params![id.as_str(), tenant_id, domain.as_str(), token.as_str(), "pending", now.as_str()],
+                libsql::params![id.as_str(), tenant_id, domain.as_str(), token.as_str(), "pending", now.as_str()],
             )
             .await
             .map_err(Error::from)?;
@@ -319,7 +344,7 @@ impl DomainService {
                 "SELECT id, tenant_id, domain, verification_token, status, \
              use_for_email, use_for_routing, created_at, verified_at \
              FROM tenant_domains WHERE id = ?1",
-                db::libsql::params![id],
+                libsql::params![id],
             )
             .await?;
 
@@ -336,7 +361,7 @@ impl DomainService {
                 .conn()
                 .execute_raw(
                     "UPDATE tenant_domains SET status = ?1 WHERE id = ?2",
-                    db::libsql::params!["failed", id],
+                    libsql::params!["failed", id],
                 )
                 .await
                 .map_err(Error::from)?;
@@ -365,7 +390,7 @@ impl DomainService {
             .conn()
             .execute_raw(
                 "UPDATE tenant_domains SET status = ?1, verified_at = ?2 WHERE id = ?3",
-                db::libsql::params!["verified", now.as_str(), id],
+                libsql::params!["verified", now.as_str(), id],
             )
             .await
             .map_err(Error::from)?;
@@ -384,7 +409,7 @@ impl DomainService {
             .conn()
             .execute_raw(
                 "DELETE FROM tenant_domains WHERE id = ?1",
-                db::libsql::params![id],
+                libsql::params![id],
             )
             .await
             .map_err(Error::from)?;
@@ -401,7 +426,7 @@ impl DomainService {
             .conn()
             .execute_raw(
                 "UPDATE tenant_domains SET use_for_email = 1 WHERE id = ?1",
-                db::libsql::params![id],
+                libsql::params![id],
             )
             .await
             .map_err(Error::from)?;
@@ -415,7 +440,7 @@ impl DomainService {
             .conn()
             .execute_raw(
                 "UPDATE tenant_domains SET use_for_email = 0 WHERE id = ?1",
-                db::libsql::params![id],
+                libsql::params![id],
             )
             .await
             .map_err(Error::from)?;
@@ -432,7 +457,7 @@ impl DomainService {
             .conn()
             .execute_raw(
                 "UPDATE tenant_domains SET use_for_routing = 1 WHERE id = ?1",
-                db::libsql::params![id],
+                libsql::params![id],
             )
             .await
             .map_err(Error::from)?;
@@ -446,7 +471,7 @@ impl DomainService {
             .conn()
             .execute_raw(
                 "UPDATE tenant_domains SET use_for_routing = 0 WHERE id = ?1",
-                db::libsql::params![id],
+                libsql::params![id],
             )
             .await
             .map_err(Error::from)?;
@@ -468,7 +493,7 @@ impl DomainService {
                 "SELECT tenant_id, domain FROM tenant_domains \
                  WHERE domain = ?1 AND status = 'verified' AND use_for_email = 1 \
                  LIMIT 1",
-                db::libsql::params![domain.as_str()],
+                libsql::params![domain.as_str()],
             )
             .await?;
         Ok(row.map(|r| TenantMatch {
@@ -488,7 +513,7 @@ impl DomainService {
                 "SELECT tenant_id, domain FROM tenant_domains \
                  WHERE domain = ?1 AND status = 'verified' AND use_for_routing = 1 \
                  LIMIT 1",
-                db::libsql::params![domain.as_str()],
+                libsql::params![domain.as_str()],
             )
             .await?;
         Ok(row.map(|r| TenantMatch {
@@ -522,7 +547,7 @@ impl DomainService {
                  use_for_email, use_for_routing, created_at, verified_at \
                  FROM tenant_domains WHERE tenant_id = ?1 \
                  ORDER BY created_at DESC",
-                db::libsql::params![tenant_id],
+                libsql::params![tenant_id],
             )
             .await?;
 
@@ -541,7 +566,7 @@ impl DomainService {
             .conn()
             .query_one_map(
                 "SELECT status FROM tenant_domains WHERE id = ?1",
-                db::libsql::params![id],
+                libsql::params![id],
                 |row| {
                     let val = row.get_value(0).map_err(Error::from)?;
                     db::FromValue::from_value(val)

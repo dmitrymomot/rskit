@@ -9,7 +9,7 @@
 
 One crate. Zero proc macros. Everything you need to ship a real app — sessions, auth, background jobs, email, storage — without stitching together 15 crates and writing the glue yourself.
 
-Built on [axum 0.8](https://github.com/tokio-rs/axum), so you keep full access to the axum/tower ecosystem. Handlers are plain `async fn`. Routes use axum's `Router`. Database queries use raw sqlx. No magic, no code generation, no framework lock-in.
+Built on [axum 0.8](https://github.com/tokio-rs/axum), so you keep full access to the axum/tower ecosystem. Handlers are plain `async fn`. Routes use axum's `Router`. Database queries use libsql directly. No magic, no code generation, no framework lock-in.
 
 ## Why modo
 
@@ -62,7 +62,7 @@ let config: Config = modo::config::load("config/")?;
 
 ### Database without an ORM
 
-SQLite via sqlx. `Pool`, `ReadPool`, `WritePool` newtypes enforce read/write separation at the type level. Upgrade from one pool to split pools without changing handler signatures.
+SQLite via libsql. A single `Database` handle wraps an `Arc`-ed connection — clone-friendly, no pool complexity.
 
 ```rust
 let pool = db::connect(&config.database).await?;
@@ -186,7 +186,7 @@ modo-rs = { version = "0.1", features = ["auth", "templates"] }
 
 ## Re-exports
 
-modo re-exports `axum`, `serde`, `sqlx`, and `tokio` so you don't need to version-match them yourself.
+modo re-exports `axum`, `serde`, `serde_json`, and `tokio` so you don't need to version-match them yourself.
 
 ## Claude Code Plugin
 

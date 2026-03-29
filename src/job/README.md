@@ -85,21 +85,21 @@ async fn start_worker(config: &JobConfig, registry: &Registry) {
 }
 ```
 
-`Worker::builder` panics if a `WritePool` is not registered in the registry.
+`Worker::builder` panics if a `Database` is not registered in the registry.
 
 ### Enqueueing jobs
 
 ```rust
 use modo::job::{Enqueuer, EnqueueOptions, EnqueueResult};
-use modo::db::WritePool;
+use modo::db::Database;
 use serde::Serialize;
 use chrono::Utc;
 
 #[derive(Serialize)]
 struct WelcomePayload { user_id: String }
 
-async fn enqueue_jobs(pool: &WritePool) {
-    let enqueuer = Enqueuer::new(pool);
+async fn enqueue_jobs(db: Database) {
+    let enqueuer = Enqueuer::new(db);
 
     // Immediate execution on default queue
     let id = enqueuer.enqueue("send_welcome_email", &WelcomePayload {

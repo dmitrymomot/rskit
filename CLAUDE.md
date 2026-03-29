@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-modo — Rust web framework. Single crate, zero proc macros, plain `async fn` handlers, axum Router, raw sqlx, explicit wiring. Rust 2024 edition, MSRV 1.92.
+modo — Rust web framework. Single crate, zero proc macros, plain `async fn` handlers, axum Router, libsql (SQLite), explicit wiring. Rust 2024 edition, MSRV 1.92.
 
 ## Commands
 
@@ -34,7 +34,7 @@ modo — Rust web framework. Single crate, zero proc macros, plain `async fn` ha
 - `std::sync::RwLock` (not tokio) for sync-only state — never hold across `.await`
 - Tracing fields: snake_case (`user_id`, `session_id`)
 - Config: YAML with `${VAR}` / `${VAR:default}` env substitution; `trusted_proxies` is top-level
-- Database: `Pool`/`ReadPool`/`WritePool` newtypes; `connect()` forces `max_connections=1` for `:memory:`; `connect_rw()` rejects `:memory:` — for in-memory tests share one `Pool` via `ReadPool::new()`/`WritePool::new()`
+- Database: single `Database` handle (`Arc<Connection>`); `connect()` opens one connection with PRAGMA defaults; `ConnExt` for raw queries, `ConnQueryExt` for typed helpers; `libsql::params!` for bind parameters
 - No TODOs, no workarounds — every declared field and API must be fully implemented
 
 ## Feature Flags
