@@ -173,7 +173,10 @@ pub struct Worker {
 impl Worker {
     /// Create a [`WorkerBuilder`] from config and service registry.
     ///
-    /// Panics if a [`Database`](crate::db::Database) is not registered in `registry`.
+    /// # Panics
+    ///
+    /// Panics if a [`Database`](crate::db::Database) is not registered in
+    /// `registry`.
     pub fn builder(config: &JobConfig, registry: &Registry) -> WorkerBuilder {
         let snapshot = registry.snapshot();
         let db = snapshot

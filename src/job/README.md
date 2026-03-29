@@ -27,7 +27,8 @@ End-applications own the `jobs` table migration — this module ships none.
 | `Meta`           | Handler argument — job ID, name, queue, attempt count, deadline              |
 | `Status`         | Job lifecycle status: `Pending`, `Running`, `Completed`, `Dead`, `Cancelled` |
 | `JobHandler`     | Trait blanket-implemented for plain `async fn`s with 0–12 args               |
-| `FromJobContext` | Extension trait for custom handler argument types                            |
+| `JobContext`     | Runtime context passed to handlers; carries payload, metadata, and registry  |
+| `FromJobContext` | Extraction trait for custom handler argument types                           |
 
 ## Configuration (YAML)
 
@@ -45,9 +46,15 @@ job:
     cleanup:
         interval_secs: 3600
         retention_secs: 259200 # 72 hours
+    # Optional: use a separate SQLite database for the job queue
+    # database:
+    #     path: data/jobs.db
 ```
 
 Set `cleanup: ~` (null) to disable automatic cleanup of terminal jobs.
+
+Set `database` to use a separate SQLite file for job-queue writes, keeping them
+from contending with application queries.
 
 ## Usage
 

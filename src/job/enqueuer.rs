@@ -54,6 +54,11 @@ impl Enqueuer {
     /// Enqueue a job on the default queue for immediate execution.
     ///
     /// Returns the new job's ID on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload cannot be serialized to JSON or if the
+    /// database insert fails.
     pub async fn enqueue<T: Serialize>(&self, name: &str, payload: &T) -> Result<String> {
         self.enqueue_with(name, payload, EnqueueOptions::default())
             .await
@@ -62,6 +67,11 @@ impl Enqueuer {
     /// Enqueue a job on the default queue to run at a specific time.
     ///
     /// Returns the new job's ID on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload cannot be serialized to JSON or if the
+    /// database insert fails.
     pub async fn enqueue_at<T: Serialize>(
         &self,
         name: &str,
@@ -82,6 +92,11 @@ impl Enqueuer {
     /// Enqueue a job with full control over queue and schedule.
     ///
     /// Returns the new job's ID on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload cannot be serialized to JSON or if the
+    /// database insert fails.
     pub async fn enqueue_with<T: Serialize>(
         &self,
         name: &str,
@@ -113,6 +128,12 @@ impl Enqueuer {
     /// payload already exists (idempotent enqueue on the default queue).
     ///
     /// The uniqueness key is a SHA-256 hash of `name + "\0" + payload_json`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload cannot be serialized to JSON or if a
+    /// database operation fails (other than the expected unique-constraint
+    /// violation).
     pub async fn enqueue_unique<T: Serialize>(
         &self,
         name: &str,
@@ -126,6 +147,12 @@ impl Enqueuer {
     /// payload already exists, with full queue and schedule options.
     ///
     /// The uniqueness key is a SHA-256 hash of `name + "\0" + payload_json`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload cannot be serialized to JSON or if a
+    /// database operation fails (other than the expected unique-constraint
+    /// violation).
     pub async fn enqueue_unique_with<T: Serialize>(
         &self,
         name: &str,
@@ -178,6 +205,10 @@ impl Enqueuer {
     ///
     /// Returns `true` if the job was found and cancelled, `false` if it was
     /// not found or was already past the `pending` state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails.
     pub async fn cancel(&self, id: &str) -> Result<bool> {
         let now_str = Utc::now().to_rfc3339();
         let affected = self

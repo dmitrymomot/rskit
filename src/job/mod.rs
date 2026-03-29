@@ -9,6 +9,7 @@
 //! - Idempotent enqueueing via [`Enqueuer::enqueue_unique`]
 //! - Stale job reaping (jobs stuck in `running` beyond a configurable threshold)
 //! - Periodic cleanup of terminal jobs
+//! - Optional separate SQLite database for job-queue isolation
 //!
 //! # Database schema
 //!
