@@ -23,6 +23,19 @@ pub fn encode(bytes: &[u8]) -> String {
 }
 
 /// SHA-256 hash of `data`, returned as a 64-character lowercase hex string.
+///
+/// # Examples
+///
+/// ```rust
+/// use modo::encoding::hex;
+///
+/// let digest = hex::sha256(b"hello world");
+/// assert_eq!(digest.len(), 64);
+/// assert_eq!(
+///     digest,
+///     "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+/// );
+/// ```
 pub fn sha256(data: impl AsRef<[u8]>) -> String {
     encode(&Sha256::digest(data.as_ref()))
 }

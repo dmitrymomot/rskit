@@ -1,50 +1,121 @@
-//! SQLite database layer for modo.
+//! # modo::db
 //!
-//! This module provides connection pooling, migration support, and type-safe
-//! pool wrappers built on top of [`sqlx`]. It supports two connection modes:
+//! Lightweight libsql (SQLite) database layer with typed row mapping,
+//! composable query building, filtering, and pagination.
 //!
-//! - **Single pool** ([`connect`]) — one [`Pool`] for both reads and writes.
-//!   Use this for simple apps or in-memory databases.
-//! - **Read/write split** ([`connect_rw`]) — separate [`ReadPool`] and
-//!   [`WritePool`] for workloads that benefit from concurrent readers and a
-//!   single serialized writer. Not supported for `:memory:` databases.
+//! Requires feature `"db"`.
 //!
-//! # Quick start
+//! ## Core types
 //!
-//! ```no_run
-//! # async fn example() -> modo::Result<()> {
-//! use modo::db::{self, SqliteConfig};
+//! | Type | Purpose |
+//! |------|---------|
+//! | [`Database`] | Clone-able, `Arc`-wrapped single-connection handle |
+//! | [`Config`] | YAML-deserializable database configuration with PRAGMA defaults |
+//! | [`ManagedDatabase`] | Wrapper for graceful shutdown via [`crate::run!`] |
+//! | [`managed`] | Wraps a [`Database`] into a [`ManagedDatabase`] |
 //!
-//! let config = SqliteConfig::default();
-//! let pool = db::connect(&config).await?;
-//! db::migrate("migrations", &pool).await?;
-//! # Ok(())
-//! # }
+//! ## Connection & querying
+//!
+//! | Item | Purpose |
+//! |------|---------|
+//! | [`connect`] | Open a database, apply PRAGMAs, optionally run migrations |
+//! | [`migrate`] | Run `*.sql` migrations from a directory with checksum tracking |
+//! | [`ConnExt`] | Low-level `query_raw`/`execute_raw` trait for `Connection` and `Transaction` |
+//! | [`ConnQueryExt`] | High-level `query_one`/`query_all`/`query_optional` helpers (blanket impl on `ConnExt`) |
+//! | [`SelectBuilder`] | Composable query builder combining filters, sorting, and pagination |
+//!
+//! ## Row mapping
+//!
+//! | Item | Purpose |
+//! |------|---------|
+//! | [`FromRow`] | Trait for converting a `libsql::Row` into a Rust struct |
+//! | [`FromValue`] | Trait for converting a `libsql::Value` into a concrete Rust type |
+//! | [`ColumnMap`] | Column name to index lookup for name-based row access |
+//!
+//! ## Filtering & pagination
+//!
+//! | Item | Purpose |
+//! |------|---------|
+//! | [`Filter`] | Raw parsed filter from query string (axum extractor) |
+//! | [`FilterSchema`] | Declares allowed filter and sort fields for an endpoint |
+//! | [`ValidatedFilter`] | Schema-validated filter safe for SQL generation |
+//! | [`FieldType`] | Column type enum for filter value validation |
+//! | [`PageRequest`] | Offset-based pagination extractor (`?page=N&per_page=N`) |
+//! | [`Page`] | Offset-based page response with total/has_next/has_prev |
+//! | [`CursorRequest`] | Cursor-based pagination extractor (`?after=<cursor>&per_page=N`) |
+//! | [`CursorPage`] | Cursor-based page response with next_cursor/has_more |
+//! | [`PaginationConfig`] | Configurable defaults and limits for pagination extractors |
+//!
+//! ## Configuration enums
+//!
+//! | Enum | Purpose |
+//! |------|---------|
+//! | [`JournalMode`] | SQLite journal mode (WAL, Delete, Truncate, Memory, Off) |
+//! | [`SynchronousMode`] | SQLite synchronous mode (Off, Normal, Full, Extra) |
+//! | [`TempStore`] | SQLite temp store location (Default, File, Memory) |
+//!
+//! ## Re-exports
+//!
+//! The [`libsql`] crate is re-exported for direct access to low-level types
+//! such as `libsql::params!`, `libsql::Value`, `libsql::Connection`, and
+//! `libsql::Transaction`.
+//!
+//! ## Quick start
+//!
+//! ```rust,ignore
+//! use modo::db;
+//!
+//! // Connect with defaults (data/app.db, WAL mode, FK on)
+//! let db = db::connect(&db::Config::default()).await?;
+//!
+//! // Use query helpers via ConnQueryExt
+//! use db::ConnQueryExt;
+//! let user: User = db.conn().query_one(
+//!     "SELECT id, name FROM users WHERE id = ?1",
+//!     libsql::params!["user_abc"],
+//! ).await?;
+//!
+//! // Or use the SelectBuilder for filtered, paginated queries
+//! use db::ConnExt; // provides .select()
+//! let page = db.conn()
+//!     .select("SELECT id, name FROM users")
+//!     .filter(validated_filter)
+//!     .order_by("\"created_at\" DESC")
+//!     .page::<User>(page_request)
+//!     .await?;
 //! ```
-//!
-//! # Graceful shutdown
-//!
-//! Wrap a pool in [`ManagedPool`] via [`managed`] to integrate with the
-//! `run!` macro shutdown sequence:
-//!
-//! ```ignore
-//! let managed = db::managed(pool.clone());
-//! run!(server, managed);
-//! ```
+
+mod error;
 
 mod config;
+pub use config::{Config, JournalMode, SynchronousMode, TempStore};
+
+mod database;
+pub use database::Database;
+
 mod connect;
-mod error;
+pub use connect::connect;
+
+mod from_row;
+pub use from_row::{ColumnMap, FromRow, FromValue};
+
+mod conn;
+pub use conn::{ConnExt, ConnQueryExt};
+
 mod managed;
+pub use managed::{ManagedDatabase, managed};
+
 mod migrate;
-mod pool;
-
-pub use config::SqliteConfig;
-pub use config::{JournalMode, PoolOverrides, SynchronousMode, TempStore};
-pub use connect::{connect, connect_rw};
-pub use managed::{ManagedPool, managed};
 pub use migrate::migrate;
-pub use pool::{InnerPool, Pool, ReadPool, Reader, WritePool, Writer};
 
-/// Type alias for [`SqliteConfig`].
-pub type Config = SqliteConfig;
+mod page;
+pub use page::{CursorPage, CursorRequest, Page, PageRequest, PaginationConfig};
+
+mod filter;
+pub use filter::{FieldType, Filter, FilterSchema, ValidatedFilter};
+
+mod select;
+pub use select::SelectBuilder;
+
+// Re-export libsql for direct access
+pub use libsql;

@@ -123,13 +123,9 @@ struct MyClaims {
 }
 
 // Build encoder and decoder from the same config
-let config = JwtConfig {
-    secret: "change-me-in-production".into(),
-    default_expiry: Some(3600),
-    leeway: 5,
-    issuer: None,
-    audience: None,
-};
+let mut config = JwtConfig::new("change-me-in-production");
+config.default_expiry = Some(3600);
+config.leeway = 5;
 let encoder = JwtEncoder::from_config(&config);
 let decoder = JwtDecoder::from_config(&config);
 
@@ -217,14 +213,13 @@ use modo::auth::oauth::{
 use modo::auth::oauth::AuthorizationRequest;
 
 // Build from config (typically loaded from YAML)
-let provider_config = OAuthProviderConfig {
-    client_id: "my-client-id".into(),
-    client_secret: "my-client-secret".into(),
-    redirect_uri: "https://example.com/auth/google/callback".into(),
-    scopes: vec![],  // use provider defaults
-};
-// Construct the provider (cookie_config and key come from your app config)
-let google = Google::new(&provider_config, &cookie_config, &key);
+let provider_config = OAuthProviderConfig::new(
+    "my-client-id",
+    "my-client-secret",
+    "https://example.com/auth/google/callback",
+);
+// Construct the provider (cookie_config, key, and http_client come from your app config)
+let google = Google::new(&provider_config, &cookie_config, &key, http_client);
 
 // Login handler — returns a 303 redirect to Google's authorization page
 async fn login_handler(
@@ -297,6 +292,8 @@ oauth:
 | `Bearer`               | `modo::auth::jwt`      | Axum extractor for the raw Bearer token string      |
 | `JwtError`             | `modo::auth::jwt`      | Typed JWT error enum with `code()` strings          |
 | `HmacSigner`           | `modo::auth::jwt`      | HMAC-SHA256 (HS256) signer/verifier                 |
+| `TokenSigner`          | `modo::auth::jwt`      | Trait for JWT signing (extends `TokenVerifier`)     |
+| `TokenVerifier`        | `modo::auth::jwt`      | Trait for JWT signature verification                |
 | `TokenSource`          | `modo::auth::jwt`      | Trait for pluggable token extraction                |
 | `Revocation`           | `modo::auth::jwt`      | Trait for async token revocation checks             |
 | `ValidationConfig`     | `modo::auth::jwt`      | Runtime validation policy (leeway, iss, aud)        |

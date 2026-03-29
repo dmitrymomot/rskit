@@ -59,41 +59,37 @@ let token = generate_verification_token(); // e.g. "0r9xkbf2a1m4z"
 // Add CNAME:      example.com              →  app.yourservice.com
 ```
 
-### Step 2 — verify TXT ownership
+### Step 2 — verify ownership
 
 ```rust,no_run
-use modo::dns::{DnsConfig, DomainVerifier};
+use modo::dns::{DnsConfig, DomainStatus, DomainVerifier, generate_verification_token};
 
-let config = DnsConfig {
-    nameserver: "8.8.8.8:53".into(),
-    txt_prefix: "_modo-verify".into(),
-    timeout_ms: 5000,
-};
-let verifier = DomainVerifier::from_config(&config)?;
+async fn verify(token: &str) -> modo::Result<()> {
+    let config = DnsConfig {
+        nameserver: "8.8.8.8:53".into(),
+        txt_prefix: "_modo-verify".into(),
+        timeout_ms: 5000,
+    };
+    let verifier = DomainVerifier::from_config(&config)?;
 
-// Returns true when _modo-verify.example.com TXT == token (case-sensitive).
-// Returns false when the record is absent or mismatched (not an error).
-let txt_ok = verifier.check_txt("example.com", &token).await?;
-```
+    // Check TXT record: returns true when _modo-verify.example.com TXT == token
+    // (case-sensitive). Returns false when absent or mismatched (not an error).
+    let txt_ok = verifier.check_txt("example.com", token).await?;
 
-### Step 3 — verify CNAME routing
+    // Check CNAME: returns true when the target matches
+    // (case-insensitive, trailing dot stripped).
+    let cname_ok = verifier.check_cname("example.com", "app.yourservice.com").await?;
 
-```rust,no_run
-// Returns true when the CNAME target matches (case-insensitive, trailing dot stripped).
-let cname_ok = verifier.check_cname("example.com", "app.yourservice.com").await?;
-```
+    // Or check both at once (runs concurrently via tokio::join!):
+    let status: DomainStatus = verifier
+        .verify_domain("example.com", token, "app.yourservice.com")
+        .await?;
 
-### Step 4 — check both at once
+    if status.txt_verified && status.cname_verified {
+        // domain is fully verified
+    }
 
-```rust,no_run
-use modo::dns::DomainStatus;
-
-let status: DomainStatus = verifier
-    .verify_domain("example.com", &token, "app.yourservice.com")
-    .await?;
-
-if status.txt_verified && status.cname_verified {
-    // domain is fully verified
+    Ok(())
 }
 ```
 

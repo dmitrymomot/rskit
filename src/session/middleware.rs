@@ -46,9 +46,10 @@ pub struct SessionLayer {
 /// ```rust,no_run
 /// use modo::session::{self, SessionConfig, Store};
 /// use modo::cookie::{CookieConfig, key_from_config};
+/// use modo::db::Database;
 ///
-/// # async fn example(pool: impl modo::db::Reader + modo::db::Writer) -> modo::Result<()> {
-/// let store = Store::new(&pool, SessionConfig::default());
+/// # async fn example(db: Database) -> modo::Result<()> {
+/// let store = Store::new(db, SessionConfig::default());
 /// let cookie_config: CookieConfig = todo!("load from config");
 /// let key = key_from_config(&cookie_config)?;
 /// let session_layer = session::layer(store, &cookie_config, &key);

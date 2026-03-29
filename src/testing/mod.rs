@@ -4,6 +4,18 @@
 //! handlers without spinning up a real HTTP server. Everything runs in-process
 //! using Tower's [`oneshot`](tower::ServiceExt::oneshot) transport.
 //!
+//! # Provides
+//!
+//! - [`TestApp`] / [`TestAppBuilder`] — assemble a test application with routes,
+//!   services, and middleware; send requests via HTTP-method helpers.
+//! - [`TestDb`] — in-memory libsql database with chainable `exec` / `migrate`
+//!   setup; exposes a [`Database`](crate::db::Database) handle via [`db()`](TestDb::db).
+//! - [`TestRequestBuilder`] — fluent builder for a single in-process HTTP request
+//!   with JSON, form, and raw-body support.
+//! - [`TestResponse`] — captured response with status, header, and body accessors.
+//! - [`TestSession`] — session infrastructure for integration tests: creates the
+//!   `sessions` table, signs cookies, and builds a [`SessionLayer`](crate::session::SessionLayer).
+//!
 //! # Requires feature `test-helpers`
 //!
 //! Enable the feature in your `Cargo.toml` dev-dependency:

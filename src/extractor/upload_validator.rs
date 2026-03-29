@@ -39,8 +39,12 @@ impl<'a> UploadValidator<'a> {
         self
     }
 
-    /// Finish validation. Returns `Ok(())` when all rules pass, or a
-    /// 422 Unprocessable Entity error with collected messages.
+    /// Finish validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `422 Unprocessable Entity` error with all collected violation
+    /// messages in the `details` payload if any rule failed.
     pub fn check(self) -> crate::error::Result<()> {
         if self.errors.is_empty() {
             Ok(())

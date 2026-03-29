@@ -81,6 +81,7 @@ server:
 
 database:
     path: ${DATABASE_PATH:data/app.db}
+    migrations: migrations/
 
 cookie:
     secret: ${COOKIE_SECRET}
@@ -97,21 +98,22 @@ Source: `src/config/modo.rs`
 | Field              | Type                                | YAML key           | Description                                                                 |
 | ------------------ | ----------------------------------- | ------------------ | --------------------------------------------------------------------------- |
 | `server`           | `server::Config`                    | `server`           | HTTP bind address and shutdown                                              |
-| `database`         | `db::SqliteConfig`                  | `database`         | SQLite connection pool                                                      |
 | `tracing`          | `tracing::Config`                   | `tracing`          | Log level, format, optional Sentry                                          |
 | `cookie`           | `Option<cookie::CookieConfig>`      | `cookie`           | Signed cookie secret and attributes. `None` disables signed/private cookies |
 | `security_headers` | `middleware::SecurityHeadersConfig` | `security_headers` | HTTP security response headers                                              |
 | `cors`             | `middleware::CorsConfig`            | `cors`             | CORS policy                                                                 |
 | `csrf`             | `middleware::CsrfConfig`            | `csrf`             | CSRF protection                                                             |
 | `rate_limit`       | `middleware::RateLimitConfig`       | `rate_limit`       | Token-bucket rate limiting                                                  |
-| `session`          | `session::SessionConfig`            | `session`          | Session TTL, cookie, fingerprint                                            |
-| `job`              | `job::JobConfig`                    | `job`              | Background job queue                                                        |
 | `trusted_proxies`  | `Vec<String>`                       | `trusted_proxies`  | CIDR ranges for `ClientIpLayer`                                             |
 
 ### Feature-Gated Fields
 
 | Field         | Type                             | YAML key      | Feature       |
 | ------------- | -------------------------------- | ------------- | ------------- |
+| `database`    | `db::Config`                     | `database`    | `db`          |
+| `session`     | `session::SessionConfig`         | `session`     | `session`     |
+| `http`        | `http::ClientConfig`             | `http`        | `http-client` |
+| `job`         | `job::JobConfig`                 | `job`         | `job`         |
 | `oauth`       | `auth::oauth::OAuthConfig`       | `oauth`       | `auth`        |
 | `jwt`         | `auth::jwt::JwtConfig`           | `jwt`         | `auth`        |
 | `email`       | `email::EmailConfig`             | `email`       | `email`       |
@@ -130,31 +132,23 @@ Source: `src/config/modo.rs`
 | `port`                  | `u16`    | `8080`        | TCP port                  |
 | `shutdown_timeout_secs` | `u64`    | `30`          | Graceful shutdown timeout |
 
-### `db::SqliteConfig`
+### `db::Config` (feature: `db`)
 
-| Field                  | Type                | Default         | Description                                  |
-| ---------------------- | ------------------- | --------------- | -------------------------------------------- |
-| `path`                 | `String`            | `"data/app.db"` | SQLite file path. `":memory:"` for in-memory |
-| `max_connections`      | `u32`               | `10`            | Pool max connections                         |
-| `min_connections`      | `u32`               | `1`             | Pool min idle connections                    |
-| `acquire_timeout_secs` | `u64`               | `30`            | Connection acquire timeout                   |
-| `idle_timeout_secs`    | `u64`               | `600`           | Idle connection timeout                      |
-| `max_lifetime_secs`    | `u64`               | `1800`          | Max connection lifetime                      |
-| `journal_mode`         | `JournalMode`       | `WAL`           | PRAGMA journal_mode                          |
-| `synchronous`          | `SynchronousMode`   | `NORMAL`        | PRAGMA synchronous                           |
-| `foreign_keys`         | `bool`              | `true`          | PRAGMA foreign_keys                          |
-| `busy_timeout`         | `u64`               | `5000`          | PRAGMA busy_timeout (ms)                     |
-| `cache_size`           | `i64`               | `-2000`         | PRAGMA cache_size (negative = KiB)           |
-| `mmap_size`            | `Option<u64>`       | `None`          | PRAGMA mmap_size (bytes)                     |
-| `temp_store`           | `Option<TempStore>` | `None`          | PRAGMA temp_store                            |
-| `wal_autocheckpoint`   | `Option<u32>`       | `None`          | PRAGMA wal_autocheckpoint                    |
-| `reader`               | `PoolOverrides`     | see below       | Reader pool overrides for `connect_rw`       |
-| `writer`               | `PoolOverrides`     | see below       | Writer pool overrides for `connect_rw`       |
+Single-connection libsql config. No connection pool -- `connect()` opens one connection with PRAGMA defaults.
 
-**Reader defaults:** `busy_timeout=1000`, `cache_size=-16000` (16 MB), `mmap_size=256 MiB`.
-**Writer defaults:** `max_connections=1`, `busy_timeout=2000`, `cache_size=-16000`, `mmap_size=256 MiB`.
+| Field          | Type              | Default         | Description                                                     |
+| -------------- | ----------------- | --------------- | --------------------------------------------------------------- |
+| `path`         | `String`          | `"data/app.db"` | Database file path. `":memory:"` for in-memory                  |
+| `migrations`   | `Option<String>`  | `None`          | Migration directory. If set, migrations run on connect           |
+| `busy_timeout` | `u64`             | `5000`          | PRAGMA busy_timeout (ms)                                        |
+| `cache_size`   | `i64`             | `16384`         | PRAGMA cache_size in KB (applied as `cache_size = -N`)          |
+| `mmap_size`    | `u64`             | `268435456`     | PRAGMA mmap_size (bytes, default 256 MB)                        |
+| `journal_mode` | `JournalMode`     | `wal`           | PRAGMA journal_mode                                             |
+| `synchronous`  | `SynchronousMode` | `normal`        | PRAGMA synchronous                                              |
+| `foreign_keys` | `bool`            | `true`          | PRAGMA foreign_keys                                             |
+| `temp_store`   | `TempStore`       | `memory`        | PRAGMA temp_store                                               |
 
-**Enums:** `JournalMode` values: `DELETE`, `TRUNCATE`, `PERSIST`, `MEMORY`, `WAL`, `OFF`. `SynchronousMode` values: `OFF`, `NORMAL`, `FULL`, `EXTRA`. `TempStore` values: `DEFAULT`, `FILE`, `MEMORY`. All serialize as UPPERCASE in YAML.
+**Enums:** `JournalMode` values: `wal`, `delete`, `truncate`, `memory`, `off`. `SynchronousMode` values: `off`, `normal`, `full`, `extra`. `TempStore` values: `default`, `file`, `memory`. All serialize as **lowercase** in YAML (`#[serde(rename_all = "lowercase")]`).
 
 ### `tracing::Config`
 
@@ -235,7 +229,7 @@ The `modo::tracing` module re-exports the following macros from the `tracing` cr
 | `cleanup_interval_secs` | `u64`   | `60`    | Purge interval for expired entries |
 | `max_keys`              | `usize` | `10000` | Max tracked keys. `0` = unlimited  |
 
-### `session::SessionConfig`
+### `session::SessionConfig` (feature: `session`)
 
 | Field                   | Type     | Default      | Description                                           |
 | ----------------------- | -------- | ------------ | ----------------------------------------------------- |
@@ -245,7 +239,7 @@ The `modo::tracing` module re-exports the following macros from the `tracing` cr
 | `touch_interval_secs`   | `u64`    | `300`        | Min interval between `last_active_at` updates (5 min) |
 | `max_sessions_per_user` | `usize`  | `10`         | Max concurrent sessions per user. Must be > 0         |
 
-### `job::JobConfig`
+### `job::JobConfig` (feature: `job`)
 
 | Field                        | Type                    | Default                             | Description                         |
 | ---------------------------- | ----------------------- | ----------------------------------- | ----------------------------------- |
@@ -338,21 +332,26 @@ Size format for `max_file_size`: `<number><unit>` where unit is `b`, `kb`, `mb`,
 
 ## Feature Flags
 
-Defined in `Cargo.toml`. Default is empty (no optional features enabled).
+Defined in `Cargo.toml`. Default feature: `db`.
 
 | Feature        | What it enables                                          | Dependencies                                                                                |
 | -------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `full`         | All optional features below                              | (meta)                                                                                      |
-| `auth`         | OAuth 2.0 (Google, GitHub), JWT, Argon2 password hashing | `argon2`, `hmac`, `sha1`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util`           |
+| `db`           | libsql (SQLite) database connection and queries          | `libsql`, `urlencoding`                                                                     |
+| `session`      | Session management (requires `db`)                       | (implies `db`)                                                                              |
+| `job`          | Background job queue (requires `db`)                     | (implies `db`)                                                                              |
+| `http-client`  | HTTP client for outgoing requests                        | `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util`, `base64`                           |
+| `auth`         | OAuth 2.0 (Google, GitHub), JWT, Argon2 password hashing | `argon2`, `hmac`, `sha1` (implies `http-client`)                                           |
 | `templates`    | MiniJinja template engine with i18n                      | `minijinja`, `minijinja-contrib`, `intl_pluralrules`, `unic-langid`                         |
 | `sse`          | Server-Sent Events broadcaster                           | `futures-util`                                                                              |
 | `email`        | SMTP email delivery with Markdown-to-HTML                | `lettre`, `pulldown-cmark`                                                                  |
-| `storage`      | S3-compatible object storage                             | `hmac`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util`                             |
-| `webhooks`     | Webhook delivery with Standard Webhooks signing          | `hmac`, `base64`, `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util`                   |
+| `storage`      | S3-compatible object storage                             | `hmac` (implies `http-client`)                                                              |
+| `webhooks`     | Webhook delivery with Standard Webhooks signing          | `hmac` (implies `http-client`)                                                              |
 | `dns`          | DNS domain verification (TXT, CNAME)                     | `simple-dns`                                                                                |
 | `geolocation`  | MaxMind GeoIP2 geolocation                               | `maxminddb`                                                                                 |
+| `qrcode`       | QR code generation                                       | `fast_qr`                                                                                   |
 | `sentry`       | Sentry error reporting via tracing                       | `sentry`, `sentry-tracing`                                                                  |
-| `test-helpers` | `modo::testing` module for test utilities                | (none)                                                                                      |
+| `test-helpers` | `modo::testing` module for test utilities                | (implies `db`, `session`)                                                                   |
 
 ### Test Feature Flags
 
@@ -379,10 +378,8 @@ These activate the parent feature for integration tests:
 
 6. **`load()` is not async** -- it reads the file synchronously with `std::fs::read_to_string`. Call it at startup before entering the async runtime's hot path.
 
-7. **Database config type alias** -- `db::Config` is a type alias for `db::SqliteConfig`. Both names work.
+7. **`database`, `session`, `job`, `http` are feature-gated** -- these fields only exist on `Config` when their respective features (`db`, `session`, `job`, `http-client`) are enabled. `db` is a default feature. Unknown YAML keys are silently ignored by serde, so the YAML can contain sections for disabled features without error.
 
-8. **Feature-gated fields disappear** -- when a feature is not enabled, its config field does not exist on `Config`. Unknown YAML keys are silently ignored by serde, so the YAML can contain sections for disabled features without error.
+8. **`max_sessions_per_user` must be > 0** -- deserialization fails if set to `0` (custom deserializer rejects it to prevent locking out all users).
 
-9. **`max_sessions_per_user` must be > 0** -- deserialization fails if set to `0` (custom deserializer rejects it to prevent locking out all users).
-
-10. **`connect()` forces `max_connections=1` for `:memory:`** -- `connect_rw()` rejects `:memory:` entirely.
+9. **Single connection, no pool** -- `db::connect()` opens one libsql connection with PRAGMA defaults. There is no connection pool or reader/writer split.

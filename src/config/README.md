@@ -119,22 +119,28 @@ trusted_proxies:
 ## Config struct fields
 
 `Config` composes the sub-configs of every built-in module. All fields are optional in
-YAML (each falls back to the type's `Default`):
+YAML (each falls back to the type's `Default`). Feature-gated fields are only present
+when the corresponding feature is enabled; YAML sections for disabled features are
+silently ignored:
 
-| Field              | Type                                | Feature gate  |
-| ------------------ | ----------------------------------- | ------------- |
-| `server`           | `server::Config`                    | always        |
-| `database`         | `db::Config`                        | always        |
-| `tracing`          | `tracing::Config`                   | always        |
-| `cookie`           | `Option<cookie::CookieConfig>`      | always        |
-| `security_headers` | `middleware::SecurityHeadersConfig` | always        |
-| `cors`             | `middleware::CorsConfig`            | always        |
-| `csrf`             | `middleware::CsrfConfig`            | always        |
-| `rate_limit`       | `middleware::RateLimitConfig`       | always        |
-| `session`          | `session::SessionConfig`            | always        |
-| `job`              | `job::JobConfig`                    | always        |
-| `trusted_proxies`  | `Vec<String>`                       | always        |
-| `oauth`            | `auth::oauth::OAuthConfig`          | `auth`        |
-| `email`            | `email::EmailConfig`                | `email`       |
-| `template`         | `template::TemplateConfig`          | `templates`   |
-| `geolocation`      | `geolocation::GeolocationConfig`    | `geolocation` |
+| Field              | Type                                | Feature gate   |
+| ------------------ | ----------------------------------- | -------------- |
+| `server`           | `server::Config`                    | always         |
+| `database`         | `db::Config`                        | `db`           |
+| `tracing`          | `tracing::Config`                   | always         |
+| `cookie`           | `Option<cookie::CookieConfig>`      | always         |
+| `security_headers` | `middleware::SecurityHeadersConfig`  | always         |
+| `cors`             | `middleware::CorsConfig`            | always         |
+| `csrf`             | `middleware::CsrfConfig`            | always         |
+| `rate_limit`       | `middleware::RateLimitConfig`       | always         |
+| `session`          | `session::SessionConfig`            | `session`      |
+| `http`             | `http::ClientConfig`               | `http-client`  |
+| `job`              | `job::JobConfig`                    | `job`          |
+| `trusted_proxies`  | `Vec<String>`                       | always         |
+| `oauth`            | `auth::oauth::OAuthConfig`          | `auth`         |
+| `email`            | `email::EmailConfig`                | `email`        |
+| `template`         | `template::TemplateConfig`          | `templates`    |
+| `geolocation`      | `geolocation::GeolocationConfig`    | `geolocation`  |
+| `storage`          | `storage::BucketConfig`             | `storage`      |
+| `dns`              | `dns::DnsConfig`                    | `dns`          |
+| `jwt`              | `auth::jwt::JwtConfig`              | `auth`         |

@@ -1,58 +1,43 @@
-use super::pool::InnerPool;
 use crate::error::Result;
 use crate::runtime::Task;
 
-/// A pool wrapper that implements [`Task`] for graceful shutdown.
-///
-/// When [`Task::shutdown`] is called, the underlying connection pool is
-/// closed and all connections are drained. Construct via [`managed`].
-pub struct ManagedPool {
-    pool: InnerPool,
-}
+use super::database::Database;
 
-impl Task for ManagedPool {
+/// Wrapper for graceful shutdown integration with [`crate::run!`].
+///
+/// Wraps a [`Database`] so it can be registered as a [`Task`] with the
+/// modo runtime. On shutdown the inner `Database` is dropped, which
+/// releases the underlying libsql connection and database handle once the
+/// last clone is gone.
+///
+/// Created by [`managed`].
+pub struct ManagedDatabase(Database);
+
+impl Task for ManagedDatabase {
     async fn shutdown(self) -> Result<()> {
-        self.pool.close().await;
+        // Dropping Database drops the Arc. When the last reference is dropped,
+        // Inner is dropped, which drops libsql::Connection and libsql::Database.
+        // libsql handles cleanup internally.
+        drop(self.0);
         Ok(())
     }
 }
 
-/// Wraps a pool for graceful shutdown via the [`Task`] trait.
+/// Wrap a [`Database`] for use with [`crate::run!`].
 ///
-/// This consumes the pool. Clone it first if you need continued access after
-/// passing it to the shutdown sequence:
+/// # Examples
 ///
-/// ```ignore
-/// let managed = db::managed(pool.clone());
-/// run!(server, managed);
+/// ```rust,no_run
+/// use modo::db;
+///
+/// # async fn example() -> modo::Result<()> {
+/// let config = db::Config::default();
+/// let db = db::connect(&config).await?;
+/// let task = db::managed(db.clone());
+/// // Register `task` with modo::run!() for graceful shutdown
+/// # Ok(())
+/// # }
 /// ```
-///
-/// Accepts [`Pool`](super::Pool), [`ReadPool`](super::ReadPool), or
-/// [`WritePool`](super::WritePool).
-pub fn managed<P: Into<ManagedPool>>(pool: P) -> ManagedPool {
-    pool.into()
-}
-
-impl From<super::Pool> for ManagedPool {
-    fn from(pool: super::Pool) -> Self {
-        Self {
-            pool: pool.into_inner(),
-        }
-    }
-}
-
-impl From<super::ReadPool> for ManagedPool {
-    fn from(pool: super::ReadPool) -> Self {
-        Self {
-            pool: pool.into_inner(),
-        }
-    }
-}
-
-impl From<super::WritePool> for ManagedPool {
-    fn from(pool: super::WritePool) -> Self {
-        Self {
-            pool: pool.into_inner(),
-        }
-    }
+pub fn managed(db: Database) -> ManagedDatabase {
+    ManagedDatabase(db)
 }

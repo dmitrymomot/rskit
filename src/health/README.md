@@ -15,7 +15,7 @@ Registers two routes on an axum `Router`:
 | `HealthChecks` | Fluent builder that collects named checks; registered in the service registry |
 | `router()` | Returns a `Router<AppState>` with `/_live` and `/_ready` mounted |
 
-`db::Pool`, `db::ReadPool`, and `db::WritePool` implement `HealthCheck` out of the box — they verify health by acquiring a connection from the pool.
+When the `db` feature is enabled, `db::Database` implements `HealthCheck` out of the box — it verifies health by executing a simple query on the connection.
 
 ## Usage
 
@@ -27,8 +27,7 @@ use modo::service::Registry;
 
 // Build the check collection during startup.
 let checks = HealthChecks::new()
-    .check("read_pool", read_pool.clone())   // db::ReadPool implements HealthCheck
-    .check("write_pool", write_pool.clone()) // db::WritePool implements HealthCheck
+    .check("database", database.clone())     // db::Database implements HealthCheck
     .check_fn("external_api", || async {
         // Any async logic; return Ok(()) when healthy.
         Ok(())

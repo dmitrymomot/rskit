@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::db::{InnerPool, Writer};
+use crate::db::{ConnExt, ConnQueryExt, Database};
 use crate::error::{Error, Result};
 
 /// Result of an idempotent enqueue operation.
@@ -39,23 +39,26 @@ impl Default for EnqueueOptions {
 /// Enqueues jobs into the `jobs` SQLite table.
 ///
 /// Constructed via [`Enqueuer::new`]. Cheaply cloneable — the underlying
-/// connection pool is `Arc`-wrapped.
+/// database handle is `Arc`-wrapped.
 #[derive(Clone)]
 pub struct Enqueuer {
-    writer: InnerPool,
+    db: Database,
 }
 
 impl Enqueuer {
-    /// Create a new `Enqueuer` using the write pool from `writer`.
-    pub fn new(writer: &impl Writer) -> Self {
-        Self {
-            writer: writer.write_pool().clone(),
-        }
+    /// Create a new `Enqueuer` using the given database handle.
+    pub fn new(db: Database) -> Self {
+        Self { db }
     }
 
     /// Enqueue a job on the default queue for immediate execution.
     ///
     /// Returns the new job's ID on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload cannot be serialized to JSON or if the
+    /// database insert fails.
     pub async fn enqueue<T: Serialize>(&self, name: &str, payload: &T) -> Result<String> {
         self.enqueue_with(name, payload, EnqueueOptions::default())
             .await
@@ -64,6 +67,11 @@ impl Enqueuer {
     /// Enqueue a job on the default queue to run at a specific time.
     ///
     /// Returns the new job's ID on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload cannot be serialized to JSON or if the
+    /// database insert fails.
     pub async fn enqueue_at<T: Serialize>(
         &self,
         name: &str,
@@ -84,6 +92,11 @@ impl Enqueuer {
     /// Enqueue a job with full control over queue and schedule.
     ///
     /// Returns the new job's ID on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload cannot be serialized to JSON or if the
+    /// database insert fails.
     pub async fn enqueue_with<T: Serialize>(
         &self,
         name: &str,
@@ -98,20 +111,15 @@ impl Enqueuer {
         let now_str = now.to_rfc3339();
         let run_at_str = run_at.to_rfc3339();
 
-        sqlx::query(
-            "INSERT INTO jobs (id, name, queue, payload, status, attempt, run_at, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, 'pending', 0, ?, ?, ?)",
-        )
-        .bind(&id)
-        .bind(name)
-        .bind(&options.queue)
-        .bind(&payload_json)
-        .bind(&run_at_str)
-        .bind(&now_str)
-        .bind(&now_str)
-        .execute(&self.writer)
-        .await
-        .map_err(|e| Error::internal(format!("enqueue job: {e}")))?;
+        self.db
+            .conn()
+            .execute_raw(
+                "INSERT INTO jobs (id, name, queue, payload, status, attempt, run_at, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, 'pending', 0, ?5, ?6, ?7)",
+                libsql::params![id.as_str(), name, options.queue.as_str(), payload_json.as_str(), run_at_str.as_str(), now_str.as_str(), now_str.as_str()],
+            )
+            .await
+            .map_err(|e| Error::internal(format!("enqueue job: {e}")))?;
 
         Ok(id)
     }
@@ -120,6 +128,12 @@ impl Enqueuer {
     /// payload already exists (idempotent enqueue on the default queue).
     ///
     /// The uniqueness key is a SHA-256 hash of `name + "\0" + payload_json`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload cannot be serialized to JSON or if a
+    /// database operation fails (other than the expected unique-constraint
+    /// violation).
     pub async fn enqueue_unique<T: Serialize>(
         &self,
         name: &str,
@@ -133,6 +147,12 @@ impl Enqueuer {
     /// payload already exists, with full queue and schedule options.
     ///
     /// The uniqueness key is a SHA-256 hash of `name + "\0" + payload_json`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload cannot be serialized to JSON or if a
+    /// database operation fails (other than the expected unique-constraint
+    /// violation).
     pub async fn enqueue_unique_with<T: Serialize>(
         &self,
         name: &str,
@@ -148,30 +168,32 @@ impl Enqueuer {
         let now_str = now.to_rfc3339();
         let run_at_str = run_at.to_rfc3339();
 
-        match sqlx::query(
-            "INSERT INTO jobs (id, name, queue, payload, payload_hash, status, attempt, run_at, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)",
-        )
-        .bind(&id)
-        .bind(name)
-        .bind(&options.queue)
-        .bind(&payload_json)
-        .bind(&hash)
-        .bind(&run_at_str)
-        .bind(&now_str)
-        .bind(&now_str)
-        .execute(&self.writer)
-        .await
+        match self
+            .db
+            .conn()
+            .execute_raw(
+                "INSERT INTO jobs (id, name, queue, payload, payload_hash, status, attempt, run_at, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, 'pending', 0, ?6, ?7, ?8)",
+                libsql::params![id.as_str(), name, options.queue.as_str(), payload_json.as_str(), hash.as_str(), run_at_str.as_str(), now_str.as_str(), now_str.as_str()],
+            )
+            .await
         {
             Ok(_) => Ok(EnqueueResult::Created(id)),
-            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
-                let (existing_id,): (String,) = sqlx::query_as(
-                    "SELECT id FROM jobs WHERE payload_hash = ? AND status IN ('pending', 'running') LIMIT 1",
-                )
-                .bind(&hash)
-                .fetch_one(&self.writer)
-                .await
-                .map_err(|e| Error::internal(format!("fetch duplicate job id: {e}")))?;
+            Err(ref e) if is_unique_violation(e) => {
+                let existing_id: String = self
+                    .db
+                    .conn()
+                    .query_one_map(
+                        "SELECT id FROM jobs WHERE payload_hash = ?1 AND status IN ('pending', 'running') LIMIT 1",
+                        libsql::params![hash.as_str()],
+                        |row| {
+                            use crate::db::FromValue;
+                            let val = row.get_value(0).map_err(crate::Error::from)?;
+                            String::from_value(val)
+                        },
+                    )
+                    .await
+                    .map_err(|e| Error::internal(format!("fetch duplicate job id: {e}")))?;
 
                 Ok(EnqueueResult::Duplicate(existing_id))
             }
@@ -183,19 +205,29 @@ impl Enqueuer {
     ///
     /// Returns `true` if the job was found and cancelled, `false` if it was
     /// not found or was already past the `pending` state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails.
     pub async fn cancel(&self, id: &str) -> Result<bool> {
         let now_str = Utc::now().to_rfc3339();
-        let result = sqlx::query(
-            "UPDATE jobs SET status = 'cancelled', updated_at = ? WHERE id = ? AND status = 'pending'",
-        )
-        .bind(&now_str)
-        .bind(id)
-        .execute(&self.writer)
-        .await
-        .map_err(|e| Error::internal(format!("cancel job: {e}")))?;
+        let affected = self
+            .db
+            .conn()
+            .execute_raw(
+                "UPDATE jobs SET status = 'cancelled', updated_at = ?1 WHERE id = ?2 AND status = 'pending'",
+                libsql::params![now_str.as_str(), id],
+            )
+            .await
+            .map_err(|e| Error::internal(format!("cancel job: {e}")))?;
 
-        Ok(result.rows_affected() > 0)
+        Ok(affected > 0)
     }
+}
+
+/// Check if a libsql error is a unique constraint violation.
+fn is_unique_violation(err: &libsql::Error) -> bool {
+    matches!(err, libsql::Error::SqliteFailure(2067 | 1555, _))
 }
 
 fn compute_payload_hash(name: &str, payload_json: &str) -> String {

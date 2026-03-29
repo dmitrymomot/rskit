@@ -16,6 +16,8 @@
 //! - [`ModuleShape`] — shape of data modules (Square, RoundedSquare, Circle, Diamond).
 //! - [`FinderShape`] — shape of finder patterns (Square, Rounded, Circle).
 //! - [`QrError`] — error type for generation and rendering failures.
+//! - [`qr_svg_function`] — MiniJinja template function factory (requires
+//!   `templates` feature).
 //!
 //! # Example
 //!

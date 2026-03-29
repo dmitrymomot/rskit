@@ -72,6 +72,10 @@ impl Session {
     /// Deserialise a value stored in the session under `key`.
     ///
     /// Returns `Ok(None)` when there is no active session or the key is absent.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the stored value cannot be deserialised into `T`.
     pub fn get<T: DeserializeOwned>(&self, key: &str) -> crate::Result<Option<T>> {
         let guard = self.state.current.lock().expect("session mutex poisoned");
         let session = match guard.as_ref() {
@@ -108,6 +112,10 @@ impl Session {
     /// The change is held in memory and flushed to the database by the
     /// middleware after the handler returns. No-op when there is no active
     /// session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the value cannot be serialised to JSON.
     pub fn set<T: Serialize>(&self, key: &str, value: &T) -> crate::Result<()> {
         let mut guard = self.state.current.lock().expect("session mutex poisoned");
         let session = match guard.as_mut() {
@@ -147,6 +155,11 @@ impl Session {
     /// If a session already exists, it is destroyed first (session fixation
     /// prevention). A new token is generated and set on the cookie. Equivalent
     /// to `authenticate_with(user_id, serde_json::json!({}))`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the existing session cannot be destroyed or the
+    /// new session cannot be created in the database.
     pub async fn authenticate(&self, user_id: &str) -> crate::Result<()> {
         self.authenticate_with(user_id, serde_json::json!({})).await
     }
@@ -155,6 +168,11 @@ impl Session {
     ///
     /// If a session already exists, it is destroyed first (session fixation
     /// prevention). A new token is generated and set on the cookie.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the existing session cannot be destroyed or the
+    /// new session cannot be created in the database.
     pub async fn authenticate_with(
         &self,
         user_id: &str,
@@ -185,6 +203,11 @@ impl Session {
     ///
     /// Returns `401 Unauthorized` if there is no active session. Use this
     /// after privilege escalation to prevent session fixation.
+    ///
+    /// # Errors
+    ///
+    /// Returns `401 Unauthorized` when no active session exists, or an
+    /// internal error if the database update fails.
     pub async fn rotate(&self) -> crate::Result<()> {
         let session_id = {
             let current = self.state.current.lock().expect("session mutex poisoned");
@@ -211,6 +234,10 @@ impl Session {
     /// Destroy the current session and clear the session cookie.
     ///
     /// No-op (succeeds silently) when there is no active session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database delete fails.
     pub async fn logout(&self) -> crate::Result<()> {
         let existing_id = {
             let current = self.state.current.lock().expect("session mutex poisoned");
@@ -227,6 +254,10 @@ impl Session {
     /// Destroy all sessions for the current user and clear the session cookie.
     ///
     /// Returns `401 Unauthorized` if there is no active session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database delete fails.
     pub async fn logout_all(&self) -> crate::Result<()> {
         let existing_user_id = {
             let current = self.state.current.lock().expect("session mutex poisoned");
@@ -243,6 +274,11 @@ impl Session {
     /// Destroy all sessions for the current user except the current one.
     ///
     /// Returns `401 Unauthorized` if there is no active session.
+    ///
+    /// # Errors
+    ///
+    /// Returns `401 Unauthorized` when no active session exists, or an
+    /// internal error if the database delete fails.
     pub async fn logout_other(&self) -> crate::Result<()> {
         let (user_id, session_id) = {
             let current = self.state.current.lock().expect("session mutex poisoned");
@@ -260,6 +296,11 @@ impl Session {
     /// Return all active sessions for the current user.
     ///
     /// Returns `401 Unauthorized` if there is no active session.
+    ///
+    /// # Errors
+    ///
+    /// Returns `401 Unauthorized` when no active session exists, or an
+    /// internal error if the database query fails.
     pub async fn list_my_sessions(&self) -> crate::Result<Vec<SessionData>> {
         let user_id = {
             let current = self.state.current.lock().expect("session mutex poisoned");
@@ -276,6 +317,12 @@ impl Session {
     /// Returns `401 Unauthorized` if there is no active session and `404 Not
     /// Found` if `id` does not belong to the current user (deliberately
     /// indistinguishable to prevent enumeration).
+    ///
+    /// # Errors
+    ///
+    /// Returns `401 Unauthorized` when no active session exists, `404 Not
+    /// Found` when the target session does not exist or belongs to another
+    /// user, or an internal error if the database operation fails.
     pub async fn revoke(&self, id: &str) -> crate::Result<()> {
         let current_user_id = {
             let current = self.state.current.lock().expect("session mutex poisoned");

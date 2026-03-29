@@ -11,8 +11,7 @@ All types are re-exported from the crate root under `#[cfg(feature = "webhooks")
 
 ```rust
 use modo::{
-    HttpClient, HyperClient, SignedHeaders,
-    WebhookResponse, WebhookSecret, WebhookSender,
+    SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender,
 };
 ```
 
@@ -26,60 +25,39 @@ use modo::webhook::{sign, verify, sign_headers, verify_headers};
 
 ---
 
-## HttpClient Trait
+## WebhookSender
 
-Defines how a single HTTP POST is sent. Uses RPITIT (not object-safe).
-
-```rust
-pub trait HttpClient: Send + Sync + 'static {
-    fn post(
-        &self,
-        url: &str,
-        headers: HeaderMap,
-        body: Bytes,
-    ) -> impl Future<Output = Result<WebhookResponse>> + Send;
-}
-```
-
-Because `HttpClient` uses return-position `impl Trait`, it cannot be used as `dyn HttpClient`. Always use a concrete type parameter: `WebhookSender<HyperClient>` or `WebhookSender<MyClient>`.
-
----
-
-## HyperClient
-
-Default `HttpClient` implementation backed by `hyper` + `hyper-rustls` with TLS (webpki roots).
-
-```rust
-let client = HyperClient::new(Duration::from_secs(30));
-```
-
-- Constructor takes a `timeout: Duration`. Requests exceeding this timeout return an error.
-- Uses `hyper_rustls::HttpsConnectorBuilder` with `.with_webpki_roots()`, `.https_or_http()`, `.enable_http1()`.
-- Timeout enforced via `tokio::time::timeout`.
-
----
-
-## WebhookSender\<C\>
-
-High-level sender that signs payloads per the Standard Webhooks protocol and delivers them via an `HttpClient`. Clone-cheap (`Arc<Inner>` pattern).
+High-level sender that signs payloads per the Standard Webhooks protocol and delivers them via `modo::http::Client` (from the `http-client` feature). Clone-cheap (`Arc<Inner>` pattern).
 
 ### Construction
 
 ```rust
-// With default HyperClient (30s timeout):
+// With default http::Client (30s timeout):
 let sender = WebhookSender::default_client();
 
 // With custom client:
-let sender = WebhookSender::new(my_client);
+let client = modo::http::Client::builder()
+    .timeout(Duration::from_secs(10))
+    .build();
+let sender = WebhookSender::new(client);
 
-// Override User-Agent (must be called before cloning):
+// Override User-Agent (builder pattern, must be called before cloning):
 let sender = WebhookSender::default_client()
     .with_user_agent("my-app/2.0");
 ```
 
-- `default_client()` is an inherent method on `WebhookSender<HyperClient>` only.
+### Constructors and methods
+
+```rust
+pub fn new(client: crate::http::Client) -> Self
+pub fn default_client() -> Self
+pub fn with_user_agent(mut self, user_agent: impl Into<String>) -> Self
+```
+
+- `new()` takes a `modo::http::Client` instance.
+- `default_client()` creates a sender with a default `http::Client` using a 30-second timeout.
 - Default User-Agent: `modo-webhooks/<version>`.
-- `with_user_agent()` panics if called after the sender has been cloned (uses `Arc::get_mut`).
+- `with_user_agent()` consumes and returns `Self` (builder pattern). Panics if called after the sender has been cloned (uses `Arc::get_mut`). Invalid header values are silently ignored.
 
 ### Sending
 
@@ -106,7 +84,7 @@ Behavior:
 - Gets current UTC timestamp.
 - Calls `sign_headers()` to produce Standard Webhooks headers.
 - Sets headers: `content-type: application/json`, `user-agent`, `webhook-id`, `webhook-timestamp`, `webhook-signature`.
-- Delegates to `self.inner.client.post()`.
+- Delegates to internal `client::post()` which uses `http::Client`.
 - Empty body is accepted.
 
 ---
@@ -120,7 +98,7 @@ pub struct WebhookResponse {
 }
 ```
 
-Returned by `HttpClient::post()` and `WebhookSender::send()`. The caller decides what status codes constitute success or failure.
+Returned by `WebhookSender::send()`. The caller decides what status codes constitute success or failure.
 
 ---
 
@@ -145,9 +123,18 @@ let bytes = secret.as_bytes();
 println!("{}", secret); // whsec_<base64>
 ```
 
+### Public API
+
+```rust
+pub fn new(raw: impl Into<Vec<u8>>) -> Self
+pub fn generate() -> Self
+pub fn as_bytes(&self) -> &[u8]
+```
+
 - `Debug` output is always redacted: `WebhookSecret(***)`.
 - Implements `Serialize` / `Deserialize` as `whsec_<base64>` strings (safe for YAML/JSON config).
-- `FromStr` requires the `whsec_` prefix; returns `Error::bad_request` if missing or if base64 is invalid.
+- Implements `FromStr` (requires `whsec_` prefix; returns `Error::bad_request` if missing or if base64 is invalid).
+- Implements `Display` (always `whsec_<base64>`).
 - Uses standard base64 encoding (`base64::engine::general_purpose::STANDARD`).
 
 ---
@@ -209,12 +196,20 @@ For verifying incoming webhooks:
 
 ---
 
+## Internal (not public)
+
+The following are `pub(crate)` and not part of the public API:
+
+- `client::post()` -- sends the actual HTTP POST via `crate::http::Client`. Not exported.
+
+---
+
 ## Gotchas
 
 - **base64 crate, not encoding::base64url**: The webhook module uses the `base64` crate with `general_purpose::STANDARD` encoding. This is standard base64 with padding, per the Standard Webhooks spec. Do NOT use `modo::encoding::base64url` (which is RFC 4648 no-padding).
-- **HttpClient is not object-safe**: Uses RPITIT. Always use concrete type parameters, never `Arc<dyn HttpClient>`.
-- **with_user_agent panics after clone**: Must be called on the original `WebhookSender` before any `.clone()` calls.
+- **with_user_agent panics after clone**: Must be called on the original `WebhookSender` before any `.clone()` calls. Uses `Arc::get_mut` internally.
+- **with_user_agent silently ignores invalid values**: If the provided string is not a valid HTTP header value, the method returns `self` unchanged without error.
 - **sign_headers panics on empty secrets**: `WebhookSender::send()` validates this before calling, but direct callers of `sign_headers()` must ensure non-empty.
 - **No retry logic**: `WebhookSender` sends once. Retry/backoff is the caller's responsibility (e.g., via the job queue).
-- **No redirect following**: `HyperClient` does not follow redirects.
 - **Content-Type is always `application/json`**: Hardcoded in `WebhookSender::send()`.
+- **Uses `http::Client` not a trait**: The webhook module uses the concrete `modo::http::Client` struct (from the `http-client` feature), not a trait. There is no `dyn` dispatch.

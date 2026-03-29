@@ -38,6 +38,10 @@ impl ColumnMap {
     /// Look up the column index by name.
     ///
     /// Returns the zero-based column index, or an error if the column is not found.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the column name does not exist in the row.
     pub fn index(&self, name: &str) -> Result<i32> {
         self.map
             .get(name)
@@ -51,6 +55,11 @@ impl ColumnMap {
     /// then converts it via the [`FromValue`] trait.
     /// Supported types: `String`, `i32`, `i64`, `u32`, `u64`, `f64`, `bool`,
     /// `Vec<u8>`, `Option<T>`, and `libsql::Value`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the column is not found or the value cannot be
+    /// converted to `T`.
     pub fn get<T: FromValue>(&self, row: &libsql::Row, name: &str) -> Result<T> {
         let idx = self.index(name)?;
         let val = row.get_value(idx).map_err(Error::from)?;

@@ -1,9 +1,10 @@
 //! Role-based access control (RBAC) for axum applications.
 //!
-//! Three building blocks work together:
+//! Four building blocks work together:
 //!
 //! - [`RoleExtractor`] — implement this to resolve the current user's role from a request.
 //! - [`middleware()`] — Tower layer that calls your extractor and stores [`Role`] in extensions.
+//! - [`Role`] — newtype extractor over `String`; pull the resolved role into handlers.
 //! - [`require_role()`] / [`require_authenticated()`] — guard layers applied with
 //!   `.route_layer()` that reject requests before they reach handlers.
 //!

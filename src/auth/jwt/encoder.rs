@@ -64,6 +64,13 @@ impl JwtEncoder {
     /// If `claims.exp` is `None` and `default_expiry` is configured,
     /// `exp` is automatically set to `now + default_expiry` before signing.
     /// An explicitly set `exp` is never overwritten.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::internal` with [`JwtError::SerializationFailed`](super::JwtError::SerializationFailed)
+    /// if the claims cannot be serialized to JSON, or
+    /// [`JwtError::SigningFailed`](super::JwtError::SigningFailed) if the HMAC signing
+    /// operation fails.
     pub fn encode<T: Serialize>(&self, claims: &super::claims::Claims<T>) -> Result<String> {
         // Auto-fill exp if missing and default_expiry is configured
         let claims_json = if claims.exp.is_none() {

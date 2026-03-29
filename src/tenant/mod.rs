@@ -22,6 +22,17 @@
 //! | [`api_key_header`] | [`ApiKeyHeaderStrategy`] | `TenantId::ApiKey` |
 //! | [`path_prefix`] | [`PathPrefixStrategy`] | `TenantId::Slug` (rewrites URI) |
 //! | [`path_param`] | [`PathParamStrategy`] | `TenantId::Slug` (requires `route_layer`) |
+//!
+//! # Domain management (feature-gated)
+//!
+//! When both the `db` and `dns` features are enabled, the [`domain`] submodule
+//! provides [`domain::DomainService`] for registering, verifying, and managing
+//! custom domains per tenant. Domains are verified via DNS TXT records and can
+//! be flagged for email routing or HTTP request routing. See the [`domain`]
+//! module documentation for details.
+
+#[cfg(all(feature = "db", feature = "dns"))]
+pub mod domain;
 
 mod extractor;
 mod id;

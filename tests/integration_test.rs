@@ -25,11 +25,11 @@ async fn test_full_bootstrap() {
     let _tracing = modo::tracing::init(&config.modo.tracing).unwrap();
 
     // Database
-    let pool = db::connect(&config.modo.database).await.unwrap();
+    let database = db::connect(&config.modo.database).await.unwrap();
 
     // Registry
     let mut registry = service::Registry::new();
-    registry.add(pool.clone());
+    registry.add(database.clone());
 
     // Router
     let state = registry.into_state();
@@ -43,9 +43,11 @@ async fn test_full_bootstrap() {
     // Server
     let handle = server::http(router, &config.modo.server).await.unwrap();
 
-    // Verify pool works
-    let row: (i64,) = sqlx::query_as("SELECT 1").fetch_one(&*pool).await.unwrap();
-    assert_eq!(row.0, 1);
+    // Verify database works
+    let mut rows = database.conn().query("SELECT 1", ()).await.unwrap();
+    let row = rows.next().await.unwrap().unwrap();
+    let val: i64 = row.get(0).unwrap();
+    assert_eq!(val, 1);
 
     // Verify app_name loaded
     assert_eq!(config.app_name.as_deref(), Some("test-app"));
@@ -53,7 +55,6 @@ async fn test_full_bootstrap() {
     // Shutdown
     use modo::runtime::Task;
     handle.shutdown().await.unwrap();
-    pool.close().await;
 }
 
 #[tokio::test]
@@ -64,10 +65,10 @@ async fn test_web_core_bootstrap() {
     unsafe { env::remove_var("APP_ENV") };
 
     let _tracing = modo::tracing::init(&config.modo.tracing).unwrap();
-    let pool = db::connect(&config.modo.database).await.unwrap();
+    let database = db::connect(&config.modo.database).await.unwrap();
 
     let mut registry = service::Registry::new();
-    registry.add(pool.clone());
+    registry.add(database);
 
     let state = registry.into_state();
     let router = Router::new()
@@ -81,5 +82,4 @@ async fn test_web_core_bootstrap() {
     use modo::runtime::Task;
     handle.shutdown().await.unwrap();
     _tracing.shutdown().await.unwrap();
-    pool.close().await;
 }

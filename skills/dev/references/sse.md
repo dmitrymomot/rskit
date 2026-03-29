@@ -76,6 +76,15 @@ fn channel<F, Fut>(&self, f: F) -> Response
 
 `BroadcastStream<T>` implements `Stream<Item = Result<T, Error>>` and `Drop` (cleanup closure). It yields raw `T` values, not `Event`s. Convert downstream with `SseStreamExt::cast_events()`.
 
+### Construction
+
+```rust
+// Create from a raw broadcast::Receiver (no cleanup, no auto-removal).
+pub fn new(rx: broadcast::Receiver<T>) -> Self
+```
+
+`BroadcastStream::new()` is public for standalone use outside `Broadcaster`. Channels created this way have no automatic cleanup on drop. Prefer `Broadcaster::subscribe()` for managed channel lifecycles.
+
 ### Lag policy
 
 ```rust

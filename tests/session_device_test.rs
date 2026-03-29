@@ -1,4 +1,4 @@
-#![cfg(feature = "db")]
+#![cfg(feature = "session")]
 
 use modo::session::device::{parse_device_name, parse_device_type};
 

@@ -4,6 +4,8 @@ Module: `src/tenant/` | Always available (no feature gate)
 
 Re-exported from `modo`: `HasTenantId`, `Tenant`, `TenantId`, `TenantLayer`, `TenantResolver`, `TenantStrategy`, `tenant_middleware`.
 
+Domain submodule re-exports (requires `#[cfg(all(feature = "db", feature = "dns"))]`): `ClaimStatus`, `DomainClaim`, `DomainService`, `TenantMatch`.
+
 ## Overview
 
 The tenant system has four moving parts:
@@ -88,7 +90,15 @@ where
     R: TenantResolver;
 ```
 
-`TenantLayer` is a Tower `Layer` that produces `TenantMiddleware` services.
+`TenantLayer` is a Tower `Layer` that produces `TenantMiddleware` services. It also exposes a public constructor:
+
+```rust
+impl<S, R> TenantLayer<S, R> {
+    pub fn new(strategy: S, resolver: R) -> Self;
+}
+```
+
+`TenantMiddleware<Svc, S, R>` is a Tower `Service` (no public methods beyond the `Service` impl). Both `TenantLayer` and `TenantMiddleware` implement `Clone`.
 
 On each request the middleware:
 
@@ -111,6 +121,105 @@ Implements `FromRequestParts`, `OptionalFromRequestParts`, `Deref<Target = T>`, 
 - `Option<Tenant<T>>` -- returns `None` if no tenant in extensions.
 - `.get() -> &T` for an explicit reference.
 - Dereferences to `T` so fields are accessible directly via `Deref`.
+
+## Domain submodule (`tenant::domain`)
+
+Feature gate: `#[cfg(all(feature = "db", feature = "dns"))]`
+
+Provides domain claim registration, DNS-based verification, and domain-to-tenant lookups.
+
+### ClaimStatus
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClaimStatus {
+    Pending,
+    Verified,
+    Failed,
+}
+```
+
+Methods:
+
+- `as_str(&self) -> &'static str` -- returns `"pending"`, `"verified"`, or `"failed"`.
+
+### DomainClaim
+
+```rust
+#[derive(Debug, Clone, Serialize)]
+pub struct DomainClaim {
+    pub id: String,
+    pub tenant_id: String,
+    pub domain: String,
+    pub verification_token: String,
+    pub status: ClaimStatus,
+    pub use_for_email: bool,
+    pub use_for_routing: bool,
+    pub created_at: String,
+    pub verified_at: Option<String>,
+}
+```
+
+### TenantMatch
+
+```rust
+#[derive(Debug, Clone, Serialize)]
+pub struct TenantMatch {
+    pub tenant_id: String,
+    pub domain: String,
+}
+```
+
+### Free functions
+
+```rust
+pub fn validate_domain(domain: &str) -> Result<String>;
+pub fn extract_email_domain(email: &str) -> Result<String>;
+```
+
+- `validate_domain` -- trims, lowercases, rejects empty/no-dot/leading-trailing dots or hyphens/labels >63 chars/total >253 chars/non-alphanumeric-hyphen chars.
+- `extract_email_domain` -- splits on `@`, validates the domain portion via `validate_domain`.
+
+### DomainService
+
+```rust
+#[derive(Clone)]
+pub struct DomainService { /* Arc<Inner> */ }
+```
+
+Cheap to clone (`Arc` internally). Backed by `Database` and `DomainVerifier`.
+
+```rust
+impl DomainService {
+    pub fn new(db: Database, verifier: DomainVerifier) -> Self;
+    pub async fn register(&self, tenant_id: &str, domain: &str) -> Result<DomainClaim>;
+    pub async fn verify(&self, id: &str) -> Result<DomainClaim>;
+    pub async fn remove(&self, id: &str) -> Result<()>;
+    pub async fn enable_email(&self, id: &str) -> Result<()>;
+    pub async fn disable_email(&self, id: &str) -> Result<()>;
+    pub async fn enable_routing(&self, id: &str) -> Result<()>;
+    pub async fn disable_routing(&self, id: &str) -> Result<()>;
+    pub async fn lookup_email_domain(&self, email: &str) -> Result<Option<TenantMatch>>;
+    pub async fn lookup_routing_domain(&self, domain: &str) -> Result<Option<TenantMatch>>;
+    pub async fn resolve_tenant(&self, domain: &str) -> Result<Option<String>>;
+    pub async fn list(&self, tenant_id: &str) -> Result<Vec<DomainClaim>>;
+}
+```
+
+Method details:
+
+- `register` -- validates domain, returns existing pending claim if one exists (deduplication), generates a verification token, inserts a pending claim. Caller instructs user to create DNS TXT record at `_modo-verify.{domain}`.
+- `verify` -- fetches claim by ID, returns already-verified claims immediately, checks 48-hour expiry (marks `failed` if expired), queries DNS TXT via `DomainVerifier::check_txt`, updates status to `verified` on success.
+- `remove` -- deletes the claim row by ID.
+- `enable_email` / `disable_email` -- toggles `use_for_email` flag. Enable requires verified status.
+- `enable_routing` / `disable_routing` -- toggles `use_for_routing` flag. Enable requires verified status.
+- `lookup_email_domain` -- extracts domain from email address, finds a verified domain with `use_for_email = true`.
+- `lookup_routing_domain` -- validates domain, finds a verified domain with `use_for_routing = true`.
+- `resolve_tenant` -- convenience wrapper around `lookup_routing_domain`, returns only the tenant ID.
+- `list` -- returns all claims for a tenant ordered by `created_at DESC`. Pending claims older than 48 hours are returned with `Failed` status (computed in-memory).
+
+Expected table: `tenant_domains` with columns `id`, `tenant_id`, `domain`, `verification_token`, `status`, `use_for_email`, `use_for_routing`, `created_at`, `verified_at`.
 
 ## Usage example
 
@@ -175,3 +284,5 @@ let app = axum::Router::new()
 - **TenantResolver is not object-safe**: It uses RPITIT, so you cannot use `Arc<dyn TenantResolver>`. Pass the concrete resolver type directly.
 - **PathPrefixStrategy rewrites the URI**: The prefix and slug are stripped from the path; downstream handlers see the remaining path. Query strings are preserved.
 - **Subdomain strategies reject multi-level subdomains**: `a.b.acme.com` against base `acme.com` is an error, not a valid tenant.
+- **Domain enable requires verified**: `enable_email` and `enable_routing` return an error if the domain claim is not in `verified` status.
+- **48-hour verification window**: Pending claims expire after 48 hours. `verify()` persists the `failed` status; `list()` computes it in-memory without persisting.

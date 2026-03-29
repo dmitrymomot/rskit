@@ -23,6 +23,8 @@ pub struct CronContext {
 pub trait FromCronContext: Sized {
     /// Attempt to extract `Self` from the given context.
     ///
+    /// # Errors
+    ///
     /// Returns an error if the required data is not present (e.g. a service
     /// was not registered before the scheduler was built).
     fn from_cron_context(ctx: &CronContext) -> Result<Self>;

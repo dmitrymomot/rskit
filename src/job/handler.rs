@@ -33,6 +33,11 @@ use super::context::{FromJobContext, JobContext};
 /// ```
 pub trait JobHandler<Args>: Clone + Send + 'static {
     /// Invoke the handler with extracted arguments from `ctx`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if argument extraction from the context fails or if
+    /// the handler function itself returns an error.
     fn call(self, ctx: JobContext) -> impl Future<Output = Result<()>> + Send;
 }
 

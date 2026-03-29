@@ -51,12 +51,14 @@ Build the `features` list from selected components:
 | DNS         | `"dns"`           |
 | Geolocation | `"geolocation"`   |
 | Sentry      | `"sentry"`        |
+| Session     | `"session"`       |
+| Jobs        | `"job"`           |
 
 If ALL of these are selected, use `"full"` instead of listing them individually.
 
-For dev-dependencies, append `"test-helpers"` to the features list.
+For dev-dependencies, append `"test-helpers"`, `"session"`, and `"job"` to the features list.
 
-Jobs, Cron, Multi-tenancy, and RBAC do NOT require feature flags.
+Cron, Multi-tenancy, and RBAC do NOT require feature flags. Jobs requires `"job"`. Session (used by core) requires `"session"` — always include it.
 
 ---
 
@@ -380,7 +382,7 @@ just db-reset     # Remove all database files
 - Handlers are plain `async fn` — no macros, no signature rewriting
 - Routes use axum's `Router` directly — no auto-registration
 - Services wired explicitly in `main()` via `modo::service::Registry`
-- Database uses raw sqlx — no ORM
+- Database uses libsql (SQLite) — no ORM
 - Config YAML uses `${VAR:default}` for dev, `${VAR}` for production
 - IDs: `modo::id::ulid()` for full ULID, `modo::id::short()` for short time-sortable ID
 - Error handling: `modo::Error` with `?` operator everywhere, `modo::Result<T>` alias

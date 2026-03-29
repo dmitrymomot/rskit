@@ -28,6 +28,8 @@ Requires the `auth` feature flag.
 | `CookieSource`     | Extracts token from a named cookie                               |
 | `HeaderSource`     | Extracts token from a custom request header                      |
 | `HmacSigner`       | HS256 HMAC-SHA256 `TokenSigner` / `TokenVerifier` implementation |
+| `TokenSigner`      | Trait for JWT signing (extends `TokenVerifier`)                  |
+| `TokenVerifier`    | Trait for JWT signature verification                             |
 | `ValidationConfig` | Leeway, issuer, and audience validation policy                   |
 
 ## Configuration
@@ -46,13 +48,8 @@ Construct services from config:
 ```rust
 use modo::auth::jwt::{JwtConfig, JwtEncoder, JwtDecoder};
 
-let config = JwtConfig {
-    secret: "my-secret".into(),
-    default_expiry: Some(3600),
-    leeway: 0,
-    issuer: None,
-    audience: None,
-};
+let mut config = JwtConfig::new("my-secret");
+config.default_expiry = Some(3600);
 let encoder = JwtEncoder::from_config(&config);
 let decoder = JwtDecoder::from_config(&config);
 // Or share the same key material:
@@ -72,13 +69,8 @@ use modo::id;
 #[derive(Clone, Serialize, Deserialize)]
 struct AppClaims { role: String }
 
-let config = JwtConfig {
-    secret: "my-secret".into(),
-    default_expiry: Some(3600),
-    leeway: 0,
-    issuer: None,
-    audience: None,
-};
+let mut config = JwtConfig::new("my-secret");
+config.default_expiry = Some(3600);
 let encoder = JwtEncoder::from_config(&config);
 
 let claims = Claims::new(AppClaims { role: "admin".into() })
@@ -98,13 +90,8 @@ use modo::auth::jwt::{Claims, JwtConfig, JwtDecoder};
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct AppClaims { role: String }
 
-let config = JwtConfig {
-    secret: "my-secret".into(),
-    default_expiry: Some(3600),
-    leeway: 0,
-    issuer: None,
-    audience: None,
-};
+let mut config = JwtConfig::new("my-secret");
+config.default_expiry = Some(3600);
 let decoder = JwtDecoder::from_config(&config);
 
 let token: String = /* JWT string received from the client */;
@@ -125,13 +112,8 @@ async fn me_handler(claims: Claims<AppClaims>) -> String {
     format!("hello {}", claims.subject().unwrap_or("?"))
 }
 
-let config = JwtConfig {
-    secret: "my-secret".into(),
-    default_expiry: Some(3600),
-    leeway: 0,
-    issuer: None,
-    audience: None,
-};
+let mut config = JwtConfig::new("my-secret");
+config.default_expiry = Some(3600);
 let decoder = JwtDecoder::from_config(&config);
 
 let app: Router = Router::new()
@@ -166,13 +148,8 @@ use modo::auth::jwt::{
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct AppClaims { role: String }
 
-let config = JwtConfig {
-    secret: "my-secret".into(),
-    default_expiry: Some(3600),
-    leeway: 0,
-    issuer: None,
-    audience: None,
-};
+let mut config = JwtConfig::new("my-secret");
+config.default_expiry = Some(3600);
 let decoder = JwtDecoder::from_config(&config);
 
 let layer = JwtLayer::<AppClaims>::new(decoder)
@@ -202,13 +179,8 @@ impl Revocation for MyRevocationStore {
     }
 }
 
-let config = JwtConfig {
-    secret: "my-secret".into(),
-    default_expiry: Some(3600),
-    leeway: 0,
-    issuer: None,
-    audience: None,
-};
+let mut config = JwtConfig::new("my-secret");
+config.default_expiry = Some(3600);
 let decoder = JwtDecoder::from_config(&config);
 
 let layer = JwtLayer::<()>::new(decoder)

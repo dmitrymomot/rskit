@@ -216,7 +216,7 @@ Errors: empty recipient list, malformed addresses, SMTP delivery failures.
 | `TemplateSource`                  | Trait for loading raw templates                                                                        |
 | `FileSource`                      | Filesystem template source with locale fallback                                                        |
 | `CachedSource<S: TemplateSource>` | LRU-cached wrapper for any `TemplateSource`. `impl TemplateSource`                                     |
-| `ButtonType`                      | Enum: `Primary`, `Danger`, `Warning`, `Info`, `Success`. Derives `Debug`, `Clone`, `Copy`, `PartialEq` |
+| `ButtonType`                      | Enum: `Primary`, `Danger`, `Warning`, `Info`, `Success`. Derives `Debug`, `Clone`, `Copy`, `PartialEq`. Method: `colors(&self, brand_color: Option<&str>) -> (&str, &str)` returns `(background, text)` CSS hex pair |
 
 ## Dependencies
 

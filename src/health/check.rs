@@ -84,38 +84,13 @@ impl Default for HealthChecks {
 }
 
 #[cfg(feature = "db")]
-mod pool_health {
-    use super::*;
-    use crate::db;
-
-    macro_rules! impl_pool_health_check {
-        ($ty:ty, $msg:literal) => {
-            impl HealthCheck for $ty {
-                fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-                    Box::pin(async {
-                        self.acquire()
-                            .await
-                            .map_err(|e| crate::Error::internal($msg).chain(e))?;
-                        Ok(())
-                    })
-                }
-            }
-        };
-    }
-
-    impl_pool_health_check!(db::Pool, "pool health check failed");
-    impl_pool_health_check!(db::ReadPool, "read pool health check failed");
-    impl_pool_health_check!(db::WritePool, "write pool health check failed");
-}
-
-#[cfg(feature = "ldb")]
-impl HealthCheck for crate::ldb::Database {
+impl HealthCheck for crate::db::Database {
     fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async {
             self.conn()
                 .query("SELECT 1", ())
                 .await
-                .map_err(|e| crate::Error::internal("ldb health check failed").chain(e))?;
+                .map_err(|e| crate::Error::internal("db health check failed").chain(e))?;
             Ok(())
         })
     }
@@ -124,35 +99,15 @@ impl HealthCheck for crate::ldb::Database {
 #[cfg(all(test, feature = "db"))]
 mod tests {
     use super::*;
-    use crate::db::{Pool, ReadPool, WritePool};
 
     #[tokio::test]
-    async fn pool_health_check_succeeds() {
-        let pool = Pool::new(sqlx::SqlitePool::connect(":memory:").await.unwrap());
-        pool.check().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn read_pool_health_check_succeeds() {
-        let inner = sqlx::SqlitePool::connect(":memory:").await.unwrap();
-        let pool = ReadPool::new(inner);
-        pool.check().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn write_pool_health_check_succeeds() {
-        let inner = sqlx::SqlitePool::connect(":memory:").await.unwrap();
-        let pool = WritePool::new(inner);
-        pool.check().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn check_adds_trait_impl() {
-        let pool = Pool::new(sqlx::SqlitePool::connect(":memory:").await.unwrap());
-        let checks = HealthChecks::new().check("pool", pool);
-        assert_eq!(checks.as_slice().len(), 1);
-        assert_eq!(checks.as_slice()[0].0, "pool");
-        checks.as_slice()[0].1.check().await.unwrap();
+    async fn database_health_check() {
+        let config = crate::db::Config {
+            path: ":memory:".to_string(),
+            ..Default::default()
+        };
+        let db = crate::db::connect(&config).await.unwrap();
+        db.check().await.unwrap();
     }
 
     #[tokio::test]

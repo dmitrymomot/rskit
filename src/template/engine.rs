@@ -152,8 +152,9 @@ impl EngineBuilder {
     ///
     /// The resolvers are tried in order; the first one that returns `Some` wins.
     /// When not called, a default chain of [`QueryParamResolver`](super::QueryParamResolver),
-    /// [`CookieResolver`](super::CookieResolver), [`SessionResolver`](super::SessionResolver),
-    /// and [`AcceptLanguageResolver`](super::AcceptLanguageResolver) is used.
+    /// [`CookieResolver`](super::CookieResolver),
+    /// [`AcceptLanguageResolver`](super::AcceptLanguageResolver), and (when the `session`
+    /// feature is enabled) `SessionResolver` is used.
     pub fn locale_resolvers(mut self, resolvers: Vec<Arc<dyn LocaleResolver>>) -> Self {
         self.locale_resolvers = Some(resolvers);
         self

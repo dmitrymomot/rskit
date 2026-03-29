@@ -1,234 +1,493 @@
 # Database (`modo::db`)
 
-SQLite database layer built on raw sqlx. No ORM. One module: `src/db/`.
+Lightweight libsql (SQLite) database layer. Single connection, no ORM, no pool. One module: `src/db/`.
 
-## Pool Newtypes
+Feature flag: `db` (default). Dependencies: `libsql`, `urlencoding`.
 
-All three wrap `sqlx::SqlitePool` (aliased as `InnerPool`) and `Deref` to it, so you can pass `&*pool` directly to sqlx queries.
+Re-exports `libsql` crate for direct access to `libsql::params!`, `libsql::Value`, `libsql::Connection`, `libsql::Transaction`.
 
-| Type        | Implements        | Purpose                                       |
-| ----------- | ----------------- | --------------------------------------------- |
-| `Pool`      | `Reader + Writer` | Single pool for both reads and writes         |
-| `ReadPool`  | `Reader` only     | Read-only handle; prevents accidental writes  |
-| `WritePool` | `Reader + Writer` | Write handle; defaults to `max_connections=1` |
+## Database Handle
 
-Each has `::new(InnerPool) -> Self` and `Clone`.
-
-## Reader / Writer Traits
+`Database` — clone-able, `Arc`-wrapped single-connection handle. Created by `connect()`.
 
 ```rust
-pub trait Reader {
-    fn read_pool(&self) -> &InnerPool;
-}
+#[derive(Clone)]
+pub struct Database { /* inner: Arc<Inner> */ }
 
-pub trait Writer {
-    fn write_pool(&self) -> &InnerPool;
+impl Database {
+    pub fn conn(&self) -> &libsql::Connection;
 }
 ```
 
-Use these as bounds on functions that interact with the database:
+`Inner` is private. `new()` is `pub(crate)`.
 
-```rust
-pub async fn find_user(id: &str, db: &impl Reader) -> Result<User> {
-    let row = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = ?")
-        .bind(id)
-        .fetch_one(db.read_pool())
-        .await?;
-    Ok(row)
-}
+## Configuration (`Config`)
 
-pub async fn create_user(user: &NewUser, db: &impl Writer) -> Result<()> {
-    sqlx::query("INSERT INTO users (id, name) VALUES (?, ?)")
-        .bind(&user.id)
-        .bind(&user.name)
-        .execute(db.write_pool())
-        .await?;
-    Ok(())
-}
-```
+Derives `Debug`, `Clone`, `Deserialize`. All fields have serde defaults. `impl Default for Config` mirrors those defaults.
 
-`ReadPool` intentionally does **not** implement `Writer`, so passing it to a write function is a compile error.
-
-## Connection Functions
-
-### `connect(config) -> Result<Pool>`
-
-Opens a single connection pool. Use for simple apps or in-memory databases.
-
-```rust
-use modo::db::{self, SqliteConfig};
-
-let config = SqliteConfig {
-    path: "data/app.db".to_string(),
-    ..Default::default()
-};
-let pool = db::connect(&config).await?;
-```
-
-### `connect_rw(config) -> Result<(ReadPool, WritePool)>`
-
-Opens separate read and write pools. The read pool opens the file in read-only mode (`?mode=ro`). The write pool defaults to `max_connections=1` to serialize writes.
-
-```rust
-let (read_pool, write_pool) = db::connect_rw(&config).await?;
-```
-
-## Using sqlx Queries
-
-All pool newtypes `Deref` to `sqlx::SqlitePool`, so you can use `&*pool` anywhere sqlx expects an executor:
-
-```rust
-// With Deref (common in handlers/tests)
-let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
-    .fetch_one(&*pool)
-    .await?;
-
-// With Reader/Writer traits (common in service functions)
-let rows = sqlx::query_as::<_, UserRow>("SELECT * FROM users WHERE active = ?")
-    .bind(true)
-    .fetch_all(db.read_pool())
-    .await?;
-```
-
-## sqlx Error Conversion
-
-`sqlx::Error` converts automatically into `modo::Error` via `From`:
-
-| sqlx error                  | HTTP status | message                 |
-| --------------------------- | ----------- | ----------------------- |
-| `RowNotFound`               | 404         | "record not found"      |
-| unique constraint violation | 409         | "record already exists" |
-| foreign key violation       | 400         | "foreign key violation" |
-| `PoolTimedOut`              | 500         | "database pool timeout" |
-| all others                  | 500         | "database error"        |
-
-Use `?` in handlers and the conversion happens automatically.
-
-## Migrations
-
-```rust
-db::migrate("migrations", &pool).await?;
-```
-
-Accepts any `&impl Writer`. Uses sqlx's standard migration file naming (e.g., `001_create_users.sql`).
-
-## Managed Pool (Graceful Shutdown)
-
-`ManagedPool` implements `Task`. Consume a pool into `ManagedPool` for use with the `run!` macro:
-
-```rust
-let managed = db::managed(pool.clone());
-run!(server, managed);
-```
-
-Accepts `Pool`, `ReadPool`, or `WritePool` (each has `impl From<T> for ManagedPool`). **Consumes the pool** -- clone first if you need continued access. On shutdown, closes the pool and drains connections.
-
-## Configuration (`SqliteConfig`)
-
-`#[non_exhaustive]`. Loaded from YAML. `db::Config` is a type alias for `SqliteConfig` (re-exported as `pub type Config = SqliteConfig`). Derives `Debug`, `Clone`, `Deserialize`.
-
-Key defaults:
-
-| Field                  | Type                | Default                           |
-| ---------------------- | ------------------- | --------------------------------- |
-| `path`                 | `String`            | `"data/app.db"`                   |
-| `max_connections`      | `u32`               | `10`                              |
-| `min_connections`      | `u32`               | `1`                               |
-| `journal_mode`         | `JournalMode`       | `Wal`                             |
-| `synchronous`          | `SynchronousMode`   | `Normal`                          |
-| `foreign_keys`         | `bool`              | `true`                            |
-| `busy_timeout`         | `u64`               | `5000` ms                         |
-| `cache_size`           | `i64`               | `-2000` (~2 MB)                   |
-| `acquire_timeout_secs` | `u64`               | `30`                              |
-| `idle_timeout_secs`    | `u64`               | `600`                             |
-| `max_lifetime_secs`    | `u64`               | `1800`                            |
-| `mmap_size`            | `Option<u64>`       | `None`                            |
-| `temp_store`           | `Option<TempStore>` | `None`                            |
-| `wal_autocheckpoint`   | `Option<u32>`       | `None`                            |
-| `reader`               | `PoolOverrides`     | `PoolOverrides::default_reader()` |
-| `writer`               | `PoolOverrides`     | `PoolOverrides::default_writer()` |
+| Field          | Type              | Default              |
+| -------------- | ----------------- | -------------------- |
+| `path`         | `String`          | `"data/app.db"`      |
+| `migrations`   | `Option<String>`  | `None`               |
+| `busy_timeout` | `u64`             | `5000` ms            |
+| `cache_size`   | `i64`             | `16384` (~16 MB)     |
+| `mmap_size`    | `u64`             | `268_435_456` (256 MB) |
+| `journal_mode` | `JournalMode`     | `Wal`                |
+| `synchronous`  | `SynchronousMode` | `Normal`             |
+| `foreign_keys` | `bool`            | `true`               |
+| `temp_store`   | `TempStore`       | `Memory`             |
 
 ### Enum types
 
-**`JournalMode`**: `Delete`, `Truncate`, `Persist`, `Memory`, `Wal`, `Off`.
-
-**`SynchronousMode`**: `Off`, `Normal`, `Full`, `Extra`.
-
-**`TempStore`**: `Default`, `File`, `Memory`.
-
-All three are publicly exported from `modo::db`.
-
-### PoolOverrides
-
-`#[non_exhaustive]`. `reader` and `writer` fields on `SqliteConfig` hold `PoolOverrides` for `connect_rw()`. All fields are `Option<T>` (override the base `SqliteConfig` value when `Some`).
-
-Fields: `max_connections`, `min_connections`, `acquire_timeout_secs`, `idle_timeout_secs`, `max_lifetime_secs`, `busy_timeout`, `cache_size`, `mmap_size`, `temp_store`, `wal_autocheckpoint`.
-
-Constructor methods:
-
-- `PoolOverrides::default_reader() -> Self` — returns a `PoolOverrides` pre-filled with reader defaults (`busy_timeout=1000`, `cache_size=-16000`, `mmap_size=268435456`).
-- `PoolOverrides::default_writer() -> Self` — returns a `PoolOverrides` pre-filled with writer defaults (`max_connections=1`, `busy_timeout=2000`, `cache_size=-16000`, `mmap_size=268435456`).
-
-Reader defaults: `busy_timeout=1000`, `cache_size=-16000` (~16 MB), `mmap_size=268435456` (256 MiB). Writer defaults: `max_connections=1`, `busy_timeout=2000`, `cache_size=-16000` (~16 MB), `mmap_size=268435456` (256 MiB).
-
-## Registry Integration
-
-Add pools to the service registry for extraction in handlers:
+**`JournalMode`** — derives `Debug, Clone, Copy, Deserialize, Default`. Variants: `Wal` (default), `Delete`, `Truncate`, `Memory`, `Off`. Serde: `rename_all = "lowercase"`.
 
 ```rust
-let mut registry = service::Registry::new();
-registry.add(pool.clone());
-// or for read/write split:
-registry.add(read_pool.clone());
-registry.add(write_pool.clone());
-```
-
-Extract in handlers via `Service<T>`:
-
-```rust
-async fn list_users(Service(pool): Service<ReadPool>) -> Result<Json<Vec<User>>> {
-    let users = sqlx::query_as::<_, User>("SELECT * FROM users")
-        .fetch_all(&*pool)
-        .await?;
-    Ok(Json(users))
+impl JournalMode {
+    pub fn as_str(self) -> &'static str;
 }
 ```
 
-## In-Memory Test Pattern
-
-Use `TestDb` (behind `test-helpers` feature) or manually share one pool:
+**`SynchronousMode`** — derives `Debug, Clone, Copy, Deserialize, Default`. Variants: `Off`, `Normal` (default), `Full`, `Extra`. Serde: `rename_all = "lowercase"`.
 
 ```rust
-// With TestDb (preferred)
-use modo::testing::TestDb;
-let db = TestDb::new().await
-    .exec("CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
-    .await;
-let pool = db.pool();
-let read_pool = db.read_pool();   // shares same underlying connection
-let write_pool = db.write_pool(); // shares same underlying connection
+impl SynchronousMode {
+    pub fn as_str(self) -> &'static str;
+}
+```
 
-// Manual approach
-let pool = db::connect(&SqliteConfig {
-    path: ":memory:".to_string(),
-    ..Default::default()
-}).await?;
-let read_pool = ReadPool::new((*pool).clone());
-let write_pool = WritePool::new((*pool).clone());
+**`TempStore`** — derives `Debug, Clone, Copy, Deserialize, Default`. Variants: `Default`, `File`, `Memory` (default). Serde: `rename_all = "lowercase"`.
+
+```rust
+impl TempStore {
+    pub fn as_str(self) -> &'static str;
+}
+```
+
+## Connection Functions
+
+### `connect(config: &Config) -> Result<Database>`
+
+Opens a local libsql database, applies PRAGMAs from `Config`, optionally runs migrations (when `Config::migrations` is set). Creates parent directories for the database path if they don't exist.
+
+```rust
+pub async fn connect(config: &Config) -> Result<Database>;
+```
+
+### `migrate(conn: &libsql::Connection, dir: &str) -> Result<()>`
+
+Runs `*.sql` migration files from a directory, sorted by filename. Tracks applied migrations in a `_migrations` table with FNV-1a checksum verification. Each migration runs in a transaction. Skips already-applied files. Errors on checksum mismatch.
+
+```rust
+pub async fn migrate(conn: &libsql::Connection, dir: &str) -> Result<()>;
+```
+
+## ConnExt Trait
+
+Low-level query trait implemented for `libsql::Connection` and `libsql::Transaction`.
+
+```rust
+pub trait ConnExt: Sync {
+    fn query_raw(
+        &self,
+        sql: &str,
+        params: impl IntoParams + Send,
+    ) -> impl Future<Output = std::result::Result<libsql::Rows, libsql::Error>> + Send;
+
+    fn execute_raw(
+        &self,
+        sql: &str,
+        params: impl IntoParams + Send,
+    ) -> impl Future<Output = std::result::Result<u64, libsql::Error>> + Send;
+
+    fn select<'a>(&'a self, sql: &str) -> SelectBuilder<'a, Self>
+    where
+        Self: Sized;
+}
+```
+
+Implemented for: `libsql::Connection`, `libsql::Transaction`.
+
+## ConnQueryExt Trait
+
+High-level query helpers. Blanket-implemented for all `ConnExt` types (`impl<T: ConnExt> ConnQueryExt for T {}`).
+
+```rust
+pub trait ConnQueryExt: ConnExt {
+    fn query_one<T: FromRow + Send>(
+        &self,
+        sql: &str,
+        params: impl IntoParams + Send,
+    ) -> impl Future<Output = Result<T>> + Send;
+
+    fn query_optional<T: FromRow + Send>(
+        &self,
+        sql: &str,
+        params: impl IntoParams + Send,
+    ) -> impl Future<Output = Result<Option<T>>> + Send;
+
+    fn query_all<T: FromRow + Send>(
+        &self,
+        sql: &str,
+        params: impl IntoParams + Send,
+    ) -> impl Future<Output = Result<Vec<T>>> + Send;
+
+    fn query_one_map<T: Send, F>(
+        &self,
+        sql: &str,
+        params: impl IntoParams + Send,
+        f: F,
+    ) -> impl Future<Output = Result<T>> + Send
+    where
+        F: Fn(&libsql::Row) -> Result<T> + Send;
+
+    fn query_optional_map<T: Send, F>(
+        &self,
+        sql: &str,
+        params: impl IntoParams + Send,
+        f: F,
+    ) -> impl Future<Output = Result<Option<T>>> + Send
+    where
+        F: Fn(&libsql::Row) -> Result<T> + Send;
+
+    fn query_all_map<T: Send, F>(
+        &self,
+        sql: &str,
+        params: impl IntoParams + Send,
+        f: F,
+    ) -> impl Future<Output = Result<Vec<T>>> + Send
+    where
+        F: Fn(&libsql::Row) -> Result<T> + Send;
+}
+```
+
+## Row Mapping
+
+### `FromRow` trait
+
+```rust
+pub trait FromRow: Sized {
+    fn from_row(row: &libsql::Row) -> Result<Self>;
+}
+```
+
+### `ColumnMap`
+
+Column name to index lookup built from a single row's column metadata.
+
+```rust
+pub struct ColumnMap { /* map: HashMap<String, i32> */ }
+
+impl ColumnMap {
+    pub fn from_row(row: &libsql::Row) -> Self;
+    pub fn index(&self, name: &str) -> Result<i32>;
+    pub fn get<T: FromValue>(&self, row: &libsql::Row, name: &str) -> Result<T>;
+}
+```
+
+### `FromValue` trait
+
+Converts `libsql::Value` into a concrete Rust type. Implemented for: `libsql::Value`, `String`, `i32`, `u32`, `i64`, `u64`, `f64`, `bool`, `Vec<u8>`, `Option<T>` (where `T: FromValue`).
+
+```rust
+pub trait FromValue: Sized {
+    fn from_value(val: libsql::Value) -> Result<Self>;
+}
+```
+
+## Filtering
+
+### `FilterSchema`
+
+Declares allowed filter fields and sort fields for an endpoint. Derives `Default`.
+
+```rust
+pub struct FilterSchema { /* fields, sort_fields */ }
+
+impl FilterSchema {
+    pub fn new() -> Self;
+    pub fn field(mut self, name: &str, typ: FieldType) -> Self;
+    pub fn sort_fields(mut self, fields: &[&str]) -> Self;
+}
+```
+
+### `FieldType`
+
+Derives `Debug, Clone, Copy`. Variants: `Text`, `Int`, `Float`, `Date`, `Bool`.
+
+### `Filter`
+
+Raw parsed filter from query string. Implements `FromRequestParts<S>` (axum extractor).
+
+Supported query-string syntax:
+
+| Pattern          | Meaning                           |
+| ---------------- | --------------------------------- |
+| `field=value`    | Equality, or `IN` if multi-value  |
+| `field.ne=value` | Not equal                         |
+| `field.gt=value` | Greater than                      |
+| `field.gte=value`| Greater than or equal             |
+| `field.lt=value` | Less than                         |
+| `field.lte=value`| Less than or equal                |
+| `field.like=value`| SQL `LIKE`                       |
+| `field.null=true`| `IS NULL` / `IS NOT NULL`         |
+| `sort=field`     | Sort ascending; `-field` for desc |
+
+```rust
+pub struct Filter { /* conditions, sort */ }
+
+impl Filter {
+    pub fn from_query_params(params: &HashMap<String, Vec<String>>) -> Self;
+    pub fn validate(self, schema: &FilterSchema) -> Result<ValidatedFilter>;
+}
+```
+
+### `ValidatedFilter`
+
+`#[non_exhaustive]`. Schema-validated filter safe for SQL generation.
+
+```rust
+pub struct ValidatedFilter {
+    pub clauses: Vec<String>,
+    pub params: Vec<libsql::Value>,
+    pub sort_clause: Option<String>,
+}
+
+impl ValidatedFilter {
+    pub fn is_empty(&self) -> bool;
+}
+```
+
+## Pagination
+
+### `PaginationConfig`
+
+Derives `Debug, Clone`. Add to request extensions to override defaults.
+
+```rust
+pub struct PaginationConfig {
+    pub default_per_page: i64,  // default: 20
+    pub max_per_page: i64,      // default: 100
+}
+```
+
+### `PageRequest`
+
+Offset pagination extractor (`?page=N&per_page=N`). Derives `Debug, Clone, Deserialize`. Implements `FromRequestParts<S>`. Pages are 1-based.
+
+```rust
+pub struct PageRequest {
+    pub page: i64,
+    pub per_page: i64,
+}
+
+impl PageRequest {
+    pub fn clamp(&mut self, config: &PaginationConfig);
+    pub fn offset(&self) -> i64;
+}
+```
+
+### `Page<T: Serialize>`
+
+Offset-based page response. Derives `Debug, Serialize`.
+
+```rust
+pub struct Page<T: Serialize> {
+    pub items: Vec<T>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
+    pub total_pages: i64,
+    pub has_next: bool,
+    pub has_prev: bool,
+}
+
+impl<T: Serialize> Page<T> {
+    pub fn new(items: Vec<T>, total: i64, page: i64, per_page: i64) -> Self;
+}
+```
+
+### `CursorRequest`
+
+Cursor pagination extractor (`?after=<cursor>&per_page=N`). Derives `Debug, Clone, Deserialize`. Implements `FromRequestParts<S>`.
+
+```rust
+pub struct CursorRequest {
+    pub after: Option<String>,
+    pub per_page: i64,
+}
+
+impl CursorRequest {
+    pub fn clamp(&mut self, config: &PaginationConfig);
+}
+```
+
+### `CursorPage<T: Serialize>`
+
+Cursor-based page response. Derives `Debug, Serialize`.
+
+```rust
+pub struct CursorPage<T: Serialize> {
+    pub items: Vec<T>,
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+    pub per_page: i64,
+}
+
+impl<T: Serialize> CursorPage<T> {
+    pub fn new(items: Vec<T>, next_cursor: Option<String>, per_page: i64) -> Self;
+}
+```
+
+## SelectBuilder
+
+Composable query builder combining filters, sorting, and pagination. Created via `ConnExt::select()`.
+
+```rust
+pub struct SelectBuilder<'a, C: ConnExt> { /* conn, base_sql, filter, order_by, cursor_column, cursor_desc */ }
+
+impl<'a, C: ConnExt> SelectBuilder<'a, C> {
+    pub fn filter(mut self, filter: ValidatedFilter) -> Self;
+    pub fn order_by(mut self, order: &str) -> Self;
+    pub fn cursor_column(mut self, col: &str) -> Self;
+    pub fn oldest_first(mut self) -> Self;
+    pub async fn page<T: FromRow + Serialize>(self, req: PageRequest) -> Result<Page<T>>;
+    pub async fn cursor<T: FromRow + Serialize>(self, req: CursorRequest) -> Result<CursorPage<T>>;
+    pub async fn fetch_all<T: FromRow>(self) -> Result<Vec<T>>;
+    pub async fn fetch_one<T: FromRow>(self) -> Result<T>;
+    pub async fn fetch_optional<T: FromRow>(self) -> Result<Option<T>>;
+}
+```
+
+Default cursor column: `"id"`. Default cursor order: descending (newest-first). `oldest_first()` switches to ascending.
+
+## Managed Database (Graceful Shutdown)
+
+`ManagedDatabase` implements `Task`. Wraps a `Database` for use with `run!` macro. On shutdown, drops the database handle.
+
+```rust
+pub struct ManagedDatabase(Database);
+
+pub fn managed(db: Database) -> ManagedDatabase;
+```
+
+## libsql Error Conversion
+
+`libsql::Error` converts into `modo::Error` via `From`:
+
+| libsql error                                        | HTTP status | message                          |
+| --------------------------------------------------- | ----------- | -------------------------------- |
+| `SqliteFailure(2067)` / `SqliteFailure(1555)` (unique/PK) | 409   | "record already exists"          |
+| `SqliteFailure(787)` (FK violation)                 | 400         | "foreign key violation"          |
+| `SqliteFailure(other)`                              | 500         | "database error: {msg}"          |
+| `QueryReturnedNoRows`                               | 404         | "record not found"               |
+| `NullValue`                                         | 400         | "unexpected null value"          |
+| `ConnectionFailed(msg)`                             | 500         | "database connection failed: {msg}" |
+| `InvalidColumnIndex`                                | 500         | "invalid column index"           |
+| `InvalidColumnType`                                 | 500         | "invalid column type"            |
+| all others                                          | 500         | "database error"                 |
+
+## Usage Examples
+
+```rust
+use modo::db;
+
+// Connect with defaults (data/app.db, WAL mode, FK on)
+let db = db::connect(&db::Config::default()).await?;
+
+// Use ConnQueryExt for typed queries
+use db::ConnQueryExt;
+let user: User = db.conn().query_one(
+    "SELECT id, name FROM users WHERE id = ?1",
+    libsql::params!["user_abc"],
+).await?;
+
+// Optional query
+let maybe: Option<User> = db.conn().query_optional(
+    "SELECT id, name FROM users WHERE email = ?1",
+    libsql::params![email],
+).await?;
+
+// All rows
+let users: Vec<User> = db.conn().query_all(
+    "SELECT id, name FROM users WHERE active = ?1",
+    libsql::params![1],
+).await?;
+
+// Closure-based mapping
+let count: i64 = db.conn().query_one_map(
+    "SELECT COUNT(*) FROM users",
+    (),
+    |row| Ok(row.get::<i64>(0).map_err(modo::Error::from)?),
+).await?;
+
+// Raw execute
+use db::ConnExt;
+let affected = db.conn().execute_raw(
+    "DELETE FROM sessions WHERE expires_at < datetime('now')",
+    (),
+).await.map_err(modo::Error::from)?;
+
+// SelectBuilder with filters and pagination
+let page = db.conn()
+    .select("SELECT id, name FROM users")
+    .filter(validated_filter)
+    .order_by("\"created_at\" DESC")
+    .page::<User>(page_request)
+    .await?;
+
+// Cursor pagination
+let cursor_page = db.conn()
+    .select("SELECT id, name FROM users")
+    .filter(validated_filter)
+    .cursor_column("id")
+    .cursor::<User>(cursor_request)
+    .await?;
+
+// Transactions
+let tx = db.conn().transaction().await.map_err(modo::Error::from)?;
+tx.execute_raw("INSERT INTO users (id, name) VALUES (?1, ?2)", libsql::params!["id1", "Alice"]).await?;
+tx.execute_raw("INSERT INTO profiles (user_id) VALUES (?1)", libsql::params!["id1"]).await?;
+tx.commit().await.map_err(modo::Error::from)?;
+```
+
+## Implementing FromRow
+
+```rust
+use modo::db::{FromRow, ColumnMap};
+use modo::Result;
+
+struct User {
+    id: String,
+    name: String,
+    age: Option<i32>,
+}
+
+impl FromRow for User {
+    fn from_row(row: &libsql::Row) -> Result<Self> {
+        let cols = ColumnMap::from_row(row);
+        Ok(Self {
+            id: cols.get(row, "id")?,
+            name: cols.get(row, "name")?,
+            age: cols.get(row, "age")?,
+        })
+    }
+}
 ```
 
 ## Gotchas
 
-- **`:memory:` forces `max_connections=1`**: `connect()` auto-downgrades because each SQLite connection to `:memory:` gets its own isolated database instance. A pool with >1 connection would see different databases.
+- **Single connection**: `Database` wraps one `libsql::Connection` in `Arc`. No pool. All clones share the same connection.
 
-- **`connect_rw()` rejects `:memory:`**: Returns `Error::internal` immediately. In-memory databases cannot be shared across separate pools. Use `connect()` + `ReadPool::new()`/`WritePool::new()` to share one pool.
+- **999 bind params limit**: SQLite limits a single statement to 999 bound parameters. Batch operations must chunk accordingly.
 
-- **999 bind params limit**: SQLite limits a single statement to 999 bound parameters. Batch operations must chunk accordingly (e.g., max ~900 registered job handlers in the worker poll loop).
+- **No `ON CONFLICT` with partial unique indexes**: Use plain `INSERT` and catch the unique violation error from the `From<libsql::Error>` conversion (409 Conflict).
 
-- **No `ON CONFLICT` with partial unique indexes**: SQLite does not support `ON CONFLICT` clauses on partial unique indexes. Use plain `INSERT` and catch `is_unique_violation()` from the sqlx database error.
+- **Parent directories auto-created**: `connect()` creates missing parent directories for the database path.
 
-- **Pool types lack `Debug`**: `Pool`, `ReadPool`, `WritePool` do not implement `Debug`. In tests, use `.err().unwrap()` instead of `.unwrap_err()` when asserting errors.
+- **PRAGMAs via query, not execute**: libsql PRAGMAs return rows, so `connect()` uses `conn.query()` (not `conn.execute()`) for PRAGMA statements.
 
-- **PRAGMAs applied per-connection**: All configured PRAGMAs (`journal_mode`, `synchronous`, `foreign_keys`, `busy_timeout`, `cache_size`, etc.) are set via `after_connect`, so every new connection in the pool gets them automatically.
+- **`ConnExt` uses RPITIT**: `query_raw` and `execute_raw` return `impl Future` (not `Pin<Box<dyn Future>>`), so `ConnExt` is not object-safe.
 
-- **Parent directories auto-created**: `connect()` and `connect_rw()` create missing parent directories for the database file path.
+- **Transactions**: Use `db.conn().transaction().await` to get a `libsql::Transaction`. `ConnExt` and `ConnQueryExt` are implemented for `Transaction`, so the same query helpers work inside transactions.
+
+- **Migrations use FNV-1a**: Checksums are FNV-1a (not SHA/CRC), stored as 16-char hex. Deterministic and stable across Rust versions.

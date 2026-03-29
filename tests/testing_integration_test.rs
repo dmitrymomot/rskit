@@ -2,15 +2,25 @@
 
 use axum::Json;
 use axum::routing::get;
-use modo::db::Pool;
+use modo::db::{ColumnMap, ConnExt, ConnQueryExt, Database, FromRow};
 use modo::session::Session;
 use modo::testing::{TestApp, TestDb, TestSession};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 struct User {
     id: String,
     name: String,
+}
+
+impl FromRow for User {
+    fn from_row(row: &libsql::Row) -> modo::Result<Self> {
+        let cols = ColumnMap::from_row(row);
+        Ok(Self {
+            id: cols.get(row, "id")?,
+            name: cols.get(row, "name")?,
+        })
+    }
 }
 
 impl modo::sanitize::Sanitize for User {
@@ -19,13 +29,14 @@ impl modo::sanitize::Sanitize for User {
 
 async fn create_user(
     _session: Session,
-    modo::extractor::Service(pool): modo::extractor::Service<Pool>,
+    modo::extractor::Service(db): modo::extractor::Service<Database>,
     modo::extractor::JsonRequest(input): modo::extractor::JsonRequest<User>,
 ) -> modo::Result<Json<User>> {
-    sqlx::query("INSERT INTO users (id, name) VALUES (?, ?)")
-        .bind(&input.id)
-        .bind(&input.name)
-        .execute(&**pool)
+    db.conn()
+        .execute_raw(
+            "INSERT INTO users (id, name) VALUES (?1, ?2)",
+            libsql::params![input.id.clone(), input.name.clone()],
+        )
         .await
         .map_err(|e| modo::Error::internal(e.to_string()))?;
     Ok(Json(input))
@@ -33,16 +44,12 @@ async fn create_user(
 
 async fn list_users(
     _session: Session,
-    modo::extractor::Service(pool): modo::extractor::Service<Pool>,
+    modo::extractor::Service(db): modo::extractor::Service<Database>,
 ) -> modo::Result<Json<Vec<User>>> {
-    let rows: Vec<(String, String)> = sqlx::query_as("SELECT id, name FROM users")
-        .fetch_all(&**pool)
-        .await
-        .map_err(|e| modo::Error::internal(e.to_string()))?;
-    let users: Vec<User> = rows
-        .into_iter()
-        .map(|(id, name)| User { id, name })
-        .collect();
+    let users: Vec<User> = db
+        .conn()
+        .query_all("SELECT id, name FROM users", ())
+        .await?;
     Ok(Json(users))
 }
 
@@ -59,7 +66,7 @@ async fn test_full_app_with_db_and_session() {
     let session = TestSession::new(&db).await;
 
     let app = TestApp::builder()
-        .service(db.pool())
+        .service(db.db())
         .route("/users", get(list_users).post(create_user))
         .route("/me", get(whoami))
         .layer(session.layer())

@@ -155,7 +155,10 @@ where
 /// Returns a Tower layer that adds security headers to every response
 /// based on the provided configuration.
 ///
-/// Returns an error if any configured header value contains invalid characters.
+/// # Errors
+///
+/// Returns [`crate::Error`] if any configured header value contains invalid
+/// HTTP header characters.
 ///
 /// # Example
 ///

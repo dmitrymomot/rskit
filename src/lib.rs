@@ -4,7 +4,7 @@
 //!
 //! Single crate, zero proc macros. Handlers are plain `async fn`, routes use
 //! axum's [`Router`](axum::Router) directly, services are wired explicitly in
-//! `main()`, and database queries use raw sqlx.
+//! `main()`, and database queries use raw libsql.
 //!
 //! ## Quick start
 //!
@@ -13,8 +13,9 @@
 //! modo = "0.1"
 //! ```
 //!
-//! Enable optional modules via feature flags: `templates`, `auth`, `sse`,
-//! `email`, `storage`, `webhooks`, `dns`, `geolocation`, `sentry`.
+//! Enable optional modules via feature flags: `http-client`, `templates`,
+//! `auth`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`,
+//! `qrcode`, `sentry`.
 //!
 //! Or enable everything:
 //!
@@ -36,19 +37,17 @@ pub mod health;
 pub mod id;
 pub mod ip;
 pub mod middleware;
-#[cfg(feature = "db")]
-pub mod page;
 pub mod runtime;
 pub mod sanitize;
 pub mod server;
 pub mod service;
-#[cfg(feature = "db")]
+#[cfg(feature = "session")]
 pub mod session;
 pub mod tracing;
 pub mod validate;
 
 pub mod cron;
-#[cfg(feature = "db")]
+#[cfg(feature = "job")]
 pub mod job;
 pub mod rbac;
 pub mod tenant;
@@ -77,14 +76,8 @@ pub mod webhook;
 #[cfg(feature = "dns")]
 pub mod dns;
 
-#[cfg(feature = "dns")]
-pub mod domain_signup;
-
 #[cfg(feature = "geolocation")]
 pub mod geolocation;
-
-#[cfg(feature = "ldb")]
-pub mod ldb;
 
 #[cfg(feature = "qrcode")]
 pub mod qrcode;
@@ -103,19 +96,18 @@ pub use http::{
     Client as HttpClient, ClientBuilder as HttpClientBuilder, ClientConfig as HttpClientConfig,
 };
 pub use ip::{ClientIp, ClientIpLayer};
-#[cfg(feature = "db")]
-pub use page::{
-    CursorPage, CursorPaginate, CursorRequest, Page, PageRequest, Paginate, PaginationConfig,
-};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
-#[cfg(feature = "db")]
+#[cfg(feature = "session")]
 pub use session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};
 pub use tenant::{
     HasTenantId, Tenant, TenantId, TenantLayer, TenantResolver, TenantStrategy,
     middleware as tenant_middleware,
 };
 pub use validate::{Validate, ValidationError, Validator};
+
+#[cfg(all(feature = "db", feature = "dns"))]
+pub use tenant::domain::{ClaimStatus, DomainClaim, DomainService, TenantMatch};
 
 #[cfg(feature = "auth")]
 pub use auth::oauth::{
@@ -144,9 +136,6 @@ pub use webhook::{SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender};
 #[cfg(feature = "dns")]
 pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};
 
-#[cfg(feature = "dns")]
-pub use domain_signup::{ClaimStatus, DomainClaim, DomainRegistry, TenantMatch};
-
 #[cfg(feature = "geolocation")]
 pub use geolocation::{GeoLayer, GeoLocator, GeolocationConfig, Location};
 
@@ -160,6 +149,4 @@ pub use qrcode::qr_svg_function;
 pub use axum;
 pub use serde;
 pub use serde_json;
-#[cfg(feature = "db")]
-pub use sqlx;
 pub use tokio;

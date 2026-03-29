@@ -44,6 +44,8 @@ impl Mailer {
     /// If `config.cache_templates` is `true`, the file source is wrapped in a
     /// [`CachedSource`] with `config.template_cache_size` capacity.
     ///
+    /// # Errors
+    ///
     /// Returns an error if the SMTP transport cannot be built (e.g., invalid
     /// host, mismatched credentials) or if the layouts directory cannot be
     /// read.
@@ -70,6 +72,11 @@ impl Mailer {
     ///
     /// Use this to supply an in-memory source, a database-backed source, or
     /// any other custom implementation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the SMTP transport cannot be built or if the
+    /// layouts directory cannot be read.
     pub fn with_source(config: &EmailConfig, source: Arc<dyn TemplateSource>) -> Result<Self> {
         let transport = Self::build_smtp_transport(config)?;
         let layouts = layout::load_layouts(&config.layouts_path)?;
@@ -86,6 +93,10 @@ impl Mailer {
     ///
     /// Requires feature `"email-test"`. The stub transport accepts messages
     /// without actually sending them over a network.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the layouts directory cannot be read.
     #[cfg(feature = "email-test")]
     pub fn with_stub_transport(
         config: &EmailConfig,
@@ -153,6 +164,11 @@ impl Mailer {
     /// layout, and generates the plain-text fallback.
     ///
     /// Returns a [`RenderedEmail`] containing the subject, HTML, and text.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the template cannot be loaded, the frontmatter is
+    /// missing or malformed, or the requested layout is not found.
     pub fn render(&self, email: &SendEmail) -> Result<RenderedEmail> {
         let locale = email
             .locale
@@ -194,8 +210,11 @@ impl Mailer {
     /// MIME message (text/plain + text/html) and delivers it over the
     /// configured transport.
     ///
+    /// # Errors
+    ///
     /// Returns an error if the recipient list is empty, if any address is
-    /// malformed, or if the SMTP delivery fails.
+    /// malformed, if the template cannot be rendered, or if the SMTP delivery
+    /// fails.
     pub async fn send(&self, email: SendEmail) -> Result<()> {
         if email.to.is_empty() {
             return Err(Error::bad_request("email has no recipients"));

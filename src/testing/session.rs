@@ -84,13 +84,15 @@ impl TestSession {
         session_config: SessionConfig,
         cookie_config: CookieConfig,
     ) -> Self {
-        sqlx::query(SESSIONS_TABLE_SQL)
-            .execute(&*db.pool())
+        use crate::db::ConnExt;
+        db.db()
+            .conn()
+            .execute_raw(SESSIONS_TABLE_SQL, ())
             .await
             .expect("failed to create sessions table");
 
         let key = key_from_config(&cookie_config).expect("failed to derive cookie key");
-        let store = Store::new(&db.pool(), session_config.clone());
+        let store = Store::new(db.db(), session_config.clone());
 
         Self {
             store,

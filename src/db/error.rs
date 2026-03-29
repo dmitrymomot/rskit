@@ -1,36 +1,34 @@
-//! Automatic conversion from [`sqlx::Error`] to [`crate::Error`].
-
 use crate::error::Error;
-use http::StatusCode;
 
-/// Converts a [`sqlx::Error`] into a [`crate::Error`] with an appropriate HTTP status code.
+/// Converts `libsql::Error` into [`modo::Error`](crate::Error) with
+/// appropriate HTTP status codes:
 ///
-/// | sqlx error                  | HTTP status | message                 |
-/// |-----------------------------|-------------|-------------------------|
-/// | `RowNotFound`               | 404         | "record not found"      |
-/// | unique constraint violation | 409         | "record already exists" |
-/// | foreign key violation       | 400         | "foreign key violation" |
-/// | `PoolTimedOut`              | 500         | "database pool timeout" |
-/// | all others                  | 500         | "database error"        |
-impl From<sqlx::Error> for Error {
-    fn from(err: sqlx::Error) -> Self {
+/// - Unique/primary-key constraint violations become `409 Conflict`.
+/// - Foreign-key violations become `400 Bad Request`.
+/// - `QueryReturnedNoRows` becomes `404 Not Found`.
+/// - Everything else becomes `500 Internal Server Error`.
+impl From<libsql::Error> for Error {
+    fn from(err: libsql::Error) -> Self {
         match &err {
-            sqlx::Error::RowNotFound => Error::not_found("record not found"),
-            sqlx::Error::Database(db_err) => {
-                if db_err.is_unique_violation() {
-                    Error::with_source(StatusCode::CONFLICT, "record already exists", err)
-                } else if db_err.is_foreign_key_violation() {
-                    Error::with_source(StatusCode::BAD_REQUEST, "foreign key violation", err)
-                } else {
-                    Error::with_source(StatusCode::INTERNAL_SERVER_ERROR, "database error", err)
+            libsql::Error::SqliteFailure(code, msg) => {
+                // SQLite extended error codes
+                // SQLITE_CONSTRAINT_UNIQUE = 2067
+                // SQLITE_CONSTRAINT_FOREIGNKEY = 787
+                // SQLITE_CONSTRAINT_PRIMARYKEY = 1555
+                match *code {
+                    2067 | 1555 => Error::conflict("record already exists").chain(err),
+                    787 => Error::bad_request("foreign key violation").chain(err),
+                    _ => Error::internal(format!("database error: {msg}")).chain(err),
                 }
             }
-            sqlx::Error::PoolTimedOut => Error::with_source(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "database pool timeout",
-                err,
-            ),
-            _ => Error::with_source(StatusCode::INTERNAL_SERVER_ERROR, "database error", err),
+            libsql::Error::QueryReturnedNoRows => Error::not_found("record not found"),
+            libsql::Error::NullValue => Error::bad_request("unexpected null value"),
+            libsql::Error::ConnectionFailed(msg) => {
+                Error::internal(format!("database connection failed: {msg}"))
+            }
+            libsql::Error::InvalidColumnIndex => Error::internal("invalid column index"),
+            libsql::Error::InvalidColumnType => Error::internal("invalid column type"),
+            _ => Error::internal("database error").chain(err),
         }
     }
 }

@@ -65,8 +65,11 @@ impl Clone for DomainVerifier {
 impl DomainVerifier {
     /// Create a new verifier from [`DnsConfig`].
     ///
-    /// Parses the nameserver address and builds a UDP resolver. Returns an
-    /// error if the nameserver string is not a valid IP address.
+    /// Parses the nameserver address and builds a UDP resolver.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the nameserver string is not a valid IP address.
     pub fn from_config(config: &DnsConfig) -> Result<Self> {
         let nameserver = config.parse_nameserver()?;
         let timeout = Duration::from_millis(config.timeout_ms);
@@ -107,6 +110,8 @@ impl DomainVerifier {
     /// when the record exists but no value matches, or when no TXT records
     /// exist (NXDOMAIN is treated as an empty record set, not an error).
     ///
+    /// # Errors
+    ///
     /// Returns [`crate::Error`] with status 400 when `domain` or
     /// `expected_token` is empty, or a gateway error on network/DNS failure.
     pub async fn check_txt(&self, domain: &str, expected_token: &str) -> Result<bool> {
@@ -132,6 +137,8 @@ impl DomainVerifier {
     /// Normalizes both the resolved target and `expected_target` before
     /// comparing: both are lowercased and any trailing dot is stripped.
     /// Returns `false` when no CNAME record is present.
+    ///
+    /// # Errors
     ///
     /// Returns [`crate::Error`] with status 400 when `domain` or
     /// `expected_target` is empty, or a gateway error on network/DNS failure.
@@ -163,9 +170,12 @@ impl DomainVerifier {
     ///
     /// Runs [`check_txt`](Self::check_txt) and
     /// [`check_cname`](Self::check_cname) in parallel via `tokio::join!`.
-    /// Returns [`DomainStatus`] with individual results. If either check
-    /// returns a hard error (e.g. network failure) the error is propagated
-    /// and the other result is discarded.
+    /// Returns [`DomainStatus`] with individual results.
+    ///
+    /// # Errors
+    ///
+    /// If either check returns a hard error (e.g. network failure) the error
+    /// is propagated and the other result is discarded.
     pub async fn verify_domain(
         &self,
         domain: &str,

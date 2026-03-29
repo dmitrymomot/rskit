@@ -2,7 +2,7 @@
 
 ## Modules
 
-- `modo::job` -- durable SQLite-backed job queue (always available, no feature gate)
+- `modo::job` -- durable SQLite-backed job queue (feature-gated: `#[cfg(feature = "job")]`, depends on `db`)
 - `modo::cron` -- in-process cron scheduler (always available, no feature gate)
 
 Both modules are re-exported at the crate root as `pub mod job` and `pub mod cron`.
@@ -47,12 +47,12 @@ async fn send_email_job(
 
 ### Enqueuing Jobs
 
-`Enqueuer` writes rows into `jobs`. Construct with any `Writer`:
+`Enqueuer` writes rows into `jobs`. Construct with a `Database` handle:
 
 ```rust
 use modo::job::{Enqueuer, EnqueueOptions};
 
-let enqueuer = Enqueuer::new(&write_pool);  // accepts &impl Writer (WritePool or Pool)
+let enqueuer = Enqueuer::new(db);  // accepts Database (cloneable Arc<Connection>)
 
 // Immediate execution on the "default" queue
 let job_id = enqueuer.enqueue("send_email", &payload).await?;
@@ -149,7 +149,7 @@ let worker = Worker::builder(&job_config, &registry)
     .await;
 ```
 
-`Worker::builder` panics if `WritePool` is not in the registry.
+`Worker::builder` panics if `Database` is not in the registry.
 
 `Worker` implements `Task` for integration with the `run!` macro:
 
@@ -251,7 +251,7 @@ Three formats are accepted:
 @every 30s
 ```
 
-Invalid expressions panic at scheduler build time (not at runtime).
+Invalid expressions return an error at scheduler build time (the `job()` and `job_with()` methods return `Result<Self>`).
 
 ### Building and Starting a Scheduler
 
@@ -259,12 +259,12 @@ Invalid expressions panic at scheduler build time (not at runtime).
 use modo::cron::{Scheduler, CronOptions};
 
 let scheduler = Scheduler::builder(&registry)
-    .job("@daily", cleanup_expired)
-    .job("*/5 * * * *", heartbeat)
+    .job("@daily", cleanup_expired)?
+    .job("*/5 * * * *", heartbeat)?
     .job_with("@every 30s", intensive_task, CronOptions {
         timeout_secs: 25,
         ..Default::default()
-    })
+    })?
     .start()
     .await;
 ```
@@ -291,13 +291,13 @@ The cron `Meta.name` field is set to the fully qualified Rust type name of the h
 
 ## Gotchas
 
-- **No embedded migrations**: Both `job` and `cron` modules are DB-backed (job) or in-memory (cron). The `jobs` table must be created by the end-application's migration. The framework does not ship DDL.
+- **No embedded migrations**: The `job` module is DB-backed and `cron` is in-memory. The `jobs` table must be created by the end-application's migration. The framework does not ship DDL.
 
 - **999 bind params limit (SQLite)**: The worker poll loop builds a dynamic `IN (?, ?, ...)` clause for all registered handler names. SQLite has a 999 bind parameter limit per statement, so a single worker can support a maximum of roughly 900 registered handlers.
 
-- **croner 6-field support**: `croner::Cron::new()` defaults to 5-field expressions. The framework calls `.with_seconds_optional()` so both 5-field and 6-field (seconds-prefixed) expressions work. If you use `croner` directly elsewhere, remember to call `.with_seconds_optional()` for 6-field support.
+- **croner 6-field support**: The framework uses `croner::parser::CronParser::builder().seconds(croner::parser::Seconds::Optional).build()` so both 5-field and 6-field (seconds-prefixed) expressions work. If you use `croner` directly elsewhere, remember to enable optional seconds for 6-field support.
 
-- **`WritePool` required**: `Worker::builder()` panics if `WritePool` is not registered in the `Registry`.
+- **`Database` required**: `Worker::builder()` panics if `Database` is not registered in the `Registry`.
 
 - **Registry snapshot is frozen**: Both `Worker` and `Scheduler` capture a `RegistrySnapshot` at build time. Services added to the `Registry` after building are not visible to handlers.
 

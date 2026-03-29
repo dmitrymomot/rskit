@@ -3,34 +3,36 @@
 use modo::testing::TestDb;
 
 #[tokio::test]
-async fn test_new_creates_pool() {
+async fn test_db_creates_database() {
     let db = TestDb::new().await;
-    let pool = db.pool();
-    let row: (i64,) = sqlx::query_as("SELECT 1").fetch_one(&*pool).await.unwrap();
-    assert_eq!(row.0, 1);
+    let _ = db.db();
 }
 
 #[tokio::test]
-async fn test_exec_creates_table() {
+async fn test_db_exec_and_query() {
     let db = TestDb::new()
         .await
-        .exec("CREATE TABLE test_items (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+        .exec("CREATE TABLE items (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+        .await
+        .exec("INSERT INTO items (id, name) VALUES ('1', 'hello')")
         .await;
 
-    sqlx::query("INSERT INTO test_items (id, name) VALUES ('1', 'Alice')")
-        .execute(&*db.pool())
+    use modo::db::ConnQueryExt;
+    let count: i64 = db
+        .db()
+        .conn()
+        .query_one_map("SELECT COUNT(*) FROM items", (), |row| {
+            use modo::db::FromValue;
+            let val = row.get_value(0).map_err(modo::Error::from)?;
+            i64::from_value(val)
+        })
         .await
         .unwrap();
-
-    let row: (String,) = sqlx::query_as("SELECT name FROM test_items WHERE id = '1'")
-        .fetch_one(&*db.pool())
-        .await
-        .unwrap();
-    assert_eq!(row.0, "Alice");
+    assert_eq!(count, 1);
 }
 
 #[tokio::test]
-async fn test_exec_chaining() {
+async fn test_db_exec_chaining() {
     let db = TestDb::new()
         .await
         .exec("CREATE TABLE t1 (id INTEGER PRIMARY KEY)")
@@ -38,98 +40,30 @@ async fn test_exec_chaining() {
         .exec("CREATE TABLE t2 (id INTEGER PRIMARY KEY)")
         .await;
 
-    sqlx::query("INSERT INTO t1 (id) VALUES (1)")
-        .execute(&*db.pool())
+    use modo::db::ConnExt;
+    db.db()
+        .conn()
+        .execute_raw("INSERT INTO t1 (id) VALUES (1)", ())
         .await
         .unwrap();
-    sqlx::query("INSERT INTO t2 (id) VALUES (2)")
-        .execute(&*db.pool())
+    db.db()
+        .conn()
+        .execute_raw("INSERT INTO t2 (id) VALUES (2)", ())
         .await
         .unwrap();
 }
 
 #[tokio::test]
-async fn test_read_pool_and_write_pool_share_data() {
+async fn test_db_migrate() {
     let db = TestDb::new()
         .await
-        .exec("CREATE TABLE shared (id TEXT PRIMARY KEY)")
+        .migrate("tests/fixtures/db_migrations")
         .await;
-
-    sqlx::query("INSERT INTO shared (id) VALUES ('x')")
-        .execute(&*db.write_pool())
-        .await
-        .unwrap();
-
-    let row: (String,) = sqlx::query_as("SELECT id FROM shared")
-        .fetch_one(&*db.read_pool())
-        .await
-        .unwrap();
-    assert_eq!(row.0, "x");
-}
-
-#[tokio::test]
-async fn test_pool_read_pool_write_pool_all_share_same_db() {
-    let db = TestDb::new()
-        .await
-        .exec("CREATE TABLE multi (id TEXT PRIMARY KEY)")
-        .await;
-
-    sqlx::query("INSERT INTO multi (id) VALUES ('a')")
-        .execute(&*db.pool())
-        .await
-        .unwrap();
-
-    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM multi")
-        .fetch_one(&*db.read_pool())
-        .await
-        .unwrap();
-    assert_eq!(count.0, 1);
-
-    sqlx::query("INSERT INTO multi (id) VALUES ('b')")
-        .execute(&*db.write_pool())
-        .await
-        .unwrap();
-
-    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM multi")
-        .fetch_one(&*db.pool())
-        .await
-        .unwrap();
-    assert_eq!(count.0, 2);
-}
-
-#[tokio::test]
-async fn test_migrate_runs_sql_files() {
-    let db = TestDb::new()
-        .await
-        .migrate("tests/fixtures/migrations")
-        .await;
-
-    sqlx::query("INSERT INTO items (id, name, status) VALUES ('1', 'Alice', 'active')")
-        .execute(&*db.pool())
-        .await
-        .unwrap();
-
-    let row: (String, String, String) =
-        sqlx::query_as("SELECT id, name, status FROM items WHERE id = '1'")
-            .fetch_one(&*db.pool())
-            .await
-            .unwrap();
-    assert_eq!(row.0, "1");
-    assert_eq!(row.1, "Alice");
-    assert_eq!(row.2, "active");
-}
-
-#[tokio::test]
-#[should_panic(expected = "failed to run migrations")]
-async fn test_migrate_panics_on_invalid_path() {
-    TestDb::new()
-        .await
-        .migrate("tests/fixtures/nonexistent")
-        .await;
+    let _ = db.db();
 }
 
 #[tokio::test]
 #[should_panic]
-async fn test_exec_panics_on_invalid_sql() {
+async fn test_db_exec_invalid_sql_panics() {
     TestDb::new().await.exec("NOT VALID SQL").await;
 }

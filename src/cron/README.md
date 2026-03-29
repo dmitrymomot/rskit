@@ -18,7 +18,7 @@ Three formats are accepted wherever a schedule string is required:
 | Named alias                              | `@yearly`, `@annually`, `@monthly`, `@weekly`, `@daily`, `@midnight`, `@hourly` |
 | Interval                                 | `@every 5m`, `@every 1h30m`, `@every 30s`                                       |
 
-Invalid expressions or durations cause a panic at startup.
+Invalid expressions or durations return an error at builder time.
 
 ## Key Types
 
@@ -37,6 +37,7 @@ Invalid expressions or durations cause a panic at startup.
 ```rust
 use modo::cron::Scheduler;
 use modo::extractor::Service;
+use modo::runtime::Task;
 use modo::service::Registry;
 use modo::Result;
 
@@ -57,8 +58,8 @@ async fn main() {
     registry.add(EmailService);
 
     let scheduler = Scheduler::builder(&registry)
-        .job("@daily", send_digest)
-        .job("@every 1m", heartbeat)
+        .job("@daily", send_digest).unwrap()
+        .job("@every 1m", heartbeat).unwrap()
         .start()
         .await;
 
@@ -71,6 +72,7 @@ async fn main() {
 
 ```rust
 use modo::cron::{Scheduler, CronOptions};
+use modo::runtime::Task;
 use modo::service::Registry;
 use modo::Result;
 
@@ -88,6 +90,7 @@ async fn main() {
             slow_job,
             CronOptions { timeout_secs: 600 },
         )
+        .unwrap()
         .start()
         .await;
 

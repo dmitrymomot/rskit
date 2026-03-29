@@ -81,7 +81,7 @@ let app = Router::new()
     .layer(middleware::catch_panic())
     .layer(middleware::compression())
     .layer(middleware::cors(&cors_config))
-    .layer(middleware::security_headers(&sec_config))
+    .layer(middleware::security_headers(&sec_config)?)
     .layer(middleware::rate_limit(&rl_config, cancel.clone()))
     .layer(ClientIpLayer::new());
 ```
@@ -261,7 +261,7 @@ let config = SecurityHeadersConfig {
     permissions_policy: None,
     ..Default::default()
 };
-let layer = security_headers(&config);
+let layer = security_headers(&config)?;
 ```
 
 ### CSRF

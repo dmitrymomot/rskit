@@ -1,11 +1,11 @@
-#![cfg(feature = "db")]
+#![cfg(feature = "job")]
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use chrono::Utc;
-use modo::db;
+use modo::db::{self, ConnExt, ConnQueryExt, FromValue};
 use modo::error::Result;
 use modo::job::{self, Enqueuer, JobOptions, Payload, Worker};
 use modo::service::Registry;
@@ -33,21 +33,19 @@ CREATE UNIQUE INDEX idx_jobs_payload_hash
     ON jobs(payload_hash)
     WHERE payload_hash IS NOT NULL AND status IN ('pending', 'running')";
 
-async fn setup() -> (Registry, db::Pool) {
-    let config = {
-        let mut c = db::SqliteConfig::default();
-        c.path = ":memory:".to_string();
-        c
+async fn setup() -> (Registry, db::Database) {
+    let config = db::Config {
+        path: ":memory:".to_string(),
+        ..Default::default()
     };
-    let pool = db::connect(&config).await.unwrap();
-    sqlx::query(CREATE_TABLE).execute(&*pool).await.unwrap();
-    sqlx::query(CREATE_INDEX).execute(&*pool).await.unwrap();
+    let db = db::connect(&config).await.unwrap();
+    db.conn().execute_raw(CREATE_TABLE, ()).await.unwrap();
+    db.conn().execute_raw(CREATE_INDEX, ()).await.unwrap();
 
     let mut registry = Registry::new();
-    let write_pool = db::WritePool::new((*pool).clone());
-    registry.add(write_pool);
-    registry.add(Enqueuer::new(&pool));
-    (registry, pool)
+    registry.add(db.clone());
+    registry.add(Enqueuer::new(db.clone()));
+    (registry, db)
 }
 
 fn fast_config() -> job::JobConfig {
@@ -80,11 +78,11 @@ async fn failing_handler(_payload: Payload<serde_json::Value>) -> Result<()> {
 
 #[tokio::test]
 async fn worker_processes_enqueued_job() {
-    let (mut registry, pool) = setup().await;
+    let (mut registry, db) = setup().await;
     let counter = Arc::new(AtomicU32::new(0));
     registry.add(counter.clone());
 
-    let enqueuer = Enqueuer::new(&pool);
+    let enqueuer = Enqueuer::new(db.clone());
     enqueuer
         .enqueue("count", &serde_json::json!({}))
         .await
@@ -101,8 +99,12 @@ async fn worker_processes_enqueued_job() {
 
     assert_eq!(counter.load(Ordering::SeqCst), 1);
 
-    let (status,): (String,) = sqlx::query_as("SELECT status FROM jobs LIMIT 1")
-        .fetch_one(&*pool)
+    let status: String = db
+        .conn()
+        .query_one_map("SELECT status FROM jobs LIMIT 1", (), |row| {
+            let val = row.get_value(0).map_err(modo::Error::from)?;
+            String::from_value(val)
+        })
         .await
         .unwrap();
     assert_eq!(status, "completed");
@@ -110,9 +112,9 @@ async fn worker_processes_enqueued_job() {
 
 #[tokio::test]
 async fn worker_retries_failed_job() {
-    let (registry, pool) = setup().await;
+    let (registry, db) = setup().await;
 
-    let enqueuer = Enqueuer::new(&pool);
+    let enqueuer = Enqueuer::new(db.clone());
     enqueuer
         .enqueue("fail", &serde_json::json!({}))
         .await
@@ -136,22 +138,27 @@ async fn worker_retries_failed_job() {
 
     modo::runtime::Task::shutdown(worker).await.unwrap();
 
-    let (status, attempt): (String, i32) =
-        sqlx::query_as("SELECT status, attempt FROM jobs LIMIT 1")
-            .fetch_one(&*pool)
-            .await
-            .unwrap();
+    let (status, attempt): (String, i32) = db
+        .conn()
+        .query_one_map("SELECT status, attempt FROM jobs LIMIT 1", (), |row| {
+            Ok((
+                String::from_value(row.get_value(0).map_err(modo::Error::from)?)?,
+                i32::from_value(row.get_value(1).map_err(modo::Error::from)?)?,
+            ))
+        })
+        .await
+        .unwrap();
     assert_eq!(status, "dead");
     assert_eq!(attempt, 2);
 }
 
 #[tokio::test]
 async fn worker_ignores_unregistered_job_names() {
-    let (mut registry, pool) = setup().await;
+    let (mut registry, db) = setup().await;
     let counter = Arc::new(AtomicU32::new(0));
     registry.add(counter.clone());
 
-    let enqueuer = Enqueuer::new(&pool);
+    let enqueuer = Enqueuer::new(db.clone());
     enqueuer
         .enqueue("unknown_job", &serde_json::json!({}))
         .await
@@ -168,8 +175,12 @@ async fn worker_ignores_unregistered_job_names() {
 
     // The job should remain pending because the worker only claims jobs
     // whose names match registered handlers (via the IN clause).
-    let (status,): (String,) = sqlx::query_as("SELECT status FROM jobs LIMIT 1")
-        .fetch_one(&*pool)
+    let status: String = db
+        .conn()
+        .query_one_map("SELECT status FROM jobs LIMIT 1", (), |row| {
+            let val = row.get_value(0).map_err(modo::Error::from)?;
+            String::from_value(val)
+        })
         .await
         .unwrap();
     assert_eq!(status, "pending");
@@ -177,7 +188,7 @@ async fn worker_ignores_unregistered_job_names() {
 
 #[tokio::test]
 async fn worker_shutdown_is_clean() {
-    let (registry, _pool) = setup().await;
+    let (registry, _db) = setup().await;
 
     async fn noop_handler(_payload: Payload<serde_json::Value>) -> Result<()> {
         Ok(())
@@ -200,22 +211,23 @@ async fn worker_shutdown_is_clean() {
 
 #[tokio::test]
 async fn reaper_resets_stale_running_jobs() {
-    let (mut registry, pool) = setup().await;
+    let (mut registry, db) = setup().await;
     let counter = Arc::new(AtomicU32::new(0));
     registry.add(counter.clone());
 
     // Enqueue a job and manually mark it as stale running
-    let enqueuer = Enqueuer::new(&pool);
+    let enqueuer = Enqueuer::new(db.clone());
     let id = enqueuer
         .enqueue("count", &serde_json::json!({}))
         .await
         .unwrap();
 
     let stale_time = (Utc::now() - chrono::Duration::minutes(2)).to_rfc3339();
-    sqlx::query("UPDATE jobs SET status = 'running', attempt = 1, started_at = ? WHERE id = ?")
-        .bind(&stale_time)
-        .bind(&id)
-        .execute(&*pool)
+    db.conn()
+        .execute_raw(
+            "UPDATE jobs SET status = 'running', attempt = 1, started_at = ?1 WHERE id = ?2",
+            libsql::params![stale_time.as_str(), id.as_str()],
+        )
         .await
         .unwrap();
 
@@ -250,9 +262,16 @@ async fn reaper_resets_stale_running_jobs() {
     // and the worker should have picked it up and completed it
     assert!(counter.load(Ordering::SeqCst) >= 1);
 
-    let (status,): (String,) = sqlx::query_as("SELECT status FROM jobs WHERE id = ?")
-        .bind(&id)
-        .fetch_one(&*pool)
+    let status: String = db
+        .conn()
+        .query_one_map(
+            "SELECT status FROM jobs WHERE id = ?1",
+            libsql::params![id.as_str()],
+            |row| {
+                let val = row.get_value(0).map_err(modo::Error::from)?;
+                String::from_value(val)
+            },
+        )
         .await
         .unwrap();
     assert_eq!(status, "completed");
@@ -260,19 +279,21 @@ async fn reaper_resets_stale_running_jobs() {
 
 #[tokio::test]
 async fn cleanup_removes_old_terminal_jobs() {
-    let (registry, pool) = setup().await;
+    let (registry, db) = setup().await;
 
     // Enqueue a job and manually mark it as completed with old timestamp
-    let enqueuer = Enqueuer::new(&pool);
+    let enqueuer = Enqueuer::new(db.clone());
     enqueuer
         .enqueue("test", &serde_json::json!({}))
         .await
         .unwrap();
 
     let old_time = (Utc::now() - chrono::Duration::minutes(2)).to_rfc3339();
-    sqlx::query("UPDATE jobs SET status = 'completed', updated_at = ?")
-        .bind(&old_time)
-        .execute(&*pool)
+    db.conn()
+        .execute_raw(
+            "UPDATE jobs SET status = 'completed', updated_at = ?1",
+            libsql::params![old_time.as_str()],
+        )
         .await
         .unwrap();
 
@@ -311,9 +332,13 @@ async fn cleanup_removes_old_terminal_jobs() {
 
     modo::runtime::Task::shutdown(worker).await.unwrap();
 
-    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM jobs")
-        .fetch_one(&*pool)
+    let count: i64 = db
+        .conn()
+        .query_one_map("SELECT COUNT(*) FROM jobs", (), |row| {
+            let val = row.get_value(0).map_err(modo::Error::from)?;
+            i64::from_value(val)
+        })
         .await
         .unwrap();
-    assert_eq!(count.0, 0);
+    assert_eq!(count, 0);
 }

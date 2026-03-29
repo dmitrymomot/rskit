@@ -17,6 +17,8 @@ impl RegistrySnapshot {
         Self { services }
     }
 
+    /// Returns a reference-counted handle to the service stored as type `T`,
+    /// or `None` if no such service exists in the snapshot.
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
         self.services
             .get(&TypeId::of::<T>())

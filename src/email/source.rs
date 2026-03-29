@@ -10,8 +10,12 @@ pub trait TemplateSource: Send + Sync {
     /// Load a template by `name` for the given `locale`.
     ///
     /// `default_locale` is the application-wide fallback locale, used when a
-    /// locale-specific file does not exist.  Implementations should return
-    /// `Err` only when no suitable file can be found.
+    /// locale-specific file does not exist.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no suitable template can be found for the
+    /// given name and locale combination.
     fn load(&self, name: &str, locale: &str, default_locale: &str) -> Result<String>;
 }
 

@@ -5,7 +5,8 @@ feature flag.
 
 Provides: filesystem template loading, built-in `t()` i18n function, `static_url()` for
 cache-busted asset paths, per-request locale resolution, Tower middleware for request-scoped
-context, `Renderer` axum extractor, HTMX support, and static file serving.
+context, `Renderer` axum extractor, `context!` macro re-export, HTMX support, and static file
+serving.
 
 ## Usage
 
@@ -116,25 +117,27 @@ items:
 In templates: `{{ t("common.greeting", name="World") }}` and
 `{{ t("common.items", count=5) }}`.
 
-The locale chain resolves in order: query param → cookie → session →
-`Accept-Language` header, falling back to `default_locale`.
+The locale chain resolves in order: query param → cookie → session (when the
+`session` feature is enabled) → `Accept-Language` header, falling back to
+`default_locale`.
 
 ## Key Types
 
-| Type / Trait             | Purpose                                                 |
-| ------------------------ | ------------------------------------------------------- |
-| `Engine`                 | Holds the MiniJinja environment; cheaply cloneable      |
-| `EngineBuilder`          | Fluent builder for `Engine`                             |
-| `TemplateConfig`         | All configuration for the template subsystem            |
-| `TemplateContext`        | Per-request key-value map shared by middleware/handlers |
-| `TemplateContextLayer`   | Tower middleware that populates `TemplateContext`       |
-| `Renderer`               | axum extractor for rendering templates in handlers      |
-| `HxRequest`              | Infallible extractor that detects `HX-Request: true`    |
-| `LocaleResolver` (trait) | Pluggable interface for locale detection                |
-| `QueryParamResolver`     | Resolves locale from a URL query parameter              |
-| `CookieResolver`         | Resolves locale from a cookie                           |
-| `SessionResolver`        | Resolves locale from session data                       |
-| `AcceptLanguageResolver` | Resolves locale from `Accept-Language` header           |
+| Type / Trait             | Purpose                                                                    |
+| ------------------------ | -------------------------------------------------------------------------- |
+| `Engine`                 | Holds the MiniJinja environment; cheaply cloneable                         |
+| `EngineBuilder`          | Fluent builder for `Engine`                                                |
+| `TemplateConfig`         | All configuration for the template subsystem                               |
+| `TemplateContext`        | Per-request key-value map shared by middleware/handlers                    |
+| `TemplateContextLayer`   | Tower middleware that populates `TemplateContext`                          |
+| `Renderer`               | axum extractor for rendering templates in handlers                         |
+| `HxRequest`              | Infallible extractor that detects `HX-Request: true`                       |
+| `context!` (macro)       | Re-export of `minijinja::context!` for building template data in handlers  |
+| `LocaleResolver` (trait) | Pluggable interface for locale detection                                   |
+| `QueryParamResolver`     | Resolves locale from a URL query parameter                                 |
+| `CookieResolver`         | Resolves locale from a cookie                                              |
+| `SessionResolver`        | Resolves locale from session data (requires **`session`** feature)         |
+| `AcceptLanguageResolver` | Resolves locale from `Accept-Language` header                              |
 
 ## Template variables injected by middleware
 

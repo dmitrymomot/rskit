@@ -8,7 +8,8 @@ two-step pipeline: a **strategy** extracts a raw identifier, and a
 resolved tenant is stored in request extensions and surfaced to handlers
 via the `Tenant<T>` axum extractor.
 
-Always available — no feature flag required.
+Always available — no feature flag required. The `domain` submodule
+(custom domain management) requires both the `db` and `dns` features.
 
 ## Key Types
 
@@ -159,3 +160,85 @@ async fn my_handler() { /* ... */ }
 
 Spans that do not declare `tenant_id = tracing::field::Empty` silently
 ignore the `record()` call.
+
+## Domain management (`domain` submodule)
+
+Requires features: `db` + `dns`.
+
+The `domain` submodule provides `DomainService` for registering, verifying,
+and managing custom domains per tenant. Verification uses DNS TXT records
+via `modo::dns::DomainVerifier`. A domain must be verified within 48 hours
+of registration or it is marked as failed.
+
+### Domain types
+
+| Item                    | Kind       | Purpose                                                       |
+| ----------------------- | ---------- | ------------------------------------------------------------- |
+| `DomainService`         | struct     | Service for managing domain claims and verification           |
+| `DomainClaim`           | struct     | A registered domain claim for a tenant                        |
+| `ClaimStatus`           | enum       | Verification status: `Pending`, `Verified`, `Failed`          |
+| `TenantMatch`           | struct     | Result of a domain-to-tenant lookup (`tenant_id` + `domain`)  |
+| `validate_domain()`     | fn         | Validate and normalize a domain name                          |
+| `extract_email_domain()` | fn        | Extract and validate the domain part of an email address      |
+
+### `DomainService` methods
+
+| Method                 | Description                                                     |
+| ---------------------- | --------------------------------------------------------------- |
+| `new(db, verifier)`    | Create a new domain service                                     |
+| `register(tenant_id, domain)` | Register a domain claim (returns existing pending if any) |
+| `verify(id)`           | Verify a claim via DNS TXT record                               |
+| `remove(id)`           | Delete a domain claim                                           |
+| `enable_email(id)`     | Enable email routing flag (requires verified status)            |
+| `disable_email(id)`    | Disable email routing flag                                      |
+| `enable_routing(id)`   | Enable HTTP request routing flag (requires verified status)     |
+| `disable_routing(id)`  | Disable HTTP request routing flag                               |
+| `lookup_email_domain(email)` | Find the tenant for a verified, email-enabled domain      |
+| `lookup_routing_domain(domain)` | Find the tenant for a verified, routing-enabled domain |
+| `resolve_tenant(domain)` | Convenience wrapper returning only the tenant ID              |
+| `list(tenant_id)`      | List all domain claims for a tenant                             |
+
+### Domain usage
+
+```rust
+use modo::tenant::domain::DomainService;
+use modo::db::Database;
+use modo::dns::DomainVerifier;
+
+// Create the service
+let svc = DomainService::new(db, verifier);
+
+// Register a domain for a tenant
+let claim = svc.register("tenant-1", "example.com").await?;
+// claim.verification_token contains the DNS TXT value
+
+// After the user sets up _modo-verify.example.com TXT record:
+let claim = svc.verify(&claim.id).await?;
+assert_eq!(claim.status, modo::tenant::domain::ClaimStatus::Verified);
+
+// Enable capabilities
+svc.enable_routing(&claim.id).await?;
+svc.enable_email(&claim.id).await?;
+
+// Look up tenant by domain
+let tenant = svc.resolve_tenant("example.com").await?;
+```
+
+### Required database table
+
+Applications must create the `tenant_domains` table in their own migrations.
+The expected schema:
+
+```sql
+CREATE TABLE tenant_domains (
+    id                 TEXT PRIMARY KEY,
+    tenant_id          TEXT NOT NULL,
+    domain             TEXT NOT NULL,
+    verification_token TEXT NOT NULL,
+    status             TEXT NOT NULL DEFAULT 'pending',
+    use_for_email      INTEGER NOT NULL DEFAULT 0,
+    use_for_routing    INTEGER NOT NULL DEFAULT 0,
+    created_at         TEXT NOT NULL,
+    verified_at        TEXT
+);
+```

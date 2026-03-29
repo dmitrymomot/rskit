@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-modo — Rust web framework. Single crate, zero proc macros, plain `async fn` handlers, axum Router, raw sqlx, explicit wiring. Rust 2024 edition, MSRV 1.92.
+modo — Rust web framework. Single crate, zero proc macros, plain `async fn` handlers, axum Router, libsql (SQLite), explicit wiring. Rust 2024 edition, MSRV 1.92.
 
 ## Commands
 
@@ -34,12 +34,12 @@ modo — Rust web framework. Single crate, zero proc macros, plain `async fn` ha
 - `std::sync::RwLock` (not tokio) for sync-only state — never hold across `.await`
 - Tracing fields: snake_case (`user_id`, `session_id`)
 - Config: YAML with `${VAR}` / `${VAR:default}` env substitution; `trusted_proxies` is top-level
-- Database: `Pool`/`ReadPool`/`WritePool` newtypes; `connect()` forces `max_connections=1` for `:memory:`; `connect_rw()` rejects `:memory:` — for in-memory tests share one `Pool` via `ReadPool::new()`/`WritePool::new()`
+- Database: single `Database` handle (`Arc<Connection>`); `connect()` opens one connection with PRAGMA defaults; `ConnExt` for raw queries, `ConnQueryExt` for typed helpers; `libsql::params!` for bind parameters
 - No TODOs, no workarounds — every declared field and API must be fully implemented
 
 ## Feature Flags
 
-Feature-gated modules: `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`, `qrcode`, `sentry`. Always-available: cache, encoding, flash, ip, session, tenant, rbac, job, cron, testing (`test-helpers`).
+Feature-gated modules: `db` (default), `session`, `job`, `http-client`, `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`, `qrcode`, `sentry`. Always-available: cache, encoding, flash, ip, tenant, rbac, cron, testing (`test-helpers`).
 
 - Integration test files need `#![cfg(feature = "X")]`
 - Feature-gated modules for integration tests must use `pub mod` (not `pub(crate) mod`)
@@ -80,7 +80,7 @@ Feature-gated modules: `auth`, `templates`, `sse`, `email`, `storage`, `webhooks
 - YAML: `serde_yaml_ng` (not `serde_yaml`)
 - base64: `base64` crate for standard, `encoding::base64url` for RFC 4648 no-padding
 - rand: `rand::fill(&mut bytes)` not `rand::rng().fill_bytes()`
-- croner: `.with_seconds_optional()` for 6-field cron
+- croner: `CronParser::builder().seconds(Seconds::Optional).build()` for 6-field cron
 - Session: raw `cookie::CookieJar`, not `axum_extra` signed jar
 - MiniJinja: `Value::from_safe_string()` for URLs/HTML; registrations consume by move
 - Streaming HTTP: `BodyExt::frame()` loop, not `body.collect().await`
@@ -99,4 +99,4 @@ Feature-gated modules: `auth`, `templates`, `sse`, `email`, `storage`, `webhooks
 
 - `tests/fixtures/migrations/` — `TestDb::migrate()` tests
 - `tests/fixtures/GeoIP2-City-Test.mmdb` — geolocation tests
-- Types without `Debug` (pool newtypes, Storage): `.err().unwrap()` not `.unwrap_err()`
+- Types without `Debug` (`Database`, `Storage`/`Buckets`): `.err().unwrap()` not `.unwrap_err()`

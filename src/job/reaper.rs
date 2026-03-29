@@ -3,10 +3,10 @@ use std::time::Duration;
 use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 
-use crate::db::InnerPool;
+use crate::db::{ConnExt, Database};
 
 pub(crate) async fn reaper_loop(
-    writer: InnerPool,
+    db: Database,
     stale_threshold_secs: u64,
     interval_secs: u64,
     cancel: CancellationToken,
@@ -22,18 +22,16 @@ pub(crate) async fn reaper_loop(
                         .to_rfc3339();
                 let now_str = Utc::now().to_rfc3339();
 
-                match sqlx::query(
-                    "UPDATE jobs SET status = 'pending', started_at = NULL, updated_at = ? \
-                     WHERE status = 'running' AND started_at < ?",
+                match db.conn().execute_raw(
+                    "UPDATE jobs SET status = 'pending', started_at = NULL, updated_at = ?1 \
+                     WHERE status = 'running' AND started_at < ?2",
+                    libsql::params![now_str.as_str(), threshold.as_str()],
                 )
-                .bind(&now_str)
-                .bind(&threshold)
-                .execute(&writer)
                 .await
                 {
-                    Ok(result) if result.rows_affected() > 0 => {
+                    Ok(count) if count > 0 => {
                         tracing::info!(
-                            count = result.rows_affected(),
+                            count = count,
                             "reaped stale jobs"
                         );
                     }

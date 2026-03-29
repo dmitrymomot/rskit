@@ -32,6 +32,11 @@ pub struct JobContext {
 pub trait FromJobContext: Sized {
     /// Extract `Self` from the job context, returning an error if extraction
     /// fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if extraction fails (e.g. payload deserialization
+    /// error or missing service in the registry).
     fn from_job_context(ctx: &JobContext) -> Result<Self>;
 }
 

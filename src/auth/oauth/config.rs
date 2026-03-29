@@ -21,7 +21,9 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct OAuthConfig {
+    /// Google OAuth 2.0 provider configuration. `None` disables Google login.
     pub google: Option<OAuthProviderConfig>,
+    /// GitHub OAuth 2.0 provider configuration. `None` disables GitHub login.
     pub github: Option<OAuthProviderConfig>,
 }
 

@@ -56,6 +56,8 @@ impl SchedulerBuilder {
     /// The `schedule` string can be a standard cron expression, a named alias
     /// (`@daily`, `@hourly`, etc.), or an interval (`@every 5m`).
     ///
+    /// # Errors
+    ///
     /// Returns an error if the schedule string is invalid.
     pub fn job<H, Args>(self, schedule: &str, handler: H) -> Result<Self>
     where
@@ -65,6 +67,8 @@ impl SchedulerBuilder {
     }
 
     /// Register a cron job with custom [`CronOptions`].
+    ///
+    /// # Errors
     ///
     /// Returns an error if the schedule string is invalid.
     pub fn job_with<H, Args>(
