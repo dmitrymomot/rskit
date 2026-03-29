@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use http::StatusCode;
 use modo::error::Result;
 use modo::ldb;
 use modo::ldb::{
@@ -425,7 +426,7 @@ fn filter_eq_single_value() {
     let filter = Filter::from_query_params(&params);
     let validated = filter.validate(&schema).unwrap();
     assert_eq!(validated.clauses.len(), 1);
-    assert_eq!(validated.clauses[0], "status = ?");
+    assert_eq!(validated.clauses[0], "\"status\" = ?");
     assert_eq!(validated.params.len(), 1);
 }
 
@@ -437,7 +438,7 @@ fn filter_in_multiple_values() {
 
     let filter = Filter::from_query_params(&params);
     let validated = filter.validate(&schema).unwrap();
-    assert_eq!(validated.clauses[0], "status IN (?, ?)");
+    assert_eq!(validated.clauses[0], "\"status\" IN (?, ?)");
     assert_eq!(validated.params.len(), 2);
 }
 
@@ -465,7 +466,7 @@ fn filter_null_operator() {
 
     let filter = Filter::from_query_params(&params);
     let validated = filter.validate(&schema).unwrap();
-    assert_eq!(validated.clauses[0], "deleted_at IS NULL");
+    assert_eq!(validated.clauses[0], "\"deleted_at\" IS NULL");
     assert_eq!(validated.params.len(), 0);
 }
 
@@ -492,7 +493,7 @@ fn filter_sort() {
 
     let filter = Filter::from_query_params(&params);
     let validated = filter.validate(&schema).unwrap();
-    assert_eq!(validated.sort_clause, Some("created_at DESC".into()));
+    assert_eq!(validated.sort_clause, Some("\"created_at\" DESC".into()));
 }
 
 #[test]
@@ -885,4 +886,392 @@ async fn select_cursor_missing_column_errors() {
         .await;
 
     assert!(result.is_err());
+}
+
+// -- SelectBuilder fetch_one / fetch_optional tests --
+
+#[tokio::test]
+async fn select_fetch_one_found() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    let user: SimpleUser = conn
+        .select("SELECT id, name, status FROM items")
+        .fetch_one()
+        .await
+        .unwrap();
+    assert!(!user.id.is_empty());
+}
+
+#[tokio::test]
+async fn select_fetch_one_not_found() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    let schema = FilterSchema::new().field("status", FieldType::Text);
+    let mut params = HashMap::new();
+    params.insert("status".into(), vec!["nonexistent".into()]);
+    let filter = Filter::from_query_params(&params)
+        .validate(&schema)
+        .unwrap();
+
+    let result: Result<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .filter(filter)
+        .fetch_one()
+        .await;
+
+    let err = result.err().unwrap();
+    assert_eq!(err.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn select_fetch_optional_some() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    let user: Option<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .fetch_optional()
+        .await
+        .unwrap();
+    assert!(user.is_some());
+}
+
+#[tokio::test]
+async fn select_fetch_optional_none() {
+    let db = test_db_with_users().await;
+    let conn = db.conn();
+
+    let schema = FilterSchema::new().field("status", FieldType::Text);
+    let mut params = HashMap::new();
+    params.insert("status".into(), vec!["nonexistent".into()]);
+    let filter = Filter::from_query_params(&params)
+        .validate(&schema)
+        .unwrap();
+
+    let user: Option<SimpleUser> = conn
+        .select("SELECT id, name, status FROM items")
+        .filter(filter)
+        .fetch_optional()
+        .await
+        .unwrap();
+    assert!(user.is_none());
+}
+
+// -- Migration checksum mismatch test --
+
+#[tokio::test]
+async fn migrate_checksum_mismatch() {
+    let dir = tempfile::tempdir().unwrap();
+    let migration_path = dir.path().join("001_init.sql");
+    std::fs::write(&migration_path, "CREATE TABLE t (id TEXT PRIMARY KEY);").unwrap();
+
+    let db = test_db().await;
+    let conn = db.conn();
+    ldb::migrate(conn, dir.path().to_str().unwrap())
+        .await
+        .unwrap();
+
+    // Overwrite the migration file with different content
+    std::fs::write(
+        &migration_path,
+        "CREATE TABLE t (id TEXT PRIMARY KEY, name TEXT);",
+    )
+    .unwrap();
+
+    let result = ldb::migrate(conn, dir.path().to_str().unwrap()).await;
+    let err = result.unwrap_err();
+    assert!(
+        format!("{err}").contains("checksum mismatch"),
+        "expected checksum mismatch error, got: {err}"
+    );
+}
+
+// -- Error mapping tests --
+
+#[tokio::test]
+async fn error_unique_constraint_maps_to_conflict() {
+    let db = test_db().await;
+    let conn = db.conn();
+    seed_users(conn).await;
+
+    // Insert duplicate primary key
+    let result = conn
+        .execute(
+            "INSERT INTO users (id, name, email) VALUES ('u1', 'Dup', 'dup@test.com')",
+            (),
+        )
+        .await;
+    let err = modo::error::Error::from(result.unwrap_err());
+    assert_eq!(err.status(), StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn error_foreign_key_maps_to_bad_request() {
+    let db = test_db().await;
+    let conn = db.conn();
+    conn.execute("CREATE TABLE parents (id TEXT PRIMARY KEY)", ())
+        .await
+        .unwrap();
+    conn.execute(
+        "CREATE TABLE children (id TEXT PRIMARY KEY, parent_id TEXT NOT NULL REFERENCES parents(id))",
+        (),
+    )
+    .await
+    .unwrap();
+
+    let result = conn
+        .execute(
+            "INSERT INTO children (id, parent_id) VALUES ('c1', 'nonexistent')",
+            (),
+        )
+        .await;
+    let err = modo::error::Error::from(result.unwrap_err());
+    assert_eq!(err.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn error_not_found_on_query_one() {
+    let db = test_db().await;
+    let conn = db.conn();
+    seed_users(conn).await;
+
+    let result: Result<User> = conn
+        .query_one(
+            "SELECT id, name, email FROM users WHERE id = ?1",
+            libsql::params!["nonexistent"],
+        )
+        .await;
+    let err = result.err().unwrap();
+    assert_eq!(err.status(), StatusCode::NOT_FOUND);
+}
+
+// -- FromValue edge case tests --
+
+#[tokio::test]
+async fn from_value_type_mismatch() {
+    let db = test_db().await;
+    let conn = db.conn();
+    conn.execute("CREATE TABLE vals (v TEXT)", ())
+        .await
+        .unwrap();
+    conn.execute("INSERT INTO vals (v) VALUES ('hello')", ())
+        .await
+        .unwrap();
+
+    let mut rows = conn.query("SELECT v FROM vals", ()).await.unwrap();
+    let row = rows.next().await.unwrap().unwrap();
+    let cols = ColumnMap::from_row(&row);
+    let result = cols.get::<i64>(&row, "v");
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn from_value_null_non_optional() {
+    let db = test_db().await;
+    let conn = db.conn();
+    conn.execute("CREATE TABLE vals (v TEXT)", ())
+        .await
+        .unwrap();
+    conn.execute("INSERT INTO vals (v) VALUES (NULL)", ())
+        .await
+        .unwrap();
+
+    let mut rows = conn.query("SELECT v FROM vals", ()).await.unwrap();
+    let row = rows.next().await.unwrap().unwrap();
+    let cols = ColumnMap::from_row(&row);
+    let result = cols.get::<String>(&row, "v");
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn from_value_option_some() {
+    let db = test_db().await;
+    let conn = db.conn();
+    conn.execute("CREATE TABLE vals (v TEXT)", ())
+        .await
+        .unwrap();
+    conn.execute("INSERT INTO vals (v) VALUES ('hello')", ())
+        .await
+        .unwrap();
+
+    let mut rows = conn.query("SELECT v FROM vals", ()).await.unwrap();
+    let row = rows.next().await.unwrap().unwrap();
+    let cols = ColumnMap::from_row(&row);
+    let result: Option<String> = cols.get(&row, "v").unwrap();
+    assert_eq!(result, Some("hello".to_string()));
+}
+
+#[tokio::test]
+async fn from_value_option_none() {
+    let db = test_db().await;
+    let conn = db.conn();
+    conn.execute("CREATE TABLE vals (v TEXT)", ())
+        .await
+        .unwrap();
+    conn.execute("INSERT INTO vals (v) VALUES (NULL)", ())
+        .await
+        .unwrap();
+
+    let mut rows = conn.query("SELECT v FROM vals", ()).await.unwrap();
+    let row = rows.next().await.unwrap().unwrap();
+    let cols = ColumnMap::from_row(&row);
+    let result: Option<String> = cols.get(&row, "v").unwrap();
+    assert_eq!(result, None);
+}
+
+#[tokio::test]
+async fn from_value_blob_roundtrip() {
+    let db = test_db().await;
+    let conn = db.conn();
+    conn.execute("CREATE TABLE vals (v BLOB)", ())
+        .await
+        .unwrap();
+    conn.execute(
+        "INSERT INTO vals (v) VALUES (?1)",
+        libsql::params![vec![0xDE_u8, 0xAD, 0xBE, 0xEF]],
+    )
+    .await
+    .unwrap();
+
+    let mut rows = conn.query("SELECT v FROM vals", ()).await.unwrap();
+    let row = rows.next().await.unwrap().unwrap();
+    let cols = ColumnMap::from_row(&row);
+    let result: Vec<u8> = cols.get(&row, "v").unwrap();
+    assert_eq!(result, vec![0xDE, 0xAD, 0xBE, 0xEF]);
+}
+
+#[tokio::test]
+async fn from_value_bool_variants() {
+    let db = test_db().await;
+    let conn = db.conn();
+    conn.execute("CREATE TABLE vals (v INTEGER)", ())
+        .await
+        .unwrap();
+    conn.execute("INSERT INTO vals (v) VALUES (0)", ())
+        .await
+        .unwrap();
+    conn.execute("INSERT INTO vals (v) VALUES (1)", ())
+        .await
+        .unwrap();
+    conn.execute("INSERT INTO vals (v) VALUES (42)", ())
+        .await
+        .unwrap();
+
+    let mut rows = conn
+        .query("SELECT v FROM vals ORDER BY v", ())
+        .await
+        .unwrap();
+    let row0 = rows.next().await.unwrap().unwrap();
+    let cols0 = ColumnMap::from_row(&row0);
+    assert!(!cols0.get::<bool>(&row0, "v").unwrap());
+
+    let row1 = rows.next().await.unwrap().unwrap();
+    let cols1 = ColumnMap::from_row(&row1);
+    assert!(cols1.get::<bool>(&row1, "v").unwrap());
+
+    let row42 = rows.next().await.unwrap().unwrap();
+    let cols42 = ColumnMap::from_row(&row42);
+    assert!(cols42.get::<bool>(&row42, "v").unwrap());
+}
+
+// -- Filter edge case tests --
+
+#[test]
+fn filter_float_type_validation() {
+    let schema = FilterSchema::new().field("score", FieldType::Float);
+    let mut params = HashMap::new();
+    params.insert("score".into(), vec!["not_a_float".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let result = filter.validate(&schema);
+    assert!(result.is_err());
+}
+
+#[test]
+fn filter_bool_conversion() {
+    let schema = FilterSchema::new().field("active", FieldType::Bool);
+
+    // "true", "1", "yes" all produce Integer(1)
+    for val in &["true", "1", "yes"] {
+        let mut params = HashMap::new();
+        params.insert("active".into(), vec![val.to_string()]);
+        let filter = Filter::from_query_params(&params);
+        let validated = filter.validate(&schema).unwrap();
+        assert_eq!(
+            validated.params[0],
+            libsql::Value::from(1_i32),
+            "expected Integer(1) for input '{val}'"
+        );
+    }
+
+    // "false", "0", "no" all produce Integer(0)
+    for val in &["false", "0", "no"] {
+        let mut params = HashMap::new();
+        params.insert("active".into(), vec![val.to_string()]);
+        let filter = Filter::from_query_params(&params);
+        let validated = filter.validate(&schema).unwrap();
+        assert_eq!(
+            validated.params[0],
+            libsql::Value::from(0_i32),
+            "expected Integer(0) for input '{val}'"
+        );
+    }
+}
+
+#[test]
+fn filter_explicit_eq_operator_is_unknown() {
+    // "status.eq=active" — "eq" is not a recognized operator, so it's skipped
+    let schema = FilterSchema::new().field("status", FieldType::Text);
+    let mut params = HashMap::new();
+    params.insert("status.eq".into(), vec!["active".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert!(validated.clauses.is_empty());
+}
+
+#[test]
+fn filter_empty_value() {
+    let schema = FilterSchema::new().field("status", FieldType::Text);
+    let mut params = HashMap::new();
+    params.insert("status".into(), vec![String::new()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(validated.params[0], libsql::Value::from(String::new()));
+}
+
+// -- execute_raw test --
+
+#[tokio::test]
+async fn conn_ext_execute_returns_affected_rows() {
+    let db = test_db().await;
+    let conn = db.conn();
+    seed_users(conn).await;
+
+    // INSERT returns 1
+    let inserted = conn
+        .execute_raw(
+            "INSERT INTO users (id, name, email) VALUES ('u3', 'Carol', 'carol@test.com')",
+            (),
+        )
+        .await
+        .unwrap();
+    assert_eq!(inserted, 1);
+
+    // UPDATE returns affected count
+    let updated = conn
+        .execute_raw("UPDATE users SET name = 'Updated'", ())
+        .await
+        .unwrap();
+    assert_eq!(updated, 3);
+
+    // DELETE returns 1
+    let deleted = conn
+        .execute_raw("DELETE FROM users WHERE id = 'u3'", ())
+        .await
+        .unwrap();
+    assert_eq!(deleted, 1);
 }

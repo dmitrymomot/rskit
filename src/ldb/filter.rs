@@ -2,14 +2,21 @@ use std::collections::{HashMap, HashSet};
 
 use crate::error::{Error, Result};
 
-/// Defines allowed filter fields and sort fields for an endpoint.
+/// Declares the allowed filter fields and sort fields for an endpoint.
+///
+/// Build one per endpoint using the builder methods [`field`](Self::field)
+/// and [`sort_fields`](Self::sort_fields), then pass it to
+/// [`Filter::validate`] to produce a [`ValidatedFilter`].
 #[derive(Default)]
 pub struct FilterSchema {
     fields: HashMap<String, FieldType>,
     sort_fields: HashSet<String>,
 }
 
-/// Column type for validation.
+/// Column type used for validating filter values.
+///
+/// Determines how string query-parameter values are converted to
+/// `libsql::Value` during [`Filter::validate`].
 #[derive(Debug, Clone, Copy)]
 pub enum FieldType {
     Text,
@@ -20,15 +27,18 @@ pub enum FieldType {
 }
 
 impl FilterSchema {
+    /// Create an empty schema.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Add an allowed filter field with its expected type.
     pub fn field(mut self, name: &str, typ: FieldType) -> Self {
         self.fields.insert(name.to_string(), typ);
         self
     }
 
+    /// Set the allowed sort field names.
     pub fn sort_fields(mut self, fields: &[&str]) -> Self {
         self.sort_fields = fields.iter().map(|s| s.to_string()).collect();
         self
@@ -65,27 +75,56 @@ struct FilterCondition {
     values: Vec<String>,
 }
 
-/// Raw parsed filter from query string. Must be validated before use.
+/// Raw parsed filter from query string.
+///
+/// Implements `FromRequestParts` so it can be used directly as an axum
+/// handler argument. Must be validated against a [`FilterSchema`] via
+/// [`validate`](Self::validate) before use in SQL generation.
+///
+/// ## Supported query-string syntax
+///
+/// | Pattern | Meaning |
+/// |---------|---------|
+/// | `field=value` | Equality (`=`), or `IN` if multiple values |
+/// | `field.ne=value` | Not equal (`!=`) |
+/// | `field.gt=value` | Greater than (`>`) |
+/// | `field.gte=value` | Greater than or equal (`>=`) |
+/// | `field.lt=value` | Less than (`<`) |
+/// | `field.lte=value` | Less than or equal (`<=`) |
+/// | `field.like=value` | SQL `LIKE` |
+/// | `field.null=true` | `IS NULL` / `IS NOT NULL` |
+/// | `sort=field` | Sort ascending; `sort=-field` for descending |
 pub struct Filter {
     conditions: Vec<FilterCondition>,
     sort: Option<String>,
 }
 
-/// Validated filter — safe to use in SQL generation.
+/// Schema-validated filter, safe for SQL generation.
+///
+/// Produced by [`Filter::validate`]. Contains parameterized WHERE clauses
+/// and an optional ORDER BY clause. Used by [`SelectBuilder`](super::SelectBuilder).
+#[non_exhaustive]
 pub struct ValidatedFilter {
+    /// WHERE clause fragments (joined with `AND`).
     pub clauses: Vec<String>,
+    /// Bind parameters corresponding to `?` placeholders in `clauses`.
     pub params: Vec<libsql::Value>,
+    /// Optional ORDER BY clause from the `sort` parameter.
     pub sort_clause: Option<String>,
 }
 
 impl ValidatedFilter {
+    /// Returns `true` if no filter conditions were produced.
     pub fn is_empty(&self) -> bool {
         self.clauses.is_empty()
     }
 }
 
 impl Filter {
-    /// Parse filter conditions from a query string map.
+    /// Parse filter conditions from a pre-parsed query string map.
+    ///
+    /// Pagination parameters (`page`, `per_page`, `after`) are silently
+    /// skipped. Unknown operators are ignored.
     pub fn from_query_params(params: &HashMap<String, Vec<String>>) -> Self {
         let mut conditions: HashMap<String, FilterCondition> = HashMap::new();
         let mut sort = None;
@@ -146,13 +185,23 @@ impl Filter {
         }
     }
 
-    /// Validate against a schema. Unknown columns are silently ignored.
-    /// Type mismatches return a 400 error.
+    /// Validate against a schema, producing a [`ValidatedFilter`].
+    ///
+    /// Unknown columns are silently ignored. Sort fields not listed in the
+    /// schema are dropped.
+    ///
+    /// # Errors
+    ///
+    /// Returns a 400 error if a filter value cannot be converted to the
+    /// declared [`FieldType`] (e.g., `"abc"` for an `Int` field).
     pub fn validate(self, schema: &FilterSchema) -> Result<ValidatedFilter> {
         let mut clauses = Vec::new();
         let mut params: Vec<libsql::Value> = Vec::new();
 
-        for cond in &self.conditions {
+        let mut conditions = self.conditions.clone();
+        conditions.sort_by(|a, b| a.column.cmp(&b.column));
+
+        for cond in &conditions {
             let Some(field_type) = schema.field_type(&cond.column) else {
                 continue; // Unknown column — silently ignore
             };
@@ -160,15 +209,19 @@ impl Filter {
             match &cond.operator {
                 Operator::IsNull(is_null) => {
                     if *is_null {
-                        clauses.push(format!("{} IS NULL", cond.column));
+                        clauses.push(format!("\"{}\" IS NULL", cond.column));
                     } else {
-                        clauses.push(format!("{} IS NOT NULL", cond.column));
+                        clauses.push(format!("\"{}\" IS NOT NULL", cond.column));
                     }
                 }
                 Operator::In => {
                     let placeholders: Vec<String> =
                         cond.values.iter().map(|_| "?".to_string()).collect();
-                    clauses.push(format!("{} IN ({})", cond.column, placeholders.join(", ")));
+                    clauses.push(format!(
+                        "\"{}\" IN ({})",
+                        cond.column,
+                        placeholders.join(", ")
+                    ));
                     for val in &cond.values {
                         params.push(convert_value(val, field_type)?);
                     }
@@ -184,7 +237,7 @@ impl Filter {
                         Operator::Like => "LIKE",
                         _ => unreachable!(),
                     };
-                    clauses.push(format!("{} {} ?", cond.column, sql_op));
+                    clauses.push(format!("\"{}\" {} ?", cond.column, sql_op));
                     let val = cond.values.first().ok_or_else(|| {
                         Error::bad_request(format!("missing value for filter '{}'", cond.column))
                     })?;
@@ -202,7 +255,7 @@ impl Filter {
             };
             if schema.is_sort_field(field) {
                 let direction = if desc { "DESC" } else { "ASC" };
-                Some(format!("{field} {direction}"))
+                Some(format!("\"{field}\" {direction}"))
             } else {
                 None // Unknown sort field — ignore
             }
@@ -231,10 +284,13 @@ fn convert_value(val: &str, field_type: FieldType) -> Result<libsql::Value> {
                 .map_err(|_| Error::bad_request(format!("invalid float value: '{val}'")))?;
             Ok(libsql::Value::from(n))
         }
-        FieldType::Bool => {
-            let b = matches!(val, "true" | "1" | "yes");
-            Ok(libsql::Value::from(b as i32))
-        }
+        FieldType::Bool => match val {
+            "true" | "1" | "yes" => Ok(libsql::Value::from(1_i32)),
+            "false" | "0" | "no" => Ok(libsql::Value::from(0_i32)),
+            _ => Err(Error::bad_request(format!(
+                "invalid boolean value: '{val}' (expected true/false, 1/0, yes/no)"
+            ))),
+        },
     }
 }
 

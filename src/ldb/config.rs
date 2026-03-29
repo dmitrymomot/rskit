@@ -1,6 +1,12 @@
 use serde::Deserialize;
 
-/// Database configuration. All fields have sensible defaults.
+/// Database configuration with sensible defaults for SQLite/libsql.
+///
+/// All fields are optional when deserializing from YAML. Defaults produce
+/// a WAL-mode database at `data/app.db` with foreign keys enabled.
+///
+/// If [`migrations`](Self::migrations) is set, SQL migrations from that
+/// directory are applied automatically on [`connect`](super::connect).
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     /// Database file path.
@@ -56,6 +62,9 @@ impl Default for Config {
     }
 }
 
+/// SQLite journal mode.
+///
+/// Controls how the database writes transactions. Default is [`Wal`](Self::Wal).
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum JournalMode {
@@ -68,6 +77,7 @@ pub enum JournalMode {
 }
 
 impl JournalMode {
+    /// Returns the PRAGMA-compatible string representation.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Wal => "WAL",
@@ -79,6 +89,10 @@ impl JournalMode {
     }
 }
 
+/// SQLite synchronous mode.
+///
+/// Controls the trade-off between durability and write performance.
+/// Default is [`Normal`](Self::Normal).
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SynchronousMode {
@@ -90,6 +104,7 @@ pub enum SynchronousMode {
 }
 
 impl SynchronousMode {
+    /// Returns the PRAGMA-compatible string representation.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Off => "OFF",
@@ -100,6 +115,10 @@ impl SynchronousMode {
     }
 }
 
+/// SQLite temp store location.
+///
+/// Controls where temporary tables and indices are stored.
+/// Default is [`Memory`](Self::Memory).
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TempStore {
@@ -110,6 +129,7 @@ pub enum TempStore {
 }
 
 impl TempStore {
+    /// Returns the PRAGMA-compatible string representation.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Default => "DEFAULT",

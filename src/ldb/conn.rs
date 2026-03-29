@@ -4,20 +4,27 @@ use crate::error::{Error, Result};
 
 use super::from_row::FromRow;
 
-/// Extension trait adding query helpers to libsql::Connection and libsql::Transaction.
+/// Low-level query trait implemented for `libsql::Connection` and `libsql::Transaction`.
+///
+/// Provides `query_raw`, `execute_raw`, and the [`select`](Self::select) builder
+/// entry point. Higher-level helpers are on [`ConnQueryExt`], which is blanket-implemented
+/// for all `ConnExt` types.
 pub trait ConnExt: Sync {
+    /// Execute a query and return raw rows.
     fn query_raw(
         &self,
         sql: &str,
         params: impl IntoParams + Send,
     ) -> impl std::future::Future<Output = std::result::Result<libsql::Rows, libsql::Error>> + Send;
 
+    /// Execute a statement and return the number of affected rows.
     fn execute_raw(
         &self,
         sql: &str,
         params: impl IntoParams + Send,
     ) -> impl std::future::Future<Output = std::result::Result<u64, libsql::Error>> + Send;
 
+    /// Start a composable [`SelectBuilder`](super::SelectBuilder) from a base SQL query.
     fn select<'a>(&'a self, sql: &str) -> super::select::SelectBuilder<'a, Self>
     where
         Self: Sized,
@@ -64,9 +71,16 @@ impl ConnExt for libsql::Transaction {
     }
 }
 
-/// High-level query helpers. Import this trait to use them.
+/// High-level query helpers built on [`ConnExt`].
+///
+/// Blanket-implemented for all `ConnExt` types. Import this trait to use
+/// `query_one`, `query_optional`, `query_all`, and their `_map` variants.
 pub trait ConnQueryExt: ConnExt {
-    /// Fetch first row as T via FromRow. Returns Error::not_found if empty.
+    /// Fetch the first row as `T` via [`FromRow`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::not_found`](crate::Error::not_found) if the query returns no rows.
     fn query_one<T: FromRow + Send>(
         &self,
         sql: &str,
@@ -83,7 +97,11 @@ pub trait ConnQueryExt: ConnExt {
         }
     }
 
-    /// Fetch first row as T via FromRow. Returns None if empty.
+    /// Fetch the first row as `T` via [`FromRow`], returning `None` if empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails or row conversion fails.
     fn query_optional<T: FromRow + Send>(
         &self,
         sql: &str,
@@ -98,7 +116,11 @@ pub trait ConnQueryExt: ConnExt {
         }
     }
 
-    /// Fetch all rows as Vec<T> via FromRow.
+    /// Fetch all rows as `Vec<T>` via [`FromRow`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails or any row conversion fails.
     fn query_all<T: FromRow + Send>(
         &self,
         sql: &str,
@@ -114,7 +136,11 @@ pub trait ConnQueryExt: ConnExt {
         }
     }
 
-    /// Fetch first row, map with closure. Returns Error::not_found if empty.
+    /// Fetch the first row and map it with a closure.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::not_found`](crate::Error::not_found) if the query returns no rows.
     fn query_one_map<T: Send, F>(
         &self,
         sql: &str,
@@ -135,7 +161,11 @@ pub trait ConnQueryExt: ConnExt {
         }
     }
 
-    /// Fetch first row, map with closure. Returns None if empty.
+    /// Fetch the first row and map it with a closure, returning `None` if empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails or the mapping closure returns an error.
     fn query_optional_map<T: Send, F>(
         &self,
         sql: &str,
@@ -154,7 +184,11 @@ pub trait ConnQueryExt: ConnExt {
         }
     }
 
-    /// Fetch all rows, map with closure.
+    /// Fetch all rows and map each with a closure.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails or any mapping closure call returns an error.
     fn query_all_map<T: Send, F>(
         &self,
         sql: &str,
