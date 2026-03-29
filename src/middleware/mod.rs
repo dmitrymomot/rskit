@@ -9,12 +9,16 @@
 //! | [`request_id`] | Set / propagate `x-request-id` header |
 //! | [`catch_panic`] | Convert handler panics into 500 responses |
 //! | [`cors`] / [`cors_with`] | CORS headers (static or dynamic origins) |
+//! | [`CorsConfig`] | CORS configuration |
 //! | [`subdomains`] / [`urls`] | CORS origin predicates |
 //! | [`csrf`] / [`CsrfConfig`] | Double-submit signed-cookie CSRF protection |
+//! | [`CsrfToken`] | CSRF token in request/response extensions |
 //! | [`error_handler`] | Centralised error-response rendering |
 //! | [`security_headers`] / [`SecurityHeadersConfig`] | Security response headers |
 //! | [`tracing`] | HTTP request/response lifecycle spans |
 //! | [`rate_limit`] / [`rate_limit_with`] | Token-bucket rate limiting |
+//! | [`RateLimitConfig`] | Rate-limit configuration |
+//! | [`RateLimitLayer`] | Tower layer produced by `rate_limit` / `rate_limit_with` |
 //! | [`KeyExtractor`] | Trait for custom rate-limit key extraction |
 //! | [`PeerIpKeyExtractor`] / [`GlobalKeyExtractor`] | Built-in key extractors |
 

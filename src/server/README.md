@@ -1,4 +1,4 @@
-# server
+# modo::server
 
 HTTP server startup and graceful shutdown for the modo framework.
 

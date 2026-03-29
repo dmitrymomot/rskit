@@ -81,7 +81,7 @@ let config = SecurityHeadersConfig {
     content_security_policy: Some("default-src 'self'".to_string()),
     ..Default::default()
 };
-let layer = security_headers(&config);
+let layer = security_headers(&config).unwrap();
 ```
 
 ### Error handler
