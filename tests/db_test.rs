@@ -1,3 +1,5 @@
+#![cfg(feature = "db")]
+
 #[test]
 fn test_sqlite_config_defaults() {
     let config = modo::db::SqliteConfig::default();

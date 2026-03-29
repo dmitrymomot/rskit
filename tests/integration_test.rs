@@ -1,3 +1,5 @@
+#![cfg(feature = "db")]
+
 use axum::{Json, Router, routing::get};
 use modo::{config, db, server, service};
 use serde::Deserialize;

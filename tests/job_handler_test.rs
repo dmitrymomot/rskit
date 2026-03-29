@@ -1,3 +1,5 @@
+#![cfg(feature = "db")]
+
 use modo::Service;
 use modo::error::Result;
 use modo::job::{JobHandler, Meta, Payload};
