@@ -40,7 +40,7 @@ dns = ["dep:simple-dns"]
 dns-test = ["dns"]
 geolocation = ["dep:maxminddb"]
 qrcode = ["dep:fast_qr"]
-test-helpers = ["db"]
+test-helpers = ["db", "session"]
 
 [dependencies]
 # Web
