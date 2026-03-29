@@ -185,7 +185,7 @@ trusted_proxies:
   - "127.0.0.1/8"
 
 cors:
-  allow_origins:
+  origins:
     - "http://localhost:8080"
 
 csrf:
@@ -229,7 +229,7 @@ trusted_proxies:
   - ${TRUSTED_PROXY_CIDR}
 
 cors:
-  allow_origins:
+  origins:
     - ${APP_URL}
 
 csrf:
@@ -258,15 +258,18 @@ COOKIE_SECRET=change-me-in-production-at-least-64-bytes-long-secret-key-here!!
 ```sql
 -- Sessions table (required by modo session middleware)
 CREATE TABLE IF NOT EXISTS sessions (
-    token       TEXT PRIMARY KEY,
-    data        TEXT    NOT NULL DEFAULT '{}',
-    user_id     TEXT,
-    ip_address  TEXT,
-    user_agent  TEXT,
-    fingerprint TEXT,
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-    expires_at  TEXT    NOT NULL
+    id             TEXT    NOT NULL PRIMARY KEY,
+    token_hash     TEXT    NOT NULL UNIQUE,
+    user_id        TEXT    NOT NULL,
+    ip_address     TEXT    NOT NULL DEFAULT '',
+    user_agent     TEXT    NOT NULL DEFAULT '',
+    device_name    TEXT    NOT NULL DEFAULT '',
+    device_type    TEXT    NOT NULL DEFAULT '',
+    fingerprint    TEXT    NOT NULL DEFAULT '',
+    data           TEXT    NOT NULL DEFAULT '{}',
+    created_at     TEXT    NOT NULL,
+    last_active_at TEXT    NOT NULL,
+    expires_at     TEXT    NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
@@ -484,7 +487,7 @@ JWT_SECRET=change-me-in-production-at-least-64-bytes-long-jwt-secret-key-here!!!
 ### Notes
 
 - Password hashing (`modo::auth::password::hash()` / `verify()`) doesn't need registry setup — call directly in handlers
-- TOTP (`modo::auth::totp`) and backup codes (`modo::auth::backup_codes`) are utilities — no registry/config needed
+- TOTP (`modo::auth::totp`) and backup codes (`modo::auth::backup`) are utilities — no registry/config needed
 - OAuth providers are constructed per-request from config, not registered in the registry
 - JWT middleware (`JwtLayer<T>`) is applied per-route group, not globally — the user adds it where needed
 
@@ -892,27 +895,26 @@ job:
 ```sql
 -- Job queue table
 CREATE TABLE IF NOT EXISTS jobs (
-    id          TEXT PRIMARY KEY,
-    name        TEXT    NOT NULL,
-    queue       TEXT    NOT NULL DEFAULT 'default',
-    payload     TEXT    NOT NULL DEFAULT '{}',
-    status      TEXT    NOT NULL DEFAULT 'pending',
-    attempts    INTEGER NOT NULL DEFAULT 0,
-    max_retries INTEGER NOT NULL DEFAULT 3,
-    run_at      TEXT    NOT NULL DEFAULT (datetime('now')),
-    locked_at   TEXT,
-    locked_by   TEXT,
-    finished_at TEXT,
-    last_error  TEXT,
-    idempotency_key TEXT,
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    id            TEXT    PRIMARY KEY,
+    name          TEXT    NOT NULL,
+    queue         TEXT    NOT NULL DEFAULT 'default',
+    payload       TEXT    NOT NULL DEFAULT '{}',
+    payload_hash  TEXT,
+    status        TEXT    NOT NULL DEFAULT 'pending',
+    attempt       INTEGER NOT NULL DEFAULT 0,
+    run_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+    started_at    TEXT,
+    completed_at  TEXT,
+    failed_at     TEXT,
+    error_message TEXT,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status_queue_run_at
     ON jobs(status, queue, run_at);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idempotency_key
-    ON jobs(idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_payload_hash_pending
+    ON jobs(payload_hash) WHERE payload_hash IS NOT NULL AND status IN ('pending', 'running');
 ```
 
 **src/jobs/mod.rs:**
@@ -946,7 +948,7 @@ mod jobs;
 
 ```rust
 let scheduler = modo::cron::Scheduler::builder(&job_registry)
-    .job("@hourly", jobs::example::scheduled)
+    .job("@hourly", jobs::example::scheduled)?
     .start()
     .await;
 ```
@@ -1012,17 +1014,23 @@ pub struct AppTenant {
     pub name: String,
 }
 
+impl modo::tenant::HasTenantId for AppTenant {
+    fn tenant_id(&self) -> &str {
+        &self.id
+    }
+}
+
 /// Implement this to look up tenants from your database.
 /// Then apply the middleware in routes:
 ///   .layer(modo::tenant::middleware(strategy, resolver))
 ///
 /// Available strategies:
-///   modo::tenant::subdomain()
+///   modo::tenant::subdomain("myapp.com")
 ///   modo::tenant::domain()
-///   modo::tenant::subdomain_or_domain()
+///   modo::tenant::subdomain_or_domain("myapp.com")
 ///   modo::tenant::header("X-Tenant-Id")
 ///   modo::tenant::api_key_header("X-Api-Key")
-///   modo::tenant::path_prefix()
+///   modo::tenant::path_prefix("/org")
 ///   modo::tenant::path_param("tenant_id")
 pub struct AppTenantResolver;
 
@@ -1030,8 +1038,8 @@ pub struct AppTenantResolver;
 // impl TenantResolver for AppTenantResolver {
 //     type Tenant = AppTenant;
 //
-//     async fn resolve(&self, id: TenantId, parts: &mut modo::axum::http::request::Parts) -> Result<Self::Tenant> {
-//         // Look up tenant from database using Service<ReadPool> from parts
+//     async fn resolve(&self, id: &TenantId) -> Result<Self::Tenant> {
+//         // Look up tenant from database using id.as_str()
 //         todo!("implement tenant resolution")
 //     }
 // }

@@ -93,7 +93,6 @@ jobs:
     needs: [changes, fmt, lint, test, test-minimal, test-features]
     if: >-
       always()
-      && github.event_name == 'push'
       && github.ref == 'refs/heads/main'
       && needs.changes.outputs.rust == 'true'
       && !contains(needs.*.result, 'failure')

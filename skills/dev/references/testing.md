@@ -316,10 +316,11 @@ impl modo::Sanitize for User {
 }
 
 impl FromRow for User {
-    fn from_row(row: &modo::db::libsql::Row, col_map: &modo::db::ColumnMap) -> modo::Result<Self> {
+    fn from_row(row: &modo::db::libsql::Row) -> modo::Result<Self> {
+        let cols = modo::db::ColumnMap::from_row(row);
         Ok(Self {
-            id: col_map.get(row, "id")?,
-            name: col_map.get(row, "name")?,
+            id: cols.get(row, "id")?,
+            name: cols.get(row, "name")?,
         })
     }
 }
