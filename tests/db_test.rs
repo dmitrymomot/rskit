@@ -3,11 +3,11 @@
 use std::collections::HashMap;
 
 use http::StatusCode;
-use modo::error::Result;
 use modo::db;
 use modo::db::{
     ColumnMap, ConnExt, ConnQueryExt, FieldType, Filter, FilterSchema, FromRow, PageRequest,
 };
+use modo::error::Result;
 
 #[tokio::test]
 async fn connect_in_memory() {
@@ -898,7 +898,10 @@ async fn cursor_newest_first() {
     // Default is newest-first (DESC) — should return highest IDs first
     let page: db::CursorPage<SimpleUser> = conn
         .select("SELECT id, name, status FROM items")
-        .cursor(db::CursorRequest { after: None, per_page: 5 })
+        .cursor(db::CursorRequest {
+            after: None,
+            per_page: 5,
+        })
         .await
         .unwrap();
 
@@ -921,7 +924,10 @@ async fn cursor_oldest_first() {
     let page: db::CursorPage<SimpleUser> = conn
         .select("SELECT id, name, status FROM items")
         .oldest_first()
-        .cursor(db::CursorRequest { after: None, per_page: 5 })
+        .cursor(db::CursorRequest {
+            after: None,
+            per_page: 5,
+        })
         .await
         .unwrap();
 
