@@ -35,6 +35,14 @@ let config = BucketConfig {
 let storage = Storage::new(&config)?;
 ```
 
+### Constructors
+
+| Constructor    | Signature                                                                      | Notes                                                         |
+| -------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `new`          | `pub fn new(config: &BucketConfig) -> Result<Self>`                            | Builds its own default HTTP client                            |
+| `with_client`  | `pub fn with_client(config: &BucketConfig, client: crate::http::Client) -> Result<Self>` | Shared connection pool; preferred for multiple `Storage` instances |
+| `memory`       | `pub fn memory() -> Self`                                                      | In-memory backend, `#[cfg(test)]` or `storage-test` feature   |
+
 ### Methods
 
 | Method              | Signature                                                                                        | Notes                                                       |
@@ -48,7 +56,6 @@ let storage = Storage::new(&config)?;
 | `exists`            | `async fn exists(&self, key: &str) -> Result<bool>`                                              | HEAD check                                                  |
 | `put_from_url`      | `async fn put_from_url(&self, input: &PutFromUrlInput) -> Result<String>`                        | Fetch URL then upload                                       |
 | `put_from_url_with` | `async fn put_from_url_with(&self, input: &PutFromUrlInput, opts: PutOptions) -> Result<String>` | With custom options                                         |
-| `memory`            | `fn memory() -> Self`                                                                            | In-memory backend, `#[cfg(test)]` or `storage-test` feature |
 
 ### Key Generation
 
@@ -216,8 +223,8 @@ let key = storage.put_from_url_with(&input, PutOptions {
 
 - **Signing**: AWS SigV4 signing implemented in `signing.rs`. All S3 requests are signed with HMAC-SHA256.
 - **Presigning**: `presign.rs` generates presigned GET URLs with configurable expiry.
-- **Backend enum**: `BackendKind::Remote(RemoteBackend)` for real S3, `BackendKind::Memory(MemoryBackend)` for tests.
-- **HTTP client**: `hyper` + `hyper-rustls` with webpki roots. One client per `Storage` instance.
+- **Backend enum**: `BackendKind::Remote(Box<RemoteBackend>)` for real S3, `BackendKind::Memory(MemoryBackend)` for tests.
+- **HTTP client**: Uses `crate::http::Client` (wraps `hyper` + `hyper-rustls`). `Storage::new()` creates its own client; `Storage::with_client()` accepts a shared client for connection pooling across multiple `Storage` instances.
 - **XML parsing**: Hand-parsed `<Key>` and `<IsTruncated>` tags from ListObjectsV2 responses.
 - **Bridge**: `PutInput::from_upload()` bridges the multipart `UploadedFile` extractor to storage input.
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-modo provides database-backed HTTP sessions (SQLite via `sessions` table), signed cookie utilities, and cookie-based flash messages. Sessions and flash are always available -- no feature flag required.
+modo provides database-backed HTTP sessions (libsql/SQLite via `sessions` table), signed cookie utilities, and cookie-based flash messages. Flash and cookie are always available -- no feature flag required. Session requires the `session` feature flag (transitively enables `db`).
 
 ---
 
@@ -59,6 +59,8 @@ None. Use `modo::cookie::CookieConfig`, `modo::cookie::key_from_config`, etc.
 
 ## Session (`modo::session`)
 
+Requires the **`session`** feature flag (transitively enables `db`).
+
 ### SessionConfig
 
 Deserialized from the `session` key in YAML config. All fields have defaults via `impl Default`. Marked `#[non_exhaustive]` -- cannot be constructed with struct literal syntax outside the crate; use `SessionConfig::default()` and then mutate fields.
@@ -89,22 +91,20 @@ session:
 
 ### Store
 
-Low-level SQLite-backed session store. Wraps read and write pools.
+Low-level libsql/SQLite-backed session store. Wraps a `Database` handle.
 
 ```rust
 use modo::session::{Store, SessionConfig};
+use modo::db::Database;
 
-// Single pool (local SQLite or shared in-memory)
-let store = Store::new(&pool, SessionConfig::default());
-
-// Separate read/write pools
-let store = Store::new_rw(&read_pool, &write_pool, config);
+let store = Store::new(db, SessionConfig::default());
 ```
 
 Public methods on `Store`:
 
 | Method                 | Signature                                                                                | Description                                |
 | ---------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `new`                  | `(db: Database, config: SessionConfig) -> Self`                                          | Create store from Database and config      |
 | `config`               | `&self -> &SessionConfig`                                                                | Return config reference                    |
 | `read_by_token`        | `async(&self, &SessionToken) -> Result<Option<SessionData>>`                             | Lookup active session by token hash        |
 | `read`                 | `async(&self, &str) -> Result<Option<SessionData>>`                                      | Lookup session by ULID id (ignores expiry) |
@@ -160,14 +160,21 @@ Construct the layer with the `session::layer()` function:
 ```rust
 use modo::session::{self, SessionConfig, Store};
 use modo::cookie::{CookieConfig, key_from_config};
+use modo::db::Database;
 
 let key = key_from_config(&cookie_cfg)?;
-let store = Store::new(&pool, session_cfg);
+let store = Store::new(db, session_cfg);
 let session_layer = session::layer(store, &cookie_cfg, &key);
 
 let router = Router::new()
     .route("/login", post(login_handler))
     .layer(session_layer);
+```
+
+Function signature:
+
+```rust
+pub fn layer(store: Store, cookie_config: &CookieConfig, key: &Key) -> SessionLayer
 ```
 
 The middleware lifecycle per request:
@@ -350,10 +357,11 @@ When the `templates` feature is enabled, `TemplateContextLayer` injects a `flash
 
 ```rust
 pub use flash::{Flash, FlashEntry, FlashLayer};
+#[cfg(feature = "session")]
 pub use session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};
 ```
 
-So `modo::Flash`, `modo::Session`, `modo::SessionLayer`, etc. work directly.
+So `modo::Flash`, `modo::FlashEntry`, `modo::FlashLayer` work directly. `modo::Session`, `modo::SessionLayer`, etc. require the `session` feature flag.
 
 ---
 
@@ -361,11 +369,11 @@ So `modo::Flash`, `modo::Session`, `modo::SessionLayer`, etc. work directly.
 
 1. **Raw `cookie::CookieJar`, not `axum_extra`**: The session and flash middleware use the raw `cookie` crate's `CookieJar` and `SignedJar` internally for cookie signing -- not `axum_extra::extract::cookie::SignedCookieJar`. The `axum_extra` types are re-exported from `modo::cookie` for use in handlers, but the middleware does its own signing.
 
-2. **`SessionLayer` must be re-exported**: `SessionLayer` is re-exported from `modo::session::SessionLayer`. Test helpers and any code that programmatically creates session layers needs this export.
+2. **Session requires `session` feature flag**: The session module is gated behind `#[cfg(feature = "session")]` which transitively enables `db`. Flash and cookie are always available.
 
 3. **Flash is always available**: No feature gate. It is part of the default build.
 
-4. **Session is always available**: No feature gate. The `sessions` table schema is not shipped as a migration -- end-apps own their DB schema.
+4. **`sessions` table schema not shipped**: The `sessions` table schema is not shipped as a migration -- end-apps own their DB schema.
 
 5. **`CookieConfig.secret` minimum 64 characters**: `key_from_config()` returns `Error::internal` if shorter.
 
@@ -373,7 +381,7 @@ So `modo::Flash`, `modo::Session`, `modo::SessionLayer`, etc. work directly.
 
 7. **Touch interval**: Sessions are only touched in the DB when `touch_interval_secs` has elapsed since last touch, reducing write load.
 
-8. **Max sessions per user**: When exceeded on `authenticate`/`authenticate_with`, the least-recently-used session is evicted inside the same transaction.
+8. **Max sessions per user**: When exceeded on `authenticate`/`authenticate_with`, the least-recently-used session is evicted.
 
 9. **`SessionToken` redacted**: `Debug` prints `"SessionToken(****)"`, `Display` prints `"****"`. Only the SHA-256 hash is stored in the DB -- a database leak cannot forge cookies.
 
@@ -384,3 +392,5 @@ So `modo::Flash`, `modo::Session`, `modo::SessionLayer`, etc. work directly.
 12. **`SessionState` is `pub(crate)`**: Not accessible outside the crate. Handlers use the `Session` extractor.
 
 13. **Handler-level `async fn` for axum bounds**: Handler functions inside `#[tokio::test]` closures do not satisfy axum's `Handler` bounds. Define test handlers as module-level `async fn`.
+
+14. **Store takes `Database`, not pools**: `Store::new(db, config)` takes a `Database` handle (which wraps `Arc<Connection>`), not separate read/write pools.

@@ -37,7 +37,6 @@ External crates re-exported for user convenience:
 pub use axum;
 pub use serde;
 pub use serde_json;
-pub use sqlx;
 pub use tokio;
 ```
 
@@ -272,7 +271,7 @@ pub struct UploadedFile {
 
 fn extension(&self) -> Option<String>           // lowercase, without dot
 fn validate(&self) -> UploadValidator<'_>       // start fluent validation
-async fn from_field(field: Field) -> Result<Self>  // low-level, prefer MultipartRequest
+async fn from_field(field: axum_extra::extract::multipart::Field) -> Result<Self>  // low-level, prefer MultipartRequest
 ```
 
 ### `Files`
@@ -635,11 +634,9 @@ pub trait HealthCheck: Send + Sync + 'static {
 }
 ```
 
-Built-in implementations:
+Built-in implementations (behind feature flags):
 
-- `db::Pool` -- acquires a connection to verify pool health
-- `db::ReadPool` -- acquires a connection to verify read pool health
-- `db::WritePool` -- acquires a connection to verify write pool health
+- `db::Database` (feature `db`) -- executes `SELECT 1` to verify database connectivity
 
 ### `HealthChecks`
 
@@ -668,8 +665,7 @@ use modo::health::{HealthChecks, router};
 use modo::service::Registry;
 
 let checks = HealthChecks::new()
-    .check("read_pool", read_pool.clone())
-    .check("write_pool", write_pool.clone())
+    .check("database", db.clone())
     .check_fn("redis", || async { Ok(()) });
 
 let mut registry = Registry::new();

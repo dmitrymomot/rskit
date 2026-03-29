@@ -57,7 +57,7 @@ Write the code following modo conventions:
 - Handlers are plain `async fn` — no macros, no signature rewriting
 - Routes use `axum::Router` directly — no auto-registration
 - Services wired via `Registry` and extracted with `Service<T>`
-- Database uses raw sqlx — no ORM
+- Database uses libsql — no ORM
 - `modo::Error` for all errors, `?` for propagation
 - `mod.rs` files contain ONLY `mod` declarations and re-exports
 
@@ -90,23 +90,23 @@ modo is a single Rust crate with zero proc macros. Everything is explicit:
 - **Handlers** are plain `async fn` satisfying axum's `Handler` trait.
 - **Routes** use `axum::Router` directly — no auto-registration or macros.
 - **Services** are wired in `main()` via `Registry` -> `AppState` -> `Service<T>` extraction.
-- **Database** uses raw sqlx with `Pool`/`ReadPool`/`WritePool` newtypes and `Reader`/`Writer` traits.
+- **Database** uses libsql (SQLite) with a single `Database` handle (`Arc<Connection>`) and `ConnExt`/`ConnQueryExt` traits.
 - **Middleware** is standard Tower layers applied via `.layer()` on the router.
 - **Config** loads from YAML files with `${VAR}` / `${VAR:default}` env var substitution.
 
-Optional modules are behind feature flags (`auth`, `templates`, `sse`, `email`,
-`storage`, `webhooks`, `dns`, `geolocation`, `sentry`, `test-helpers`). Core
-modules (sessions, flash, RBAC, jobs, cron, cache, encoding, tenant, IP) are
-always available.
+Optional modules are behind feature flags (`db` [default], `session`, `job`,
+`http-client`, `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`,
+`dns`, `geolocation`, `qrcode`, `sentry`, `test-helpers`). Core modules
+(flash, RBAC, cron, cache, encoding, tenant, IP) are always available.
 
 ## Minimal App Wiring Pattern
 
 Every modo app follows this structure in `main()`:
 
 1. **Load config** — `modo::config::load("config/")` reads `{APP_ENV}.yaml`
-2. **Connect database** — `modo::db::connect(&config.database)` or `connect_rw()`
-3. **Run migrations** — `modo::db::migrate("migrations", &pool)`
-4. **Build registry** — `Registry::new()`, then `.add()` each service (pools, mailer, etc.)
+2. **Connect database** — `modo::db::connect(&config.database)` returns a `Database` handle
+3. **Run migrations** — `modo::db::migrate(db.conn(), "migrations")`
+4. **Build registry** — `Registry::new()`, then `.add()` each service (db, mailer, etc.)
 5. **Build router** — `Router::new()` with routes, layers, `.with_state(registry.into_state())`
 6. **Start server** — `modo::server::http(app, &config.server)` returns an `HttpServer`
 7. **Run** — `modo::run!(server, worker, ...)` handles graceful shutdown via SIGINT/SIGTERM
@@ -122,9 +122,9 @@ Middleware layer order (innermost to outermost, matching `.layer()` call order):
 modo uses a single `modo::Error` type everywhere. Key patterns:
 
 - **Simple errors:** `Error::not_found("user not found")`, `Error::bad_request("invalid input")`
-- **Chaining sources:** `Error::not_found("user not found").chain(sqlx_error)` — attaches the original error for logging/debugging
+- **Chaining sources:** `Error::not_found("user not found").chain(db_error)` — attaches the original error for logging/debugging
 - **Error identity:** `.with_code("jwt:expired")` — survives `IntoResponse` (unlike `source` which is dropped on clone/response)
-- **Propagation:** `?` works everywhere thanks to `From` impls for sqlx, serde, validation errors
+- **Propagation:** `?` works everywhere thanks to `From` impls for libsql, serde, validation errors
 
 For middleware/guard errors, always use `Error::into_response()` — never construct raw HTTP responses.
 
@@ -158,7 +158,8 @@ All paths are relative to the `references/` directory inside this skill folder.
 | --------------------------------------------------------------------------------------------------- | --------------------------- |
 | File organization, error handling, extractors, response types, service registry, IDs, health checks | `references/conventions.md` |
 | YAML config, env var substitution, feature flags                                                    | `references/config.md`      |
-| Database: raw sqlx, Pool/ReadPool/WritePool, Reader/Writer traits                                   | `references/database.md`    |
+| Database: libsql (SQLite), Database handle, ConnExt/ConnQueryExt traits                             | `references/database.md`    |
+| HTTP client with retries, connection pooling, timeouts                                              | `references/http-client.md` |
 | Handlers, routing, axum Router, middleware (rate limit, CORS, tracing)                              | `references/handlers.md`    |
 | Sessions, cookies, flash messages                                                                   | `references/sessions.md`    |
 | OAuth2, JWT, password hashing, OTP, TOTP, backup codes, RBAC                                        | `references/auth.md`        |

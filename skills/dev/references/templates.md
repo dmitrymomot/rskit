@@ -14,9 +14,9 @@ pub use template::{
 Locale resolvers are re-exported from the `template` module only:
 
 ```rust
-pub use locale::{
-    AcceptLanguageResolver, CookieResolver, LocaleResolver, QueryParamResolver, SessionResolver,
-};
+pub use locale::{AcceptLanguageResolver, CookieResolver, LocaleResolver, QueryParamResolver};
+#[cfg(feature = "session")]
+pub use locale::SessionResolver;
 ```
 
 The `context!` macro from MiniJinja is also re-exported: `modo::template::context`.
@@ -219,7 +219,7 @@ Default order (first `Some` wins):
 
 1. `QueryParamResolver` -- reads `?lang=uk` from URL query string.
 2. `CookieResolver` -- reads `lang` cookie.
-3. `SessionResolver` -- reads `"locale"` key from session data (requires `SessionLayer`).
+3. `SessionResolver` -- reads `"locale"` key from session data (requires `SessionLayer`). Only included when the `session` feature is enabled.
 4. `AcceptLanguageResolver` -- parses `Accept-Language` header, picks highest-quality match.
 
 All resolvers validate against available locales when `available_locales` is non-empty.

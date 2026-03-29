@@ -36,11 +36,11 @@ Both use Authorization Code flow with PKCE (S256).
 **Constructor:**
 
 ```rust
-GitHub::new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key) -> Self
-Google::new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key) -> Self
+GitHub::new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key, http_client: modo::http::Client) -> Self
+Google::new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key, http_client: modo::http::Client) -> Self
 ```
 
-`Key` is `axum_extra::extract::cookie::Key`. Must be registered in the `Registry` for `OAuthState` extraction.
+`Key` is `axum_extra::extract::cookie::Key`. Must be registered in the `Registry` for `OAuthState` extraction. `http_client` is the framework-wide HTTP client used for token exchange and profile fetching.
 
 ### OAuthConfig
 
@@ -53,6 +53,7 @@ pub struct OAuthConfig {
 }
 
 #[non_exhaustive]
+#[derive(Debug, Clone, Deserialize)]
 pub struct OAuthProviderConfig {
     pub client_id: String,
     pub client_secret: String,

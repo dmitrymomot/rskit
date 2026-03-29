@@ -39,7 +39,7 @@ modo — Rust web framework. Single crate, zero proc macros, plain `async fn` ha
 
 ## Feature Flags
 
-Feature-gated modules: `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`, `qrcode`, `sentry`. Always-available: cache, encoding, flash, ip, session, tenant, rbac, job, cron, testing (`test-helpers`).
+Feature-gated modules: `db` (default), `session`, `job`, `http-client`, `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`, `qrcode`, `sentry`. Always-available: cache, encoding, flash, ip, tenant, rbac, cron, testing (`test-helpers`).
 
 - Integration test files need `#![cfg(feature = "X")]`
 - Feature-gated modules for integration tests must use `pub mod` (not `pub(crate) mod`)
@@ -80,7 +80,7 @@ Feature-gated modules: `auth`, `templates`, `sse`, `email`, `storage`, `webhooks
 - YAML: `serde_yaml_ng` (not `serde_yaml`)
 - base64: `base64` crate for standard, `encoding::base64url` for RFC 4648 no-padding
 - rand: `rand::fill(&mut bytes)` not `rand::rng().fill_bytes()`
-- croner: `.with_seconds_optional()` for 6-field cron
+- croner: `CronParser::builder().seconds(Seconds::Optional).build()` for 6-field cron
 - Session: raw `cookie::CookieJar`, not `axum_extra` signed jar
 - MiniJinja: `Value::from_safe_string()` for URLs/HTML; registrations consume by move
 - Streaming HTTP: `BodyExt::frame()` loop, not `body.collect().await`
@@ -99,4 +99,4 @@ Feature-gated modules: `auth`, `templates`, `sse`, `email`, `storage`, `webhooks
 
 - `tests/fixtures/migrations/` — `TestDb::migrate()` tests
 - `tests/fixtures/GeoIP2-City-Test.mmdb` — geolocation tests
-- Types without `Debug` (pool newtypes, Storage): `.err().unwrap()` not `.unwrap_err()`
+- Types without `Debug` (`Database`, `Storage`/`Buckets`): `.err().unwrap()` not `.unwrap_err()`

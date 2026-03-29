@@ -24,10 +24,9 @@ modo::testing::TestSession
 
 ## TestDb
 
-In-memory SQLite database for tests. Opens a single `:memory:` connection and
-exposes it as `Pool`, `ReadPool`, and `WritePool` that all share the **same**
-underlying connection (required because SQLite in-memory DBs are
-connection-scoped).
+In-memory SQLite database for tests. Opens a single `:memory:` libsql connection
+and exposes it as a `Database` handle (the same `Arc<Connection>` wrapper used
+throughout modo).
 
 ### Construction
 
@@ -39,13 +38,11 @@ Panics if the database cannot be opened.
 
 ### Methods
 
-| Method       | Signature                                    | Description                                                                                  |
-| ------------ | -------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `exec`       | `async fn exec(self, sql: &str) -> Self`     | Execute raw SQL. Panics on failure. Returns self for chaining.                               |
-| `migrate`    | `async fn migrate(self, path: &str) -> Self` | Run all `.sql` migrations in `path` directory. Panics on failure. Returns self for chaining. |
-| `pool`       | `fn pool(&self) -> Pool`                     | Cloned `Pool` newtype.                                                                       |
-| `read_pool`  | `fn read_pool(&self) -> ReadPool`            | `ReadPool` sharing the same connection.                                                      |
-| `write_pool` | `fn write_pool(&self) -> WritePool`          | `WritePool` sharing the same connection.                                                     |
+| Method    | Signature                                    | Description                                                                                  |
+| --------- | -------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `exec`    | `async fn exec(self, sql: &str) -> Self`     | Execute raw SQL. Panics on failure. Returns self for chaining.                               |
+| `migrate` | `async fn migrate(self, path: &str) -> Self` | Run all `.sql` migrations in `path` directory. Panics on failure. Returns self for chaining. |
+| `db`      | `fn db(&self) -> Database`                   | Cloned `Database` handle backed by the in-memory connection.                                 |
 
 ### Chaining pattern
 
@@ -67,24 +64,14 @@ let db = TestDb::new()
     .await;
 ```
 
-### Registering pools with TestApp
+### Registering Database with TestApp
 
 ```rust
 let db = TestDb::new().await.exec("CREATE TABLE ...").await;
 
 let app = TestApp::builder()
-    .service(db.pool())       // handlers extract via Service<Pool>
+    .service(db.db())          // handlers extract via Service<Database>
     .route("/items", get(list_items))
-    .build();
-```
-
-For read/write split in handlers that use `Service<ReadPool>` / `Service<WritePool>`:
-
-```rust
-let app = TestApp::builder()
-    .service(db.read_pool())
-    .service(db.write_pool())
-    .route("/items", get(list_items).post(create_item))
     .build();
 ```
 
@@ -311,7 +298,7 @@ Combines `TestDb`, `TestSession`, and `TestApp` with database-backed handlers:
 
 use axum::Json;
 use axum::routing::{get, post};
-use modo::db::Pool;
+use modo::db::{ConnExt, ConnQueryExt, Database, FromRow};
 use modo::session::Session;
 use modo::testing::{TestApp, TestDb, TestSession};
 use serde::{Deserialize, Serialize};
@@ -328,25 +315,34 @@ impl modo::Sanitize for User {
     }
 }
 
+impl FromRow for User {
+    fn from_row(row: &modo::db::libsql::Row, col_map: &modo::db::ColumnMap) -> modo::Result<Self> {
+        Ok(Self {
+            id: col_map.get(row, "id")?,
+            name: col_map.get(row, "name")?,
+        })
+    }
+}
+
 async fn list_users(
-    modo::extractor::Service(pool): modo::extractor::Service<Pool>,
+    modo::extractor::Service(db): modo::extractor::Service<Database>,
 ) -> modo::Result<Json<Vec<User>>> {
-    let users = sqlx::query_as::<_, User>("SELECT id, name FROM users")
-        .fetch_all(&**pool)
-        .await?;
+    let users: Vec<User> = db.conn().query_all(
+        "SELECT id, name FROM users",
+        (),
+    ).await?;
     Ok(Json(users))
 }
 
 async fn create_user(
     _session: Session,
-    modo::extractor::Service(pool): modo::extractor::Service<Pool>,
+    modo::extractor::Service(db): modo::extractor::Service<Database>,
     modo::extractor::JsonRequest(input): modo::extractor::JsonRequest<User>,
 ) -> modo::Result<Json<User>> {
-    sqlx::query("INSERT INTO users (id, name) VALUES (?, ?)")
-        .bind(&input.id)
-        .bind(&input.name)
-        .execute(&**pool)
-        .await?;
+    db.conn().execute_raw(
+        "INSERT INTO users (id, name) VALUES (?1, ?2)",
+        modo::db::libsql::params![input.id.as_str(), input.name.as_str()],
+    ).await?;
     Ok(Json(input))
 }
 
@@ -359,7 +355,7 @@ async fn test_full_app_with_db_and_session() {
     let session = TestSession::new(&db).await;
 
     let app = TestApp::builder()
-        .service(db.pool())
+        .service(db.db())
         .route("/users", get(list_users).post(create_user))
         .layer(session.layer())
         .build();
@@ -481,8 +477,8 @@ fn test_env_substitution() {
 
 ### Types without Debug
 
-Pool newtypes (`Pool`, `ReadPool`, `WritePool`), `Storage`, and `Buckets` do not
-implement `Debug`. In tests, use `.err().unwrap()` instead of `.unwrap_err()`:
+`Database` and `Storage`/`Buckets` do not implement `Debug`. In tests, use
+`.err().unwrap()` instead of `.unwrap_err()`:
 
 ```rust
 let result = some_operation().await;
