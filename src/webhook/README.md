@@ -2,22 +2,25 @@
 
 Outbound webhook delivery following the [Standard Webhooks](https://www.standardwebhooks.com/) specification.
 
-Requires feature `"webhooks"`.
+Requires feature `"webhooks"`:
+
+```toml
+[dependencies]
+modo = { version = "0.1", features = ["webhooks"] }
+```
 
 ## Key Types
 
-| Item               | Kind   | Description                                                                           |
-| ------------------ | ------ | ------------------------------------------------------------------------------------- |
-| `WebhookSender<C>` | struct | Signs and delivers webhook payloads via HTTP POST. Clone-cheap (`Arc` inside).        |
-| `WebhookSecret`    | struct | HMAC-SHA256 signing key. Serialized as `whsec_<base64>`. `Debug` output is redacted.  |
-| `WebhookResponse`  | struct | HTTP status code and body bytes returned by the endpoint.                             |
-| `SignedHeaders`    | struct | The three Standard Webhooks request headers produced by `sign_headers`.               |
-| `HttpClient`       | trait  | HTTP transport abstraction. Not object-safe; use a concrete type parameter.           |
-| `HyperClient`      | struct | Default hyper/rustls HTTP client with a configurable per-request timeout.             |
-| `sign`             | fn     | Compute a raw HMAC-SHA256 signature (base64-encoded).                                 |
-| `verify`           | fn     | Verify a raw HMAC-SHA256 signature with constant-time comparison.                     |
-| `sign_headers`     | fn     | Build the three Standard Webhooks headers from id, timestamp, body, and secrets.      |
-| `verify_headers`   | fn     | Verify an incoming request's Standard Webhooks headers with replay-attack protection. |
+| Item              | Kind   | Description                                                                           |
+| ----------------- | ------ | ------------------------------------------------------------------------------------- |
+| `WebhookSender`   | struct | Signs and delivers webhook payloads via HTTP POST. Clone-cheap (`Arc` inside).        |
+| `WebhookSecret`   | struct | HMAC-SHA256 signing key. Serialized as `whsec_<base64>`. `Debug` output is redacted.  |
+| `WebhookResponse` | struct | HTTP status code and body bytes returned by the endpoint.                             |
+| `SignedHeaders`   | struct | The three Standard Webhooks request headers produced by `sign_headers`.               |
+| `sign`            | fn     | Compute a raw HMAC-SHA256 signature (base64-encoded).                                 |
+| `verify`          | fn     | Verify a raw HMAC-SHA256 signature with constant-time comparison.                     |
+| `sign_headers`    | fn     | Build the three Standard Webhooks headers from id, timestamp, body, and secrets.      |
+| `verify_headers`  | fn     | Verify an incoming request's Standard Webhooks headers with replay-attack protection. |
 
 ## Usage
 
@@ -42,6 +45,30 @@ async fn example() -> modo::Result<()> {
 }
 ```
 
+### Custom User-Agent
+
+Call `with_user_agent` immediately after construction, before cloning:
+
+```rust
+use modo::webhook::WebhookSender;
+
+let sender = WebhookSender::default_client()
+    .with_user_agent("my-app/2.0");
+```
+
+### Shared HTTP Client
+
+Pass an existing `modo::http::Client` to share connection pools across modules:
+
+```rust
+use modo::webhook::WebhookSender;
+
+let client = modo::http::Client::builder()
+    .timeout(std::time::Duration::from_secs(10))
+    .build();
+let sender = WebhookSender::new(client);
+```
+
 ### Storing and Loading Secrets
 
 `WebhookSecret` serializes as a `whsec_<base64>` string and implements `FromStr`:
@@ -60,13 +87,13 @@ fn roundtrip() -> modo::Result<()> {
 
 ### Key Rotation
 
-Pass multiple secrets to `send` — each produces a `v1,<sig>` entry in the
+Pass multiple secrets to `send` -- each produces a `v1,<sig>` entry in the
 `webhook-signature` header. A receiver accepts the message if any entry matches:
 
 ```rust
 use modo::webhook::{WebhookSender, WebhookSecret};
 
-async fn rotate(sender: &WebhookSender<modo::webhook::HyperClient>) -> modo::Result<()> {
+async fn rotate(sender: &WebhookSender) -> modo::Result<()> {
     let old: WebhookSecret = "whsec_b2xkLWtleS1ieXRlcw==".parse()?;
     let new: WebhookSecret = "whsec_bmV3LWtleS1ieXRlcw==".parse()?;
 
@@ -97,36 +124,6 @@ fn handle_incoming(
 ) -> modo::Result<()> {
     verify_headers(&[secret], headers, body, Duration::from_secs(300))
 }
-```
-
-### Custom HTTP Client
-
-Implement `HttpClient` to swap in a different transport (e.g. for testing or to
-add retry logic):
-
-```rust
-use bytes::Bytes;
-use http::HeaderMap;
-use modo::webhook::{HttpClient, WebhookResponse, WebhookSender};
-
-struct LoggingClient;
-
-impl HttpClient for LoggingClient {
-    async fn post(
-        &self,
-        url: &str,
-        _headers: HeaderMap,
-        _body: Bytes,
-    ) -> modo::Result<WebhookResponse> {
-        tracing::info!(url, "webhook delivered");
-        Ok(WebhookResponse {
-            status: http::StatusCode::OK,
-            body: Bytes::new(),
-        })
-    }
-}
-
-let sender = WebhookSender::new(LoggingClient);
 ```
 
 ## Configuration

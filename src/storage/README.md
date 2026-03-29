@@ -1,6 +1,6 @@
-# storage
+# modo::storage
 
-S3-compatible object storage for the `modo` framework. Supports AWS S3, RustFS,
+S3-compatible object storage for the modo framework. Supports AWS S3, RustFS,
 MinIO, and any provider that implements the S3 API.
 
 Request signing uses AWS Signature Version 4. Both path-style
@@ -11,14 +11,14 @@ Request signing uses AWS Signature Version 4. Both path-style
 
 ```toml
 [dependencies]
-modo = { version = "*", features = ["storage"] }
+modo = { version = "0.1", features = ["storage"] }
 ```
 
 For integration tests using the memory backend, also add:
 
 ```toml
 [dev-dependencies]
-modo = { version = "*", features = ["storage-test"] }
+modo = { version = "0.1", features = ["storage-test"] }
 ```
 
 The memory backend is also available inside `#[cfg(test)]` unit-test blocks
@@ -28,7 +28,7 @@ without enabling `storage-test`.
 
 ### Single-bucket setup
 
-```rust
+```rust,ignore
 use modo::storage::{BucketConfig, Storage, PutInput};
 use bytes::Bytes;
 
@@ -40,12 +40,15 @@ let config = BucketConfig {
     region: Some("us-east-1".into()),
     public_url: Some("https://cdn.example.com".into()),
     max_file_size: Some("10mb".into()),
-    path_style: true,
-    name: String::new(),
+    ..Default::default()
 };
 
 let storage = Storage::new(&config)?;
 
+// Using PutInput::new (filename defaults to None)
+let input = PutInput::new(Bytes::from("file contents"), "avatars/", "image/jpeg");
+
+// Or construct directly for full control
 let key = storage.put(&PutInput {
     data: Bytes::from("file contents"),
     prefix: "avatars/".into(),
@@ -56,9 +59,21 @@ let key = storage.put(&PutInput {
 let public_url = storage.url(&key)?;
 ```
 
+### Shared HTTP client
+
+Use `Storage::with_client` to share a connection pool across multiple `Storage`
+instances or other modules:
+
+```rust,ignore
+use modo::storage::{BucketConfig, Storage};
+
+let client = modo::http::Client::default();
+let storage = Storage::with_client(&config, client)?;
+```
+
 ### Upload with options
 
-```rust
+```rust,ignore
 use modo::storage::{Acl, PutOptions};
 
 let key = storage.put_with(&input, PutOptions {
@@ -71,7 +86,7 @@ let key = storage.put_with(&input, PutOptions {
 
 ### Upload from a URL
 
-```rust
+```rust,ignore
 use modo::storage::PutFromUrlInput;
 
 let key = storage.put_from_url(&PutFromUrlInput {
@@ -86,7 +101,7 @@ The memory backend returns an error for this operation.
 
 ### Presigned URL
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 let url = storage.presigned_url("avatars/01ABC.jpg", Duration::from_secs(3600)).await?;
@@ -94,7 +109,7 @@ let url = storage.presigned_url("avatars/01ABC.jpg", Duration::from_secs(3600)).
 
 ### Delete
 
-```rust
+```rust,ignore
 // Delete a single key (no-op if missing)
 storage.delete("avatars/01ABC.jpg").await?;
 
@@ -104,7 +119,7 @@ storage.delete_prefix("avatars/").await?;
 
 ### Build from an uploaded file
 
-```rust
+```rust,ignore
 use modo::storage::PutInput;
 use modo::extractor::UploadedFile;
 
@@ -114,7 +129,7 @@ let key = storage.put(&input).await?;
 
 ### Multi-bucket setup
 
-```rust
+```rust,ignore
 use modo::storage::{BucketConfig, Buckets};
 
 let configs = vec![
@@ -128,7 +143,7 @@ let avatars = buckets.get("avatars")?;
 
 ### In-memory backend for tests
 
-```rust
+```rust,ignore
 // Available in #[cfg(test)] blocks and with the `storage-test` feature
 let storage = Storage::memory();
 let buckets = Buckets::memory(&["avatars", "docs"]);
@@ -167,3 +182,4 @@ working with sizes in code.
 | `PutOptions`      | Optional headers and ACL override for uploads       |
 | `Acl`             | `Private` (default) or `PublicRead`                 |
 | `BucketConfig`    | Deserialisable configuration for one bucket         |
+| `kb` / `mb` / `gb`| Size-unit helper functions (convert to bytes)       |
