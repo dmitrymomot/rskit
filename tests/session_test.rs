@@ -1,4 +1,4 @@
-#![cfg(feature = "db")]
+#![cfg(feature = "session")]
 
 use axum::Router;
 use axum::body::Body;
@@ -6,6 +6,7 @@ use axum::http::Request;
 use axum::routing::{get, post};
 use http::StatusCode;
 use modo::cookie::{CookieConfig, key_from_config};
+use modo::db::{self, ConnExt};
 use modo::service::Registry;
 use modo::session::{Session, SessionConfig, Store};
 use tower::ServiceExt;
@@ -16,30 +17,27 @@ fn test_cookie_config() -> CookieConfig {
     c
 }
 
-async fn setup_store() -> (Store, modo::db::Pool) {
-    let db_config = {
-        let mut c = modo::db::SqliteConfig::default();
-        c.path = ":memory:".to_string();
-        c
+async fn setup_store() -> Store {
+    let config = db::Config {
+        path: ":memory:".into(),
+        ..Default::default()
     };
-    let pool = modo::db::connect(&db_config).await.unwrap();
-
-    sqlx::query(
-        "CREATE TABLE sessions (
-            id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
-            user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
-            user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
-            device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,
-            data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
-            last_active_at TEXT NOT NULL, expires_at TEXT NOT NULL
-        )",
-    )
-    .execute(&*pool)
-    .await
-    .unwrap();
-
-    let store = Store::new(&pool, SessionConfig::default());
-    (store, pool)
+    let db = db::connect(&config).await.unwrap();
+    db.conn()
+        .execute_raw(
+            "CREATE TABLE sessions (
+                id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
+                user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
+                user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
+                device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,
+                data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
+                last_active_at TEXT NOT NULL, expires_at TEXT NOT NULL
+            )",
+            (),
+        )
+        .await
+        .unwrap();
+    Store::new(db, SessionConfig::default())
 }
 
 async fn handler_no_auth(session: Session) -> &'static str {
@@ -71,7 +69,7 @@ async fn handler_set_get(session: Session) -> modo::Result<&'static str> {
 
 #[tokio::test]
 async fn test_session_middleware_no_cookie_passes_through() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -90,7 +88,7 @@ async fn test_session_middleware_no_cookie_passes_through() {
 
 #[tokio::test]
 async fn test_session_authenticate_sets_cookie() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -117,7 +115,7 @@ async fn test_session_authenticate_sets_cookie() {
 
 #[tokio::test]
 async fn test_session_logout_removes_cookie() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -142,7 +140,7 @@ async fn test_session_logout_removes_cookie() {
 
 #[tokio::test]
 async fn test_session_set_and_get_data() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -295,7 +293,7 @@ async fn handler_revoke_ext(
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_cookie_round_trip() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -351,7 +349,7 @@ async fn test_cookie_round_trip() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_fingerprint_mismatch_destroys_session() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -416,7 +414,7 @@ async fn test_fingerprint_mismatch_destroys_session() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_authenticate_destroys_old_session() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -511,7 +509,7 @@ async fn test_authenticate_destroys_old_session() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_revoke_other_users_session_returns_not_found() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -559,7 +557,7 @@ async fn test_revoke_other_users_session_returns_not_found() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_logout_all_destroys_all_sessions() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -602,7 +600,7 @@ async fn test_logout_all_destroys_all_sessions() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_logout_other_keeps_current() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -644,7 +642,7 @@ async fn test_logout_other_keeps_current() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_rotate_unauthenticated_returns_error() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -678,7 +676,7 @@ async fn test_rotate_unauthenticated_returns_error() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_list_my_sessions_unauthenticated_returns_error() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -706,7 +704,7 @@ async fn test_list_my_sessions_unauthenticated_returns_error() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_logout_removes_cookie_in_response() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
@@ -754,7 +752,7 @@ async fn test_logout_removes_cookie_in_response() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_set_no_op_when_unauthenticated() {
-    let (store, _pool) = setup_store().await;
+    let store = setup_store().await;
     let cookie_config = test_cookie_config();
     let key = key_from_config(&cookie_config).unwrap();
 
