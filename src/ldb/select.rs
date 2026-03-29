@@ -5,7 +5,13 @@ use super::filter::ValidatedFilter;
 use super::from_row::FromRow;
 use super::page::{CursorPage, CursorRequest, Page, PageRequest};
 
-/// Composable query builder for filter + pagination.
+/// Composable query builder combining filters, sorting, and pagination.
+///
+/// Created via [`ConnExt::select`] with a base SQL query. Chain
+/// [`filter`](Self::filter), [`order_by`](Self::order_by), and
+/// [`cursor_column`](Self::cursor_column) before executing with
+/// [`page`](Self::page), [`cursor`](Self::cursor), [`fetch_all`](Self::fetch_all),
+/// [`fetch_one`](Self::fetch_one), or [`fetch_optional`](Self::fetch_optional).
 pub struct SelectBuilder<'a, C: ConnExt> {
     conn: &'a C,
     base_sql: String,
@@ -67,7 +73,14 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
             .or_else(|| self.order_by.clone())
     }
 
-    /// Execute with offset pagination. Returns Page<T>.
+    /// Execute with offset pagination, returning a [`Page<T>`].
+    ///
+    /// Runs a `COUNT(*)` subquery for the total, then fetches the
+    /// requested page with `LIMIT`/`OFFSET`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query or row conversion fails.
     pub async fn page<T: FromRow + serde::Serialize>(self, req: PageRequest) -> Result<Page<T>> {
         let (where_sql, mut params) = self.build_where();
         let order = self.resolve_order();
@@ -112,7 +125,7 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
         Ok(Page::new(items, total, req.page, req.per_page))
     }
 
-    /// Execute with cursor pagination. Returns CursorPage<T>.
+    /// Execute with cursor pagination. Returns [`CursorPage<T>`].
     ///
     /// Uses the configured cursor column (default `"id"`) for ordering and
     /// the `WHERE col > ?` condition. Set a different column with
@@ -192,7 +205,11 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
         })
     }
 
-    /// Execute without pagination. Returns Vec<T>.
+    /// Execute without pagination, returning all matching rows.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query or row conversion fails.
     pub async fn fetch_all<T: FromRow>(self) -> Result<Vec<T>> {
         let (where_sql, params) = self.build_where();
         let order = self.resolve_order();
@@ -211,7 +228,11 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
         Ok(items)
     }
 
-    /// Execute without pagination. Returns first row.
+    /// Execute without pagination, returning the first row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::not_found`](crate::Error::not_found) if no rows match.
     pub async fn fetch_one<T: FromRow>(self) -> Result<T> {
         let (where_sql, params) = self.build_where();
         let sql = format!("{}{} LIMIT 1", self.base_sql, where_sql);
@@ -229,7 +250,11 @@ impl<'a, C: ConnExt> SelectBuilder<'a, C> {
         T::from_row(&row)
     }
 
-    /// Execute without pagination. Returns Option<T>.
+    /// Execute without pagination, returning the first row or `None`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query or row conversion fails.
     pub async fn fetch_optional<T: FromRow>(self) -> Result<Option<T>> {
         let (where_sql, params) = self.build_where();
         let sql = format!("{}{} LIMIT 1", self.base_sql, where_sql);

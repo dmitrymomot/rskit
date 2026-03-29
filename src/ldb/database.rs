@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
-/// Single-connection database handle. Clone-able (Arc internally).
+/// Clone-able, single-connection database handle.
+///
+/// Wraps a `libsql::Database` and `libsql::Connection` behind an `Arc`.
+/// Cloning is cheap (reference count increment). Use [`conn()`](Self::conn)
+/// to access the underlying `libsql::Connection` for queries.
+///
+/// Created by [`connect`](super::connect).
 #[derive(Clone)]
 pub struct Database {
     inner: Arc<Inner>,

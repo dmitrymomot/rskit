@@ -2,9 +2,16 @@ use std::collections::HashMap;
 
 use crate::error::{Error, Result};
 
-/// Trait for converting a libsql Row into a Rust struct.
-/// Users implement this per struct, choosing positional or name-based access.
+/// Trait for converting a `libsql::Row` into a Rust struct.
+///
+/// Implement this per struct, choosing positional (`row.get(idx)`) or
+/// name-based ([`ColumnMap`]) access for each column.
 pub trait FromRow: Sized {
+    /// Convert a row into `Self`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a column is missing or has an incompatible type.
     fn from_row(row: &libsql::Row) -> Result<Self>;
 }
 
@@ -55,7 +62,15 @@ impl ColumnMap {
 ///
 /// This trait mirrors the sealed `FromValue` inside libsql, providing the same
 /// conversions for use with [`ColumnMap::get`].
+///
+/// Implemented for: `String`, `i32`, `i64`, `u32`, `u64`, `f64`, `bool`,
+/// `Vec<u8>`, `Option<T>` (where `T: FromValue`), and `libsql::Value`.
 pub trait FromValue: Sized {
+    /// Convert a value into `Self`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error on type mismatch or unexpected null.
     fn from_value(val: libsql::Value) -> Result<Self>;
 }
 

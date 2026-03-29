@@ -6,6 +6,16 @@ use crate::error::{Error, Result};
 /// in a `_migrations` table with checksum verification. Each migration
 /// is applied inside a transaction so the schema change and the
 /// `_migrations` record are committed atomically.
+///
+/// Already-applied migrations are skipped. If a file's checksum differs
+/// from the recorded checksum, an error is returned (the file was modified
+/// after being applied).
+///
+/// # Errors
+///
+/// Returns an error if the migrations directory cannot be read, a
+/// migration file cannot be parsed, a checksum mismatch is detected,
+/// or a migration statement fails.
 pub async fn migrate(conn: &libsql::Connection, dir: &str) -> Result<()> {
     // Create tracking table
     conn.execute(

@@ -1,5 +1,12 @@
 use crate::error::Error;
 
+/// Converts `libsql::Error` into [`modo::Error`](crate::Error) with
+/// appropriate HTTP status codes:
+///
+/// - Unique/primary-key constraint violations become `409 Conflict`.
+/// - Foreign-key violations become `400 Bad Request`.
+/// - `QueryReturnedNoRows` becomes `404 Not Found`.
+/// - Everything else becomes `500 Internal Server Error`.
 impl From<libsql::Error> for Error {
     fn from(err: libsql::Error) -> Self {
         match &err {

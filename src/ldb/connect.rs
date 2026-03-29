@@ -3,7 +3,17 @@ use crate::error::Result;
 use super::config::Config;
 use super::database::Database;
 
-/// Open a database, apply PRAGMAs, and optionally run migrations.
+/// Open a local libsql database, apply PRAGMAs from [`Config`], and
+/// optionally run migrations.
+///
+/// Creates parent directories for the database path if they do not exist.
+/// When [`Config::migrations`] is set, SQL migration files from that
+/// directory are applied via [`migrate`](super::migrate).
+///
+/// # Errors
+///
+/// Returns an error if directory creation, database opening, PRAGMA
+/// execution, or migration fails.
 pub async fn connect(config: &Config) -> Result<Database> {
     // Create parent directories if needed
     if let Some(parent) = std::path::Path::new(&config.path).parent()
