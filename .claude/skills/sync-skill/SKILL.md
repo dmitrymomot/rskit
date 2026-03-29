@@ -1,7 +1,7 @@
 ---
 name: sync-skill
-description: Recompile the modo skill and references by verifying them against current crate source code. Use when crate APIs have changed and skill docs need updating.
-argument-hint: "[module-name ...]"
+description: Recompile the modo skill references by verifying them against current crate source code. Syncs both the dev skill (API references) and the init skill (code templates). Use when crate APIs have changed and skill docs need updating.
+argument-hint: "[module-name ... | init | dev | all]"
 disable-model-invocation: true
 ---
 
@@ -10,8 +10,20 @@ disable-model-invocation: true
 You are updating the modo skill references to match the current state of the codebase.
 This is a verification and correction task — not creative writing.
 
-**Output directory:** `skills/dev/` at the project root (NOT `.claude/skills/dev/`).
-Reference files go in `skills/dev/references/`, the topic index is `skills/dev/SKILL.md`.
+## Skill Directories
+
+There are two skill directories to sync. Both live at the project root (NOT under `.claude/`):
+
+| Skill | Output directory | Reference type | Topic index |
+|-------|-----------------|----------------|-------------|
+| **dev** | `skills/dev/references/` | API documentation (types, methods, signatures) | `skills/dev/SKILL.md` |
+| **init** | `skills/init/references/` | Code templates (scaffolding snippets, config blocks) | `skills/init/SKILL.md` |
+
+**Argument routing:**
+- No args or `all` → sync both dev and init
+- `init` → sync only init skill references
+- `dev` → sync only dev skill references
+- Module names (e.g., `db`, `auth`) → sync only those modules in dev skill
 All paths in this document are relative to the project root unless stated otherwise.
 
 ## Hard Rules
@@ -286,6 +298,76 @@ cargo clippy --all-features --tests -- -D warnings
 
 These commands verify the source code, not the references — but if you introduced
 inconsistencies in CLAUDE.md that affect how code is written, this catches downstream issues.
+
+---
+
+## Init Skill Sync
+
+The init skill (`skills/init/`) contains code templates for scaffolding new modo apps.
+Unlike the dev skill (which documents API signatures), init references contain **exact code
+snippets** that must use the current API correctly. A single stale function call means every
+scaffolded project starts broken.
+
+### Init Reference Files
+
+```
+skills/init/references/components.md  — Code blocks for each component (core skeleton,
+                                        registry setup, middleware layers, config YAML,
+                                        migration SQL, handler examples)
+skills/init/references/files.md       — Boilerplate file templates (Cargo.toml, justfile,
+                                        Dockerfile, docker-compose, .env, CLAUDE.md, CI)
+skills/init/SKILL.md                  — Skill instructions with middleware layer example
+```
+
+### What to Verify in Init References
+
+For each code block in `components.md` and `files.md`, check:
+
+1. **Function calls** — every `modo::` call must match a real `pub fn` in source.
+   Common drift: `connect_rw()` renamed to `connect()`, `Store::new_rw()` to `Store::new()`,
+   `managed(pool)` to `managed(db)`, `migrate(path, &pool)` to `migrate(conn, path)`.
+
+2. **Type names** — `Pool`, `ReadPool`, `WritePool`, `HyperClient` etc. must exist.
+   If a type was removed, the code block must be rewritten.
+
+3. **Feature flags** — verify the feature mapping table lists all features that exist in
+   `Cargo.toml` and that "no feature flag" claims are still true. Cross-check with `src/lib.rs`
+   `#[cfg(feature = "X")]` gates.
+
+4. **Config struct fields** — every YAML config key must correspond to a field on the
+   matching config struct (e.g., `ModoConfig`, `db::Config`, `SessionConfig`, `JobConfig`).
+   Read `src/config/modo.rs` and the module's config type.
+
+5. **Constructor signatures** — `::new()`, `::from_config()`, `::builder()` calls must pass
+   the correct argument types. This is the most common source of drift.
+
+6. **Middleware layer calls** — `modo::middleware::*` calls must match source signatures.
+   Some return `Result` (need `?`), some don't.
+
+7. **Import paths** — `modo::X` must match what `src/lib.rs` re-exports.
+
+### Init Sync Process
+
+1. **Read the dev skill references first** — they are the ground truth for API signatures.
+   If you just ran the dev sync, the references are already up to date. If not, at minimum
+   read the reference files for modules used in the init templates: `database.md`, `config.md`,
+   `sessions.md`, `handlers.md`, `jobs.md`, `auth.md`, `conventions.md`.
+
+2. **Read each init reference file** and scan every code block for the items listed above.
+
+3. **Cross-reference against source** — for any call you're unsure about, read the actual
+   source file. Don't guess from memory or from the dev reference.
+
+4. **Apply fixes** using Edit. Preserve the surrounding code context. Don't restructure
+   sections or change the template's overall approach — only fix API calls, types, and flags.
+
+5. **Update `skills/init/SKILL.md`** if the middleware layer example or any other code snippet
+   in the skill body contains stale calls.
+
+6. **Verify** — after fixing, read back the changed sections and confirm every `modo::` call
+   traces to a real public item.
+
+---
 
 ## Output
 

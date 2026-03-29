@@ -45,13 +45,12 @@ async fn main() -> Result<()> {
     let _guard = modo::tracing::init(&config.modo.tracing)?;
 
     // 2. Database
-    let (read_pool, write_pool) = modo::db::connect_rw(&config.modo.database).await?;
-    modo::db::migrate("migrations/app", &write_pool).await?;
+    let db = modo::db::connect(&config.modo.database).await?;
+    modo::db::migrate(db.conn(), "migrations/app").await?;
 
     // 3. Service registry
     let mut registry = modo::service::Registry::new();
-    registry.add(read_pool.clone());
-    registry.add(write_pool.clone());
+    registry.add(db.clone());
 
     // 4. Cookie key (required by session, flash, csrf)
     let cookie_config = config
@@ -63,14 +62,13 @@ async fn main() -> Result<()> {
 
     // 5. Session store
     let session_store =
-        modo::session::Store::new_rw(&read_pool, &write_pool, config.modo.session.clone());
+        modo::session::Store::new(db.clone(), config.modo.session.clone());
 
     // === COMPONENT INIT BLOCKS GO HERE ===
 
     // 6. Health checks
     let health_checks = modo::health::HealthChecks::new()
-        .check("read_pool", read_pool.clone())
-        .check("write_pool", write_pool.clone());
+        .check("database", db.clone());
     registry.add(health_checks);
 
     // 7. Rate limiter
@@ -84,7 +82,7 @@ async fn main() -> Result<()> {
         .layer(modo::middleware::tracing())
         .layer(modo::middleware::request_id())
         .layer(modo::middleware::compression())
-        .layer(modo::middleware::security_headers(&config.modo.security_headers))
+        .layer(modo::middleware::security_headers(&config.modo.security_headers)?)
         .layer(modo::middleware::cors(&config.modo.cors))
         .layer(modo::middleware::csrf(&config.modo.csrf, &cookie_key))
         // === COMPONENT MIDDLEWARE LAYERS GO HERE ===
@@ -96,11 +94,10 @@ async fn main() -> Result<()> {
     // === BACKGROUND WORKERS GO HERE ===
 
     // 9. Server + shutdown
-    let managed_read = modo::db::managed(read_pool);
-    let managed_write = modo::db::managed(write_pool);
+    let managed_db = modo::db::managed(db);
     let server = modo::server::http(app, &config.modo.server).await?;
 
-    modo::run!(server, managed_read, managed_write).await
+    modo::run!(server, managed_db).await
 }
 ```
 
@@ -278,7 +275,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 
 ### Core run! macro args
 
-Always include: `server, managed_read, managed_write`
+Always include: `server, managed_db`
 
 Add to this list as components are included (jobs adds `worker, managed_jobs`, cron adds `scheduler`).
 
@@ -698,7 +695,7 @@ registry.add(webhook_sender);
 
 - No config YAML needed (webhook secret is per-destination, managed by the app)
 - No middleware layers needed
-- Used in handlers via `Service<WebhookSender<HyperClient>>`
+- Used in handlers via `Service<WebhookSender>`
 
 ---
 
@@ -811,30 +808,27 @@ SENTRY_DSN=
 
 ## Jobs
 
-**No feature flag** — always available.
+**Feature flag:** `"job"`
 
 ### Database setup (in main.rs)
 
 ```rust
-// Job DB — separate single pool
+// Job DB — separate database
 let job_db_config = config
     .modo
     .job
     .database
     .as_ref()
     .expect("job.database config is required");
-let job_pool = modo::db::connect(job_db_config).await?;
-modo::db::migrate("migrations/jobs", &job_pool).await?;
+let job_db = modo::db::connect(job_db_config).await?;
+modo::db::migrate(job_db.conn(), "migrations/jobs").await?;
 ```
 
 ### Registry setup
 
 ```rust
-// Register job pool for health checks
-registry.add(job_pool.clone());
-
 // Job enqueuer
-let job_enqueuer = modo::job::Enqueuer::new(&job_pool);
+let job_enqueuer = modo::job::Enqueuer::new(job_db.clone());
 registry.add(job_enqueuer);
 ```
 
@@ -842,7 +836,7 @@ registry.add(job_enqueuer);
 
 Add to health checks builder:
 ```rust
-.check("job_pool", job_pool.clone())
+.check("job_db", job_db.clone())
 ```
 
 ### Worker setup (after router, before server)
@@ -850,8 +844,7 @@ Add to health checks builder:
 ```rust
 // Job worker registry (separate from app registry — workers get their own services)
 let mut job_registry = modo::service::Registry::new();
-job_registry.add(modo::db::WritePool::new((*job_pool).clone()));
-job_registry.add(read_pool.clone());
+job_registry.add(job_db.clone());
 
 let worker = modo::job::Worker::builder(&config.modo.job, &job_registry)
     .register("example_job", jobs::example::handle)
@@ -859,15 +852,15 @@ let worker = modo::job::Worker::builder(&config.modo.job, &job_registry)
     .await;
 ```
 
-### Managed pool for shutdown
+### Managed handle for shutdown
 
 ```rust
-let managed_jobs = modo::db::managed(job_pool);
+let managed_jobs = modo::db::managed(job_db);
 ```
 
 ### run! macro args
 
-Add: `worker, managed_jobs`
+With jobs: `server, managed_db, worker, managed_jobs`
 
 ### Config YAML (development)
 
@@ -961,8 +954,7 @@ let scheduler = modo::cron::Scheduler::builder(&job_registry)
 If jobs component is NOT selected but cron IS, create a minimal job registry:
 ```rust
 let mut job_registry = modo::service::Registry::new();
-job_registry.add(read_pool.clone());
-job_registry.add(write_pool.clone());
+job_registry.add(db.clone());
 ```
 
 ### run! macro args

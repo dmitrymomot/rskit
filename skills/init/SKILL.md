@@ -184,7 +184,7 @@ let app = routes::router(registry)
     // Response processing
     .layer(modo::middleware::compression())
     // Security
-    .layer(modo::middleware::security_headers(&config.modo.security_headers))
+    .layer(modo::middleware::security_headers(&config.modo.security_headers)?)
     .layer(modo::middleware::cors(&config.modo.cors))
     .layer(modo::middleware::csrf(&config.modo.csrf, &cookie_key))
     // Template context (if templates)
