@@ -14,15 +14,8 @@ Request signing uses AWS Signature Version 4. Both path-style
 modo = { version = "0.1", features = ["storage"] }
 ```
 
-For integration tests using the memory backend, also add:
-
-```toml
-[dev-dependencies]
-modo = { version = "0.1", features = ["storage-test"] }
-```
-
-The memory backend is also available inside `#[cfg(test)]` unit-test blocks
-without enabling `storage-test`.
+The memory backend is available inside `#[cfg(test)]` unit-test blocks and
+when the `test-helpers` feature is enabled (for integration tests).
 
 ## Usage
 
@@ -144,7 +137,7 @@ let avatars = buckets.get("avatars")?;
 ### In-memory backend for tests
 
 ```rust,ignore
-// Available in #[cfg(test)] blocks and with the `storage-test` feature
+// Available in #[cfg(test)] blocks and with the `test-helpers` feature
 let storage = Storage::memory();
 let buckets = Buckets::memory(&["avatars", "docs"]);
 ```
