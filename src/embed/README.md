@@ -10,7 +10,19 @@ modo = { version = "*", features = ["text-embedding"] }
 
 Depends on `http-client`. No new crate dependencies.
 
-Providers: OpenAI, Gemini, Mistral, Voyage AI.
+## Key types
+
+| Type | Purpose |
+|------|---------|
+| `EmbeddingProvider` | Concrete wrapper around any `EmbeddingBackend`; cheap to clone (`Arc` internally) |
+| `EmbeddingBackend` | Trait for embedding providers (built-in or custom) |
+| `OpenAIEmbedding` | OpenAI embedding provider |
+| `GeminiEmbedding` | Google Gemini embedding provider |
+| `MistralEmbedding` | Mistral embedding provider |
+| `VoyageEmbedding` | Voyage AI embedding provider |
+| `OpenAIConfig` / `GeminiConfig` / `MistralConfig` / `VoyageConfig` | Provider configuration structs |
+| `to_f32_blob` / `from_f32_blob` | Vector-to-blob conversion helpers for libsql `F32_BLOB` columns |
+| `test::InMemoryBackend` | Deterministic in-memory backend for unit tests |
 
 ## Providers
 
@@ -19,6 +31,7 @@ Providers: OpenAI, Gemini, Mistral, Voyage AI.
 | OpenAI | `OpenAIEmbedding` | `OpenAIConfig` | `text-embedding-3-small` | 1536 |
 | Gemini | `GeminiEmbedding` | `GeminiConfig` | `gemini-embedding-001` | 768 |
 | Mistral | `MistralEmbedding` | `MistralConfig` | `mistral-embed` | 1024 |
+| Voyage AI | `VoyageEmbedding` | `VoyageConfig` | `voyage-4` | 1024 |
 
 ## Usage
 
@@ -45,6 +58,37 @@ db.conn().execute_raw(
     libsql::params![id::ulid(), "hello world", blob],
 ).await?;
 ```
+
+## Configuration
+
+```yaml
+# OpenAI
+embedding:
+  api_key: "${OPENAI_API_KEY}"
+  model: "text-embedding-3-small"   # optional, default shown
+  dimensions: 1536                  # optional, default shown
+  base_url: "https://custom.endpoint.com"  # optional, for Azure or proxies
+
+# Gemini
+embedding:
+  api_key: "${GEMINI_API_KEY}"
+  model: "gemini-embedding-001"     # optional, default shown
+  dimensions: 768                   # optional, default shown
+
+# Mistral (no dimensions parameter — always 1024)
+embedding:
+  api_key: "${MISTRAL_API_KEY}"
+  model: "mistral-embed"            # optional, default shown
+
+# Voyage AI
+embedding:
+  api_key: "${VOYAGE_API_KEY}"
+  model: "voyage-4"                 # optional, default shown
+  dimensions: 1024                  # optional, default shown
+```
+
+All configs validate at construction time via `validate()`. Empty `api_key` or `model`
+is rejected with `Error::bad_request`.
 
 ## Custom providers
 

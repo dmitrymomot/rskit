@@ -8,8 +8,8 @@ use crate::error::Result;
 /// little-endian f32 byte blob ready for libsql `F32_BLOB` columns.
 ///
 /// The built-in providers are [`super::OpenAIEmbedding`],
-/// [`super::GeminiEmbedding`], and [`super::MistralEmbedding`]. Custom
-/// providers implement this trait directly.
+/// [`super::GeminiEmbedding`], [`super::MistralEmbedding`], and
+/// [`super::VoyageEmbedding`]. Custom providers implement this trait directly.
 pub trait EmbeddingBackend: Send + Sync {
     /// Embed a single text string.
     ///

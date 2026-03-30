@@ -29,7 +29,7 @@ Source: `src/embed/` (mod.rs, backend.rs, config.rs, convert.rs, provider.rs, op
 
 ## Config structs
 
-All three config structs are `#[non_exhaustive]`, `#[derive(Debug, Clone, Deserialize)]`, YAML-deserializable with `#[serde(default)]`, and implement `Default` and `validate()`.
+All four config structs are `#[non_exhaustive]`, `#[derive(Debug, Clone, Deserialize)]`, YAML-deserializable with `#[serde(default)]`, and implement `Default` and `validate()`.
 
 ### OpenAIConfig
 
@@ -360,7 +360,7 @@ let floats = from_f32_blob(&blob)?;
 
 ## Gotchas
 
-- **Config validation is eager** — `OpenAIEmbedding::new`, `GeminiEmbedding::new`, and `MistralEmbedding::new` all call `config.validate()` at construction. Missing `api_key` fails at startup, not at request time.
+- **Config validation is eager** — `OpenAIEmbedding::new`, `GeminiEmbedding::new`, `MistralEmbedding::new`, and `VoyageEmbedding::new` all call `config.validate()` at construction. Missing `api_key` fails at startup, not at request time.
 - **Mistral dimensions are fixed** — `MistralConfig` has no `dimensions` field. The API always returns 1024-dimensional vectors, hard-coded in `MistralEmbedding::dimensions()`.
 - **Empty input rejected** — `EmbeddingProvider::embed` returns `bad_request` immediately if `input` is empty, before calling the backend.
 - **Blob length** — `to_f32_blob` produces exactly `dimensions * 4` bytes. `from_f32_blob` returns `bad_request` if the blob length is not a multiple of 4.
