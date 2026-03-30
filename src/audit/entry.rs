@@ -124,11 +124,12 @@ mod tests {
             new_role: String,
         }
 
-        let entry = AuditEntry::new("user_123", "user.role.changed", "user", "usr_abc")
-            .metadata(RoleChange {
+        let entry = AuditEntry::new("user_123", "user.role.changed", "user", "usr_abc").metadata(
+            RoleChange {
                 old_role: "editor".into(),
                 new_role: "admin".into(),
-            });
+            },
+        );
         let meta = entry.metadata_value().unwrap();
         assert_eq!(meta["old_role"], "editor");
         assert_eq!(meta["new_role"], "admin");
@@ -139,8 +140,7 @@ mod tests {
         use crate::extractor::ClientInfo;
 
         let info = ClientInfo::new().ip("1.2.3.4").user_agent("Bot/1.0");
-        let entry = AuditEntry::new("system", "job.ran", "job", "job_1")
-            .client_info(info);
+        let entry = AuditEntry::new("system", "job.ran", "job", "job_1").client_info(info);
         let ci = entry.client_info_value().unwrap();
         assert_eq!(ci.ip.as_deref(), Some("1.2.3.4"));
         assert_eq!(ci.user_agent.as_deref(), Some("Bot/1.0"));
@@ -148,8 +148,8 @@ mod tests {
 
     #[test]
     fn tenant_id_set() {
-        let entry = AuditEntry::new("user_123", "doc.deleted", "document", "doc_1")
-            .tenant_id("tenant_abc");
+        let entry =
+            AuditEntry::new("user_123", "doc.deleted", "document", "doc_1").tenant_id("tenant_abc");
         assert_eq!(entry.tenant_id_value(), Some("tenant_abc"));
     }
 }

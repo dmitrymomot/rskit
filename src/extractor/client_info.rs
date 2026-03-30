@@ -110,7 +110,9 @@ mod tests {
         req.extensions_mut().insert(ClientIp(ip));
 
         let (mut parts, _) = req.into_parts();
-        let info = ClientInfo::from_request_parts(&mut parts, &()).await.unwrap();
+        let info = ClientInfo::from_request_parts(&mut parts, &())
+            .await
+            .unwrap();
 
         assert_eq!(info.ip.as_deref(), Some("10.0.0.1"));
         assert_eq!(info.user_agent.as_deref(), Some("TestAgent/1.0"));
@@ -121,7 +123,9 @@ mod tests {
     async fn extracts_with_missing_fields() {
         let req = http::Request::builder().body(()).unwrap();
         let (mut parts, _) = req.into_parts();
-        let info = ClientInfo::from_request_parts(&mut parts, &()).await.unwrap();
+        let info = ClientInfo::from_request_parts(&mut parts, &())
+            .await
+            .unwrap();
 
         assert!(info.ip.is_none());
         assert!(info.user_agent.is_none());

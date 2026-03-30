@@ -11,8 +11,14 @@
 //! | [`AuditLog`] | Concrete wrapper — `record()` propagates errors, `record_silent()` traces and swallows |
 //! | [`AuditRepo`] | Query interface — dedicated methods plus generic filter-based `query()` |
 
+mod backend;
 mod entry;
+mod log;
 mod record;
 
+pub use self::log::AuditLog;
+#[cfg(any(test, feature = "audit-test"))]
+pub use self::log::MemoryAuditBackend;
+pub use backend::AuditLogBackend;
 pub use entry::AuditEntry;
 pub use record::AuditRecord;

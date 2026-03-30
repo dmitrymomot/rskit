@@ -26,8 +26,7 @@ impl FromRow for AuditRecord {
     fn from_row(row: &libsql::Row) -> Result<Self> {
         let cols = ColumnMap::from_row(row);
         let metadata_str: String = cols.get(row, "metadata")?;
-        let metadata: serde_json::Value =
-            serde_json::from_str(&metadata_str).unwrap_or_default();
+        let metadata: serde_json::Value = serde_json::from_str(&metadata_str).unwrap_or_default();
 
         Ok(Self {
             id: cols.get(row, "id")?,

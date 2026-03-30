@@ -24,11 +24,11 @@
 //! modo = { version = "0.1", features = ["full"] }
 //! ```
 
+#[cfg(feature = "db")]
+pub mod audit;
 pub mod cache;
 pub mod config;
 pub mod cookie;
-#[cfg(feature = "db")]
-pub mod audit;
 #[cfg(feature = "db")]
 pub mod db;
 pub mod encoding;
