@@ -1,7 +1,7 @@
 #![cfg(feature = "test-helpers")]
 
 use modo::audit::{AuditEntry, AuditLog, AuditRepo};
-use modo::db::PageRequest;
+use modo::db::{CursorRequest, PageRequest};
 use modo::extractor::ClientInfo;
 use modo::testing::TestDb;
 
@@ -183,6 +183,77 @@ async fn pagination_works() {
     assert_eq!(p3.items.len(), 1);
     assert!(!p3.has_next);
     assert!(p3.has_prev);
+}
+
+#[tokio::test]
+async fn cursor_pagination_first_page() {
+    let (log, repo) = setup().await;
+
+    for i in 0..5 {
+        log.record(&AuditEntry::new(
+            "u",
+            format!("a.{i}"),
+            "x",
+            format!("x{i}"),
+        ))
+        .await
+        .unwrap();
+    }
+
+    let p1 = repo
+        .list_cursor(CursorRequest {
+            after: None,
+            per_page: 2,
+        })
+        .await
+        .unwrap();
+    assert_eq!(p1.items.len(), 2);
+    assert!(p1.has_more);
+    assert!(p1.next_cursor.is_some());
+}
+
+#[tokio::test]
+async fn cursor_pagination_traversal() {
+    let (log, repo) = setup().await;
+
+    for i in 0..3 {
+        log.record(&AuditEntry::new(
+            "u",
+            format!("a.{i}"),
+            "x",
+            format!("x{i}"),
+        ))
+        .await
+        .unwrap();
+    }
+
+    // First page
+    let p1 = repo
+        .list_cursor(CursorRequest {
+            after: None,
+            per_page: 2,
+        })
+        .await
+        .unwrap();
+    assert_eq!(p1.items.len(), 2);
+    assert!(p1.has_more);
+
+    // Second page using cursor
+    let p2 = repo
+        .list_cursor(CursorRequest {
+            after: p1.next_cursor,
+            per_page: 2,
+        })
+        .await
+        .unwrap();
+    assert_eq!(p2.items.len(), 1);
+    assert!(!p2.has_more);
+    assert!(p2.next_cursor.is_none());
+
+    // No overlap between pages
+    let p1_ids: Vec<&str> = p1.items.iter().map(|r| r.id.as_str()).collect();
+    let p2_ids: Vec<&str> = p2.items.iter().map(|r| r.id.as_str()).collect();
+    assert!(p1_ids.iter().all(|id| !p2_ids.contains(id)));
 }
 
 #[cfg(feature = "audit-test")]

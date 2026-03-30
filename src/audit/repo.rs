@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::db::{ConnExt, ConnQueryExt, Database, Page, PageRequest, ValidatedFilter};
+use crate::db::{
+    ConnExt, ConnQueryExt, CursorPage, CursorRequest, Database, Page, PageRequest, ValidatedFilter,
+};
 use crate::error::{Error, Result};
 
 use super::record::AuditRecord;
@@ -102,6 +104,34 @@ impl AuditRepo {
             .filter(filter)
             .order_by("\"created_at\" DESC")
             .page::<AuditRecord>(req.clone())
+            .await
+    }
+
+    /// All entries with cursor pagination, newest first.
+    ///
+    /// Uses keyset pagination on the `id` column for stable, efficient
+    /// traversal of large result sets.
+    pub async fn list_cursor(&self, req: CursorRequest) -> Result<CursorPage<AuditRecord>> {
+        self.inner
+            .db
+            .conn()
+            .select(&format!("SELECT {COLS} FROM audit_log"))
+            .cursor::<AuditRecord>(req)
+            .await
+    }
+
+    /// Flexible query with cursor pagination.
+    pub async fn query_cursor(
+        &self,
+        filter: ValidatedFilter,
+        req: CursorRequest,
+    ) -> Result<CursorPage<AuditRecord>> {
+        self.inner
+            .db
+            .conn()
+            .select(&format!("SELECT {COLS} FROM audit_log"))
+            .filter(filter)
+            .cursor::<AuditRecord>(req)
             .await
     }
 
