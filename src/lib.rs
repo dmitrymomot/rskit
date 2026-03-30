@@ -57,6 +57,9 @@ pub mod tenant;
 #[cfg(feature = "http-client")]
 pub mod http;
 
+#[cfg(feature = "embed")]
+pub mod embed;
+
 #[cfg(feature = "auth")]
 pub mod auth;
 
@@ -95,6 +98,11 @@ pub use error::{Error, Result};
 
 #[cfg(feature = "db")]
 pub use audit::{AuditEntry, AuditLog, AuditLogBackend, AuditRecord, AuditRepo};
+#[cfg(feature = "embed")]
+pub use embed::{
+    EmbeddingBackend, EmbeddingProvider, GeminiConfig, GeminiEmbedding, MistralConfig,
+    MistralEmbedding, OpenAIConfig, OpenAIEmbedding, from_f32_blob, to_f32_blob,
+};
 pub use extractor::ClientInfo;
 pub use extractor::Service;
 pub use flash::{Flash, FlashEntry, FlashLayer};
