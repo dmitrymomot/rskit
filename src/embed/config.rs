@@ -62,7 +62,9 @@ impl OpenAIConfig {
             return Err(Error::bad_request("openai model must not be empty"));
         }
         if self.dimensions == 0 {
-            return Err(Error::bad_request("openai dimensions must be greater than 0"));
+            return Err(Error::bad_request(
+                "openai dimensions must be greater than 0",
+            ));
         }
         Ok(())
     }
@@ -124,7 +126,9 @@ impl GeminiConfig {
             return Err(Error::bad_request("gemini model must not be empty"));
         }
         if self.dimensions == 0 {
-            return Err(Error::bad_request("gemini dimensions must be greater than 0"));
+            return Err(Error::bad_request(
+                "gemini dimensions must be greater than 0",
+            ));
         }
         Ok(())
     }

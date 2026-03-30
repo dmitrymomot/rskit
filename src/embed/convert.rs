@@ -14,7 +14,7 @@ pub fn to_f32_blob(v: &[f32]) -> Vec<u8> {
 ///
 /// Returns `Error::bad_request` if `blob.len()` is not a multiple of 4.
 pub fn from_f32_blob(blob: &[u8]) -> crate::error::Result<Vec<f32>> {
-    if blob.len() % 4 != 0 {
+    if !blob.len().is_multiple_of(4) {
         return Err(crate::error::Error::bad_request(
             "f32 blob length must be a multiple of 4",
         ));
@@ -39,7 +39,7 @@ mod tests {
 
     #[test]
     fn roundtrip_values() {
-        let values = vec![1.0_f32, -0.5, 0.0, 3.14, f32::MAX, f32::MIN];
+        let values = vec![1.0_f32, -0.5, 0.0, std::f32::consts::PI, f32::MAX, f32::MIN];
         let blob = to_f32_blob(&values);
         assert_eq!(blob.len(), values.len() * 4);
         let back = from_f32_blob(&blob).unwrap();

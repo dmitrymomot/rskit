@@ -98,6 +98,11 @@ pub use error::{Error, Result};
 
 #[cfg(feature = "db")]
 pub use audit::{AuditEntry, AuditLog, AuditLogBackend, AuditRecord, AuditRepo};
+#[cfg(feature = "embed")]
+pub use embed::{
+    EmbeddingBackend, EmbeddingProvider, GeminiConfig, GeminiEmbedding, MistralConfig,
+    MistralEmbedding, OpenAIConfig, OpenAIEmbedding, from_f32_blob, to_f32_blob,
+};
 pub use extractor::ClientInfo;
 pub use extractor::Service;
 pub use flash::{Flash, FlashEntry, FlashLayer};
@@ -105,11 +110,6 @@ pub use health::{HealthCheck, HealthChecks};
 #[cfg(feature = "http-client")]
 pub use http::{
     Client as HttpClient, ClientBuilder as HttpClientBuilder, ClientConfig as HttpClientConfig,
-};
-#[cfg(feature = "embed")]
-pub use embed::{
-    EmbeddingBackend, EmbeddingProvider, GeminiConfig, GeminiEmbedding, MistralConfig,
-    MistralEmbedding, OpenAIConfig, OpenAIEmbedding, from_f32_blob, to_f32_blob,
 };
 pub use ip::{ClientIp, ClientIpLayer};
 pub use rbac::{Role, RoleExtractor};
