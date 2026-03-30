@@ -176,6 +176,7 @@ All paths are relative to the `references/` directory inside this skill folder.
 | QR code generation with SVG rendering                                                              | `references/qrcode.md`      |
 | Audit logging (record events, query with cursor pagination)                                         | `references/audit.md`       |
 | API keys (issuance, verification, scoping, middleware, touch throttling)                             | `references/apikey.md`      |
+| Text-to-vector embeddings (OpenAI, Gemini, Mistral providers, f32 blob conversion)                 | `references/embed.md`       |
 
 ## Common Multi-Module Workflows
 
