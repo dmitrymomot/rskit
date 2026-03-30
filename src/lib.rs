@@ -24,6 +24,8 @@
 //! modo = { version = "0.1", features = ["full"] }
 //! ```
 
+#[cfg(feature = "db")]
+pub mod audit;
 pub mod cache;
 pub mod config;
 pub mod cookie;
@@ -88,6 +90,9 @@ pub mod testing;
 pub use config::Config;
 pub use error::{Error, Result};
 
+#[cfg(feature = "db")]
+pub use audit::{AuditEntry, AuditLog, AuditLogBackend, AuditRecord, AuditRepo};
+pub use extractor::ClientInfo;
 pub use extractor::Service;
 pub use flash::{Flash, FlashEntry, FlashLayer};
 pub use health::{HealthCheck, HealthChecks};

@@ -19,6 +19,7 @@
 //! | [`Path`] | URL path parameters | `T: DeserializeOwned` |
 //! | [`Service<T>`] | Service registry | `T: Send + Sync + 'static` |
 
+mod client_info;
 mod form;
 mod json;
 mod multipart;
@@ -27,6 +28,7 @@ mod service;
 mod upload_validator;
 
 pub use axum::extract::Path;
+pub use client_info::ClientInfo;
 pub use form::FormRequest;
 pub use json::JsonRequest;
 pub use multipart::{Files, MultipartRequest, UploadedFile};
