@@ -75,6 +75,10 @@ pub struct Config {
     #[cfg(feature = "dns")]
     #[serde(default)]
     pub dns: crate::dns::DnsConfig,
+    /// API key module settings. Requires the `apikey` feature.
+    #[cfg(feature = "apikey")]
+    #[serde(default)]
+    pub apikey: crate::apikey::ApiKeyConfig,
     /// JWT signing and validation settings. Requires the `auth` feature.
     #[cfg(feature = "auth")]
     #[serde(default)]
