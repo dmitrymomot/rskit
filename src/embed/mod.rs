@@ -2,11 +2,11 @@
 //!
 //! Text-to-vector embeddings via LLM provider APIs.
 //!
-//! Requires feature `"embed"` (depends on `"http-client"`).
+//! Requires feature `"text-embedding"` (depends on `"http-client"`).
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "*", features = ["embed"] }
+//! modo = { version = "*", features = ["text-embedding"] }
 //! ```
 //!
 //! Provides:

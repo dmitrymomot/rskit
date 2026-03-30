@@ -4,7 +4,7 @@
 
 **Goal:** Add a text-to-vector embedding module with OpenAI, Gemini, and Mistral providers.
 
-**Architecture:** Provider-only module behind `embed` feature flag. `EmbeddingBackend` trait returns f32 blobs. `EmbeddingProvider` wraps `Arc<dyn EmbeddingBackend>` cheaply. Three provider structs call their respective APIs via `http::Client` and convert `Vec<f32>` responses to little-endian blobs.
+**Architecture:** Provider-only module behind `text-embedding` feature flag. `EmbeddingBackend` trait returns f32 blobs. `EmbeddingProvider` wraps `Arc<dyn EmbeddingBackend>` cheaply. Three provider structs call their respective APIs via `http::Client` and convert `Vec<f32>` responses to little-endian blobs.
 
 **Tech Stack:** Existing `http::Client`, `serde_json`, standard library f32 byte conversion. No new crate dependencies.
 
@@ -25,7 +25,7 @@ src/embed/
 └── test_helpers.rs — InMemoryBackend for tests
 
 Modified:
-├── src/lib.rs      — add #[cfg(feature = "embed")] pub mod embed + re-exports
+├── src/lib.rs      — add #[cfg(feature = "text-embedding")] pub mod embed + re-exports
 ├── Cargo.toml      — add embed feature flag, add to full and CI matrix
 └── .github/workflows/ci.yml — add embed to feature matrix
 ```
@@ -707,11 +707,11 @@ git commit -m "feat(embed): add InMemoryBackend test helper"
 //!
 //! Text-to-vector embeddings via LLM provider APIs.
 //!
-//! Requires feature `"embed"` (depends on `"http-client"`).
+//! Requires feature `"text-embedding"` (depends on `"http-client"`).
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "*", features = ["embed"] }
+//! modo = { version = "*", features = ["text-embedding"] }
 //! ```
 //!
 //! Provides:
@@ -779,16 +779,16 @@ mv src/embed/test_helpers.rs src/embed/test/test_helpers.rs
 
 - [ ] **Step 3: Add feature flag to `Cargo.toml`**
 
-In the `[features]` section, add `embed = ["http-client"]` and add `"embed"` to the `full` feature list.
+In the `[features]` section, add `text-embedding = ["http-client"]` and add `"text-embedding"` to the `full` feature list.
 
 In `Cargo.toml`, after the line `apikey = ["db"]`:
 ```toml
 embed = ["http-client"]
 ```
 
-In the `full` feature, add `"embed"` to the list:
+In the `full` feature, add `"text-embedding"` to the list:
 ```toml
-full = ["db", "session", "job", "http-client", "templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns", "geolocation", "qrcode", "apikey", "embed"]
+full = ["db", "session", "job", "http-client", "templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns", "geolocation", "qrcode", "apikey", "text-embedding"]
 ```
 
 - [ ] **Step 4: Add module declaration to `src/lib.rs`**
@@ -796,14 +796,14 @@ full = ["db", "session", "job", "http-client", "templates", "sse", "auth", "sent
 After the `#[cfg(feature = "http-client")] pub mod http;` line, add:
 
 ```rust
-#[cfg(feature = "embed")]
+#[cfg(feature = "text-embedding")]
 pub mod embed;
 ```
 
 In the re-exports section, after the `HttpClient`/`HttpClientBuilder`/`HttpClientConfig` block, add:
 
 ```rust
-#[cfg(feature = "embed")]
+#[cfg(feature = "text-embedding")]
 pub use embed::{
     EmbeddingBackend, EmbeddingProvider, GeminiConfig, GeminiEmbedding, MistralConfig,
     MistralEmbedding, OpenAIConfig, OpenAIEmbedding, from_f32_blob, to_f32_blob,
@@ -829,12 +829,12 @@ pub struct MistralEmbedding;
 
 - [ ] **Step 6: Verify it compiles**
 
-Run: `cargo check --features embed`
+Run: `cargo check --features text-embedding`
 Expected: compiles with no errors (warnings about unused structs are fine)
 
 - [ ] **Step 7: Run existing tests to check nothing is broken**
 
-Run: `cargo test --features embed`
+Run: `cargo test --features text-embedding`
 Expected: all tests PASS, including `convert` and `config` tests
 
 - [ ] **Step 8: Commit**
@@ -992,7 +992,7 @@ struct EmbeddingData {
 
 - [ ] **Step 2: Verify it compiles**
 
-Run: `cargo check --features embed`
+Run: `cargo check --features text-embedding`
 Expected: compiles with no errors
 
 - [ ] **Step 3: Commit**
@@ -1142,7 +1142,7 @@ struct EmbeddingValues {
 
 - [ ] **Step 2: Verify it compiles**
 
-Run: `cargo check --features embed`
+Run: `cargo check --features text-embedding`
 Expected: compiles with no errors
 
 - [ ] **Step 3: Commit**
@@ -1291,7 +1291,7 @@ struct EmbeddingData {
 
 - [ ] **Step 2: Verify it compiles**
 
-Run: `cargo check --features embed`
+Run: `cargo check --features text-embedding`
 Expected: compiles with no errors
 
 - [ ] **Step 3: Commit**
@@ -1376,7 +1376,7 @@ mod tests {
 
 - [ ] **Step 2: Run tests**
 
-Run: `cargo test --features embed -p modo-rs provider`
+Run: `cargo test --features text-embedding -p modo-rs provider`
 Expected: all 6 tests PASS
 
 - [ ] **Step 3: Commit**
@@ -1393,9 +1393,9 @@ git commit -m "test(embed): add EmbeddingProvider unit tests"
 **Files:**
 - Modify: `.github/workflows/ci.yml`
 
-- [ ] **Step 1: Add `embed` to CI feature matrix**
+- [ ] **Step 1: Add `text-embedding` to CI feature matrix**
 
-In `.github/workflows/ci.yml`, find the `feature` matrix line and add `embed`:
+In `.github/workflows/ci.yml`, find the `feature` matrix line and add `text-embedding`:
 
 ```yaml
 feature: [auth, templates, sse, email, storage, webhooks, dns, geolocation, sentry, test-helpers, session, job, apikey, qrcode, http-client, embed]
@@ -1403,7 +1403,7 @@ feature: [auth, templates, sse, email, storage, webhooks, dns, geolocation, sent
 
 - [ ] **Step 2: Run clippy**
 
-Run: `cargo clippy --features embed --tests -- -D warnings`
+Run: `cargo clippy --features text-embedding --tests -- -D warnings`
 Expected: no warnings
 
 - [ ] **Step 3: Run fmt check**
@@ -1442,7 +1442,7 @@ Text-to-vector embeddings via LLM provider APIs.
 ## Feature flag
 
 ```toml
-modo = { version = "*", features = ["embed"] }
+modo = { version = "*", features = ["text-embedding"] }
 ```
 
 Depends on `http-client`. No new crate dependencies.

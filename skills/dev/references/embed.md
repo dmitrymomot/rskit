@@ -1,12 +1,12 @@
 # Embeddings
 
-Text-to-vector embeddings via LLM provider APIs. Feature-gated under `embed` (depends on `http-client`).
+Text-to-vector embeddings via LLM provider APIs. Feature-gated under `text-embedding` (depends on `http-client`).
 
 ```toml
-modo = { version = "*", features = ["embed"] }
+modo = { version = "*", features = ["text-embedding"] }
 ```
 
-All types are re-exported from `modo::embed` under `#[cfg(feature = "embed")]`:
+All types are re-exported from `modo::embed` under `#[cfg(feature = "text-embedding")]`:
 
 ```rust
 use modo::embed::{
@@ -325,4 +325,4 @@ let floats = from_f32_blob(&blob)?;
 - **Gemini uses header auth** — unlike OpenAI and Mistral (Bearer token), the Gemini provider passes the API key via the `x-goog-api-key` header.
 - **`OpenAIConfig::base_url`** — supports Azure OpenAI or compatible proxies. Trailing slashes are stripped automatically.
 - **No crate deps added** — the embed module reuses existing `http::Client`, `serde_json`, and `serde` — no new dependencies.
-- **`test-helpers` gate** — `InMemoryBackend` is gated by `#[cfg(any(test, feature = "test-helpers"))]`. Integration test files need `#![cfg(feature = "embed")]` as the first attribute.
+- **`test-helpers` gate** — `InMemoryBackend` is gated by `#[cfg(any(test, feature = "test-helpers"))]`. Integration test files need `#![cfg(feature = "text-embedding")]` as the first attribute.
