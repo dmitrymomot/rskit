@@ -1,6 +1,6 @@
 # Email Module
 
-Feature gate: `email` (add `email-test` for stub transport in tests).
+Feature gate: `email` (add `test-helpers` for stub transport in tests).
 
 Source: `src/email/`.
 
@@ -152,7 +152,7 @@ let mailer = Mailer::new(&email_config)?;
 let source: Arc<dyn TemplateSource> = Arc::new(MyDbSource::new());
 let mailer = Mailer::with_source(&email_config, source)?;
 
-// Stub transport for tests (requires feature "email-test")
+// Stub transport for tests (requires feature "test-helpers")
 let stub = lettre::transport::stub::AsyncStubTransport::new_ok();
 let mailer = Mailer::with_stub_transport(&email_config, stub)?;
 ```

@@ -41,7 +41,7 @@ let storage = Storage::new(&config)?;
 | -------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------- |
 | `new`          | `pub fn new(config: &BucketConfig) -> Result<Self>`                            | Builds its own default HTTP client                            |
 | `with_client`  | `pub fn with_client(config: &BucketConfig, client: crate::http::Client) -> Result<Self>` | Shared connection pool; preferred for multiple `Storage` instances |
-| `memory`       | `pub fn memory() -> Self`                                                      | In-memory backend, `#[cfg(test)]` or `storage-test` feature   |
+| `memory`       | `pub fn memory() -> Self`                                                      | In-memory backend, `#[cfg(test)]` or `test-helpers` feature   |
 
 ### Methods
 
@@ -109,7 +109,7 @@ store.put(&input).await?;
 ```
 
 - Each config must have a non-empty, unique `name`.
-- `Buckets::memory(names: &[&str])` for testing (`#[cfg(test)]` or `storage-test` feature).
+- `Buckets::memory(names: &[&str])` for testing (`#[cfg(test)]` or `test-helpers` feature).
 
 ## PutInput
 

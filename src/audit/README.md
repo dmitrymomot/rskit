@@ -135,7 +135,7 @@ let audit = AuditLog::from_backend(Arc::new(MyBackend));
 
 ### Testing
 
-Enable the `audit-test` feature for access to `MemoryAuditBackend`:
+Enable the `test-helpers` feature for access to `MemoryAuditBackend`:
 
 ```rust,ignore
 use modo::audit::{AuditEntry, AuditLog, MemoryAuditBackend};

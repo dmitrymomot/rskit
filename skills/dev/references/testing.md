@@ -383,7 +383,7 @@ specific patterns.
 ```bash
 cargo test --features test-helpers       # test-helpers module
 cargo test --features auth               # auth module
-cargo test --features storage-test       # storage module
+cargo test --features storage,test-helpers       # storage module
 cargo test --features webhooks           # webhooks module
 cargo test --features dns                # dns module
 cargo test --features geolocation        # geolocation module
