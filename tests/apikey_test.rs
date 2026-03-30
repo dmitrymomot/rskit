@@ -1,4 +1,4 @@
-#![cfg(feature = "apikey")]
+#![cfg(all(feature = "apikey", feature = "test-helpers"))]
 
 use modo::apikey::{ApiKeyConfig, ApiKeyStore, CreateKeyRequest};
 use modo::testing::TestDb;
