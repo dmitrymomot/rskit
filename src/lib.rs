@@ -76,6 +76,9 @@ pub mod webhook;
 #[cfg(feature = "dns")]
 pub mod dns;
 
+#[cfg(feature = "apikey")]
+pub mod apikey;
+
 #[cfg(feature = "geolocation")]
 pub mod geolocation;
 
@@ -135,6 +138,9 @@ pub use webhook::{SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender};
 
 #[cfg(feature = "dns")]
 pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};
+
+#[cfg(feature = "apikey")]
+pub use apikey::ApiKeyConfig;
 
 #[cfg(feature = "geolocation")]
 pub use geolocation::{GeoLayer, GeoLocator, GeolocationConfig, Location};
