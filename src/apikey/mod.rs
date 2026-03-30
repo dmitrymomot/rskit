@@ -14,6 +14,7 @@
 //! ```
 
 mod config;
+mod token;
 mod types;
 
 pub use config::ApiKeyConfig;
