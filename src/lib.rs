@@ -57,6 +57,9 @@ pub mod tenant;
 #[cfg(feature = "http-client")]
 pub mod http;
 
+#[cfg(feature = "embed")]
+pub mod embed;
+
 #[cfg(feature = "auth")]
 pub mod auth;
 
@@ -102,6 +105,11 @@ pub use health::{HealthCheck, HealthChecks};
 #[cfg(feature = "http-client")]
 pub use http::{
     Client as HttpClient, ClientBuilder as HttpClientBuilder, ClientConfig as HttpClientConfig,
+};
+#[cfg(feature = "embed")]
+pub use embed::{
+    EmbeddingBackend, EmbeddingProvider, GeminiConfig, GeminiEmbedding, MistralConfig,
+    MistralEmbedding, OpenAIConfig, OpenAIEmbedding, from_f32_blob, to_f32_blob,
 };
 pub use ip::{ClientIp, ClientIpLayer};
 pub use rbac::{Role, RoleExtractor};

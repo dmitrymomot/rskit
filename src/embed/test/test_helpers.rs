@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::error::Result;
 
-use super::backend::EmbeddingBackend;
-use super::convert::to_f32_blob;
+use crate::embed::backend::EmbeddingBackend;
+use crate::embed::convert::to_f32_blob;
 
 /// In-memory embedding backend for unit tests.
 ///
