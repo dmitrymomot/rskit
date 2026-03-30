@@ -56,7 +56,7 @@ impl AuditLog {
     ///
     /// Returns the `AuditLog` and a handle to the backend for inspecting
     /// captured entries.
-    #[cfg(any(test, feature = "audit-test"))]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn memory() -> (Self, Arc<MemoryAuditBackend>) {
         let backend = Arc::new(MemoryAuditBackend {
             entries: std::sync::Mutex::new(Vec::new()),
@@ -118,12 +118,12 @@ impl AuditLogBackend for SqliteAuditBackend {
 }
 
 /// In-memory audit backend for testing.
-#[cfg(any(test, feature = "audit-test"))]
+#[cfg(any(test, feature = "test-helpers"))]
 pub struct MemoryAuditBackend {
     entries: std::sync::Mutex<Vec<AuditEntry>>,
 }
 
-#[cfg(any(test, feature = "audit-test"))]
+#[cfg(any(test, feature = "test-helpers"))]
 impl MemoryAuditBackend {
     /// Return a clone of all captured entries.
     pub fn entries(&self) -> Vec<AuditEntry> {
@@ -131,7 +131,7 @@ impl MemoryAuditBackend {
     }
 }
 
-#[cfg(any(test, feature = "audit-test"))]
+#[cfg(any(test, feature = "test-helpers"))]
 impl AuditLogBackend for MemoryAuditBackend {
     fn record<'a>(
         &'a self,
