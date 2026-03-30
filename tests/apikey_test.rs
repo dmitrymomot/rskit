@@ -244,3 +244,145 @@ async fn create_empty_name_returns_bad_request() {
         .unwrap_err();
     assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
 }
+
+// --- Middleware and scope guard integration tests ---
+
+use std::convert::Infallible;
+
+use axum::body::Body;
+use http::{Request, Response, StatusCode};
+use tower::{Layer, ServiceExt};
+
+use modo::apikey::{ApiKeyLayer, ApiKeyMeta, require_scope};
+
+/// Inner service that reads ApiKeyMeta from extensions and echoes the tenant_id.
+async fn echo_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+    match req.extensions().get::<ApiKeyMeta>() {
+        Some(meta) => Ok(Response::new(Body::from(meta.tenant_id.clone()))),
+        None => Ok(Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::from("no meta"))
+            .unwrap()),
+    }
+}
+
+async fn middleware_store() -> (ApiKeyStore, String) {
+    let store = test_store().await;
+    let created = store.create(&test_request("t1")).await.unwrap();
+    (store, created.raw_token)
+}
+
+#[tokio::test]
+async fn middleware_valid_bearer_injects_meta() {
+    let (store, token) = middleware_store().await;
+    let layer = ApiKeyLayer::new(store);
+    let svc = layer.layer(tower::service_fn(echo_handler));
+
+    let req = Request::builder()
+        .header("Authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = svc.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn middleware_missing_header_returns_401() {
+    let (store, _) = middleware_store().await;
+    let layer = ApiKeyLayer::new(store);
+    let svc = layer.layer(tower::service_fn(echo_handler));
+
+    let req = Request::builder().body(Body::empty()).unwrap();
+    let resp = svc.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn middleware_invalid_token_returns_401() {
+    let (store, _) = middleware_store().await;
+    let layer = ApiKeyLayer::new(store);
+    let svc = layer.layer(tower::service_fn(echo_handler));
+
+    let req = Request::builder()
+        .header("Authorization", "Bearer invalid_token_here")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = svc.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn middleware_custom_header() {
+    let (store, token) = middleware_store().await;
+    let layer = ApiKeyLayer::from_header(store, "x-api-key");
+    let svc = layer.layer(tower::service_fn(echo_handler));
+
+    let req = Request::builder()
+        .header("x-api-key", &token)
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = svc.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn middleware_does_not_call_inner_on_failure() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let (store, _) = middleware_store().await;
+    let called = Arc::new(AtomicBool::new(false));
+    let called_clone = called.clone();
+
+    let layer = ApiKeyLayer::new(store);
+    let svc = layer.layer(tower::service_fn(move |_req: Request<Body>| {
+        let called = called_clone.clone();
+        async move {
+            called.store(true, Ordering::SeqCst);
+            Ok::<_, Infallible>(Response::new(Body::from("should not reach")))
+        }
+    }));
+
+    let req = Request::builder().body(Body::empty()).unwrap();
+    let resp = svc.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    assert!(!called.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn scope_guard_passes_with_matching_scope() {
+    let (store, token) = middleware_store().await;
+    let apikey_layer = ApiKeyLayer::new(store);
+    let scope_layer = require_scope("read:orders");
+
+    // Apply scope layer first (inner), then apikey layer (outer)
+    let svc = apikey_layer.layer(scope_layer.layer(tower::service_fn(echo_handler)));
+
+    let req = Request::builder()
+        .header("Authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = svc.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn scope_guard_rejects_missing_scope() {
+    let (store, token) = middleware_store().await;
+    let apikey_layer = ApiKeyLayer::new(store);
+    let scope_layer = require_scope("write:admin");
+
+    let svc = apikey_layer.layer(scope_layer.layer(tower::service_fn(echo_handler)));
+
+    let req = Request::builder()
+        .header("Authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = svc.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
