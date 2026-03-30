@@ -20,7 +20,7 @@ pub(crate) struct MemoryBackend {
 }
 
 impl MemoryBackend {
-    #[cfg_attr(not(any(test, feature = "storage-test")), allow(dead_code))]
+    #[cfg_attr(not(any(test, feature = "test-helpers")), allow(dead_code))]
     pub fn new() -> Self {
         Self {
             objects: RwLock::new(HashMap::new()),

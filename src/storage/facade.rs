@@ -12,7 +12,7 @@ use super::fetch::fetch_url;
 use super::options::PutOptions;
 use super::path::{generate_key, validate_path};
 
-#[cfg(any(test, feature = "storage-test"))]
+#[cfg(any(test, feature = "test-helpers"))]
 use super::memory::MemoryBackend;
 
 /// Input for `Storage::put()` and `Storage::put_with()`.
@@ -93,7 +93,7 @@ pub(crate) struct StorageInner {
 ///
 /// Cheaply cloneable (wraps `Arc`). Use `Storage::new()` to create a production
 /// instance from a `BucketConfig`. `Storage::memory()` is available inside
-/// `#[cfg(test)]` blocks and when the `storage-test` feature is enabled.
+/// `#[cfg(test)]` blocks and when the `test-helpers` feature is enabled.
 pub struct Storage {
     pub(crate) inner: Arc<StorageInner>,
 }
@@ -147,8 +147,8 @@ impl Storage {
     /// In-memory storage for testing.
     ///
     /// Available inside `#[cfg(test)]` blocks without any extra feature, and
-    /// also when the `storage-test` feature is enabled (for integration tests).
-    #[cfg(any(test, feature = "storage-test"))]
+    /// also when the `test-helpers` feature is enabled (for integration tests).
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn memory() -> Self {
         Self {
             inner: Arc::new(StorageInner {
