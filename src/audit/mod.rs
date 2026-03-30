@@ -15,6 +15,7 @@ mod backend;
 mod entry;
 mod log;
 mod record;
+mod repo;
 
 pub use self::log::AuditLog;
 #[cfg(any(test, feature = "audit-test"))]
@@ -22,3 +23,4 @@ pub use self::log::MemoryAuditBackend;
 pub use backend::AuditLogBackend;
 pub use entry::AuditEntry;
 pub use record::AuditRecord;
+pub use repo::AuditRepo;
