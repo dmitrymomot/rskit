@@ -1,4 +1,4 @@
-#![cfg(feature = "storage-test")]
+#![cfg(all(feature = "storage", feature = "test-helpers"))]
 
 use std::time::Duration;
 
