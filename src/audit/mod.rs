@@ -34,8 +34,9 @@
 //! audit.record(&entry).await?;
 //!
 //! // Query
+//! use modo::db::CursorRequest;
 //! let repo = AuditRepo::new(db);
-//! let page = repo.list(Default::default()).await?;
+//! let page = repo.list(CursorRequest { after: None, per_page: 20 }).await?;
 //! # Ok(())
 //! # }
 //! ```
