@@ -16,10 +16,12 @@
 mod backend;
 mod config;
 pub(crate) mod sqlite;
+mod store;
 mod token;
 mod types;
 
 pub use backend::ApiKeyBackend;
 pub use config::ApiKeyConfig;
+pub use store::ApiKeyStore;
 pub use types::{ApiKeyCreated, ApiKeyMeta, CreateKeyRequest};
 pub(crate) use types::ApiKeyRecord;

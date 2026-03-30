@@ -140,7 +140,9 @@ pub use webhook::{SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender};
 pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};
 
 #[cfg(feature = "apikey")]
-pub use apikey::{ApiKeyBackend, ApiKeyConfig, ApiKeyCreated, ApiKeyMeta, CreateKeyRequest};
+pub use apikey::{
+    ApiKeyBackend, ApiKeyConfig, ApiKeyCreated, ApiKeyMeta, ApiKeyStore, CreateKeyRequest,
+};
 
 #[cfg(feature = "geolocation")]
 pub use geolocation::{GeoLayer, GeoLocator, GeolocationConfig, Location};
