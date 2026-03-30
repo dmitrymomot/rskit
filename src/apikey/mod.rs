@@ -15,6 +15,9 @@
 
 mod backend;
 mod config;
+mod extractor;
+mod middleware;
+mod scope;
 pub(crate) mod sqlite;
 mod store;
 mod token;
@@ -22,6 +25,7 @@ mod types;
 
 pub use backend::ApiKeyBackend;
 pub use config::ApiKeyConfig;
+pub use middleware::ApiKeyLayer;
+pub use scope::require_scope;
 pub use store::ApiKeyStore;
-pub use types::{ApiKeyCreated, ApiKeyMeta, CreateKeyRequest};
-pub(crate) use types::ApiKeyRecord;
+pub use types::{ApiKeyCreated, ApiKeyMeta, ApiKeyRecord, CreateKeyRequest};

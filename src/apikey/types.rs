@@ -52,8 +52,8 @@ pub struct ApiKeyMeta {
     pub created_at: String,
 }
 
-/// Stored form — used by the backend trait. Crate-internal.
-pub(crate) struct ApiKeyRecord {
+/// Stored form — used by the backend trait.
+pub struct ApiKeyRecord {
     /// ULID primary key.
     pub id: String,
     /// `hex(sha256(secret))`.
@@ -76,7 +76,7 @@ pub(crate) struct ApiKeyRecord {
 
 impl ApiKeyRecord {
     /// Convert to public metadata, stripping hash and revocation fields.
-    pub(crate) fn into_meta(self) -> ApiKeyMeta {
+    pub fn into_meta(self) -> ApiKeyMeta {
         ApiKeyMeta {
             id: self.id,
             tenant_id: self.tenant_id,

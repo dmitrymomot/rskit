@@ -141,7 +141,8 @@ pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verifi
 
 #[cfg(feature = "apikey")]
 pub use apikey::{
-    ApiKeyBackend, ApiKeyConfig, ApiKeyCreated, ApiKeyMeta, ApiKeyStore, CreateKeyRequest,
+    ApiKeyBackend, ApiKeyConfig, ApiKeyCreated, ApiKeyLayer, ApiKeyMeta, ApiKeyRecord, ApiKeyStore,
+    CreateKeyRequest, require_scope,
 };
 
 #[cfg(feature = "geolocation")]
