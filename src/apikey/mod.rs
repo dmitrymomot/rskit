@@ -14,5 +14,8 @@
 //! ```
 
 mod config;
+mod types;
 
 pub use config::ApiKeyConfig;
+pub use types::{ApiKeyCreated, ApiKeyMeta, CreateKeyRequest};
+pub(crate) use types::ApiKeyRecord;
