@@ -98,7 +98,7 @@ use modo::db::{CursorRequest, Database};
 
 async fn list_events(db: Database) -> modo::Result<()> {
     let repo = AuditRepo::new(db);
-    let page = repo.list(CursorRequest::default()).await?;
+    let page = repo.list(CursorRequest { after: None, per_page: 20 }).await?;
 
     for record in &page.items {
         println!("{}: {} by {}", record.action, record.resource_id, record.actor);
