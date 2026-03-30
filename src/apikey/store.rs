@@ -172,6 +172,11 @@ impl ApiKeyStore {
 
     /// Update `expires_at` (refresh/extend a key).
     pub async fn refresh(&self, key_id: &str, expires_at: Option<&str>) -> Result<()> {
+        if let Some(exp) = expires_at {
+            chrono::DateTime::parse_from_rfc3339(exp)
+                .map_err(|_| Error::bad_request("expires_at must be a valid RFC 3339 timestamp"))?;
+        }
+
         self.0
             .backend
             .lookup(key_id)
