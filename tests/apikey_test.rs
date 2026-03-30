@@ -177,10 +177,7 @@ async fn refresh_updates_expires_at() {
 
     // Now verify succeeds
     let meta = store.verify(&created.raw_token).await.unwrap();
-    assert_eq!(
-        meta.expires_at.as_deref(),
-        Some("2099-12-31T23:59:59.000Z")
-    );
+    assert_eq!(meta.expires_at.as_deref(), Some("2099-12-31T23:59:59.000Z"));
 }
 
 #[tokio::test]

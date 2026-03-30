@@ -65,9 +65,7 @@ impl ApiKeyConfig {
     /// is too short.
     pub fn validate(&self) -> Result<()> {
         if self.prefix.is_empty() || self.prefix.len() > 20 {
-            return Err(Error::bad_request(
-                "apikey prefix must be 1-20 characters",
-            ));
+            return Err(Error::bad_request("apikey prefix must be 1-20 characters"));
         }
         if !self.prefix.chars().all(|c| c.is_ascii_alphanumeric()) {
             return Err(Error::bad_request(
@@ -95,48 +93,60 @@ mod tests {
 
     #[test]
     fn reject_empty_prefix() {
-        let mut config = ApiKeyConfig::default();
-        config.prefix = "".into();
+        let config = ApiKeyConfig {
+            prefix: "".into(),
+            ..Default::default()
+        };
         let err = config.validate().unwrap_err();
         assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
     }
 
     #[test]
     fn reject_prefix_over_20_chars() {
-        let mut config = ApiKeyConfig::default();
-        config.prefix = "a".repeat(21);
+        let config = ApiKeyConfig {
+            prefix: "a".repeat(21),
+            ..Default::default()
+        };
         let err = config.validate().unwrap_err();
         assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
     }
 
     #[test]
     fn reject_prefix_with_underscore() {
-        let mut config = ApiKeyConfig::default();
-        config.prefix = "my_prefix".into();
+        let config = ApiKeyConfig {
+            prefix: "my_prefix".into(),
+            ..Default::default()
+        };
         let err = config.validate().unwrap_err();
         assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
     }
 
     #[test]
     fn reject_prefix_with_special_chars() {
-        let mut config = ApiKeyConfig::default();
-        config.prefix = "my-prefix".into();
+        let config = ApiKeyConfig {
+            prefix: "my-prefix".into(),
+            ..Default::default()
+        };
         let err = config.validate().unwrap_err();
         assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
     }
 
     #[test]
     fn reject_short_secret_length() {
-        let mut config = ApiKeyConfig::default();
-        config.secret_length = 15;
+        let config = ApiKeyConfig {
+            secret_length: 15,
+            ..Default::default()
+        };
         let err = config.validate().unwrap_err();
         assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
     }
 
     #[test]
     fn accept_minimum_secret_length() {
-        let mut config = ApiKeyConfig::default();
-        config.secret_length = 16;
+        let config = ApiKeyConfig {
+            secret_length: 16,
+            ..Default::default()
+        };
         assert!(config.validate().is_ok());
     }
 

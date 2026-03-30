@@ -15,10 +15,8 @@ use super::types::ApiKeyRecord;
 /// backends (Postgres, Redis, etc.) implement this trait directly.
 pub trait ApiKeyBackend: Send + Sync {
     /// Store a new key record.
-    fn store(
-        &self,
-        record: &ApiKeyRecord,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
+    fn store(&self, record: &ApiKeyRecord)
+    -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
 
     /// Look up a key by ULID. Returns `None` if not found.
     fn lookup(

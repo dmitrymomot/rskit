@@ -55,10 +55,7 @@ impl ApiKeyStore {
     /// Create from a custom backend.
     ///
     /// Validates config at construction.
-    pub fn from_backend(
-        backend: Arc<dyn ApiKeyBackend>,
-        config: ApiKeyConfig,
-    ) -> Result<Self> {
+    pub fn from_backend(backend: Arc<dyn ApiKeyBackend>, config: ApiKeyConfig) -> Result<Self> {
         config.validate()?;
         Ok(Self(Arc::new(Inner { backend, config })))
     }

@@ -53,8 +53,7 @@ impl ApiKeyLayer {
         Self {
             store,
             header: HeaderSource::Custom(
-                http::HeaderName::from_bytes(header.as_bytes())
-                    .expect("invalid header name"),
+                http::HeaderName::from_bytes(header.as_bytes()).expect("invalid header name"),
             ),
         }
     }

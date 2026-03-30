@@ -67,8 +67,7 @@ mod tests {
         let (mut parts, _) = http::Request::builder().body(()).unwrap().into_parts();
 
         let result =
-            <ApiKeyMeta as OptionalFromRequestParts<()>>::from_request_parts(&mut parts, &())
-                .await;
+            <ApiKeyMeta as OptionalFromRequestParts<()>>::from_request_parts(&mut parts, &()).await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
     }
@@ -87,8 +86,7 @@ mod tests {
         });
 
         let result =
-            <ApiKeyMeta as OptionalFromRequestParts<()>>::from_request_parts(&mut parts, &())
-                .await;
+            <ApiKeyMeta as OptionalFromRequestParts<()>>::from_request_parts(&mut parts, &()).await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_some());
     }
