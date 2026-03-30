@@ -77,7 +77,11 @@ impl AuditLogBackend for SqliteAuditBackend {
                 .unwrap_or_else(|| "{}".to_string());
 
             let (ip, user_agent, fingerprint) = match entry.client_info_value() {
-                Some(ci) => (ci.ip.clone(), ci.user_agent.clone(), ci.fingerprint.clone()),
+                Some(ci) => (
+                    ci.ip_value().map(String::from),
+                    ci.user_agent_value().map(String::from),
+                    ci.fingerprint_value().map(String::from),
+                ),
                 None => (None, None, None),
             };
 

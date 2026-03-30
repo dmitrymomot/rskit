@@ -1,5 +1,3 @@
-use serde::Serialize;
-
 use crate::extractor::ClientInfo;
 
 /// An audit event to be recorded.
@@ -44,15 +42,13 @@ impl AuditEntry {
         }
     }
 
-    /// Serialize any type into the metadata JSON field.
+    /// Attach metadata to the audit entry.
     ///
-    /// # Panics
-    ///
-    /// Panics if `meta` cannot be serialized to JSON. This is intentional —
-    /// silently dropping metadata in an audit system would cause data loss.
-    pub fn metadata(mut self, meta: impl Serialize) -> Self {
-        self.metadata =
-            Some(serde_json::to_value(meta).expect("audit metadata must be serializable to JSON"));
+    /// Accepts a [`serde_json::Value`] — use [`serde_json::json!`] at the
+    /// call site for structured data, or [`serde_json::to_value`] for custom
+    /// types.
+    pub fn metadata(mut self, meta: serde_json::Value) -> Self {
+        self.metadata = Some(meta);
         self
     }
 
@@ -131,10 +127,11 @@ mod tests {
         }
 
         let entry = AuditEntry::new("user_123", "user.role.changed", "user", "usr_abc").metadata(
-            RoleChange {
+            serde_json::to_value(RoleChange {
                 old_role: "editor".into(),
                 new_role: "admin".into(),
-            },
+            })
+            .unwrap(),
         );
         let meta = entry.metadata_value().unwrap();
         assert_eq!(meta["old_role"], "editor");
@@ -148,8 +145,8 @@ mod tests {
         let info = ClientInfo::new().ip("1.2.3.4").user_agent("Bot/1.0");
         let entry = AuditEntry::new("system", "job.ran", "job", "job_1").client_info(info);
         let ci = entry.client_info_value().unwrap();
-        assert_eq!(ci.ip.as_deref(), Some("1.2.3.4"));
-        assert_eq!(ci.user_agent.as_deref(), Some("Bot/1.0"));
+        assert_eq!(ci.ip_value(), Some("1.2.3.4"));
+        assert_eq!(ci.user_agent_value(), Some("Bot/1.0"));
     }
 
     #[test]

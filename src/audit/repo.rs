@@ -130,7 +130,7 @@ impl AuditRepo {
             .query_all(
                 &format!(
                     "SELECT {COLS} FROM audit_log {where_clause} \
-                     ORDER BY created_at DESC LIMIT {} OFFSET {}",
+                     ORDER BY \"created_at\" DESC LIMIT {} OFFSET {}",
                     req.per_page,
                     req.offset()
                 ),

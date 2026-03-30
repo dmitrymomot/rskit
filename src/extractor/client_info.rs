@@ -21,9 +21,9 @@ use crate::ip::ClientIp;
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct ClientInfo {
-    pub ip: Option<String>,
-    pub user_agent: Option<String>,
-    pub fingerprint: Option<String>,
+    ip: Option<String>,
+    user_agent: Option<String>,
+    fingerprint: Option<String>,
 }
 
 impl ClientInfo {
@@ -44,6 +44,21 @@ impl ClientInfo {
     pub fn fingerprint(mut self, fp: impl Into<String>) -> Self {
         self.fingerprint = Some(fp.into());
         self
+    }
+
+    /// The client IP address, if available.
+    pub fn ip_value(&self) -> Option<&str> {
+        self.ip.as_deref()
+    }
+
+    /// The client user-agent string, if available.
+    pub fn user_agent_value(&self) -> Option<&str> {
+        self.user_agent.as_deref()
+    }
+
+    /// The client fingerprint, if available.
+    pub fn fingerprint_value(&self) -> Option<&str> {
+        self.fingerprint.as_deref()
     }
 }
 
@@ -80,9 +95,9 @@ mod tests {
     #[test]
     fn default_has_all_none() {
         let info = ClientInfo::new();
-        assert!(info.ip.is_none());
-        assert!(info.user_agent.is_none());
-        assert!(info.fingerprint.is_none());
+        assert!(info.ip_value().is_none());
+        assert!(info.user_agent_value().is_none());
+        assert!(info.fingerprint_value().is_none());
     }
 
     #[test]
@@ -91,9 +106,9 @@ mod tests {
             .ip("1.2.3.4")
             .user_agent("Mozilla/5.0")
             .fingerprint("abc123");
-        assert_eq!(info.ip.as_deref(), Some("1.2.3.4"));
-        assert_eq!(info.user_agent.as_deref(), Some("Mozilla/5.0"));
-        assert_eq!(info.fingerprint.as_deref(), Some("abc123"));
+        assert_eq!(info.ip_value(), Some("1.2.3.4"));
+        assert_eq!(info.user_agent_value(), Some("Mozilla/5.0"));
+        assert_eq!(info.fingerprint_value(), Some("abc123"));
     }
 
     #[tokio::test]
@@ -114,9 +129,9 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(info.ip.as_deref(), Some("10.0.0.1"));
-        assert_eq!(info.user_agent.as_deref(), Some("TestAgent/1.0"));
-        assert_eq!(info.fingerprint.as_deref(), Some("fp_abc"));
+        assert_eq!(info.ip_value(), Some("10.0.0.1"));
+        assert_eq!(info.user_agent_value(), Some("TestAgent/1.0"));
+        assert_eq!(info.fingerprint_value(), Some("fp_abc"));
     }
 
     #[tokio::test]
@@ -127,8 +142,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(info.ip.is_none());
-        assert!(info.user_agent.is_none());
-        assert!(info.fingerprint.is_none());
+        assert!(info.ip_value().is_none());
+        assert!(info.user_agent_value().is_none());
+        assert!(info.fingerprint_value().is_none());
     }
 }
