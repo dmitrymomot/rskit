@@ -14,7 +14,7 @@ use crate::email::config::{EmailConfig, SmtpSecurity};
 
 enum Transport {
     Smtp(AsyncSmtpTransport<Tokio1Executor>),
-    #[cfg(feature = "email-test")]
+    #[cfg(any(test, feature = "test-helpers"))]
     Stub(lettre::transport::stub::AsyncStubTransport),
 }
 
@@ -30,7 +30,7 @@ enum Transport {
 ///   `EmailConfig::templates_path`.
 /// - [`Mailer::with_source`] — accepts any custom [`TemplateSource`].
 /// - `Mailer::with_stub_transport` — in-memory stub for tests
-///   (requires feature `"email-test"`).
+///   (requires feature `"test-helpers"` or `#[cfg(test)]`).
 pub struct Mailer {
     source: Arc<dyn TemplateSource>,
     transport: Transport,
@@ -91,13 +91,13 @@ impl Mailer {
 
     /// Create a `Mailer` with a stub transport for testing.
     ///
-    /// Requires feature `"email-test"`. The stub transport accepts messages
+    /// Requires feature `"test-helpers"` or `#[cfg(test)]`. The stub transport accepts messages
     /// without actually sending them over a network.
     ///
     /// # Errors
     ///
     /// Returns an error if the layouts directory cannot be read.
-    #[cfg(feature = "email-test")]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn with_stub_transport(
         config: &EmailConfig,
         stub: lettre::transport::stub::AsyncStubTransport,
@@ -297,7 +297,7 @@ impl Mailer {
                     .await
                     .map_err(|e| Error::internal(format!("failed to send email: {e}")))?;
             }
-            #[cfg(feature = "email-test")]
+            #[cfg(any(test, feature = "test-helpers"))]
             Transport::Stub(transport) => {
                 transport
                     .send(message)
