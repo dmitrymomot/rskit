@@ -12,5 +12,7 @@
 //! | [`AuditRepo`] | Query interface — dedicated methods plus generic filter-based `query()` |
 
 mod entry;
+mod record;
 
 pub use entry::AuditEntry;
+pub use record::AuditRecord;
