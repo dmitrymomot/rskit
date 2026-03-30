@@ -11,8 +11,8 @@ All types are re-exported from `modo::embed` under `#[cfg(feature = "text-embedd
 ```rust
 use modo::embed::{
     EmbeddingProvider, EmbeddingBackend,
-    OpenAIEmbedding, GeminiEmbedding, MistralEmbedding,
-    OpenAIConfig, GeminiConfig, MistralConfig,
+    OpenAIEmbedding, GeminiEmbedding, MistralEmbedding, VoyageEmbedding,
+    OpenAIConfig, GeminiConfig, MistralConfig, VoyageConfig,
     to_f32_blob, from_f32_blob,
 };
 ```
@@ -23,7 +23,7 @@ use modo::embed::{
 use modo::embed::test::InMemoryBackend;
 ```
 
-Source: `src/embed/` (mod.rs, backend.rs, config.rs, convert.rs, provider.rs, openai.rs, gemini.rs, mistral.rs, test/test_helpers.rs).
+Source: `src/embed/` (mod.rs, backend.rs, config.rs, convert.rs, provider.rs, openai.rs, gemini.rs, mistral.rs, voyage.rs, test/test_helpers.rs).
 
 ---
 
@@ -122,6 +122,35 @@ embed:
 
 ---
 
+### VoyageConfig
+
+```rust
+#[non_exhaustive]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct VoyageConfig {
+    pub api_key: String,   // required — no default
+    pub model: String,     // default: "voyage-4"
+    pub dimensions: usize, // default: 1024
+}
+```
+
+#### validate(&self) -> Result<()>
+
+Returns `bad_request` if `api_key` is empty, `model` is empty, or `dimensions` is zero.
+
+#### YAML example
+
+```yaml
+embed:
+  voyage:
+    api_key: "${VOYAGE_API_KEY}"
+    model: "voyage-4"
+    dimensions: 1024
+```
+
+---
+
 ## EmbeddingBackend
 
 Object-safe trait for embedding providers. Uses `Pin<Box<dyn Future>>` for object-safety behind `Arc<dyn EmbeddingBackend>`.
@@ -138,7 +167,7 @@ pub trait EmbeddingBackend: Send + Sync {
 - `dimensions` — number of f32 values the model produces.
 - `model_name` — model identifier string (e.g. `"text-embedding-3-small"`).
 
-Built-in implementations: `OpenAIEmbedding`, `GeminiEmbedding`, `MistralEmbedding`.
+Built-in implementations: `OpenAIEmbedding`, `GeminiEmbedding`, `MistralEmbedding`, `VoyageEmbedding`.
 
 For custom backends, implement this trait directly and wrap in `EmbeddingProvider::new(my_backend)`.
 
@@ -181,6 +210,20 @@ pub struct MistralEmbedding(Arc<Inner>); // cheap to clone
 ```
 
 ### new(client: http::Client, config: &MistralConfig) -> Result\<Self\>
+
+Validates config at construction. Returns `bad_request` if config validation fails.
+
+---
+
+## VoyageEmbedding
+
+Calls `POST https://api.voyageai.com/v1/embeddings`. Uses `Authorization: Bearer` token.
+
+```rust
+pub struct VoyageEmbedding(Arc<Inner>); // cheap to clone
+```
+
+### new(client: http::Client, config: &VoyageConfig) -> Result\<Self\>
 
 Validates config at construction. Returns `bad_request` if config validation fails.
 

@@ -188,6 +188,70 @@ impl MistralConfig {
     }
 }
 
+fn default_voyage_model() -> String {
+    "voyage-4".into()
+}
+
+fn default_voyage_dimensions() -> usize {
+    1024
+}
+
+/// Configuration for the Voyage AI embedding provider.
+///
+/// # YAML example
+///
+/// ```yaml
+/// api_key: "${VOYAGE_API_KEY}"
+/// model: "voyage-4"
+/// dimensions: 1024
+/// ```
+#[non_exhaustive]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct VoyageConfig {
+    /// Voyage API key. Required.
+    pub api_key: String,
+    /// Model name. Defaults to `"voyage-4"`.
+    #[serde(default = "default_voyage_model")]
+    pub model: String,
+    /// Output vector dimensions. Defaults to `1024`.
+    #[serde(default = "default_voyage_dimensions")]
+    pub dimensions: usize,
+}
+
+impl Default for VoyageConfig {
+    fn default() -> Self {
+        Self {
+            api_key: String::new(),
+            model: "voyage-4".into(),
+            dimensions: 1024,
+        }
+    }
+}
+
+impl VoyageConfig {
+    /// Validate the configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::bad_request` if `api_key` is empty, `model` is empty,
+    /// or `dimensions` is zero.
+    pub fn validate(&self) -> Result<()> {
+        if self.api_key.is_empty() {
+            return Err(Error::bad_request("voyage api_key must not be empty"));
+        }
+        if self.model.is_empty() {
+            return Err(Error::bad_request("voyage model must not be empty"));
+        }
+        if self.dimensions == 0 {
+            return Err(Error::bad_request(
+                "voyage dimensions must be greater than 0",
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -301,5 +365,53 @@ mod tests {
         let yaml = r#"api_key: "ms-test""#;
         let config: MistralConfig = serde_yaml_ng::from_str(yaml).unwrap();
         assert_eq!(config.model, "mistral-embed");
+    }
+
+    // --- Voyage ---
+
+    #[test]
+    fn voyage_default_is_invalid_without_key() {
+        let config = VoyageConfig::default();
+        let err = config.validate().unwrap_err();
+        assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn voyage_valid_config() {
+        let config = VoyageConfig {
+            api_key: "pa-test".into(),
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn voyage_reject_empty_model() {
+        let config = VoyageConfig {
+            api_key: "pa-test".into(),
+            model: "".into(),
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn voyage_reject_zero_dimensions() {
+        let config = VoyageConfig {
+            api_key: "pa-test".into(),
+            dimensions: 0,
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn voyage_deserialize_defaults() {
+        let yaml = r#"api_key: "pa-test""#;
+        let config: VoyageConfig = serde_yaml_ng::from_str(yaml).unwrap();
+        assert_eq!(config.model, "voyage-4");
+        assert_eq!(config.dimensions, 1024);
     }
 }

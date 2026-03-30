@@ -10,6 +10,8 @@ modo = { version = "*", features = ["text-embedding"] }
 
 Depends on `http-client`. No new crate dependencies.
 
+Providers: OpenAI, Gemini, Mistral, Voyage AI.
+
 ## Providers
 
 | Provider | Struct | Config | Default model | Default dims |

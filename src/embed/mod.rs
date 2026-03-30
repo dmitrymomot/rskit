@@ -16,7 +16,8 @@
 //! - [`OpenAIEmbedding`] — OpenAI embedding provider
 //! - [`GeminiEmbedding`] — Google Gemini embedding provider
 //! - [`MistralEmbedding`] — Mistral embedding provider
-//! - [`OpenAIConfig`] / [`GeminiConfig`] / [`MistralConfig`] — provider configs
+//! - [`VoyageEmbedding`] — Voyage AI embedding provider
+//! - [`OpenAIConfig`] / [`GeminiConfig`] / [`MistralConfig`] / [`VoyageConfig`] — provider configs
 //! - [`to_f32_blob`] / [`from_f32_blob`] — vector ↔ blob conversion helpers
 //! - [`test::InMemoryBackend`] — in-memory backend for unit tests (`#[cfg(test)]` or `test-helpers`)
 //!
@@ -44,14 +45,16 @@ mod gemini;
 mod mistral;
 mod openai;
 mod provider;
+mod voyage;
 
 pub use backend::EmbeddingBackend;
-pub use config::{GeminiConfig, MistralConfig, OpenAIConfig};
+pub use config::{GeminiConfig, MistralConfig, OpenAIConfig, VoyageConfig};
 pub use convert::{from_f32_blob, to_f32_blob};
 pub use gemini::GeminiEmbedding;
 pub use mistral::MistralEmbedding;
 pub use openai::OpenAIEmbedding;
 pub use provider::EmbeddingProvider;
+pub use voyage::VoyageEmbedding;
 
 /// Test helpers for the embedding module.
 ///

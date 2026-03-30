@@ -101,7 +101,8 @@ pub use audit::{AuditEntry, AuditLog, AuditLogBackend, AuditRecord, AuditRepo};
 #[cfg(feature = "text-embedding")]
 pub use embed::{
     EmbeddingBackend, EmbeddingProvider, GeminiConfig, GeminiEmbedding, MistralConfig,
-    MistralEmbedding, OpenAIConfig, OpenAIEmbedding, from_f32_blob, to_f32_blob,
+    MistralEmbedding, OpenAIConfig, OpenAIEmbedding, VoyageConfig, VoyageEmbedding, from_f32_blob,
+    to_f32_blob,
 };
 pub use extractor::ClientInfo;
 pub use extractor::Service;
