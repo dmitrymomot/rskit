@@ -31,15 +31,17 @@ modo — Rust web framework. Single crate, zero proc macros, plain `async fn` ha
 - IDs: `id::ulid()` (26 chars) or `id::short()` (13 chars, base36) — no UUID
 - Pluggable backends: `Arc<dyn Trait>` (not `Box`)
 - `Arc<Inner>` pattern — `Inner` struct/field must be private; never double-wrap
+- Module factories: `ModuleName::new(db, config) -> Result<Self>` — validate config at construction, fail fast at startup
 - `std::sync::RwLock` (not tokio) for sync-only state — never hold across `.await`
 - Tracing fields: snake_case (`user_id`, `session_id`)
 - Config: YAML with `${VAR}` / `${VAR:default}` env substitution; `trusted_proxies` is top-level
+- Config durations: use `_secs: u64` fields (e.g., `touch_threshold_secs`), not `std::time::Duration` — matches `session_ttl_secs`, `touch_interval_secs` pattern
 - Database: single `Database` handle (`Arc<Connection>`); `connect()` opens one connection with PRAGMA defaults; `ConnExt` for raw queries, `ConnQueryExt` for typed helpers; `libsql::params!` for bind parameters
 - No TODOs, no workarounds — every declared field and API must be fully implemented
 
 ## Feature Flags
 
-Feature-gated modules: `db` (default), `session`, `job`, `http-client`, `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`, `qrcode`, `sentry`. Always-available: cache, encoding, flash, ip, tenant, rbac, cron, testing (`test-helpers`).
+Feature-gated modules: `db` (default), `session`, `job`, `http-client`, `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`, `qrcode`, `sentry`, `apikey`. Always-available: cache, encoding, flash, ip, tenant, rbac, cron, testing (`test-helpers`).
 
 - Integration test files need `#![cfg(feature = "X")]`
 - Feature-gated modules for integration tests must use `pub mod` (not `pub(crate) mod`)
@@ -85,6 +87,7 @@ Feature-gated modules: `db` (default), `session`, `job`, `http-client`, `auth`, 
 - MiniJinja: `Value::from_safe_string()` for URLs/HTML; registrations consume by move
 - Streaming HTTP: `BodyExt::frame()` loop, not `body.collect().await`
 - S3 keys: always `uri_encode(key, false)`
+- Constant-time comparison: `subtle::ConstantTimeEq` (already in deps) — use for secrets, tokens, hashes
 
 ### Design Decisions
 
