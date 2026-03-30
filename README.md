@@ -181,7 +181,7 @@ modo-rs = { version = "0.1", features = ["auth", "templates"] }
 | `dns`          | DNS domain verification                              |
 | `geolocation`  | MaxMind GeoIP2 lookup                                |
 | `sentry`       | Sentry error tracking                                |
-| `test-helpers` | TestDb, TestApp, TestSession                         |
+| `test-helpers` | TestDb, TestApp, TestSession, in-memory/stub backends |
 | `full`         | All of the above                                     |
 
 ## Re-exports

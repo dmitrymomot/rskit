@@ -357,12 +357,7 @@ Defined in `Cargo.toml`. Default feature: `db`.
 
 These activate the parent feature for integration tests:
 
-| Feature         | Activates  |
-| --------------- | ---------- |
-| `email-test`    | `email`    |
-| `storage-test`  | `storage`  |
-| `webhooks-test` | `webhooks` |
-| `dns-test`      | `dns`      |
+(All test-specific code now uses the `test-helpers` feature.)
 
 ## Gotchas
 

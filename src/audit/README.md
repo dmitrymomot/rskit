@@ -49,7 +49,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_created_at    ON audit_log (created_at)
 | `AuditLogBackend` | Object-safe trait for custom storage backends |
 | `AuditLog` | Service wrapper -- `record()` propagates errors, `record_silent()` traces and swallows |
 | `AuditRepo` | Query interface -- `list()` for all entries, `query()` with `ValidatedFilter` |
-| `MemoryAuditBackend` | In-memory backend for tests (requires `audit-test` feature or `#[cfg(test)]`) |
+| `MemoryAuditBackend` | In-memory backend for tests (requires `test-helpers` feature or `#[cfg(test)]`) |
 
 ## Usage
 
@@ -135,7 +135,7 @@ let audit = AuditLog::from_backend(Arc::new(MyBackend));
 
 ### Testing
 
-Enable the `audit-test` feature for access to `MemoryAuditBackend`:
+Enable the `test-helpers` feature for access to `MemoryAuditBackend`:
 
 ```rust,ignore
 use modo::audit::{AuditEntry, AuditLog, MemoryAuditBackend};

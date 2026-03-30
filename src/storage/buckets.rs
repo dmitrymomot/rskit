@@ -59,7 +59,7 @@ impl Buckets {
     }
 
     /// Create named in-memory buckets for testing.
-    #[cfg(any(test, feature = "storage-test"))]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn memory(names: &[&str]) -> Self {
         let mut map = HashMap::with_capacity(names.len());
         for name in names {

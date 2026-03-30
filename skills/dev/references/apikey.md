@@ -15,7 +15,7 @@ use modo::{
 };
 ```
 
-`InMemoryBackend` is only available under `#[cfg(test)]` or `feature = "apikey-test"`:
+`InMemoryBackend` is only available under `#[cfg(test)]` or `feature = "test-helpers"`:
 
 ```rust
 use modo::apikey::test::InMemoryBackend;
@@ -291,7 +291,7 @@ let app: Router = Router::new()
 
 ## InMemoryBackend (test helper)
 
-In-memory `ApiKeyBackend` for unit tests. Available under `#[cfg(test)]` or `feature = "apikey-test"`.
+In-memory `ApiKeyBackend` for unit tests. Available under `#[cfg(test)]` or `feature = "test-helpers"`.
 
 ```rust
 use modo::apikey::test::InMemoryBackend;

@@ -9,7 +9,8 @@ Requires feature `"email"`.
 | Feature      | Enables                                                              |
 | ------------ | -------------------------------------------------------------------- |
 | `email`      | Core email module                                                    |
-| `email-test` | `Mailer::with_stub_transport` for testing without a real SMTP server |
+
+`Mailer::with_stub_transport` is available with the `test-helpers` feature or in `#[cfg(test)]` blocks.
 
 ## Usage
 

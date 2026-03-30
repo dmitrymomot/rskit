@@ -80,7 +80,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        feature: [auth, templates, sse, email, storage, webhooks, dns, geolocation, sentry, test-helpers, session, job]
+        feature: [auth, templates, sse, email, storage, webhooks, dns, geolocation, sentry, test-helpers, session, job, apikey, qrcode, http-client]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

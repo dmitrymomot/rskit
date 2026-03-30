@@ -146,7 +146,6 @@ async fn cursor_pagination_traversal() {
     assert!(p1_ids.iter().all(|id| !p2_ids.contains(id)));
 }
 
-#[cfg(feature = "audit-test")]
 #[tokio::test]
 async fn memory_backend_captures_entries() {
     let (log, backend) = AuditLog::memory();

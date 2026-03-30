@@ -23,7 +23,7 @@ use modo::ClientInfo;
 use modo::extractor::ClientInfo;
 ```
 
-`MemoryAuditBackend` is only available under `#[cfg(test)]` or `feature = "audit-test"`:
+`MemoryAuditBackend` is only available under `#[cfg(test)]` or `feature = "test-helpers"`:
 
 ```rust
 use modo::audit::MemoryAuditBackend;
@@ -178,7 +178,7 @@ let audit = AuditLog::new(db);
 // Custom backend:
 let audit = AuditLog::from_backend(my_backend);
 
-// In-memory for testing (requires #[cfg(test)] or feature = "audit-test"):
+// In-memory for testing (requires #[cfg(test)] or feature = "test-helpers"):
 let (audit, backend) = AuditLog::memory();
 ```
 
@@ -194,7 +194,7 @@ pub async fn record_silent(&self, entry: &AuditEntry)
 Test-only:
 
 ```rust
-#[cfg(any(test, feature = "audit-test"))]
+#[cfg(any(test, feature = "test-helpers"))]
 pub fn memory() -> (Self, Arc<MemoryAuditBackend>)
 ```
 
@@ -207,7 +207,7 @@ pub fn memory() -> (Self, Arc<MemoryAuditBackend>)
 
 ## MemoryAuditBackend
 
-In-memory backend for testing. Only available under `#[cfg(test)]` or `feature = "audit-test"`.
+In-memory backend for testing. Only available under `#[cfg(test)]` or `feature = "test-helpers"`.
 
 ```rust
 pub struct MemoryAuditBackend { /* Mutex<Vec<AuditEntry>> */ }

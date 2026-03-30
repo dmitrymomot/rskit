@@ -17,7 +17,7 @@
 //! | [`AuditLogBackend`] | Object-safe trait for custom storage backends |
 //! | [`AuditLog`] | Service wrapper — [`record()`](AuditLog::record) propagates errors, [`record_silent()`](AuditLog::record_silent) traces and swallows |
 //! | [`AuditRepo`] | Query interface — [`list()`](AuditRepo::list) for all entries, [`query()`](AuditRepo::query) with [`ValidatedFilter`](crate::db::ValidatedFilter) |
-//! | [`MemoryAuditBackend`] | In-memory backend for tests (requires `audit-test` feature or `#[cfg(test)]`) |
+//! | [`MemoryAuditBackend`] | In-memory backend for tests (requires `test-helpers` feature or `#[cfg(test)]`) |
 //!
 //! ## Quick start
 //!
@@ -48,7 +48,7 @@ mod record;
 mod repo;
 
 pub use self::log::AuditLog;
-#[cfg(any(test, feature = "audit-test"))]
+#[cfg(any(test, feature = "test-helpers"))]
 pub use self::log::MemoryAuditBackend;
 pub use backend::AuditLogBackend;
 pub use entry::AuditEntry;
