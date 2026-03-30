@@ -95,20 +95,21 @@ embed:
 
 ### MistralConfig
 
+The Mistral API does not accept a `dimensions` parameter — `mistral-embed` always returns 1024-dimensional vectors. The fixed output size is hard-coded in `MistralEmbedding::dimensions()`.
+
 ```rust
 #[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct MistralConfig {
-    pub api_key: String,   // required — no default
-    pub model: String,     // default: "mistral-embed"
-    pub dimensions: usize, // default: 1024
+    pub api_key: String, // required — no default
+    pub model: String,   // default: "mistral-embed"
 }
 ```
 
 #### validate(&self) -> Result<()>
 
-Returns `bad_request` if `api_key` is empty, `model` is empty, or `dimensions` is zero.
+Returns `bad_request` if `api_key` is empty or `model` is empty.
 
 #### YAML example
 
@@ -117,7 +118,6 @@ embed:
   mistral:
     api_key: "${MISTRAL_API_KEY}"
     model: "mistral-embed"
-    dimensions: 1024
 ```
 
 ---
@@ -160,7 +160,7 @@ Validates config at construction. Returns `bad_request` if config validation fai
 
 ## GeminiEmbedding
 
-Calls `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent?key={api_key}`. API key is passed as a query parameter (not a Bearer token).
+Calls `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent`. API key is passed via the `x-goog-api-key` header (not a Bearer token or query parameter).
 
 ```rust
 pub struct GeminiEmbedding(Arc<Inner>); // cheap to clone
@@ -257,7 +257,7 @@ use modo::embed::{EmbeddingProvider, OpenAIEmbedding, OpenAIConfig};
 use modo::http::Client;
 
 // In main() or service factory:
-let http_client = Client::new(&config.http_client)?;
+let http_client = Client::new(&config.http_client);
 let embed_config = OpenAIConfig {
     api_key: config.openai_api_key.clone(),
     ..Default::default()
@@ -317,11 +317,12 @@ let floats = from_f32_blob(&blob)?;
 
 ## Gotchas
 
-- **Config validation is eager** — `OpenAIEmbedding::new`, `GeminiEmbedding::new`, and `MistralEmbedding::new` all call `config.validate()` at construction. Missing `api_key` or zero `dimensions` fails at startup, not at request time.
+- **Config validation is eager** — `OpenAIEmbedding::new`, `GeminiEmbedding::new`, and `MistralEmbedding::new` all call `config.validate()` at construction. Missing `api_key` fails at startup, not at request time.
+- **Mistral dimensions are fixed** — `MistralConfig` has no `dimensions` field. The API always returns 1024-dimensional vectors, hard-coded in `MistralEmbedding::dimensions()`.
 - **Empty input rejected** — `EmbeddingProvider::embed` returns `bad_request` immediately if `input` is empty, before calling the backend.
 - **Blob length** — `to_f32_blob` produces exactly `dimensions * 4` bytes. `from_f32_blob` returns `bad_request` if the blob length is not a multiple of 4.
 - **All providers are `Arc<Inner>`** — already cheap to clone; do not wrap in an extra `Arc` yourself.
-- **Gemini uses query-param auth** — unlike OpenAI and Mistral (Bearer token), the Gemini provider passes the API key as a `?key=` query parameter. Keep this in mind when using proxies or inspecting logs.
+- **Gemini uses header auth** — unlike OpenAI and Mistral (Bearer token), the Gemini provider passes the API key via the `x-goog-api-key` header.
 - **`OpenAIConfig::base_url`** — supports Azure OpenAI or compatible proxies. Trailing slashes are stripped automatically.
 - **No crate deps added** — the embed module reuses existing `http::Client`, `serde_json`, and `serde` — no new dependencies.
 - **`test-helpers` gate** — `InMemoryBackend` is gated by `#[cfg(any(test, feature = "test-helpers"))]`. Integration test files need `#![cfg(feature = "embed")]` as the first attribute.
