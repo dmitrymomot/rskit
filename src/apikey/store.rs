@@ -187,6 +187,8 @@ impl ApiKeyStore {
     }
 
     /// Fire-and-forget touch if the threshold has elapsed.
+    ///
+    /// Best-effort: the spawned task may be lost on shutdown.
     fn maybe_touch(&self, record: &ApiKeyRecord) {
         let threshold_secs = self.0.config.touch_threshold_secs;
         let should_touch = match &record.last_used_at {

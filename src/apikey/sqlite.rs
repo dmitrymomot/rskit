@@ -47,7 +47,8 @@ impl ApiKeyBackend for SqliteBackend {
         let key_hash = record.key_hash.clone();
         let tenant_id = record.tenant_id.clone();
         let name = record.name.clone();
-        let scopes = serde_json::to_string(&record.scopes).unwrap_or_else(|_| "[]".into());
+        // Vec<String> serialization to JSON is infallible
+        let scopes = serde_json::to_string(&record.scopes).unwrap();
         let expires_at = record.expires_at.clone();
         let created_at = record.created_at.clone();
 

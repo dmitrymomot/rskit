@@ -137,6 +137,27 @@ async fn list_excludes_revoked_keys() {
 }
 
 #[tokio::test]
+async fn verify_key_expiring_now_returns_unauthorized() {
+    let store = test_store().await;
+    // A key whose expires_at is the current instant should be treated as expired
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .to_string();
+    let created = store
+        .create(&CreateKeyRequest {
+            tenant_id: "t1".into(),
+            name: "Boundary key".into(),
+            scopes: vec![],
+            expires_at: Some(now),
+        })
+        .await
+        .unwrap();
+
+    let err = store.verify(&created.raw_token).await.unwrap_err();
+    assert_eq!(err.status(), http::StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn verify_expired_key_returns_unauthorized() {
     let store = test_store().await;
     let created = store
@@ -365,6 +386,12 @@ async fn scope_guard_passes_with_matching_scope() {
 
     let resp = svc.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn middleware_from_header_rejects_invalid_name() {
+    let store = test_store().await;
+    assert!(ApiKeyLayer::from_header(store, "invalid header!").is_err());
 }
 
 #[tokio::test]
