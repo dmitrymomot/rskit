@@ -25,6 +25,7 @@ pub struct AuditEntry {
 }
 
 impl AuditEntry {
+    /// Create a new audit entry with four required fields.
     pub fn new(
         actor: impl Into<String>,
         action: impl Into<String>,
@@ -64,30 +65,37 @@ impl AuditEntry {
         self
     }
 
+    /// Returns the actor who performed the action.
     pub fn actor(&self) -> &str {
         &self.actor
     }
 
+    /// Returns the action identifier (e.g. `"user.role.changed"`).
     pub fn action(&self) -> &str {
         &self.action
     }
 
+    /// Returns the resource type (e.g. `"user"`, `"document"`).
     pub fn resource_type(&self) -> &str {
         &self.resource_type
     }
 
+    /// Returns the resource identifier.
     pub fn resource_id(&self) -> &str {
         &self.resource_id
     }
 
+    /// Returns the optional metadata JSON value.
     pub fn metadata_value(&self) -> Option<&serde_json::Value> {
         self.metadata.as_ref()
     }
 
+    /// Returns the optional client context.
     pub fn client_info_value(&self) -> Option<&ClientInfo> {
         self.client_info.as_ref()
     }
 
+    /// Returns the optional tenant ID.
     pub fn tenant_id_value(&self) -> Option<&str> {
         self.tenant_id.as_deref()
     }

@@ -1,15 +1,44 @@
-//! Audit logging for business-significant actions.
+//! # modo::audit
 //!
-//! Provides explicit event recording (no automatic middleware capture) with
-//! a pluggable backend trait and a built-in SQLite implementation.
+//! Explicit audit logging for business-significant actions.
+//!
+//! Requires feature `"db"`.
+//!
+//! Records structured events with actor, action, resource, and optional
+//! metadata/client context. No automatic middleware capture — callers
+//! build an [`AuditEntry`] and pass it to [`AuditLog`]. A built-in
+//! SQLite backend writes to the `audit_log` table; custom backends
+//! implement [`AuditLogBackend`].
 //!
 //! | Type | Purpose |
-//! |---|---|
+//! |------|---------|
 //! | [`AuditEntry`] | Builder for audit events — four required fields plus optional metadata, client info, tenant |
-//! | [`AuditRecord`] | Stored form returned by queries — all fields flat, includes `id` and `created_at` |
+//! | [`AuditRecord`] | Stored row returned by queries — all fields flat, includes `id` and `created_at` |
 //! | [`AuditLogBackend`] | Object-safe trait for custom storage backends |
-//! | [`AuditLog`] | Concrete wrapper — `record()` propagates errors, `record_silent()` traces and swallows |
-//! | [`AuditRepo`] | Query interface — dedicated methods plus generic filter-based `query()` |
+//! | [`AuditLog`] | Service wrapper — [`record()`](AuditLog::record) propagates errors, [`record_silent()`](AuditLog::record_silent) traces and swallows |
+//! | [`AuditRepo`] | Query interface — [`list()`](AuditRepo::list) for all entries, [`query()`](AuditRepo::query) with [`ValidatedFilter`](crate::db::ValidatedFilter) |
+//! | [`MemoryAuditBackend`] | In-memory backend for tests (requires `audit-test` feature or `#[cfg(test)]`) |
+//!
+//! ## Quick start
+//!
+//! ```rust,no_run
+//! use modo::audit::{AuditEntry, AuditLog, AuditRepo};
+//! use modo::db::Database;
+//!
+//! # async fn example(db: Database) -> modo::Result<()> {
+//! // Write
+//! let audit = AuditLog::new(db.clone());
+//! let entry = AuditEntry::new("user_123", "doc.deleted", "document", "doc_42")
+//!     .metadata(serde_json::json!({"reason": "expired"}))
+//!     .tenant_id("tenant_1");
+//! audit.record(&entry).await?;
+//!
+//! // Query
+//! let repo = AuditRepo::new(db);
+//! let page = repo.list(Default::default()).await?;
+//! # Ok(())
+//! # }
+//! ```
 
 mod backend;
 mod entry;

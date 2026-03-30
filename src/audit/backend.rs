@@ -11,6 +11,10 @@ use super::entry::AuditEntry;
 /// by [`AuditLog::new()`](super::AuditLog::new).
 pub trait AuditLogBackend: Send + Sync {
     /// Persist an audit entry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the backend fails to persist the entry.
     fn record<'a>(
         &'a self,
         entry: &'a AuditEntry,

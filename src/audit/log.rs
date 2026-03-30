@@ -30,7 +30,12 @@ impl AuditLog {
         Self(backend)
     }
 
-    /// Record an audit event. Propagates errors via `Result`.
+    /// Record an audit event, propagating errors via `Result`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the backend write fails (e.g. database
+    /// connection lost, constraint violation).
     pub async fn record(&self, entry: &AuditEntry) -> Result<()> {
         self.0.record(entry).await
     }

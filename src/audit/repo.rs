@@ -31,6 +31,10 @@ impl AuditRepo {
     }
 
     /// All entries, newest first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub async fn list(&self, req: CursorRequest) -> Result<CursorPage<AuditRecord>> {
         self.inner
             .db
@@ -41,6 +45,10 @@ impl AuditRepo {
     }
 
     /// Flexible query with a pre-validated filter.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub async fn query(
         &self,
         filter: ValidatedFilter,
