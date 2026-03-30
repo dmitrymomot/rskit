@@ -28,6 +28,8 @@ pub mod cache;
 pub mod config;
 pub mod cookie;
 #[cfg(feature = "db")]
+pub mod audit;
+#[cfg(feature = "db")]
 pub mod db;
 pub mod encoding;
 pub mod error;
