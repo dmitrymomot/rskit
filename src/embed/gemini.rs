@@ -63,9 +63,9 @@ impl EmbeddingBackend for GeminiEmbedding {
                 "{BASE_URL}/models/{}:embedContent?key={}",
                 self.0.model, self.0.api_key,
             );
-            let body = OwnedRequest {
-                content: OwnedContent {
-                    parts: vec![OwnedPart { text: input }],
+            let body = Request {
+                content: Content {
+                    parts: vec![Part { text: &input }],
                 },
                 output_dimensionality: self.0.dimensions,
             };
@@ -99,19 +99,19 @@ impl EmbeddingBackend for GeminiEmbedding {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct OwnedRequest {
-    content: OwnedContent,
+struct Request<'a> {
+    content: Content<'a>,
     output_dimensionality: usize,
 }
 
 #[derive(Serialize)]
-struct OwnedContent {
-    parts: Vec<OwnedPart>,
+struct Content<'a> {
+    parts: Vec<Part<'a>>,
 }
 
 #[derive(Serialize)]
-struct OwnedPart {
-    text: String,
+struct Part<'a> {
+    text: &'a str,
 }
 
 #[derive(Deserialize)]
