@@ -51,6 +51,10 @@ impl ApiKeyStore {
     ///
     /// Validates config at construction — fails fast on invalid prefix or
     /// secret length.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if [`ApiKeyConfig::validate`] fails.
     pub fn new(db: Database, config: ApiKeyConfig) -> Result<Self> {
         config.validate()?;
         Ok(Self(Arc::new(Inner {
@@ -62,12 +66,22 @@ impl ApiKeyStore {
     /// Create from a custom backend.
     ///
     /// Validates config at construction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if [`ApiKeyConfig::validate`] fails.
     pub fn from_backend(backend: Arc<dyn ApiKeyBackend>, config: ApiKeyConfig) -> Result<Self> {
         config.validate()?;
         Ok(Self(Arc::new(Inner { backend, config })))
     }
 
     /// Create a new API key. Returns the raw token (shown once).
+    ///
+    /// # Errors
+    ///
+    /// Returns `bad_request` if `tenant_id` or `name` is empty, or if
+    /// `expires_at` is not a valid RFC 3339 timestamp. Propagates backend
+    /// storage errors.
     pub async fn create(&self, req: &CreateKeyRequest) -> Result<ApiKeyCreated> {
         if req.tenant_id.is_empty() {
             return Err(Error::bad_request("tenant_id is required"));
@@ -115,6 +129,11 @@ impl ApiKeyStore {
     ///
     /// All failure cases return the same generic `unauthorized` error to
     /// prevent enumeration.
+    ///
+    /// # Errors
+    ///
+    /// Returns `unauthorized` if the token is malformed, not found, revoked,
+    /// expired, or the hash does not match. Propagates backend lookup errors.
     pub async fn verify(&self, raw_token: &str) -> Result<ApiKeyMeta> {
         let parsed = token::parse_token(raw_token, &self.0.config.prefix)
             .ok_or_else(|| Error::unauthorized("invalid API key"))?;
@@ -154,6 +173,11 @@ impl ApiKeyStore {
     }
 
     /// Revoke a key by ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns `not_found` if no key with the given ID exists.
+    /// Propagates backend errors.
     pub async fn revoke(&self, key_id: &str) -> Result<()> {
         self.0
             .backend
@@ -165,12 +189,22 @@ impl ApiKeyStore {
     }
 
     /// List all active keys for a tenant (no secrets).
+    ///
+    /// # Errors
+    ///
+    /// Propagates backend errors.
     pub async fn list(&self, tenant_id: &str) -> Result<Vec<ApiKeyMeta>> {
         let records = self.0.backend.list(tenant_id).await?;
         Ok(records.into_iter().map(ApiKeyRecord::into_meta).collect())
     }
 
     /// Update `expires_at` (refresh/extend a key).
+    ///
+    /// # Errors
+    ///
+    /// Returns `bad_request` if `expires_at` is not a valid RFC 3339
+    /// timestamp. Returns `not_found` if no key with the given ID exists.
+    /// Propagates backend errors.
     pub async fn refresh(&self, key_id: &str, expires_at: Option<&str>) -> Result<()> {
         if let Some(exp) = expires_at {
             chrono::DateTime::parse_from_rfc3339(exp)

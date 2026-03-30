@@ -1,16 +1,43 @@
+//! # modo::apikey
+//!
 //! Prefixed API key issuance, verification, scoping, and lifecycle management.
 //!
-//! Provides tenant-scoped API keys with SHA-256 hashing, constant-time
-//! verification, touch throttling, and Tower middleware for request
-//! authentication.
-//!
-//! # Feature flag
-//!
-//! This module is only compiled when the `apikey` feature is enabled.
+//! Requires feature `"apikey"` (depends on `"db"`).
 //!
 //! ```toml
 //! [dependencies]
 //! modo = { version = "*", features = ["apikey"] }
+//! ```
+//!
+//! Provides:
+//!
+//! - [`ApiKeyStore`] — tenant-scoped store: create, verify, revoke, list, refresh keys
+//! - [`ApiKeyConfig`] — YAML-deserializable configuration (prefix, secret length, touch threshold)
+//! - [`ApiKeyBackend`] — trait for pluggable storage backends (SQLite built-in)
+//! - [`ApiKeyLayer`] — Tower middleware that verifies API keys on incoming requests
+//! - [`require_scope`] — Tower layer factory that enforces a required scope on verified keys
+//! - [`ApiKeyMeta`] — public metadata extracted by middleware, usable as an axum extractor
+//! - [`ApiKeyCreated`] — one-time creation result containing the raw token
+//! - [`ApiKeyRecord`] — full stored record used by backend implementations
+//! - [`CreateKeyRequest`] — input for [`ApiKeyStore::create`]
+//! - [`test::InMemoryBackend`] — in-memory backend for unit tests
+//!
+//! ## Quick start
+//!
+//! ```rust,no_run
+//! use modo::apikey::{ApiKeyConfig, ApiKeyStore, ApiKeyLayer, CreateKeyRequest, require_scope};
+//! use axum::{Router, routing::get};
+//! # fn example(db: modo::db::Database) {
+//!
+//! // Build the store from config + database
+//! let store = ApiKeyStore::new(db, ApiKeyConfig::default()).unwrap();
+//!
+//! // Protect routes with the API key middleware and optional scope checks
+//! let app: Router = Router::new()
+//!     .route("/orders", get(|| async { "orders" }))
+//!     .route_layer(require_scope("read:orders"))
+//!     .layer(ApiKeyLayer::new(store));
+//! # }
 //! ```
 
 mod backend;
