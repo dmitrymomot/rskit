@@ -59,8 +59,8 @@ pub use types::{ApiKeyCreated, ApiKeyMeta, ApiKeyRecord, CreateKeyRequest};
 
 /// Test helpers for the API key module.
 ///
-/// Available when running tests or when the `apikey-test` feature is enabled.
-#[cfg_attr(not(any(test, feature = "apikey-test")), allow(dead_code))]
+/// Available when running tests or when the `test-helpers` feature is enabled.
+#[cfg_attr(not(any(test, feature = "test-helpers")), allow(dead_code))]
 pub mod test {
     use std::future::Future;
     use std::pin::Pin;
