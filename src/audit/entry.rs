@@ -45,8 +45,14 @@ impl AuditEntry {
     }
 
     /// Serialize any type into the metadata JSON field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `meta` cannot be serialized to JSON. This is intentional —
+    /// silently dropping metadata in an audit system would cause data loss.
     pub fn metadata(mut self, meta: impl Serialize) -> Self {
-        self.metadata = Some(serde_json::to_value(meta).unwrap_or_default());
+        self.metadata =
+            Some(serde_json::to_value(meta).expect("audit metadata must be serializable to JSON"));
         self
     }
 
