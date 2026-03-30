@@ -15,6 +15,7 @@
 
 mod backend;
 mod config;
+pub(crate) mod sqlite;
 mod token;
 mod types;
 
