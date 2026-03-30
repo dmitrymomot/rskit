@@ -21,7 +21,8 @@ impl FromRow for ApiKeyRecord {
     fn from_row(row: &libsql::Row) -> Result<Self> {
         let cols = ColumnMap::from_row(row);
         let scopes_json: String = cols.get(row, "scopes")?;
-        let scopes: Vec<String> = serde_json::from_str(&scopes_json).unwrap_or_default();
+        let scopes: Vec<String> = serde_json::from_str(&scopes_json)
+            .map_err(|e| crate::Error::internal(format!("deserialize api_keys.scopes: {e}")))?;
 
         Ok(Self {
             id: cols.get(row, "id")?,

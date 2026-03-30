@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use chrono::Utc;
+
 use crate::db::Database;
 use crate::error::{Error, Result};
 use crate::id;
@@ -9,6 +11,11 @@ use super::config::ApiKeyConfig;
 use super::sqlite::SqliteBackend;
 use super::token;
 use super::types::{ApiKeyCreated, ApiKeyMeta, ApiKeyRecord, CreateKeyRequest};
+
+/// UTC timestamp in ISO 8601 format with millisecond precision.
+fn now_utc() -> String {
+    Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+}
 
 struct Inner {
     backend: Arc<dyn ApiKeyBackend>,
@@ -68,14 +75,16 @@ impl ApiKeyStore {
         if req.name.is_empty() {
             return Err(Error::bad_request("name is required"));
         }
+        if let Some(ref exp) = req.expires_at {
+            chrono::DateTime::parse_from_rfc3339(exp)
+                .map_err(|_| Error::bad_request("expires_at must be a valid RFC 3339 timestamp"))?;
+        }
 
         let ulid = id::ulid();
         let secret = token::generate_secret(self.0.config.secret_length);
         let raw_token = token::format_token(&self.0.config.prefix, &ulid, &secret);
         let key_hash = token::hash_secret(&secret);
-        let now = chrono::Utc::now()
-            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-            .to_string();
+        let now = now_utc();
 
         let record = ApiKeyRecord {
             id: ulid.clone(),
@@ -124,10 +133,11 @@ impl ApiKeyStore {
 
         // Expired?
         if let Some(ref exp) = record.expires_at {
-            let now = chrono::Utc::now()
-                .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-                .to_string();
-            if exp.as_str() <= now.as_str() {
+            if let Ok(exp_dt) = chrono::DateTime::parse_from_rfc3339(exp) {
+                if exp_dt <= Utc::now() {
+                    return Err(Error::unauthorized("invalid API key"));
+                }
+            } else {
                 return Err(Error::unauthorized("invalid API key"));
             }
         }
@@ -151,10 +161,7 @@ impl ApiKeyStore {
             .await?
             .ok_or_else(|| Error::not_found("API key not found"))?;
 
-        let now = chrono::Utc::now()
-            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-            .to_string();
-        self.0.backend.revoke(key_id, &now).await
+        self.0.backend.revoke(key_id, &now_utc()).await
     }
 
     /// List all active keys for a tenant (no secrets).
@@ -194,10 +201,7 @@ impl ApiKeyStore {
             let backend = self.0.backend.clone();
             let key_id = record.id.clone();
             tokio::spawn(async move {
-                let now = chrono::Utc::now()
-                    .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-                    .to_string();
-                if let Err(e) = backend.update_last_used(&key_id, &now).await {
+                if let Err(e) = backend.update_last_used(&key_id, &now_utc()).await {
                     tracing::warn!(key_id, error = %e, "failed to update API key last_used_at");
                 }
             });

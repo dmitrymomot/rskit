@@ -12,14 +12,24 @@ pub(crate) struct ParsedToken<'a> {
     pub secret: &'a str,
 }
 
+/// Maximum byte value that avoids modulo bias for base62 (62 * 4 = 248).
+const BIAS_LIMIT: u8 = 248;
+
 /// Generate a random base62 secret of `len` characters.
+///
+/// Uses rejection sampling to avoid modulo bias: bytes >= 248 are
+/// discarded so every base62 character has equal probability.
 pub(crate) fn generate_secret(len: usize) -> String {
-    let mut bytes = vec![0u8; len];
-    rand::fill(&mut bytes[..]);
-    bytes
-        .iter()
-        .map(|b| BASE62[(*b as usize) % 62] as char)
-        .collect()
+    let mut result = String::with_capacity(len);
+    let mut buf = [0u8; 1];
+    while result.len() < len {
+        rand::fill(&mut buf[..]);
+        let b = buf[0];
+        if b < BIAS_LIMIT {
+            result.push(BASE62[(b as usize) % 62] as char);
+        }
+    }
+    result
 }
 
 /// Format a full token: `{prefix}_{ulid}{secret}`.

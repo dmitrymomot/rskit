@@ -69,18 +69,7 @@ pub mod test {
             &self,
             record: &ApiKeyRecord,
         ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-            let record = ApiKeyRecord {
-                id: record.id.clone(),
-                key_hash: record.key_hash.clone(),
-                tenant_id: record.tenant_id.clone(),
-                name: record.name.clone(),
-                scopes: record.scopes.clone(),
-                expires_at: record.expires_at.clone(),
-                last_used_at: record.last_used_at.clone(),
-                created_at: record.created_at.clone(),
-                revoked_at: record.revoked_at.clone(),
-            };
-            self.records.lock().unwrap().push(record);
+            self.records.lock().unwrap().push(record.clone());
             Box::pin(async { Ok(()) })
         }
 
@@ -94,17 +83,7 @@ pub mod test {
                 .unwrap()
                 .iter()
                 .find(|r| r.id == key_id)
-                .map(|r| ApiKeyRecord {
-                    id: r.id.clone(),
-                    key_hash: r.key_hash.clone(),
-                    tenant_id: r.tenant_id.clone(),
-                    name: r.name.clone(),
-                    scopes: r.scopes.clone(),
-                    expires_at: r.expires_at.clone(),
-                    last_used_at: r.last_used_at.clone(),
-                    created_at: r.created_at.clone(),
-                    revoked_at: r.revoked_at.clone(),
-                });
+                .cloned();
             Box::pin(async { Ok(found) })
         }
 
@@ -136,17 +115,7 @@ pub mod test {
                 .unwrap()
                 .iter()
                 .filter(|r| r.tenant_id == tenant_id && r.revoked_at.is_none())
-                .map(|r| ApiKeyRecord {
-                    id: r.id.clone(),
-                    key_hash: r.key_hash.clone(),
-                    tenant_id: r.tenant_id.clone(),
-                    name: r.name.clone(),
-                    scopes: r.scopes.clone(),
-                    expires_at: r.expires_at.clone(),
-                    last_used_at: r.last_used_at.clone(),
-                    created_at: r.created_at.clone(),
-                    revoked_at: r.revoked_at.clone(),
-                })
+                .cloned()
                 .collect();
             Box::pin(async { Ok(records) })
         }

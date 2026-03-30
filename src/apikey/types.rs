@@ -53,6 +53,7 @@ pub struct ApiKeyMeta {
 }
 
 /// Stored form — used by the backend trait.
+#[derive(Clone)]
 pub struct ApiKeyRecord {
     /// ULID primary key.
     pub id: String,

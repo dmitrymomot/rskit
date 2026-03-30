@@ -49,13 +49,17 @@ impl ApiKeyLayer {
     }
 
     /// Create a layer that reads from a custom header.
-    pub fn from_header(store: ApiKeyStore, header: &str) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::bad_request` if the header name is invalid.
+    pub fn from_header(store: ApiKeyStore, header: &str) -> crate::Result<Self> {
+        let name = http::HeaderName::from_bytes(header.as_bytes())
+            .map_err(|_| Error::bad_request(format!("invalid header name: {header}")))?;
+        Ok(Self {
             store,
-            header: HeaderSource::Custom(
-                http::HeaderName::from_bytes(header.as_bytes()).expect("invalid header name"),
-            ),
-        }
+            header: HeaderSource::Custom(name),
+        })
     }
 }
 

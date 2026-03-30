@@ -313,7 +313,7 @@ async fn middleware_invalid_token_returns_401() {
 #[tokio::test]
 async fn middleware_custom_header() {
     let (store, token) = middleware_store().await;
-    let layer = ApiKeyLayer::from_header(store, "x-api-key");
+    let layer = ApiKeyLayer::from_header(store, "x-api-key").unwrap();
     let svc = layer.layer(tower::service_fn(echo_handler));
 
     let req = Request::builder()

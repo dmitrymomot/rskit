@@ -88,10 +88,11 @@ where
         std::mem::swap(&mut self.inner, &mut inner);
 
         Box::pin(async move {
-            let meta = request
-                .extensions()
-                .get::<ApiKeyMeta>()
-                .expect("require_scope() requires ApiKeyLayer to be applied first");
+            let Some(meta) = request.extensions().get::<ApiKeyMeta>() else {
+                return Ok(
+                    Error::internal("require_scope() called without ApiKeyLayer").into_response(),
+                );
+            };
 
             if !meta.scopes.iter().any(|s| s == &scope) {
                 return Ok(
