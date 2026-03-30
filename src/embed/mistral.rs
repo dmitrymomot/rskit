@@ -1,4 +1,3 @@
-use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -11,13 +10,15 @@ use super::backend::EmbeddingBackend;
 use super::config::MistralConfig;
 use super::convert::to_f32_blob;
 
-const BASE_URL: &str = "https://api.mistral.ai";
+/// Fixed output dimensions for `mistral-embed`. The Mistral API does not
+/// accept a `dimensions` parameter — all models return 1024-dimensional
+/// vectors.
+const DIMENSIONS: usize = 1024;
 
 struct Inner {
     client: http::Client,
     api_key: String,
     model: String,
-    dimensions: usize,
 }
 
 /// Mistral embedding provider.
@@ -51,7 +52,6 @@ impl MistralEmbedding {
             client,
             api_key: config.api_key.clone(),
             model: config.model.clone(),
-            dimensions: config.dimensions,
         })))
     }
 }
@@ -60,7 +60,7 @@ impl EmbeddingBackend for MistralEmbedding {
     fn embed(&self, input: &str) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + '_>> {
         let input = input.to_owned();
         Box::pin(async move {
-            let url = format!("{BASE_URL}/v1/embeddings");
+            const URL: &str = concat!("https://api.mistral.ai", "/v1/embeddings");
             let body = Request {
                 input: &input,
                 model: &self.0.model,
@@ -69,7 +69,7 @@ impl EmbeddingBackend for MistralEmbedding {
             let resp = self
                 .0
                 .client
-                .post(&url)
+                .post(URL)
                 .bearer_token(&self.0.api_key)
                 .json(&body)
                 .send()
@@ -99,7 +99,7 @@ impl EmbeddingBackend for MistralEmbedding {
     }
 
     fn dimensions(&self) -> usize {
-        self.0.dimensions
+        DIMENSIONS
     }
 
     fn model_name(&self) -> &str {

@@ -138,18 +138,18 @@ fn default_mistral_model() -> String {
     "mistral-embed".into()
 }
 
-fn default_mistral_dimensions() -> usize {
-    1024
-}
-
 /// Configuration for the Mistral embedding provider.
+///
+/// The Mistral API does not accept a `dimensions` parameter — `mistral-embed`
+/// always returns 1024-dimensional vectors. Use
+/// [`MistralEmbedding::dimensions()`](super::MistralEmbedding::dimensions) to
+/// query the fixed output size.
 ///
 /// # YAML example
 ///
 /// ```yaml
 /// api_key: "${MISTRAL_API_KEY}"
 /// model: "mistral-embed"
-/// dimensions: 1024
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
@@ -160,9 +160,6 @@ pub struct MistralConfig {
     /// Model name. Defaults to `"mistral-embed"`.
     #[serde(default = "default_mistral_model")]
     pub model: String,
-    /// Output vector dimensions. Defaults to `1024`.
-    #[serde(default = "default_mistral_dimensions")]
-    pub dimensions: usize,
 }
 
 impl Default for MistralConfig {
@@ -170,7 +167,6 @@ impl Default for MistralConfig {
         Self {
             api_key: String::new(),
             model: "mistral-embed".into(),
-            dimensions: 1024,
         }
     }
 }
@@ -180,19 +176,13 @@ impl MistralConfig {
     ///
     /// # Errors
     ///
-    /// Returns `Error::bad_request` if `api_key` is empty, `model` is empty,
-    /// or `dimensions` is zero.
+    /// Returns `Error::bad_request` if `api_key` is empty or `model` is empty.
     pub fn validate(&self) -> Result<()> {
         if self.api_key.is_empty() {
             return Err(Error::bad_request("mistral api_key must not be empty"));
         }
         if self.model.is_empty() {
             return Err(Error::bad_request("mistral model must not be empty"));
-        }
-        if self.dimensions == 0 {
-            return Err(Error::bad_request(
-                "mistral dimensions must be greater than 0",
-            ));
         }
         Ok(())
     }
@@ -307,21 +297,9 @@ mod tests {
     }
 
     #[test]
-    fn mistral_reject_zero_dimensions() {
-        let config = MistralConfig {
-            api_key: "ms-test".into(),
-            dimensions: 0,
-            ..Default::default()
-        };
-        let err = config.validate().unwrap_err();
-        assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
-    }
-
-    #[test]
     fn mistral_deserialize_defaults() {
         let yaml = r#"api_key: "ms-test""#;
         let config: MistralConfig = serde_yaml_ng::from_str(yaml).unwrap();
         assert_eq!(config.model, "mistral-embed");
-        assert_eq!(config.dimensions, 1024);
     }
 }

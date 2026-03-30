@@ -1,4 +1,3 @@
-use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -59,10 +58,7 @@ impl EmbeddingBackend for GeminiEmbedding {
     fn embed(&self, input: &str) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + '_>> {
         let input = input.to_owned();
         Box::pin(async move {
-            let url = format!(
-                "{BASE_URL}/models/{}:embedContent?key={}",
-                self.0.model, self.0.api_key,
-            );
+            let url = format!("{BASE_URL}/models/{}:embedContent", self.0.model,);
             let body = Request {
                 content: Content {
                     parts: vec![Part { text: &input }],
@@ -70,7 +66,18 @@ impl EmbeddingBackend for GeminiEmbedding {
                 output_dimensionality: self.0.dimensions,
             };
 
-            let resp = self.0.client.post(&url).json(&body).send().await?;
+            let resp = self
+                .0
+                .client
+                .post(&url)
+                .header(
+                    ::http::header::HeaderName::from_static("x-goog-api-key"),
+                    ::http::header::HeaderValue::from_str(&self.0.api_key)
+                        .map_err(|e| Error::internal("invalid gemini api key header").chain(e))?,
+                )
+                .json(&body)
+                .send()
+                .await?;
 
             if !resp.status().is_success() {
                 let status = resp.status();
