@@ -1,4 +1,4 @@
-#![cfg(feature = "db")]
+#![cfg(feature = "test-helpers")]
 
 use modo::audit::{AuditEntry, AuditLog, AuditRepo};
 use modo::db::PageRequest;
@@ -89,9 +89,15 @@ async fn record_silent_does_not_panic() {
 async fn by_actor_filters() {
     let (log, repo) = setup().await;
 
-    log.record(&AuditEntry::new("user_1", "a.1", "x", "x1")).await.unwrap();
-    log.record(&AuditEntry::new("user_2", "a.2", "x", "x2")).await.unwrap();
-    log.record(&AuditEntry::new("user_1", "a.3", "x", "x3")).await.unwrap();
+    log.record(&AuditEntry::new("user_1", "a.1", "x", "x1"))
+        .await
+        .unwrap();
+    log.record(&AuditEntry::new("user_2", "a.2", "x", "x2"))
+        .await
+        .unwrap();
+    log.record(&AuditEntry::new("user_1", "a.3", "x", "x3"))
+        .await
+        .unwrap();
 
     let result = repo.by_actor("user_1", &page(1, 10)).await.unwrap();
     assert_eq!(result.total, 2);
@@ -102,11 +108,20 @@ async fn by_actor_filters() {
 async fn by_resource_filters() {
     let (log, repo) = setup().await;
 
-    log.record(&AuditEntry::new("u", "a", "user", "usr_1")).await.unwrap();
-    log.record(&AuditEntry::new("u", "a", "user", "usr_2")).await.unwrap();
-    log.record(&AuditEntry::new("u", "a", "doc", "doc_1")).await.unwrap();
+    log.record(&AuditEntry::new("u", "a", "user", "usr_1"))
+        .await
+        .unwrap();
+    log.record(&AuditEntry::new("u", "a", "user", "usr_2"))
+        .await
+        .unwrap();
+    log.record(&AuditEntry::new("u", "a", "doc", "doc_1"))
+        .await
+        .unwrap();
 
-    let result = repo.by_resource("user", "usr_1", &page(1, 10)).await.unwrap();
+    let result = repo
+        .by_resource("user", "usr_1", &page(1, 10))
+        .await
+        .unwrap();
     assert_eq!(result.total, 1);
     assert_eq!(result.items[0].resource_id, "usr_1");
 }
@@ -115,8 +130,12 @@ async fn by_resource_filters() {
 async fn by_tenant_filters() {
     let (log, repo) = setup().await;
 
-    log.record(&AuditEntry::new("u", "a", "x", "x1").tenant_id("t_1")).await.unwrap();
-    log.record(&AuditEntry::new("u", "a", "x", "x2").tenant_id("t_2")).await.unwrap();
+    log.record(&AuditEntry::new("u", "a", "x", "x1").tenant_id("t_1"))
+        .await
+        .unwrap();
+    log.record(&AuditEntry::new("u", "a", "x", "x2").tenant_id("t_2"))
+        .await
+        .unwrap();
 
     let result = repo.by_tenant("t_1", &page(1, 10)).await.unwrap();
     assert_eq!(result.total, 1);
@@ -127,8 +146,12 @@ async fn by_tenant_filters() {
 async fn by_action_filters() {
     let (log, repo) = setup().await;
 
-    log.record(&AuditEntry::new("u", "user.created", "user", "u1")).await.unwrap();
-    log.record(&AuditEntry::new("u", "user.deleted", "user", "u2")).await.unwrap();
+    log.record(&AuditEntry::new("u", "user.created", "user", "u1"))
+        .await
+        .unwrap();
+    log.record(&AuditEntry::new("u", "user.deleted", "user", "u2"))
+        .await
+        .unwrap();
 
     let result = repo.by_action("user.created", &page(1, 10)).await.unwrap();
     assert_eq!(result.total, 1);
@@ -140,9 +163,14 @@ async fn pagination_works() {
     let (log, repo) = setup().await;
 
     for i in 0..5 {
-        log.record(&AuditEntry::new("u", format!("a.{i}"), "x", format!("x{i}")))
-            .await
-            .unwrap();
+        log.record(&AuditEntry::new(
+            "u",
+            format!("a.{i}"),
+            "x",
+            format!("x{i}"),
+        ))
+        .await
+        .unwrap();
     }
 
     let p1 = repo.list(&page(1, 2)).await.unwrap();
