@@ -142,8 +142,8 @@ fn default_mistral_model() -> String {
 ///
 /// The Mistral API does not accept a `dimensions` parameter — `mistral-embed`
 /// always returns 1024-dimensional vectors. Use
-/// [`MistralEmbedding::dimensions()`](super::MistralEmbedding::dimensions) to
-/// query the fixed output size.
+/// [`EmbeddingBackend::dimensions()`](super::EmbeddingBackend::dimensions) on
+/// a `MistralEmbedding` to query the fixed output size.
 ///
 /// # YAML example
 ///

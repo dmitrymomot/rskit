@@ -18,7 +18,7 @@
 //! - [`MistralEmbedding`] — Mistral embedding provider
 //! - [`OpenAIConfig`] / [`GeminiConfig`] / [`MistralConfig`] — provider configs
 //! - [`to_f32_blob`] / [`from_f32_blob`] — vector ↔ blob conversion helpers
-//! - [`test::InMemoryBackend`] — in-memory backend for unit tests
+//! - [`test::InMemoryBackend`] — in-memory backend for unit tests (`#[cfg(test)]` or `test-helpers`)
 //!
 //! ## Quick start
 //!

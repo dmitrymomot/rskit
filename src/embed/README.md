@@ -20,7 +20,7 @@ Depends on `http-client`. No new crate dependencies.
 
 ## Usage
 
-```rust
+```rust,ignore
 use modo::http;
 use modo::embed::{EmbeddingProvider, OpenAIEmbedding, OpenAIConfig};
 
@@ -48,7 +48,7 @@ db.conn().execute_raw(
 
 Implement `EmbeddingBackend` and wrap with `EmbeddingProvider::new()`:
 
-```rust
+```rust,ignore
 use modo::embed::{EmbeddingBackend, EmbeddingProvider};
 
 struct MyProvider { /* ... */ }
@@ -79,10 +79,12 @@ let embedder = EmbeddingProvider::new(MyProvider { /* ... */ });
 
 Use `embed::test::InMemoryBackend` for tests:
 
-```rust
+```rust,ignore
 use modo::embed::{EmbeddingProvider, test::InMemoryBackend};
 
 let embedder = EmbeddingProvider::new(InMemoryBackend::new(768));
 let blob = embedder.embed("test").await?;
 assert_eq!(blob.len(), 768 * 4);
 ```
+
+`InMemoryBackend` is available under `#[cfg(test)]` or when the `test-helpers` feature is enabled.
