@@ -96,7 +96,7 @@ modo is a single Rust crate with zero proc macros. Everything is explicit:
 
 Optional modules are behind feature flags (`db` [default], `session`, `job`,
 `http-client`, `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`,
-`dns`, `geolocation`, `qrcode`, `sentry`, `test-helpers`). Core modules
+`dns`, `geolocation`, `qrcode`, `sentry`, `apikey`, `test-helpers`). Core modules
 (flash, RBAC, cron, cache, encoding, tenant, IP) are always available.
 
 ## Minimal App Wiring Pattern
@@ -175,6 +175,7 @@ All paths are relative to the `references/` directory inside this skill folder.
 | Test helpers (TestDb, TestApp, etc.)                                                                | `references/testing.md`     |
 | QR code generation with SVG rendering                                                              | `references/qrcode.md`      |
 | Audit logging (record events, query with cursor pagination)                                         | `references/audit.md`       |
+| API keys (issuance, verification, scoping, middleware, touch throttling)                             | `references/apikey.md`      |
 
 ## Common Multi-Module Workflows
 
@@ -192,6 +193,7 @@ then domain-specific files add the module details.
 | JWT-protected API                           | `conventions.md` -> `handlers.md` -> `auth.md`                            |
 | SSE real-time updates                       | `conventions.md` -> `handlers.md` -> `sse.md`                             |
 | Full-stack feature (DB -> API -> job -> email) | `conventions.md` -> `database.md` -> `handlers.md` -> `jobs.md` -> `email.md` |
+| API key protected endpoints                    | `conventions.md` -> `handlers.md` -> `apikey.md`                               |
 
 ## Relationship to CLAUDE.md
 
