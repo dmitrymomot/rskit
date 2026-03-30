@@ -13,10 +13,12 @@
 //! modo = { version = "*", features = ["apikey"] }
 //! ```
 
+mod backend;
 mod config;
 mod token;
 mod types;
 
+pub use backend::ApiKeyBackend;
 pub use config::ApiKeyConfig;
 pub use types::{ApiKeyCreated, ApiKeyMeta, CreateKeyRequest};
 pub(crate) use types::ApiKeyRecord;
