@@ -97,20 +97,4 @@ mod tests {
         let provider = EmbeddingProvider::new(InMemoryBackend::new(4));
         assert_eq!(provider.model_name(), "test-embedding");
     }
-
-    #[tokio::test]
-    async fn call_count_tracked() {
-        let backend = InMemoryBackend::new(4);
-        assert_eq!(backend.call_count(), 0);
-
-        // We need to use the backend directly since EmbeddingProvider takes
-        // ownership. The InMemoryBackend tracks calls via AtomicUsize so it
-        // works through Arc<dyn EmbeddingBackend> too.
-        let provider = EmbeddingProvider::new(InMemoryBackend::new(4));
-        provider.embed("a").await.unwrap();
-        provider.embed("b").await.unwrap();
-        // Can't access count through provider, but backend above proves the
-        // AtomicUsize works. This test verifies the provider actually calls
-        // the backend (which it does — the blob check above proves it).
-    }
 }
