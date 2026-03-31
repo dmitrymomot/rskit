@@ -96,7 +96,7 @@ modo is a single Rust crate with zero proc macros. Everything is explicit:
 
 Optional modules are behind feature flags (`db` [default], `session`, `job`,
 `http-client`, `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`,
-`dns`, `geolocation`, `qrcode`, `sentry`, `apikey`, `test-helpers`). Core modules
+`dns`, `geolocation`, `qrcode`, `sentry`, `apikey`, `tier`, `test-helpers`). Core modules
 (flash, RBAC, cron, cache, encoding, tenant, IP) are always available.
 
 ## Minimal App Wiring Pattern
@@ -177,6 +177,7 @@ All paths are relative to the `references/` directory inside this skill folder.
 | Audit logging (record events, query with cursor pagination)                                         | `references/audit.md`       |
 | API keys (issuance, verification, scoping, middleware, touch throttling)                             | `references/apikey.md`      |
 | Text-to-vector embeddings (OpenAI, Gemini, Mistral, Voyage providers, f32 blob conversion)         | `references/embed.md`       |
+| Tier-based feature gating (plan-based feature toggles, usage limits, guards)                       | `references/tier.md`        |
 
 ## Common Multi-Module Workflows
 
@@ -195,6 +196,7 @@ then domain-specific files add the module details.
 | SSE real-time updates                       | `conventions.md` -> `handlers.md` -> `sse.md`                             |
 | Full-stack feature (DB -> API -> job -> email) | `conventions.md` -> `database.md` -> `handlers.md` -> `jobs.md` -> `email.md` |
 | API key protected endpoints                    | `conventions.md` -> `handlers.md` -> `apikey.md`                               |
+| Feature-gated SaaS routes                      | `conventions.md` -> `handlers.md` -> `tier.md`                                 |
 
 ## Relationship to CLAUDE.md
 

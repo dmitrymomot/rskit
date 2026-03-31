@@ -15,7 +15,7 @@
 //!
 //! Enable optional modules via feature flags: `http-client`, `templates`,
 //! `auth`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`,
-//! `qrcode`, `sentry`.
+//! `qrcode`, `sentry`, `apikey`, `text-embedding`, `tier`.
 //!
 //! Or enable everything:
 //!
@@ -83,6 +83,9 @@ pub mod dns;
 
 #[cfg(feature = "apikey")]
 pub mod apikey;
+
+#[cfg(feature = "tier")]
+pub mod tier;
 
 #[cfg(feature = "geolocation")]
 pub mod geolocation;
@@ -157,6 +160,11 @@ pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verifi
 pub use apikey::{
     ApiKeyBackend, ApiKeyConfig, ApiKeyCreated, ApiKeyLayer, ApiKeyMeta, ApiKeyRecord, ApiKeyStore,
     CreateKeyRequest, require_scope,
+};
+
+#[cfg(feature = "tier")]
+pub use tier::{
+    FeatureAccess, TierBackend, TierInfo, TierLayer, TierResolver, require_feature, require_limit,
 };
 
 #[cfg(feature = "geolocation")]
