@@ -31,6 +31,11 @@ pub struct TierInfo {
 /// provides the trait, wrapper, middleware, and guards.
 pub trait TierBackend: Send + Sync {
     /// Resolve tier information for the given owner.
+    ///
+    /// # Errors
+    ///
+    /// Implementation-defined. Errors are surfaced by
+    /// [`TierLayer`](super::TierLayer) as HTTP error responses.
     fn resolve(
         &self,
         owner_id: &str,
@@ -67,8 +72,11 @@ impl TierInfo {
     /// Get the limit ceiling, returning typed errors for missing or non-limit features.
     ///
     /// Returns `Ok(ceiling)` for `Limit` features.
-    /// Returns `Err(forbidden)` if the feature is missing.
-    /// Returns `Err(internal)` if the feature is a `Toggle` (not a limit).
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::forbidden`](crate::Error::forbidden) if the feature is missing.
+    /// - [`Error::internal`](crate::Error::internal) if the feature is a `Toggle` (not a limit).
     pub fn limit_ceiling(&self, name: &str) -> Result<u64> {
         match self.features.get(name) {
             Some(FeatureAccess::Limit(v)) => Ok(*v),
@@ -84,8 +92,11 @@ impl TierInfo {
     /// Check current usage against limit ceiling.
     ///
     /// Returns `Ok(())` if usage is under the limit.
-    /// Returns `Err(forbidden)` if the feature is missing, disabled, or usage >= limit.
-    /// Returns `Err(internal)` if the feature is a Toggle (not a limit).
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::forbidden`](crate::Error::forbidden) if the feature is missing or usage >= limit.
+    /// - [`Error::internal`](crate::Error::internal) if the feature is a `Toggle` (not a limit).
     pub fn check_limit(&self, name: &str, current: u64) -> Result<()> {
         let ceiling = self.limit_ceiling(name)?;
         if current >= ceiling {
@@ -105,6 +116,10 @@ impl TierResolver {
     }
 
     /// Resolve tier information for an owner.
+    ///
+    /// # Errors
+    ///
+    /// Returns any error produced by the underlying [`TierBackend`].
     pub async fn resolve(&self, owner_id: &str) -> Result<TierInfo> {
         self.0.resolve(owner_id).await
     }

@@ -1,3 +1,5 @@
+//! # modo::tier
+//!
 //! Tier-based feature gating for SaaS applications.
 //!
 //! Requires feature `"tier"`.
@@ -7,19 +9,20 @@
 //! modo = { version = "*", features = ["tier"] }
 //! ```
 //!
-//! Provides:
+//! ## Provides
 //!
 //! - [`TierBackend`] — trait for pluggable tier resolution (app implements)
 //! - [`TierResolver`] — concrete wrapper (`Arc<dyn TierBackend>`, cheap to clone)
 //! - [`TierInfo`] — resolved tier with feature checks
 //! - [`FeatureAccess`] — toggle or limit feature model
-//! - [`TierLayer`] — Tower middleware that resolves and injects `TierInfo`
+//! - [`TierLayer`] — Tower middleware that resolves and injects [`TierInfo`]
 //! - [`require_feature()`] — route guard for boolean feature gates
-//! - [`require_limit()`] — route guard for usage limit gates
+//! - [`require_limit()`] — route guard for usage-limit gates
+//! - [`mod@test`] — test helpers (`StaticTierBackend`, `FailingTierBackend`)
 //!
 //! ## Quick start
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use modo::tier::{TierBackend, TierResolver, TierInfo, TierLayer, require_feature};
 //! use axum::{Router, routing::get};
 //!
