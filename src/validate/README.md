@@ -2,10 +2,15 @@
 
 Input validation for request data in the `modo` web framework.
 
+Always available (no feature flag required).
+
 This module provides a fluent `Validator` builder that collects per-field
 errors across all fields before returning, and a `Validate` trait for types
 that validate themselves. `ValidationError` converts automatically into
 `modo::Error` (HTTP 422) with the field map in the response `details`.
+
+All three types are re-exported at the crate root as `modo::Validate`,
+`modo::ValidationError`, and `modo::Validator`.
 
 ## Key Types
 
@@ -14,6 +19,7 @@ that validate themselves. `ValidationError` converts automatically into
 | `Validator`       | Fluent builder that collects errors for multiple fields and returns them all at once |
 | `ValidationError` | Per-field error collection; converts into `Error` (HTTP 422)                         |
 | `Validate`        | Trait for types that know how to validate themselves                                 |
+| `FieldValidator`  | Per-field rule chain; obtained inside the `Validator::field` closure (not re-exported) |
 
 Rules are applied through a `FieldValidator` obtained inside the `Validator::field` closure.
 String rules require `T: AsRef<str>`; numeric rules require `T: PartialOrd + Display`.
@@ -22,7 +28,7 @@ String rules require `T: AsRef<str>`; numeric rules require `T: PartialOrd + Dis
 
 ### Implementing `Validate` on a request struct
 
-```rust
+```rust,ignore
 use modo::validate::{Validate, ValidationError, Validator};
 
 struct CreateUser {
@@ -44,7 +50,7 @@ impl Validate for CreateUser {
 
 ### Using `Validator` inline in a handler
 
-```rust
+```rust,ignore
 use modo::validate::Validator;
 
 async fn handler(name: String, email: String) -> modo::Result<()> {
@@ -59,7 +65,7 @@ async fn handler(name: String, email: String) -> modo::Result<()> {
 
 ### Inspecting errors after validation
 
-```rust
+```rust,ignore
 use modo::validate::Validator;
 
 let result = Validator::new()

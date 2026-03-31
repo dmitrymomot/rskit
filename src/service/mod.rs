@@ -1,9 +1,13 @@
-//! Service registry and application state.
+//! # modo::service
 //!
-//! This module provides the two types that wire services into an axum application:
+//! Type-map service registry and axum application state.
 //!
-//! - [`Registry`] — a mutable builder used at startup to register services by type.
-//! - [`AppState`] — an immutable, cheaply-cloneable snapshot of the registry that axum
+//! Always available — no feature flag required.
+//!
+//! Provides:
+//! - [`Registry`] — mutable builder used at startup to register services by type.
+//!   Implements `Default`.
+//! - [`AppState`] — immutable, cheaply-cloneable snapshot of the registry that axum
 //!   holds as its application state.
 //!
 //! # Typical startup flow
@@ -24,7 +28,7 @@
 //! ```
 //!
 //! Inside handlers, use the [`Service<T>`](crate::extractor::Service) extractor to
-//! retrieve a registered service:
+//! retrieve a registered service by type:
 //!
 //! ```
 //! use modo::Service;

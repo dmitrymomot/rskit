@@ -1,3 +1,8 @@
+//! Request metadata derived from HTTP headers for session tracking.
+//!
+//! Provides [`SessionMeta`], a snapshot of client information captured when a
+//! session is created, and the [`header_str`] utility for safe header extraction.
+
 use http::HeaderMap;
 
 use super::device::{parse_device_name, parse_device_type};

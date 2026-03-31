@@ -4,6 +4,13 @@ const CROCKFORD: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /// Generates a spec-compliant ULID: 48-bit ms timestamp + 80-bit random,
 /// encoded as 26 Crockford base32 characters (uppercase).
+///
+/// IDs generated later are lexicographically greater than earlier ones,
+/// making them suitable for time-sortable primary keys.
+///
+/// # Panics
+///
+/// Panics if the system clock is set before the Unix epoch.
 pub fn ulid() -> String {
     let ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)

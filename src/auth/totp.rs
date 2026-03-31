@@ -69,6 +69,10 @@ impl Totp {
     }
 
     /// Generates the current TOTP code using the system clock.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the system clock is before the Unix epoch.
     pub fn generate(&self) -> String {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -86,6 +90,12 @@ impl Totp {
 
     /// Verifies `code` against the current time, accepting codes within the
     /// configured window of adjacent time steps.
+    ///
+    /// Comparison is constant-time to prevent timing attacks.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the system clock is before the Unix epoch.
     pub fn verify(&self, code: &str) -> bool {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

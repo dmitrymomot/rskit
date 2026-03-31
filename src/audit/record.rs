@@ -9,16 +9,27 @@ use crate::error::Result;
 /// expanded into `ip`, `user_agent`, `fingerprint` columns.
 #[derive(Debug, Clone, Serialize)]
 pub struct AuditRecord {
+    /// Unique identifier (ULID).
     pub id: String,
+    /// Who performed the action (user ID, API key, `"system"`, etc.).
     pub actor: String,
+    /// Dot-delimited action identifier (e.g. `"doc.deleted"`).
     pub action: String,
+    /// Kind of resource affected (e.g. `"document"`, `"user"`).
     pub resource_type: String,
+    /// Identifier of the affected resource.
     pub resource_id: String,
+    /// Arbitrary JSON payload attached at record time; defaults to `{}`.
     pub metadata: serde_json::Value,
+    /// Client IP address, if provided.
     pub ip: Option<String>,
+    /// Client user-agent string, if provided.
     pub user_agent: Option<String>,
+    /// Client fingerprint, if provided.
     pub fingerprint: Option<String>,
+    /// Tenant identifier for multi-tenant apps.
     pub tenant_id: Option<String>,
+    /// ISO 8601 timestamp of when the event was recorded.
     pub created_at: String,
 }
 

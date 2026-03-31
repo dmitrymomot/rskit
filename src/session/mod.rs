@@ -22,7 +22,7 @@
 //! - [`layer`] — convenience constructor for [`SessionLayer`].
 //! - [`device`] — user-agent parsing helpers for device classification.
 //! - [`fingerprint`] — browser fingerprinting for session hijacking detection.
-//! - [`meta`] — request metadata ([`meta::SessionMeta`]) derived from headers.
+//! - [`meta`] — request metadata ([`meta::SessionMeta`]) and [`meta::header_str`] helper.
 //!
 //! # Quick start
 //!

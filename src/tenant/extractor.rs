@@ -8,12 +8,14 @@ use crate::Error;
 
 use super::traits::HasTenantId;
 
-/// Extractor that provides access to the resolved tenant.
+/// Axum extractor that provides access to the resolved tenant.
 ///
-/// Pulls the resolved tenant from request extensions (inserted by tenant middleware).
-/// Returns 500 if tenant middleware is not applied — this is a developer misconfiguration.
+/// Pulls the resolved tenant from request extensions (inserted by
+/// [`TenantMiddleware`](super::TenantMiddleware)). Returns HTTP 500 if the
+/// middleware has not been applied -- this indicates a developer misconfiguration.
 ///
-/// Use `Option<Tenant<T>>` for routes that work with or without a tenant.
+/// Use `Option<Tenant<T>>` for routes that work with or without a tenant
+/// (the [`OptionalFromRequestParts`] impl returns `Ok(None)` instead of an error).
 pub struct Tenant<T>(pub(crate) Arc<T>);
 
 impl<T> Tenant<T> {

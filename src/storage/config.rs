@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct BucketConfig {
-    /// Name used as the lookup key in `Buckets`. Ignored by `Storage::new()`.
+    /// Name used as the lookup key in [`Buckets`](super::Buckets). Ignored by [`Storage::new()`](super::Storage::new).
     pub name: String,
     /// S3 bucket name.
     pub bucket: String,
@@ -19,7 +19,7 @@ pub struct BucketConfig {
     pub access_key: String,
     /// Secret access key.
     pub secret_key: String,
-    /// Base URL for public (non-signed) file URLs. `None` means `url()` will error.
+    /// Base URL for public (non-signed) file URLs. `None` means [`Storage::url()`](super::Storage::url) will error.
     pub public_url: Option<String>,
     /// Maximum file size in human-readable format (e.g. `"10mb"`). `None` disables the limit.
     pub max_file_size: Option<String>,

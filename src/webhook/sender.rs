@@ -81,6 +81,14 @@ impl WebhookSender {
     /// - `id`: unique message ID for idempotency (e.g. `msg_<ulid>`)
     /// - `body`: raw request body (typically JSON)
     /// - `secrets`: one or more signing secrets; at least one is required
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) when:
+    /// - `secrets` is empty (400 Bad Request)
+    /// - `id` is empty (400 Bad Request)
+    /// - `url` is not a valid URI (400 Bad Request)
+    /// - the HTTP request fails (network error, timeout, etc.)
     pub async fn send(
         &self,
         url: &str,

@@ -4,13 +4,26 @@ Transactional email with Markdown templates, SMTP delivery, and optional LRU cac
 
 Requires feature `"email"`.
 
-## Features
-
-| Feature      | Enables                                                              |
-| ------------ | -------------------------------------------------------------------- |
-| `email`      | Core email module                                                    |
+```toml
+[dependencies]
+modo = { version = "0.2", features = ["email"] }
+```
 
 `Mailer::with_stub_transport` is available with the `test-helpers` feature or in `#[cfg(test)]` blocks.
+
+## Key types
+
+| Type | Description |
+| -------------------------------- | -------------------------------------------------- |
+| `Mailer` | Renders templates and delivers email over SMTP |
+| `EmailConfig` | Top-level configuration (deserializes from YAML) |
+| `SmtpConfig` / `SmtpSecurity` | SMTP connection settings and TLS mode |
+| `SendEmail` | Builder for composing an outgoing email |
+| `SenderProfile` | Per-message `From` / `Reply-To` override |
+| `RenderedEmail` | Output of `Mailer::render` (subject, HTML, text) |
+| `TemplateSource` | Trait for pluggable template loaders |
+| `FileSource` / `CachedSource<S>` | Filesystem loader and LRU-caching wrapper |
+| `ButtonType` | Button colour variants (`Primary`, `Danger`, etc.) |
 
 ## Usage
 
@@ -54,7 +67,7 @@ Hi {{name}},
 `layout` defaults to `"base"` (built-in responsive HTML layout with dark-mode support).
 Custom layouts are `.html` files in `EmailConfig::layouts_path`.
 
-Locale fallback: `{locale}/{name}.md` → `{default_locale}/{name}.md` → `{name}.md`.
+Locale fallback: `{locale}/{name}.md` -> `{default_locale}/{name}.md` -> `{name}.md`.
 
 ### Button types
 
@@ -128,16 +141,16 @@ email:
         security: starttls # starttls | tls | none
 ```
 
-## Key types
+## Error handling
 
-| Type                             | Description                                        |
-| -------------------------------- | -------------------------------------------------- |
-| `Mailer`                         | Renders templates and delivers email over SMTP     |
-| `EmailConfig`                    | Top-level configuration (deserializes from YAML)   |
-| `SmtpConfig` / `SmtpSecurity`    | SMTP connection settings and TLS mode              |
-| `SendEmail`                      | Builder for composing an outgoing email            |
-| `SenderProfile`                  | Per-message `From` / `Reply-To` override           |
-| `RenderedEmail`                  | Output of `Mailer::render` (subject, HTML, text)   |
-| `TemplateSource`                 | Trait for pluggable template loaders               |
-| `FileSource` / `CachedSource<S>` | Filesystem loader and LRU-caching wrapper          |
-| `ButtonType`                     | Button colour variants (`Primary`, `Danger`, etc.) |
+| Condition | HTTP status | When |
+| --- | --- | --- |
+| Missing frontmatter | 400 Bad Request | Template lacks `---` delimiters or `subject` field |
+| Invalid address | 400 Bad Request | Malformed `To`, `Cc`, `Bcc`, `From`, or `Reply-To` address |
+| No recipients | 400 Bad Request | `SendEmail::to` list is empty at send time |
+| SMTP auth mismatch | 400 Bad Request | Only one of `username`/`password` is set |
+| Template not found | 404 Not Found | Template file missing for the given name and locale |
+| Layout not found | 404 Not Found | Requested layout name not in built-in or custom layouts |
+| SMTP transport error | 500 Internal | Failed to build or connect to the SMTP server |
+| SMTP delivery error | 500 Internal | Server accepted connection but rejected the message |
+| Frontmatter parse error | 500 Internal | YAML in frontmatter is syntactically invalid |

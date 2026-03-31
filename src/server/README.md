@@ -4,14 +4,13 @@ HTTP server startup and graceful shutdown for the modo framework.
 
 ## Overview
 
-The module exposes two items:
+The module exposes three items:
 
 - `Config` — bind address and shutdown timeout, loaded from the `server` YAML section.
 - `http(router, config)` — binds a TCP port, starts serving on a background task, and
   returns an `HttpServer` handle.
-
-`HttpServer` implements the `Task` trait, so it integrates directly with the `modo::run!`
-macro for coordinated, signal-driven shutdown.
+- `HttpServer` — opaque handle to the running server; implements the `Task` trait, so it
+  integrates directly with the `modo::run!` macro for coordinated, signal-driven shutdown.
 
 ## Usage
 
@@ -74,9 +73,9 @@ YAML example:
 
 ```yaml
 server:
-    host: 0.0.0.0
-    port: ${PORT:8080}
-    shutdown_timeout_secs: 30
+  host: 0.0.0.0
+  port: ${PORT:8080}
+  shutdown_timeout_secs: 30
 ```
 
 ## Key Types

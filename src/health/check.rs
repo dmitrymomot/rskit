@@ -8,11 +8,15 @@ use crate::Result;
 /// Implement this trait for types that can verify their own health (e.g.,
 /// database pools, cache connections). The check should be fast and
 /// non-destructive.
+///
+/// When the `db` feature is enabled, [`crate::db::Database`] implements this
+/// trait automatically.
 pub trait HealthCheck: Send + Sync + 'static {
     /// Run the health check.
     ///
-    /// Returns `Ok(())` if the service is healthy, or an error describing
-    /// the failure.
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] if the service is unhealthy or unreachable.
     fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
 }
 
@@ -31,8 +35,9 @@ where
 
 /// A collection of named health checks.
 ///
-/// Built with a fluent API and registered in the service registry. The
-/// readiness endpoint runs all checks concurrently and reports failures.
+/// Built with a fluent API and registered in the
+/// [`service::Registry`](crate::service::Registry). The readiness endpoint
+/// runs all checks concurrently and reports failures.
 ///
 /// # Example
 ///
@@ -53,13 +58,15 @@ impl HealthChecks {
         Self { checks: Vec::new() }
     }
 
-    /// Register a named health check from a trait impl.
+    /// Register a named [`HealthCheck`] implementation under the given name.
     pub fn check(mut self, name: &str, c: impl HealthCheck) -> Self {
         self.checks.push((name.to_owned(), Arc::new(c)));
         self
     }
 
-    /// Register a named health check from a closure.
+    /// Register a named health check from an async closure.
+    ///
+    /// The closure must return [`crate::Result<()>`].
     pub fn check_fn<F, Fut>(mut self, name: &str, f: F) -> Self
     where
         F: Fn() -> Fut + Send + Sync + 'static,

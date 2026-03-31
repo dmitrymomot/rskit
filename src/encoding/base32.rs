@@ -1,3 +1,5 @@
+//! RFC 4648 base32 encoding and decoding without padding.
+
 const ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 /// Encodes `bytes` using RFC 4648 base32 (alphabet `A–Z`, `2–7`), without padding.

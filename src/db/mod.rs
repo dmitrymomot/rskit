@@ -63,20 +63,18 @@
 //! ## Quick start
 //!
 //! ```rust,ignore
-//! use modo::db;
+//! use modo::db::{self, ConnExt, ConnQueryExt};
 //!
 //! // Connect with defaults (data/app.db, WAL mode, FK on)
 //! let db = db::connect(&db::Config::default()).await?;
 //!
 //! // Use query helpers via ConnQueryExt
-//! use db::ConnQueryExt;
 //! let user: User = db.conn().query_one(
 //!     "SELECT id, name FROM users WHERE id = ?1",
 //!     libsql::params!["user_abc"],
 //! ).await?;
 //!
 //! // Or use the SelectBuilder for filtered, paginated queries
-//! use db::ConnExt; // provides .select()
 //! let page = db.conn()
 //!     .select("SELECT id, name FROM users")
 //!     .filter(validated_filter)

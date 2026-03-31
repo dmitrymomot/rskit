@@ -32,7 +32,7 @@ A collection of Tower-compatible middleware layers covering common cross-cutting
 
 ### Compression, request IDs, and tracing
 
-```rust
+```rust,ignore
 use axum::Router;
 use axum::routing::get;
 use modo::middleware::{catch_panic, compression, request_id, tracing};
@@ -47,7 +47,7 @@ let app = Router::new()
 
 ### CORS
 
-```rust
+```rust,ignore
 use modo::middleware::{CorsConfig, cors, cors_with, subdomains};
 
 // Static allow-list
@@ -60,7 +60,7 @@ let layer = cors_with(&config, subdomains("example.com"));
 
 ### CSRF protection
 
-```rust
+```rust,ignore
 use modo::middleware::{csrf, CsrfConfig};
 use modo::cookie::Key;
 
@@ -73,7 +73,7 @@ Handlers receive the token via `CsrfToken` in request extensions. Unsafe methods
 
 ### Security headers
 
-```rust
+```rust,ignore
 use modo::middleware::{security_headers, SecurityHeadersConfig};
 
 let config = SecurityHeadersConfig {
@@ -86,7 +86,7 @@ let layer = security_headers(&config).unwrap();
 
 ### Error handler
 
-```rust
+```rust,ignore
 use axum::response::IntoResponse;
 use http::request::Parts;
 use modo::middleware::error_handler;
@@ -102,7 +102,7 @@ The handler fires whenever a `modo::Error` is present in response extensions —
 
 ### Rate limiting
 
-```rust
+```rust,ignore
 use tokio_util::sync::CancellationToken;
 use modo::middleware::{rate_limit, rate_limit_with, GlobalKeyExtractor, RateLimitConfig};
 
@@ -120,7 +120,7 @@ When `use_headers` is `true` (default), allowed responses carry `x-ratelimit-lim
 
 ### Custom key extractor
 
-```rust
+```rust,ignore
 use http::Request;
 use modo::middleware::{KeyExtractor, rate_limit_with, RateLimitConfig};
 use tokio_util::sync::CancellationToken;

@@ -65,7 +65,12 @@ impl TestSession {
     /// Create a `TestSession` with default [`SessionConfig`] and a
     /// test-suitable [`CookieConfig`] (insecure, lax same-site, 64-char secret).
     ///
-    /// Creates the `sessions` table on `db`. Panics on failure.
+    /// Creates the `sessions` table on `db`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the sessions table cannot be created or the cookie key
+    /// cannot be derived.
     pub async fn new(db: &TestDb) -> Self {
         let cookie_config = CookieConfig {
             secret: "a".repeat(64),
@@ -78,7 +83,12 @@ impl TestSession {
 
     /// Create a `TestSession` with explicit [`SessionConfig`] and [`CookieConfig`].
     ///
-    /// Creates the `sessions` table on `db`. Panics on failure.
+    /// Creates the `sessions` table on `db`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the sessions table cannot be created or the cookie key
+    /// cannot be derived.
     pub async fn with_config(
         db: &TestDb,
         session_config: SessionConfig,
@@ -106,6 +116,10 @@ impl TestSession {
     /// signed cookie string (e.g. `"_session=<signed-value>"`).
     ///
     /// Pass the returned value as the `cookie` header in subsequent requests.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the session cannot be created in the store.
     pub async fn authenticate(&self, user_id: &str) -> String {
         self.authenticate_with(user_id, serde_json::json!({})).await
     }
@@ -114,6 +128,10 @@ impl TestSession {
     /// signed cookie string.
     ///
     /// Pass the returned value as the `cookie` header in subsequent requests.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the session cannot be created in the store.
     pub async fn authenticate_with(&self, user_id: &str, data: serde_json::Value) -> String {
         let meta = SessionMeta::from_headers("127.0.0.1".to_string(), "", "", "");
 

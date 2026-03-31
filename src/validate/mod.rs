@@ -1,14 +1,26 @@
+//! # modo::validate
+//!
 //! Input validation for request data.
 //!
-//! This module provides a fluent [`Validator`] builder that collects per-field
-//! errors and returns them all at once as a [`ValidationError`], and a
-//! [`Validate`] trait for types that validate themselves.
+//! Always available (no feature flag required).
+//!
+//! Provides:
+//! - [`Validator`] — fluent builder that collects per-field validation errors
+//! - [`ValidationError`] — per-field error collection; converts into [`crate::Error`] (HTTP 422)
+//! - [`Validate`] — trait for types that validate themselves
+//!
+//! Field rules are applied through a `FieldValidator` obtained inside the
+//! [`Validator::field`] closure. String rules require `T: AsRef<str>`; numeric
+//! rules require `T: PartialOrd + Display`.
 //!
 //! [`ValidationError`] converts automatically into [`crate::Error`] via the
 //! `From` impl, producing an HTTP 422 Unprocessable Entity response whose
 //! `details` field contains the per-field error map.
 //!
-//! # Example
+//! All three types are re-exported at the crate root as [`crate::Validate`],
+//! [`crate::ValidationError`], and [`crate::Validator`].
+//!
+//! ## Quick start
 //!
 //! ```rust,no_run
 //! use modo::validate::{Validate, ValidationError, Validator};

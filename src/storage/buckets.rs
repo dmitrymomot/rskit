@@ -24,8 +24,12 @@ impl Clone for Buckets {
 impl Buckets {
     /// Create from a list of bucket configs.
     ///
-    /// Each config must have a unique `name`. Returns an error on duplicates
-    /// or invalid config.
+    /// Each config must have a unique, non-empty `name` field.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any config has an empty `name`, if names are
+    /// duplicated, or if any individual [`BucketConfig`] fails validation.
     pub fn new(configs: &[BucketConfig]) -> Result<Self> {
         let mut map = HashMap::with_capacity(configs.len());
         for config in configs {
@@ -48,7 +52,9 @@ impl Buckets {
         })
     }
 
-    /// Get a `Storage` by name (cloned — cheap `Arc` clone).
+    /// Get a [`Storage`] by name (cloned -- cheap `Arc` clone).
+    ///
+    /// # Errors
     ///
     /// Returns an error if no bucket with that name is configured.
     pub fn get(&self, name: &str) -> Result<Storage> {

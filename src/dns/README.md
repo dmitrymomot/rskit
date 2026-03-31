@@ -12,7 +12,7 @@ This module is compiled only when the `dns` feature is enabled.
 
 ```toml
 [dependencies]
-modo = { version = "0.1", features = ["dns"] }
+modo = { version = "0.2", features = ["dns"] }
 ```
 
 ## Key types
@@ -27,17 +27,20 @@ modo = { version = "0.1", features = ["dns"] }
 
 ## Configuration
 
-```rust
+```rust,ignore
 use modo::dns::DnsConfig;
 
-let config = DnsConfig {
-    nameserver: "8.8.8.8:53".into(), // or "8.8.8.8" — port 53 appended automatically
-    txt_prefix: "_modo-verify".into(), // default
-    timeout_ms: 5000,                  // default
-};
+// Construct with a nameserver address (defaults: txt_prefix = "_modo-verify", timeout_ms = 5000)
+let config = DnsConfig::new("8.8.8.8:53");
+
+// Or override individual fields after construction
+let mut config = DnsConfig::new("8.8.8.8");
+config.txt_prefix = "_myapp-verify".into();
+config.timeout_ms = 3000;
 ```
 
-The struct deserializes from YAML. `txt_prefix` and `timeout_ms` are optional:
+The struct also implements `Default` (nameserver `"8.8.8.8"`) and deserializes from
+YAML via serde. `txt_prefix` and `timeout_ms` are optional:
 
 ```yaml
 dns:
@@ -50,7 +53,7 @@ dns:
 
 ### Step 1 — generate a token and show it to the user
 
-```rust
+```rust,ignore
 use modo::dns::generate_verification_token;
 
 let token = generate_verification_token(); // e.g. "0r9xkbf2a1m4z"
@@ -62,14 +65,10 @@ let token = generate_verification_token(); // e.g. "0r9xkbf2a1m4z"
 ### Step 2 — verify ownership
 
 ```rust,no_run
-use modo::dns::{DnsConfig, DomainStatus, DomainVerifier, generate_verification_token};
+use modo::dns::{DnsConfig, DomainStatus, DomainVerifier};
 
 async fn verify(token: &str) -> modo::Result<()> {
-    let config = DnsConfig {
-        nameserver: "8.8.8.8:53".into(),
-        txt_prefix: "_modo-verify".into(),
-        timeout_ms: 5000,
-    };
+    let config = DnsConfig::new("8.8.8.8:53");
     let verifier = DomainVerifier::from_config(&config)?;
 
     // Check TXT record: returns true when _modo-verify.example.com TXT == token
@@ -98,7 +97,7 @@ async fn verify(token: &str) -> modo::Result<()> {
 `DnsError` variants are attached to `modo::Error` using `.chain()` and
 `.with_code()` so that the error kind survives the response pipeline:
 
-```rust,no_run
+```rust,ignore
 use modo::dns::DnsError;
 
 // Before the response is serialized:
@@ -123,7 +122,7 @@ if err.error_code() == Some("dns:timeout") { /* ... */ }
 
 Register `DomainVerifier` in the service registry so handlers can extract it:
 
-```rust,no_run
+```rust,ignore
 use modo::service::Registry;
 use modo::dns::{DnsConfig, DomainVerifier};
 
@@ -141,7 +140,7 @@ let app = axum::Router::new()
 
 In a handler, extract the verifier with `Service<DomainVerifier>`:
 
-```rust,no_run
+```rust,ignore
 use modo::Service;
 use modo::dns::DomainVerifier;
 

@@ -37,6 +37,9 @@ pub fn require_scope(scope: &str) -> ScopeLayer {
 }
 
 /// Tower [`Layer`] that checks for a required scope on the verified API key.
+///
+/// Created by [`require_scope`]. Apply as a `.route_layer()` after
+/// [`super::ApiKeyLayer`].
 #[derive(Clone)]
 pub struct ScopeLayer {
     scope: String,

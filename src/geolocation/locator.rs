@@ -34,7 +34,10 @@ impl Clone for GeoLocator {
 impl GeoLocator {
     /// Open the mmdb file specified in `config` and return a ready locator.
     ///
-    /// Returns an error when `mmdb_path` is empty or the file cannot be opened.
+    /// # Errors
+    ///
+    /// Returns [`Error::internal`](crate::Error::internal) when `mmdb_path` is
+    /// empty or the file cannot be opened.
     pub fn from_config(config: &GeolocationConfig) -> crate::Result<Self> {
         if config.mmdb_path.is_empty() {
             return Err(Error::internal("geolocation mmdb_path is not configured"));
@@ -58,6 +61,11 @@ impl GeoLocator {
     ///
     /// Returns a [`Location`] with all-`None` fields when the IP is not found
     /// in the database (private ranges, loopback addresses, etc.).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::internal`](crate::Error::internal) when the database
+    /// lookup or record decoding fails.
     pub fn lookup(&self, ip: IpAddr) -> crate::Result<Location> {
         let result = self
             .inner

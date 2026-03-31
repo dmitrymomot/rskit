@@ -9,6 +9,10 @@ const SHORT_ID_LEN: usize = 13;
 /// `u64`, then encodes it as exactly 13 base36 digits. IDs generated later are
 /// lexicographically greater than earlier ones and are suitable for user-visible
 /// codes such as invite links, slugs, and short URLs.
+///
+/// # Panics
+///
+/// Panics if the system clock is set before the Unix epoch.
 pub fn short() -> String {
     let ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)

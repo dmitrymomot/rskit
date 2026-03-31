@@ -1,14 +1,14 @@
+//! # modo::extractor
+//!
 //! Request extractors for the modo web framework.
 //!
-//! All extractors in this module integrate with [`crate::sanitize::Sanitize`]:
-//! [`JsonRequest`], [`FormRequest`], [`Query`], and [`MultipartRequest`] all
-//! call [`crate::sanitize::Sanitize::sanitize`] on the deserialized value before
-//! returning it, so whitespace trimming and other normalization happen
-//! automatically.
+//! All sanitizing extractors call [`crate::sanitize::Sanitize::sanitize`] on
+//! the deserialized value before returning it, so whitespace trimming and other
+//! normalization happen automatically.
 //!
 //! [`Path`] is re-exported directly from axum and behaves identically.
 //!
-//! # Extractors overview
+//! ## Extractors
 //!
 //! | Extractor | Source | Trait bound |
 //! |---|---|---|
@@ -18,6 +18,15 @@
 //! | [`MultipartRequest<T>`] | `multipart/form-data` body | `T: DeserializeOwned + Sanitize` |
 //! | [`Path`] | URL path parameters | `T: DeserializeOwned` |
 //! | [`Service<T>`] | Service registry | `T: Send + Sync + 'static` |
+//! | [`ClientInfo`] | Client IP, user-agent, fingerprint | — |
+//!
+//! ## Multipart helpers
+//!
+//! | Type | Purpose |
+//! |---|---|
+//! | [`UploadedFile`] | Single file extracted from a multipart field |
+//! | [`Files`] | Map of field names to uploaded files |
+//! | [`UploadValidator`] | Fluent size/content-type validator for [`UploadedFile`] |
 
 mod client_info;
 mod form;

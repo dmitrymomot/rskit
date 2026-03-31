@@ -1,4 +1,4 @@
-# modo::storage
+# storage
 
 S3-compatible object storage for the modo framework. Supports AWS S3, RustFS,
 MinIO, and any provider that implements the S3 API.
@@ -9,9 +9,11 @@ Request signing uses AWS Signature Version 4. Both path-style
 
 ## Feature gate
 
+Requires the `storage` feature flag (which also enables `http-client`):
+
 ```toml
 [dependencies]
-modo = { version = "0.1", features = ["storage"] }
+modo = { version = "0.2", features = ["storage"] }
 ```
 
 The memory backend is available inside `#[cfg(test)]` unit-test blocks and
@@ -82,6 +84,10 @@ let key = storage.put_with(&input, PutOptions {
 ```rust,ignore
 use modo::storage::PutFromUrlInput;
 
+// Using the convenience constructor (filename defaults to None)
+let input = PutFromUrlInput::new("https://example.com/image.png", "downloads/");
+
+// Or construct directly for full control
 let key = storage.put_from_url(&PutFromUrlInput {
     url: "https://example.com/image.png".into(),
     prefix: "downloads/".into(),

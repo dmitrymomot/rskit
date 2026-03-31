@@ -11,8 +11,10 @@ use super::types::ApiKeyRecord;
 /// (key generation, hashing, verification, expiry checks, touch throttling)
 /// lives in [`super::ApiKeyStore`].
 ///
-/// The built-in SQLite implementation is in [`super::sqlite`]. Custom
-/// backends (Postgres, Redis, etc.) implement this trait directly.
+/// The built-in SQLite backend is used automatically by
+/// [`ApiKeyStore::new`](super::ApiKeyStore::new). Custom backends
+/// (Postgres, Redis, etc.) implement this trait and pass an `Arc<dyn
+/// ApiKeyBackend>` to [`ApiKeyStore::from_backend`](super::ApiKeyStore::from_backend).
 pub trait ApiKeyBackend: Send + Sync {
     /// Store a new key record.
     ///

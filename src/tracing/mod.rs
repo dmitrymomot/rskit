@@ -1,10 +1,20 @@
+//! # modo::tracing
+//!
 //! Tracing initialisation and structured logging for modo applications.
 //!
-//! This module configures [`tracing_subscriber`] at application startup.
-//! Call [`init`] once from `main` — typically before starting the HTTP
-//! server — and hold the returned [`TracingGuard`] for the lifetime of
-//! the process. The standard tracing macros ([`info!`], [`debug!`],
-//! [`warn!`], [`error!`], [`trace!`]) are re-exported for convenience.
+//! Configures [`tracing_subscriber`] at application startup. Call [`init`]
+//! once from `main` — typically before starting the HTTP server — and hold
+//! the returned [`TracingGuard`] for the lifetime of the process.
+//!
+//! ## Provides
+//!
+//! | Item | Description |
+//! |------|-------------|
+//! | [`Config`] | Log level, output format, and optional Sentry settings |
+//! | [`init`] | Initialises the global tracing subscriber; returns [`TracingGuard`] |
+//! | [`TracingGuard`] | RAII guard that keeps the subscriber (and Sentry client) alive |
+//! | [`SentryConfig`] | Sentry DSN, environment, and sampling rates (requires `sentry` feature) |
+//! | `info!`, `debug!`, `warn!`, `error!`, `trace!` | Re-exported tracing macros |
 //!
 //! ## Log format
 //!
@@ -21,14 +31,14 @@
 //!
 //! ## Sentry integration
 //!
-//! When compiled with the `sentry` feature, populate `SentryConfig`
-//! inside `Config::sentry` to enable error and performance reporting.
+//! When compiled with the `sentry` feature, populate [`SentryConfig`]
+//! inside [`Config::sentry`] to enable error and performance reporting.
 //! The Sentry SDK is initialised inside [`init`] and flushed when the
 //! [`TracingGuard`] is shut down.
 //!
 //! ## Quick start
 //!
-//! ```no_run
+//! ```rust,no_run
 //! use modo::config::load;
 //! use modo::Config;
 //! use modo::runtime::Task;

@@ -6,7 +6,7 @@ Requires the `sse` feature:
 
 ```toml
 [dependencies]
-modo = { version = "0.1", features = ["sse"] }
+modo = { version = "0.2", features = ["sse"] }
 ```
 
 ## Key Types

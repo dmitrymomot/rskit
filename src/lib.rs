@@ -10,18 +10,19 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = "0.1"
+//! modo = "0.2"
 //! ```
 //!
-//! Enable optional modules via feature flags: `http-client`, `templates`,
-//! `auth`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`,
-//! `qrcode`, `sentry`, `apikey`, `text-embedding`, `tier`.
+//! The `db` feature is enabled by default. Enable additional modules via
+//! feature flags: `session`, `job`, `http-client`, `auth`, `templates`,
+//! `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`, `qrcode`,
+//! `sentry`, `apikey`, `text-embedding`, `tier`.
 //!
 //! Or enable everything:
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "0.1", features = ["full"] }
+//! modo = { version = "0.2", features = ["full"] }
 //! ```
 
 #[cfg(feature = "db")]

@@ -86,6 +86,15 @@ pub fn sign_headers(
 /// Validates that the timestamp is within `tolerance` of now (replay-attack protection),
 /// then tries every `v1,` signature entry against every secret in `secrets`.
 /// Returns `Ok(())` as soon as one combination matches; returns an error if none does.
+///
+/// # Errors
+///
+/// Returns [`Error`](crate::Error) when:
+/// - Any of the three required headers (`webhook-id`, `webhook-timestamp`,
+///   `webhook-signature`) is missing or not valid UTF-8 (400 Bad Request)
+/// - `webhook-timestamp` is not a valid integer (400 Bad Request)
+/// - The timestamp is outside the `tolerance` window (400 Bad Request)
+/// - No signature entry matches any provided secret (400 Bad Request)
 pub fn verify_headers(
     secrets: &[&WebhookSecret],
     headers: &http::HeaderMap,

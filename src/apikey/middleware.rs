@@ -15,10 +15,10 @@ use super::store::ApiKeyStore;
 ///
 /// Reads the raw token from the `Authorization: Bearer <token>` header
 /// (or a custom header), calls [`ApiKeyStore::verify`], and inserts
-/// [`ApiKeyMeta`] into request extensions on success.
+/// [`super::ApiKeyMeta`] into request extensions on success.
 ///
-/// Errors are returned as `modo::Error` — the app's error handler decides
-/// rendering.
+/// Errors are returned as [`crate::Error`] -- the app's error handler
+/// decides rendering.
 pub struct ApiKeyLayer {
     store: ApiKeyStore,
     header: HeaderSource,

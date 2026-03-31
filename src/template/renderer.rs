@@ -47,6 +47,10 @@ pub struct Renderer {
 impl Renderer {
     /// Renders `template` with the given MiniJinja `context` merged with middleware
     /// context, and returns `Html<String>`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the template is not found or rendering fails.
     pub fn html(&self, template: &str, context: minijinja::Value) -> crate::Result<Html<String>> {
         let merged = self.context.merge(context);
         let result = self.engine.render(template, merged)?;
@@ -58,6 +62,11 @@ impl Renderer {
     /// This is the primary method for HTMX-driven partial updates: the full `page`
     /// template is used for initial page loads, while `partial` is used for subsequent
     /// HTMX swaps.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the selected template is not found or
+    /// rendering fails.
     pub fn html_partial(
         &self,
         page: &str,
@@ -70,6 +79,10 @@ impl Renderer {
 
     /// Renders `template` with the given MiniJinja `context` merged with middleware
     /// context, and returns the raw `String` output.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the template is not found or rendering fails.
     pub fn string(&self, template: &str, context: minijinja::Value) -> crate::Result<String> {
         let merged = self.context.merge(context);
         self.engine.render(template, merged)

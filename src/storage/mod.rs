@@ -1,14 +1,16 @@
+//! # modo::storage
+//!
 //! S3-compatible object storage.
 //!
 //! This module provides [`Storage`], a thin facade over S3-compatible backends
 //! (AWS S3, RustFS, MinIO, etc.). Features include upload from bytes or URL,
 //! presigned URLs, configurable ACLs, and file-size limits.
 //!
-//! Requires the `storage` feature flag:
+//! Requires the `storage` feature flag (which also enables `http-client`):
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "0.1", features = ["storage"] }
+//! modo = { version = "0.2", features = ["storage"] }
 //! ```
 //!
 //! # Provides

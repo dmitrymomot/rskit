@@ -15,10 +15,10 @@ use super::path::{generate_key, validate_path};
 #[cfg(any(test, feature = "test-helpers"))]
 use super::memory::MemoryBackend;
 
-/// Input for `Storage::put()` and `Storage::put_with()`.
+/// Input for [`Storage::put()`] and [`Storage::put_with()`].
 ///
-/// Use `PutInput::from_upload()` to build from an `UploadedFile` received
-/// via multipart form data.
+/// Use [`PutInput::from_upload()`] to build from an [`UploadedFile`](crate::extractor::UploadedFile)
+/// received via multipart form data, or [`PutInput::new()`] for direct construction.
 #[non_exhaustive]
 pub struct PutInput {
     /// Raw file bytes.
@@ -61,7 +61,7 @@ impl PutInput {
     }
 }
 
-/// Input for `Storage::put_from_url()` and `Storage::put_from_url_with()`.
+/// Input for [`Storage::put_from_url()`] and [`Storage::put_from_url_with()`].
 #[non_exhaustive]
 pub struct PutFromUrlInput {
     /// Source URL to fetch from (must be http or https).
@@ -111,6 +111,11 @@ impl Storage {
     ///
     /// This allows multiple `Storage` instances (and other modules) to share
     /// the same connection pool and configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if required [`BucketConfig`] fields are missing
+    /// (e.g. empty `bucket` or `endpoint`) or if `max_file_size` is invalid.
     pub fn with_client(config: &BucketConfig, client: crate::http::Client) -> Result<Self> {
         config.validate()?;
 
@@ -140,6 +145,11 @@ impl Storage {
     /// Create from a bucket configuration (builds its own default HTTP client).
     ///
     /// For shared connection pooling, prefer [`Storage::with_client`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if required [`BucketConfig`] fields are missing
+    /// (e.g. empty `bucket` or `endpoint`) or if `max_file_size` is invalid.
     pub fn new(config: &BucketConfig) -> Result<Self> {
         Self::with_client(config, crate::http::Client::default())
     }
@@ -160,11 +170,22 @@ impl Storage {
     }
 
     /// Upload bytes. Returns the generated S3 key.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::payload_too_large`](crate::Error::payload_too_large) if the
+    /// data exceeds the configured `max_file_size`, [`Error::bad_request`](crate::Error::bad_request)
+    /// if the prefix is invalid (empty, absolute, or contains path traversal),
+    /// or [`Error::internal`](crate::Error::internal) if the S3 PUT request fails.
     pub async fn put(&self, input: &PutInput) -> Result<String> {
         self.put_inner(input, &PutOptions::default()).await
     }
 
     /// Upload bytes with custom options. Returns the generated S3 key.
+    ///
+    /// # Errors
+    ///
+    /// Same error conditions as [`Storage::put()`].
     pub async fn put_with(&self, input: &PutInput, opts: PutOptions) -> Result<String> {
         self.put_inner(input, &opts).await
     }
@@ -208,6 +229,10 @@ impl Storage {
     }
 
     /// Delete a single key. No-op if missing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the key path is invalid or the S3 DELETE request fails.
     pub async fn delete(&self, key: &str) -> Result<()> {
         validate_path(key)?;
         match &self.inner.backend {
@@ -219,7 +244,12 @@ impl Storage {
         Ok(())
     }
 
-    /// Delete all keys under prefix. O(n) network calls.
+    /// Delete all keys under a prefix. Issues O(n) network calls (one per key).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the prefix path is invalid, the LIST request fails,
+    /// or any individual DELETE request fails.
     pub async fn delete_prefix(&self, prefix: &str) -> Result<()> {
         validate_path(prefix)?;
         let keys = match &self.inner.backend {
@@ -242,8 +272,13 @@ impl Storage {
 
     /// Public URL (string concatenation, no network call).
     ///
-    /// Requires `public_url` to be set in `BucketConfig`. Returns an error if
+    /// Requires `public_url` to be set in [`BucketConfig`]. Returns an error if
     /// `public_url` is not configured.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the key path is invalid or `public_url` is not set
+    /// in the [`BucketConfig`].
     pub fn url(&self, key: &str) -> Result<String> {
         validate_path(key)?;
         let base = self
@@ -255,6 +290,10 @@ impl Storage {
     }
 
     /// Presigned GET URL with expiry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the key path is invalid or presigned URL generation fails.
     pub async fn presigned_url(&self, key: &str, expires_in: Duration) -> Result<String> {
         validate_path(key)?;
         match &self.inner.backend {
@@ -265,6 +304,10 @@ impl Storage {
     }
 
     /// Check if a key exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the key path is invalid or the S3 HEAD request fails.
     pub async fn exists(&self, key: &str) -> Result<bool> {
         validate_path(key)?;
         match &self.inner.backend {
@@ -278,6 +321,13 @@ impl Storage {
     ///
     /// Redirects are not followed. A hard-coded 30-second timeout applies.
     /// Returns an error when called on the memory backend.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the URL is invalid (not http/https), the fetch
+    /// times out, the response is non-2xx, the downloaded file exceeds
+    /// `max_file_size`, or the subsequent S3 upload fails. Always errors
+    /// on the in-memory backend.
     pub async fn put_from_url(&self, input: &PutFromUrlInput) -> Result<String> {
         self.put_from_url_inner(input, &PutOptions::default()).await
     }
@@ -286,6 +336,10 @@ impl Storage {
     ///
     /// Redirects are not followed. A hard-coded 30-second timeout applies.
     /// Returns an error when called on the memory backend.
+    ///
+    /// # Errors
+    ///
+    /// Same error conditions as [`Storage::put_from_url()`].
     pub async fn put_from_url_with(
         &self,
         input: &PutFromUrlInput,

@@ -2,7 +2,7 @@ use super::facade::PutInput;
 use crate::extractor::UploadedFile;
 
 impl PutInput {
-    /// Build from an `UploadedFile` and a storage prefix.
+    /// Build from an [`UploadedFile`] and a storage prefix.
     pub fn from_upload(file: &UploadedFile, prefix: &str) -> Self {
         let filename = if file.name.is_empty() {
             None

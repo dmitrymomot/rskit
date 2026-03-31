@@ -1,8 +1,19 @@
-//! Domain management for multi-tenant applications.
+//! # modo::tenant::domain
 //!
-//! Provides [`DomainService`] for registering, verifying, and managing custom
-//! domains per tenant. Domains can be flagged for email routing
-//! (`use_for_email`) or HTTP request routing (`use_for_routing`).
+//! Custom domain management for multi-tenant applications.
+//!
+//! Requires features: `db` + `dns`.
+//!
+//! Provides:
+//! - [`DomainService`] — service for registering, verifying, and managing domain claims
+//! - [`DomainClaim`] — a registered domain claim for a tenant
+//! - [`ClaimStatus`] — verification status (`Pending`, `Verified`, `Failed`)
+//! - [`TenantMatch`] — result of a domain-to-tenant lookup
+//! - [`validate_domain()`] — validate and normalize a domain name
+//! - [`extract_email_domain()`] — extract and validate the domain part of an email
+//!
+//! Domains can be flagged for email routing (`use_for_email`) or HTTP request
+//! routing (`use_for_routing`).
 //!
 //! Verification uses DNS TXT records via [`DomainVerifier`](crate::dns::DomainVerifier).
 //! A domain must be verified within 48 hours of registration or it is marked
@@ -173,6 +184,11 @@ impl FromRow for MatchRow {
 /// Returns the trimmed, lowercased domain. Rejects empty strings, domains
 /// without a dot, domains starting or ending with a dot or hyphen, labels
 /// longer than 63 characters, and domains longer than 253 characters.
+///
+/// # Errors
+///
+/// Returns [`Error`](crate::Error) (400 Bad Request) if the domain is
+/// syntactically invalid.
 pub fn validate_domain(domain: &str) -> Result<String> {
     let domain = domain.trim().to_lowercase();
 
@@ -219,6 +235,11 @@ pub fn validate_domain(domain: &str) -> Result<String> {
 ///
 /// Splits on `@` and validates the domain portion. Returns the normalized
 /// domain string.
+///
+/// # Errors
+///
+/// Returns [`Error`](crate::Error) (400 Bad Request) if the email is
+/// malformed or the domain portion is invalid.
 pub fn extract_email_domain(email: &str) -> Result<String> {
     let email = email.trim();
     let parts: Vec<&str> = email.splitn(2, '@').collect();
@@ -274,6 +295,14 @@ impl DomainService {
     /// Validates the domain, generates a verification token, and inserts a
     /// pending claim. The caller should instruct the user to create a DNS TXT
     /// record at `_modo-verify.{domain}` with the returned token value.
+    ///
+    /// If a pending claim already exists for this tenant + domain pair, it is
+    /// returned instead of creating a duplicate.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the domain is invalid (400) or the
+    /// database insert fails (500).
     pub async fn register(&self, tenant_id: &str, domain: &str) -> Result<DomainClaim> {
         let domain = validate_domain(domain)?;
 
@@ -335,6 +364,12 @@ impl DomainService {
     /// for a TXT record at `_modo-verify.{domain}` matching the stored token.
     /// On success the claim status is updated to `verified`; on expiry it is
     /// updated to `failed`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the claim is not found (404),
+    /// the verification window has expired (400), the DNS record does not
+    /// match (400), or the database/DNS query fails (500).
     pub async fn verify(&self, id: &str) -> Result<DomainClaim> {
         let row: DomainRow = self
             .inner
@@ -403,6 +438,10 @@ impl DomainService {
     }
 
     /// Remove a domain claim by ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the database delete fails.
     pub async fn remove(&self, id: &str) -> Result<()> {
         self.inner
             .db
@@ -418,7 +457,10 @@ impl DomainService {
 
     /// Enable the email routing flag for a verified domain.
     ///
-    /// Returns an error if the domain is not in `verified` status.
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the domain is not in `verified`
+    /// status (400) or the database update fails.
     pub async fn enable_email(&self, id: &str) -> Result<()> {
         self.require_verified(id).await?;
         self.inner
@@ -434,6 +476,10 @@ impl DomainService {
     }
 
     /// Disable the email routing flag for a domain.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the database update fails.
     pub async fn disable_email(&self, id: &str) -> Result<()> {
         self.inner
             .db
@@ -449,7 +495,10 @@ impl DomainService {
 
     /// Enable the HTTP request routing flag for a verified domain.
     ///
-    /// Returns an error if the domain is not in `verified` status.
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the domain is not in `verified`
+    /// status (400) or the database update fails.
     pub async fn enable_routing(&self, id: &str) -> Result<()> {
         self.require_verified(id).await?;
         self.inner
@@ -465,6 +514,10 @@ impl DomainService {
     }
 
     /// Disable the HTTP request routing flag for a domain.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the database update fails.
     pub async fn disable_routing(&self, id: &str) -> Result<()> {
         self.inner
             .db
@@ -483,6 +536,11 @@ impl DomainService {
     ///
     /// Extracts the domain from the email, then queries for a verified domain
     /// with `use_for_email = 1`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the email is malformed (400) or the
+    /// database query fails.
     pub async fn lookup_email_domain(&self, email: &str) -> Result<Option<TenantMatch>> {
         let domain = extract_email_domain(email)?;
         let row: Option<MatchRow> = self
@@ -503,6 +561,11 @@ impl DomainService {
     }
 
     /// Look up the tenant that owns a verified, routing-enabled domain.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the domain is invalid (400) or the
+    /// database query fails.
     pub async fn lookup_routing_domain(&self, domain: &str) -> Result<Option<TenantMatch>> {
         let domain = validate_domain(domain)?;
         let row: Option<MatchRow> = self
@@ -526,6 +589,11 @@ impl DomainService {
     ///
     /// Convenience wrapper around [`lookup_routing_domain`](Self::lookup_routing_domain)
     /// that returns only the tenant ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the domain is invalid (400) or the
+    /// database query fails.
     pub async fn resolve_tenant(&self, domain: &str) -> Result<Option<String>> {
         Ok(self
             .lookup_routing_domain(domain)
@@ -535,8 +603,12 @@ impl DomainService {
 
     /// List all domain claims for a tenant.
     ///
-    /// Pending claims older than 48 hours are returned with `Failed` status
+    /// Pending claims older than 48 hours are returned with [`ClaimStatus::Failed`]
     /// (computed in-memory, not persisted until [`verify`](Self::verify) is called).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the database query fails.
     pub async fn list(&self, tenant_id: &str) -> Result<Vec<DomainClaim>> {
         let rows: Vec<DomainRow> = self
             .inner

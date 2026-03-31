@@ -1,6 +1,6 @@
 /// Access control for uploaded objects.
 ///
-/// Maps to the S3 `x-amz-acl` header. `None` in `PutOptions` means
+/// Maps to the S3 `x-amz-acl` header. `None` in [`PutOptions`] means
 /// the bucket default applies.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -20,7 +20,8 @@ impl Acl {
     }
 }
 
-/// Options for `Storage::put_with()` and `Storage::put_from_url_with()`.
+/// Options for [`Storage::put_with()`](super::Storage::put_with) and
+/// [`Storage::put_from_url_with()`](super::Storage::put_from_url_with).
 #[non_exhaustive]
 #[derive(Debug, Clone, Default)]
 pub struct PutOptions {
@@ -28,7 +29,7 @@ pub struct PutOptions {
     pub content_disposition: Option<String>,
     /// Sets the `Cache-Control` header (e.g. `"max-age=31536000"`).
     pub cache_control: Option<String>,
-    /// Overrides the content type from `PutInput`. If `None`, `PutInput.content_type` is used.
+    /// Overrides the content type from [`PutInput`](super::PutInput). If `None`, the `PutInput.content_type` is used.
     pub content_type: Option<String>,
     /// Sets the S3 `x-amz-acl` header. If `None`, the bucket default applies.
     pub acl: Option<Acl>,

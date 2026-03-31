@@ -13,6 +13,10 @@ use super::extract::extract_client_ip;
 
 /// Tower layer that extracts the client IP address and inserts
 /// [`ClientIp`] into request extensions.
+///
+/// Apply with `Router::layer()`. When trusted proxies are configured,
+/// `X-Forwarded-For` and `X-Real-IP` headers are only honoured for
+/// connections originating from a trusted CIDR range.
 pub struct ClientIpLayer {
     trusted_proxies: Arc<Vec<ipnet::IpNet>>,
 }

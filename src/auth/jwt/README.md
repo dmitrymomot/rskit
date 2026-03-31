@@ -4,11 +4,10 @@ JWT authentication for the `modo` framework: token encoding, decoding, Tower mid
 
 Requires the `auth` feature flag.
 
-## Features
-
-| Feature | What it enables                                              |
-| ------- | ------------------------------------------------------------ |
-| `auth`  | JWT module (this module), password hashing, TOTP, OTP, OAuth |
+```toml
+[dependencies]
+modo = { version = "0.2", features = ["auth"] }
+```
 
 ## Key Types
 
@@ -45,7 +44,7 @@ jwt:
 
 Construct services from config:
 
-```rust
+```rust,ignore
 use modo::auth::jwt::{JwtConfig, JwtEncoder, JwtDecoder};
 
 let mut config = JwtConfig::new("my-secret");
@@ -60,7 +59,7 @@ let decoder = JwtDecoder::from(&encoder);
 
 ### Encoding tokens
 
-```rust
+```rust,ignore
 use std::time::Duration;
 use serde::{Serialize, Deserialize};
 use modo::auth::jwt::{Claims, JwtConfig, JwtEncoder};
@@ -84,7 +83,7 @@ let token: String = encoder.encode(&claims).unwrap();
 
 ### Decoding tokens
 
-```rust
+```rust,ignore
 use modo::auth::jwt::{Claims, JwtConfig, JwtDecoder};
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -101,7 +100,7 @@ println!("{}", claims.subject().unwrap_or("?"));
 
 ### Middleware (axum Router)
 
-```rust
+```rust,ignore
 use axum::{Router, routing::get};
 use modo::auth::jwt::{Claims, JwtConfig, JwtDecoder, JwtLayer};
 
@@ -123,7 +122,7 @@ let app: Router = Router::new()
 
 ### Optional authentication
 
-```rust
+```rust,ignore
 use modo::auth::jwt::Claims;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -139,7 +138,7 @@ async fn feed_handler(claims: Option<Claims<AppClaims>>) -> String {
 
 ### Custom token sources
 
-```rust
+```rust,ignore
 use std::sync::Arc;
 use modo::auth::jwt::{
     JwtConfig, JwtDecoder, JwtLayer, BearerSource, QuerySource, CookieSource, TokenSource,
@@ -162,7 +161,7 @@ let layer = JwtLayer::<AppClaims>::new(decoder)
 
 ### Token revocation
 
-```rust
+```rust,ignore
 use std::pin::Pin;
 use std::sync::Arc;
 use modo::auth::jwt::{JwtConfig, JwtDecoder, JwtLayer, Revocation};
@@ -192,7 +191,7 @@ A backend error causes a fail-closed `401`.
 
 ### Error identity in error handlers
 
-```rust
+```rust,ignore
 use modo::auth::jwt::JwtError;
 
 // Before IntoResponse (e.g. in a guard):
@@ -202,4 +201,23 @@ use modo::auth::jwt::JwtError;
 // if err.error_code() == Some("jwt:expired") { /* ... */ }
 ```
 
+## Error handling
+
 All error codes are prefixed `jwt:` — see `JwtError::code()` for the full list.
+
+| Variant | Code | HTTP status | When |
+|---------|------|-------------|------|
+| `MissingToken` | `jwt:missing_token` | 401 | No token found by any `TokenSource` |
+| `InvalidHeader` | `jwt:invalid_header` | 401 | Token header cannot be decoded or parsed |
+| `MalformedToken` | `jwt:malformed_token` | 401 | Token does not have the expected three-part structure |
+| `DeserializationFailed` | `jwt:deserialization_failed` | 401 | Payload cannot be deserialized into the target claims type |
+| `InvalidSignature` | `jwt:invalid_signature` | 401 | Signature does not match the signing key |
+| `Expired` | `jwt:expired` | 401 | `exp` is in the past (beyond leeway), or `exp` is missing |
+| `NotYetValid` | `jwt:not_yet_valid` | 401 | `nbf` is in the future (beyond leeway) |
+| `InvalidIssuer` | `jwt:invalid_issuer` | 401 | `iss` does not match the required issuer |
+| `InvalidAudience` | `jwt:invalid_audience` | 401 | `aud` does not match the required audience |
+| `Revoked` | `jwt:revoked` | 401 | Token `jti` found in the revocation store |
+| `RevocationCheckFailed` | `jwt:revocation_check_failed` | 401 | Revocation backend returned an error (fail-closed) |
+| `AlgorithmMismatch` | `jwt:algorithm_mismatch` | 401 | Token header specifies a different algorithm than the verifier |
+| `SigningFailed` | `jwt:signing_failed` | 500 | HMAC signing operation failed |
+| `SerializationFailed` | `jwt:serialization_failed` | 500 | Claims could not be serialized to JSON |

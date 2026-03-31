@@ -26,7 +26,9 @@ use super::ValidationError;
 pub trait Validate {
     /// Validate this value, returning all field-level errors at once.
     ///
-    /// Returns `Ok(())` when all fields are valid, or `Err(ValidationError)`
-    /// containing every failing field and its error messages.
+    /// # Errors
+    ///
+    /// Returns [`ValidationError`] containing every failing field and its
+    /// error messages when one or more fields are invalid.
     fn validate(&self) -> Result<(), ValidationError>;
 }

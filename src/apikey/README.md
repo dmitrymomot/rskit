@@ -11,18 +11,35 @@ modo = { version = "*", features = ["apikey"] }
 
 ## Key types
 
+### Core
+
 | Type | Purpose |
 |------|---------|
-| [`ApiKeyStore`] | Tenant-scoped store: create, verify, revoke, list, refresh keys |
-| [`ApiKeyConfig`] | YAML-deserializable configuration (prefix, secret length, touch threshold) |
-| [`ApiKeyBackend`] | Trait for pluggable storage backends (SQLite built-in) |
-| [`ApiKeyLayer`] | Tower middleware that verifies API keys on incoming requests |
-| [`require_scope`] | Tower layer factory that enforces a required scope on verified keys |
-| [`ApiKeyMeta`] | Public metadata extracted by middleware, usable as an axum extractor |
-| [`ApiKeyCreated`] | One-time creation result containing the raw token |
-| [`ApiKeyRecord`] | Full stored record used by backend implementations |
-| [`CreateKeyRequest`] | Input for `ApiKeyStore::create` |
-| [`test::InMemoryBackend`] | In-memory backend for unit tests |
+| `ApiKeyStore` | Tenant-scoped store: create, verify, revoke, list, refresh keys |
+| `ApiKeyConfig` | YAML-deserializable configuration (prefix, secret length, touch threshold) |
+| `ApiKeyBackend` | Trait for pluggable storage backends (SQLite built-in) |
+
+### Middleware
+
+| Type | Purpose |
+|------|---------|
+| `ApiKeyLayer` | Tower layer that verifies API keys on incoming requests |
+| `require_scope` | Tower layer factory that enforces a required scope on verified keys |
+
+### Data types
+
+| Type | Purpose |
+|------|---------|
+| `ApiKeyMeta` | Public metadata extracted by middleware, usable as an axum extractor |
+| `ApiKeyCreated` | One-time creation result containing the raw token |
+| `ApiKeyRecord` | Full stored record used by backend implementations |
+| `CreateKeyRequest` | Input for `ApiKeyStore::create` |
+
+### Testing
+
+| Type | Purpose |
+|------|---------|
+| `test::InMemoryBackend` | In-memory backend for unit tests (requires `test-helpers` feature) |
 
 ## Usage
 
@@ -154,6 +171,24 @@ apikey:
   # Default: 60
   touch_threshold_secs: 60
 ```
+
+## Error handling
+
+All errors are returned as `modo::Error` with appropriate HTTP status codes:
+
+| Method | HTTP status | When |
+|--------|-------------|------|
+| `ApiKeyStore::create` | 400 Bad Request | `tenant_id` or `name` is empty, or `expires_at` is not valid RFC 3339 |
+| `ApiKeyStore::verify` | 401 Unauthorized | Token is malformed, not found, revoked, expired, or hash mismatch |
+| `ApiKeyStore::revoke` | 404 Not Found | No key with the given ID exists |
+| `ApiKeyStore::refresh` | 400 Bad Request | `expires_at` is not valid RFC 3339 |
+| `ApiKeyStore::refresh` | 404 Not Found | No key with the given ID exists |
+| `ApiKeyLayer` | 401 Unauthorized | Missing or invalid `Authorization` header |
+| `require_scope` | 403 Forbidden | Verified key lacks the required scope |
+| `require_scope` | 500 Internal | `require_scope` applied without `ApiKeyLayer` |
+
+Verification deliberately returns the same generic "invalid API key" message
+for all failure cases to prevent enumeration attacks.
 
 ## Database schema
 

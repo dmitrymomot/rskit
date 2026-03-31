@@ -65,6 +65,11 @@ impl Default for Config {
 /// subsequent calls attempt `try_init` and silently ignore the
 /// "already initialised" error.
 ///
+/// # Errors
+///
+/// Currently infallible. The `Result` return type is reserved for future
+/// validation of the [`Config`] fields at initialisation time.
+///
 /// [`TracingGuard`]: crate::tracing::TracingGuard
 pub fn init(config: &Config) -> crate::error::Result<super::sentry::TracingGuard> {
     let filter =

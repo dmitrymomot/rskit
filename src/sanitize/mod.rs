@@ -1,23 +1,28 @@
-//! Input sanitization utilities for the modo web framework.
+//! # modo::sanitize
 //!
-//! This module provides the [`Sanitize`] trait and a set of standalone functions
-//! for normalizing string fields before validation or storage.  Implementing
-//! `Sanitize` on a request struct is the integration point used by the
-//! `JsonRequest`, `FormRequest`, `Query`, and `MultipartRequest` extractors —
-//! each extractor calls [`Sanitize::sanitize`] automatically after deserialization.
+//! Input sanitization utilities for normalizing string fields before validation
+//! or storage.
 //!
-//! # Functions
+//! Provides:
 //!
-//! | Function | Operation |
-//! |---|---|
-//! | [`trim`] | Trim leading and trailing whitespace |
-//! | [`trim_lowercase`] | Trim whitespace and convert to lowercase |
-//! | [`collapse_whitespace`] | Collapse consecutive whitespace into a single space |
-//! | [`strip_html`] | Remove HTML tags and decode entities |
-//! | [`truncate`] | Limit string to a maximum character count |
-//! | [`normalize_email`] | Trim, lowercase, and strip `+tag` suffixes |
+//! | Item | Kind | Purpose |
+//! |------|------|---------|
+//! | [`Sanitize`] | trait | Implemented on input structs to normalize fields in place |
+//! | [`trim`] | fn | Trim leading and trailing whitespace |
+//! | [`trim_lowercase`] | fn | Trim whitespace and convert to lowercase |
+//! | [`collapse_whitespace`] | fn | Collapse consecutive whitespace into a single space |
+//! | [`strip_html`] | fn | Remove HTML tags and decode entities |
+//! | [`truncate`] | fn | Limit string to a maximum character count |
+//! | [`normalize_email`] | fn | Trim, lowercase, and strip `+tag` suffixes |
 //!
-//! # Example
+//! The [`JsonRequest`](crate::extractor::JsonRequest),
+//! [`FormRequest`](crate::extractor::FormRequest),
+//! [`Query`](crate::extractor::Query), and
+//! [`MultipartRequest`](crate::extractor::MultipartRequest) extractors call
+//! [`Sanitize::sanitize`] automatically after deserialization, so implementing
+//! the trait on a request struct is the only wiring required.
+//!
+//! ## Quick start
 //!
 //! ```rust,no_run
 //! use modo::sanitize::{Sanitize, trim, normalize_email};

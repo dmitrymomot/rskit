@@ -8,8 +8,11 @@ use crate::error::{Error, Result};
 /// - `${VAR:default}` — substituted with the value of `VAR`, or `default` when
 ///   `VAR` is not set.
 ///
-/// Returns an error if a placeholder is unclosed or a required variable is
-/// missing.
+/// # Errors
+///
+/// Returns [`crate::Error`] when:
+/// - A `${...` placeholder is unclosed (missing `}`).
+/// - A required variable (no default) is not set in the process environment.
 pub fn substitute_env_vars(input: &str) -> Result<String> {
     let mut result = String::with_capacity(input.len());
     let mut chars = input.chars().peekable();

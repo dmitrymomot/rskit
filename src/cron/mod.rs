@@ -1,22 +1,28 @@
-//! Cron job scheduling for the modo framework.
+//! # modo::cron
+//!
+//! Periodic cron job scheduling with plain `async fn` handlers.
 //!
 //! This module provides a cron scheduler that runs async handler functions on
 //! configurable schedules. Handlers are plain async functions — no macros or
 //! custom derives required. Services are injected via the
-//! [`crate::service::Registry`] snapshot captured at scheduler build time.
+//! [`Registry`](crate::service::Registry) snapshot captured at scheduler build
+//! time.
 //!
-//! # Provides
+//! Always available — no feature flag required.
 //!
-//! - [`Scheduler`] — running scheduler handle; implements
-//!   [`Task`](crate::runtime::Task) for clean shutdown.
-//! - [`SchedulerBuilder`] — builder returned by [`Scheduler::builder`].
-//! - [`CronOptions`] — per-job options (timeout).
-//! - [`Meta`] — job metadata injected into handler arguments.
-//! - [`CronContext`] — full execution context passed to handlers.
-//! - [`CronHandler`] — trait implemented automatically for matching `async fn`.
-//! - [`FromCronContext`] — trait for types extractable from [`CronContext`].
+//! ## Provides
 //!
-//! # Schedule formats
+//! | Export | Description |
+//! |--------|-------------|
+//! | [`Scheduler`] | Running scheduler handle; implements [`Task`](crate::runtime::Task) for shutdown |
+//! | [`SchedulerBuilder`] | Builder returned by [`Scheduler::builder`] |
+//! | [`CronOptions`] | Per-job options (timeout); default 300 s |
+//! | [`Meta`] | Job metadata injected into handler arguments |
+//! | [`CronContext`] | Execution context passed to every handler invocation |
+//! | [`CronHandler`] | Trait implemented automatically for matching `async fn` |
+//! | [`FromCronContext`] | Trait for types extractable from [`CronContext`] |
+//!
+//! ## Schedule formats
 //!
 //! Three formats are accepted wherever a schedule string is required:
 //!
@@ -29,7 +35,7 @@
 //!
 //! Invalid expressions or durations return an error at scheduler build time.
 //!
-//! # Usage
+//! ## Quick start
 //!
 //! ```rust,no_run
 //! use modo::cron::Scheduler;

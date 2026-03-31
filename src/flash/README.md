@@ -2,17 +2,20 @@
 
 Cookie-based flash messages for one-time cross-request notifications.
 
+This module is always available; no feature flag is required.
+
 Flash messages survive exactly one redirect: the sending request queues a message
 and the receiving request reads and consumes it. Once consumed the signed cookie is
 cleared from the response automatically. No session dependency is required.
 
-## Key Types
+## Key types
 
-| Type         | Role                                                           |
-| ------------ | -------------------------------------------------------------- |
-| `FlashLayer` | Tower `Layer` — add to the router to enable flash support      |
-| `Flash`      | Axum extractor — write and read flash messages in handlers     |
-| `FlashEntry` | Data type — a single message with `level` and `message` fields |
+| Type              | Role                                                           |
+| ----------------- | -------------------------------------------------------------- |
+| `FlashLayer`      | Tower `Layer` -- add to the router to enable flash support     |
+| `FlashMiddleware` | Tower `Service` produced by `FlashLayer` (not used directly)   |
+| `Flash`           | Axum extractor -- write and read flash messages in handlers    |
+| `FlashEntry`      | Data type -- a single message with `level` and `message` fields|
 
 ## Setup
 

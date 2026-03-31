@@ -4,9 +4,12 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+/// Parsed YAML frontmatter from an email template.
 #[derive(Debug, Deserialize)]
 pub struct Frontmatter {
+    /// The email subject line (after variable substitution).
     pub subject: String,
+    /// Layout name to apply. Defaults to `"base"`.
     #[serde(default = "default_layout")]
     pub layout: String,
 }

@@ -19,7 +19,28 @@
 //!   wrapper.
 //! - [`ButtonType`] — button colour variants for email templates.
 //!
-//! # Template format
+//! ## Quick start
+//!
+//! ```rust,no_run
+//! use modo::email::{EmailConfig, Mailer, SendEmail};
+//!
+//! # async fn run() -> modo::Result<()> {
+//! let config = EmailConfig {
+//!     templates_path: "emails".into(),
+//!     default_from_email: "noreply@example.com".into(),
+//!     ..Default::default()
+//! };
+//! let mailer = Mailer::new(&config)?;
+//!
+//! mailer.send(
+//!     SendEmail::new("welcome", "user@example.com")
+//!         .var("name", "Dmytro"),
+//! ).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Template format
 //!
 //! ```text
 //! ---

@@ -2,7 +2,9 @@
 
 Role-based access control (RBAC) for axum applications.
 
-The module provides three composable building blocks:
+RBAC is roles-only. Permission checks beyond "does this role match?" belong in handler logic.
+
+The module provides five composable building blocks:
 
 | Item                      | Kind   | Purpose                                                              |
 | ------------------------- | ------ | -------------------------------------------------------------------- |
@@ -11,8 +13,6 @@ The module provides three composable building blocks:
 | `require_role()`          | fn     | Guard layer — rejects requests whose role is not in the allowed list |
 | `require_authenticated()` | fn     | Guard layer — rejects requests with no role at all                   |
 | `Role`                    | struct | Newtype over `String`; axum extractor available in handlers          |
-
-RBAC is roles-only. Permission checks beyond "does this role match?" belong in handler logic.
 
 ## Usage
 
@@ -95,10 +95,10 @@ async fn handler(role: Option<Role>) -> String {
 - `Role` — newtype over `String`. Implements `Deref<Target = str>`, `Clone`, `Debug`,
   axum `FromRequestParts` (returns 500 if middleware is missing), and
   `OptionalFromRequestParts` (returns `None` if middleware is missing).
-- `RbacLayer<R>` / `RbacMiddleware<Svc, R>` — Tower `Layer` / `Service` returned by
-  `middleware()`. Rarely referenced directly.
-- `RequireRoleLayer` / `RequireAuthenticatedLayer` — Tower `Layer` types returned by
-  the guard constructors. Rarely referenced directly.
+
+The Tower `Layer` / `Service` types (`RbacLayer`, `RequireRoleLayer`,
+`RequireAuthenticatedLayer`, etc.) are internal implementation details. You interact
+with them via the `middleware()`, `require_role()`, and `require_authenticated()` functions.
 
 ## Behavior Reference
 

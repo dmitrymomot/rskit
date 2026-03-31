@@ -26,7 +26,11 @@ use crate::flash::state::FlashState;
 /// | `request_id`      | `X-Request-Id` header (if present)           |
 /// | `locale`          | Locale resolver chain (falls back to default) |
 /// | `csrf_token`      | [`CsrfToken`](crate::middleware::CsrfToken) extension (if present) |
-/// | `flash_messages`  | `FlashState` extension (if present)        |
+/// | `flash_messages`  | `FlashState` extension (if present)          |
+/// | `tier_name`       | `TierInfo` name (requires **`tier`** feature, if present) |
+/// | `tier_has`        | Template function: `tier_has(name)` returns `bool` (requires **`tier`** feature, if present) |
+/// | `tier_enabled`    | Template function: `tier_enabled(name)` returns `bool` (requires **`tier`** feature, if present) |
+/// | `tier_limit`      | Template function: `tier_limit(name)` returns `Option<u64>` (requires **`tier`** feature, if present) |
 ///
 /// # Example
 ///

@@ -143,4 +143,5 @@ silently ignored:
 | `geolocation`      | `geolocation::GeolocationConfig`    | `geolocation`  |
 | `storage`          | `storage::BucketConfig`             | `storage`      |
 | `dns`              | `dns::DnsConfig`                    | `dns`          |
+| `apikey`           | `apikey::ApiKeyConfig`              | `apikey`       |
 | `jwt`              | `auth::jwt::JwtConfig`              | `auth`         |

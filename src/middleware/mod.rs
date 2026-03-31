@@ -1,7 +1,12 @@
+//! # modo::middleware
+//!
 //! HTTP middleware for the modo web framework.
 //!
-//! This module provides a collection of Tower-compatible middleware layers that
-//! cover the most common cross-cutting concerns for HTTP applications:
+//! Provides a collection of Tower-compatible middleware layers covering
+//! the most common cross-cutting concerns for HTTP applications.
+//! Always available (no feature flag required).
+//!
+//! ## Provided items
 //!
 //! | Function / type | Purpose |
 //! |---|---|
@@ -21,6 +26,26 @@
 //! | [`RateLimitLayer`] | Tower layer produced by `rate_limit` / `rate_limit_with` |
 //! | [`KeyExtractor`] | Trait for custom rate-limit key extraction |
 //! | [`PeerIpKeyExtractor`] / [`GlobalKeyExtractor`] | Built-in key extractors |
+//!
+//! ## Quick start
+//!
+//! ```rust,no_run
+//! use axum::{Router, routing::get};
+//! use axum::response::IntoResponse;
+//! use modo::middleware::*;
+//!
+//! async fn render_error(err: modo::Error, _parts: http::request::Parts) -> axum::response::Response {
+//!     (err.status(), err.message().to_string()).into_response()
+//! }
+//!
+//! let app: Router = Router::new()
+//!     .route("/", get(|| async { "hello" }))
+//!     .layer(error_handler(render_error))
+//!     .layer(compression())
+//!     .layer(request_id())
+//!     .layer(catch_panic())
+//!     .layer(tracing());
+//! ```
 
 mod catch_panic;
 mod compression;

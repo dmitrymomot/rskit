@@ -9,18 +9,37 @@
 //! modo = { version = "*", features = ["apikey"] }
 //! ```
 //!
-//! Provides:
+//! ## Provides
 //!
-//! - [`ApiKeyStore`] — tenant-scoped store: create, verify, revoke, list, refresh keys
-//! - [`ApiKeyConfig`] — YAML-deserializable configuration (prefix, secret length, touch threshold)
-//! - [`ApiKeyBackend`] — trait for pluggable storage backends (SQLite built-in)
-//! - [`ApiKeyLayer`] — Tower middleware that verifies API keys on incoming requests
-//! - [`require_scope`] — Tower layer factory that enforces a required scope on verified keys
-//! - [`ApiKeyMeta`] — public metadata extracted by middleware, usable as an axum extractor
-//! - [`ApiKeyCreated`] — one-time creation result containing the raw token
-//! - [`ApiKeyRecord`] — full stored record used by backend implementations
-//! - [`CreateKeyRequest`] — input for [`ApiKeyStore::create`]
-//! - [`test::InMemoryBackend`] — in-memory backend for unit tests
+//! ### Core
+//!
+//! | Type | Purpose |
+//! |------|---------|
+//! | [`ApiKeyStore`] | Tenant-scoped store: create, verify, revoke, list, refresh keys |
+//! | [`ApiKeyConfig`] | YAML-deserializable configuration (prefix, secret length, touch threshold) |
+//! | [`ApiKeyBackend`] | Trait for pluggable storage backends (SQLite built-in) |
+//!
+//! ### Middleware
+//!
+//! | Type | Purpose |
+//! |------|---------|
+//! | [`ApiKeyLayer`] | Tower layer that verifies API keys on incoming requests |
+//! | [`require_scope`] | Tower layer factory that enforces a required scope on verified keys |
+//!
+//! ### Data types
+//!
+//! | Type | Purpose |
+//! |------|---------|
+//! | [`ApiKeyMeta`] | Public metadata extracted by middleware, usable as an axum extractor |
+//! | [`ApiKeyCreated`] | One-time creation result containing the raw token |
+//! | [`ApiKeyRecord`] | Full stored record used by backend implementations |
+//! | [`CreateKeyRequest`] | Input for [`ApiKeyStore::create`] |
+//!
+//! ### Testing
+//!
+//! | Type | Purpose |
+//! |------|---------|
+//! | [`test::InMemoryBackend`] | In-memory backend for unit tests (requires `test-helpers` feature) |
 //!
 //! ## Quick start
 //!

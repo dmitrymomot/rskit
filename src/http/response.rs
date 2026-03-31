@@ -63,6 +63,11 @@ impl Response {
     }
 
     /// Consume the body and deserialize it as JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if reading the body fails or the bytes are not valid JSON
+    /// for the target type `T`.
     pub async fn json<T: DeserializeOwned>(self) -> Result<T> {
         let bytes = self.bytes().await?;
         serde_json::from_slice(&bytes)
@@ -70,6 +75,10 @@ impl Response {
     }
 
     /// Consume the body and return it as a UTF-8 string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if reading the body fails or the bytes are not valid UTF-8.
     pub async fn text(self) -> Result<String> {
         let bytes = self.bytes().await?;
         String::from_utf8(bytes.into())
@@ -77,6 +86,10 @@ impl Response {
     }
 
     /// Consume the body and return it as raw bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if reading the body from the connection fails.
     pub async fn bytes(self) -> Result<Bytes> {
         self.body
             .collect()
@@ -91,6 +104,11 @@ impl Response {
     }
 
     /// Return `Ok(self)` if the status is 2xx, otherwise return an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error containing the HTTP status code and URL when the
+    /// response status is not in the 2xx range.
     pub fn error_for_status(self) -> Result<Self> {
         if self.status.is_success() {
             Ok(self)
@@ -115,7 +133,8 @@ pub struct BodyStream {
 impl BodyStream {
     /// Read the next data frame from the body stream.
     ///
-    /// Returns `None` when the stream is complete.
+    /// Returns `None` when the stream is complete. Returns `Some(Err(..))` if
+    /// reading a frame from the connection fails.
     pub async fn next(&mut self) -> Option<Result<Bytes>> {
         loop {
             let frame = std::pin::pin!(self.body.frame()).await?;

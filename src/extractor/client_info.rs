@@ -27,20 +27,24 @@ pub struct ClientInfo {
 }
 
 impl ClientInfo {
+    /// Create an empty `ClientInfo` with all fields set to `None`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the client IP address.
     pub fn ip(mut self, ip: impl Into<String>) -> Self {
         self.ip = Some(ip.into());
         self
     }
 
+    /// Set the user-agent string.
     pub fn user_agent(mut self, ua: impl Into<String>) -> Self {
         self.user_agent = Some(ua.into());
         self
     }
 
+    /// Set the client fingerprint (from the `x-fingerprint` header).
     pub fn fingerprint(mut self, fp: impl Into<String>) -> Self {
         self.fingerprint = Some(fp.into());
         self

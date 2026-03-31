@@ -35,12 +35,19 @@ impl Default for PaginationConfig {
 /// Constructed manually via [`Page::new`].
 #[derive(Debug, Serialize)]
 pub struct Page<T: Serialize> {
+    /// The items for this page.
     pub items: Vec<T>,
+    /// Total number of items across all pages.
     pub total: i64,
+    /// Current page number (1-based).
     pub page: i64,
+    /// Number of items per page.
     pub per_page: i64,
+    /// Total number of pages.
     pub total_pages: i64,
+    /// Whether a next page exists.
     pub has_next: bool,
+    /// Whether a previous page exists.
     pub has_prev: bool,
 }
 
@@ -71,9 +78,13 @@ impl<T: Serialize> Page<T> {
 /// for the next page.
 #[derive(Debug, Serialize)]
 pub struct CursorPage<T: Serialize> {
+    /// The items for this page.
     pub items: Vec<T>,
+    /// Cursor value for fetching the next page, or `None` if this is the last page.
     pub next_cursor: Option<String>,
+    /// Whether more items exist beyond this page.
     pub has_more: bool,
+    /// Number of items per page.
     pub per_page: i64,
 }
 
@@ -100,8 +111,10 @@ impl<T: Serialize> CursorPage<T> {
 /// Pages are **1-based**. A `page` below `1` is treated as `1`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PageRequest {
+    /// Page number (1-based). Defaults to `1`.
     #[serde(default = "one")]
     pub page: i64,
+    /// Items per page. Clamped by [`PaginationConfig`].
     #[serde(default)]
     pub per_page: i64,
 }
@@ -132,8 +145,10 @@ impl PageRequest {
 /// [`FromRequestParts`] so it can be used directly as a handler argument.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CursorRequest {
+    /// Cursor value from a previous [`CursorPage::next_cursor`]. `None` starts from the beginning.
     #[serde(default)]
     pub after: Option<String>,
+    /// Items per page. Clamped by [`PaginationConfig`].
     #[serde(default)]
     pub per_page: i64,
 }

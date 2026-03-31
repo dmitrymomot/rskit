@@ -1,12 +1,17 @@
+//! # modo::rbac
+//!
 //! Role-based access control (RBAC) for axum applications.
 //!
-//! Four building blocks work together:
+//! RBAC is roles-only — permission checks beyond "does this role match?" belong
+//! in handler logic.
 //!
-//! - [`RoleExtractor`] — implement this to resolve the current user's role from a request.
+//! Provides:
+//!
+//! - [`RoleExtractor`] — trait to resolve the current user's role from a request.
 //! - [`middleware()`] — Tower layer that calls your extractor and stores [`Role`] in extensions.
 //! - [`Role`] — newtype extractor over `String`; pull the resolved role into handlers.
-//! - [`require_role()`] / [`require_authenticated()`] — guard layers applied with
-//!   `.route_layer()` that reject requests before they reach handlers.
+//! - [`require_role()`] — guard layer that rejects requests whose role is not in the allowed list.
+//! - [`require_authenticated()`] — guard layer that rejects requests with no role at all.
 //!
 //! # Wiring order
 //!

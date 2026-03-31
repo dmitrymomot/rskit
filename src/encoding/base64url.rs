@@ -1,3 +1,5 @@
+//! RFC 4648 base64url encoding and decoding without padding.
+
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 /// Encodes `bytes` using RFC 4648 base64url (alphabet `A–Za–z0–9-_`), without padding.

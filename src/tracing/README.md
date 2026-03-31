@@ -4,27 +4,29 @@ Tracing initialisation and structured logging for modo applications.
 
 Wraps [`tracing_subscriber`](https://docs.rs/tracing-subscriber) with a simple YAML-driven configuration and an optional Sentry integration. Call `init` once at startup and hold the returned `TracingGuard` for the process lifetime.
 
+This module handles **subscriber setup** (log format, level, Sentry). For HTTP request/response tracing, see `modo::middleware::tracing()` which creates a `TraceLayer` with `ModoMakeSpan`.
+
 ## Features
 
 | Feature  | What it adds                                                                            |
 | -------- | --------------------------------------------------------------------------------------- |
 | `sentry` | Initialises the Sentry SDK and wires it to the tracing subscriber via `sentry-tracing`. |
 
-## Key Types
+## Key types
 
 | Type / Item    | Description                                                                                         |
 | -------------- | --------------------------------------------------------------------------------------------------- |
 | `Config`       | Log level and output format; optionally embeds `SentryConfig` when the `sentry` feature is enabled. |
 | `init`         | Initialises the global tracing subscriber and optional Sentry client; returns `TracingGuard`.        |
 | `TracingGuard` | RAII guard that keeps the subscriber and Sentry client alive. Implements `Task` and `Default`.       |
-| `SentryConfig` | Sentry DSN, environment tag, and sampling rates. Only present with the `sentry` feature.             |
-| `info!` etc.   | Re-exports of `tracing::{debug, error, info, trace, warn}` for convenience.                          |
+| `SentryConfig` | Sentry DSN, environment tag, and sampling rates. Only present with the `sentry` feature.            |
+| `info!` etc.   | Re-exports of `tracing::{debug, error, info, trace, warn}` for convenience.                         |
 
 ## Usage
 
 ### Basic setup
 
-```rust
+```rust,no_run
 use modo::config::load;
 use modo::Config;
 use modo::runtime::Task;
@@ -44,7 +46,7 @@ async fn main() -> modo::Result<()> {
 
 `TracingGuard` implements `Task`, so it integrates directly with the `run!` macro for ordered shutdown:
 
-```rust
+```rust,no_run
 use modo::config::load;
 use modo::Config;
 

@@ -162,8 +162,10 @@ impl EngineBuilder {
 
     /// Builds and returns the [`Engine`].
     ///
-    /// Fails if the templates directory is inaccessible or if a locale file cannot be
-    /// parsed.
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the locales directory is unreadable or a
+    /// locale YAML file cannot be parsed.
     pub fn build(self) -> crate::Result<Engine> {
         let config = self.config.unwrap_or_default();
 

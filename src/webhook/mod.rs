@@ -8,7 +8,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "0.1", features = ["webhooks"] }
+//! modo = { version = "0.2", features = ["webhooks"] }
 //! ```
 //!
 //! # Provides
@@ -22,7 +22,7 @@
 //! | [`sign()`] | Compute a raw HMAC-SHA256 signature (base64-encoded). |
 //! | [`verify()`] | Verify a raw HMAC-SHA256 signature with constant-time comparison. |
 //! | [`sign_headers()`] | Build the three Standard Webhooks headers from id, timestamp, body, and secrets. |
-//! | [`verify_headers()`] | Verify an incoming request's Standard Webhooks headers with replay-attack protection. |
+//! | [`verify_headers()`] | Verify incoming Standard Webhooks headers with replay-attack protection. |
 //!
 //! # Quick start
 //!

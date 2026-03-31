@@ -6,11 +6,11 @@ provider integrations (GitHub, Google).
 
 ## Feature Flag
 
-All items in this module require the `auth` feature:
+All items in this module require the `auth` feature (which implies `http-client`):
 
 ```toml
 [dependencies]
-modo = { version = "0.1", features = ["auth"] }
+modo = { version = "0.2", features = ["auth"] }
 ```
 
 ## Modules
@@ -295,12 +295,17 @@ oauth:
 | `TokenSigner`          | `modo::auth::jwt`      | Trait for JWT signing (extends `TokenVerifier`)     |
 | `TokenVerifier`        | `modo::auth::jwt`      | Trait for JWT signature verification                |
 | `TokenSource`          | `modo::auth::jwt`      | Trait for pluggable token extraction                |
+| `BearerSource`         | `modo::auth::jwt`      | Extracts token from `Authorization: Bearer` header  |
+| `CookieSource`         | `modo::auth::jwt`      | Extracts token from a named cookie                  |
+| `QuerySource`          | `modo::auth::jwt`      | Extracts token from a query parameter               |
+| `HeaderSource`         | `modo::auth::jwt`      | Extracts token from a custom header                 |
 | `Revocation`           | `modo::auth::jwt`      | Trait for async token revocation checks             |
 | `ValidationConfig`     | `modo::auth::jwt`      | Runtime validation policy (leeway, iss, aud)        |
 | `OAuthProvider`        | `modo::auth::oauth`    | Trait for custom OAuth 2.0 providers                |
 | `Google`               | `modo::auth::oauth`    | Built-in Google OAuth 2.0 provider                  |
 | `GitHub`               | `modo::auth::oauth`    | Built-in GitHub OAuth 2.0 provider                  |
 | `OAuthConfig`          | `modo::auth::oauth`    | YAML config for all OAuth providers                 |
+| `OAuthProviderConfig`  | `modo::auth::oauth`    | Per-provider credentials (client ID, secret, URI)   |
 | `OAuthState`           | `modo::auth::oauth`    | Axum extractor for the signed OAuth state cookie    |
 | `CallbackParams`       | `modo::auth::oauth`    | Query params delivered to the callback route        |
 | `AuthorizationRequest` | `modo::auth::oauth`    | Response that redirects + sets the state cookie     |

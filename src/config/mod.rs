@@ -1,3 +1,5 @@
+//! # modo::config
+//!
 //! YAML configuration loader with environment-variable substitution.
 //!
 //! Config files live in a directory (e.g. `config/`) and are named after the
@@ -9,7 +11,7 @@
 //! the process environment. Use `${VAR:default}` to supply a fallback when
 //! `VAR` is not set.
 //!
-//! # Provides
+//! ## Provides
 //!
 //! - [`Config`] — top-level framework configuration struct with feature-gated
 //!   fields for every built-in module.
@@ -18,10 +20,10 @@
 //! - [`env()`](env) — returns the current `APP_ENV` value (default: `"development"`).
 //! - [`is_dev()`](is_dev), [`is_prod()`](is_prod), [`is_test()`](is_test) —
 //!   environment predicates.
-//! - [`substitute::substitute_env_vars`] — replaces `${VAR}` placeholders in
-//!   arbitrary strings.
+//! - [`substitute`] — submodule exposing [`substitute::substitute_env_vars`] for
+//!   replacing `${VAR}` placeholders in arbitrary strings.
 //!
-//! # Quick start
+//! ## Quick start
 //!
 //! ```no_run
 //! use modo::config::load;

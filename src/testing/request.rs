@@ -41,6 +41,9 @@ impl TestRequestBuilder {
     /// Serialize `body` as JSON and set `content-type: application/json`.
     ///
     /// Any previously set `content-type` header is replaced.
+    ///
+    /// # Panics
+    ///
     /// Panics if serialization fails.
     pub fn json<T: Serialize>(mut self, body: &T) -> Self {
         let bytes = serde_json::to_vec(body).expect("failed to serialize JSON body");
@@ -54,6 +57,9 @@ impl TestRequestBuilder {
     /// URL-encode `body` as a form and set `content-type: application/x-www-form-urlencoded`.
     ///
     /// Any previously set `content-type` header is replaced.
+    ///
+    /// # Panics
+    ///
     /// Panics if serialization fails.
     pub fn form<T: Serialize>(mut self, body: &T) -> Self {
         let encoded = serde_urlencoded::to_string(body).expect("failed to serialize form body");
@@ -73,6 +79,8 @@ impl TestRequestBuilder {
     }
 
     /// Dispatch the request in-process and return the [`TestResponse`].
+    ///
+    /// # Panics
     ///
     /// Panics if the request cannot be built or the router returns an error.
     pub async fn send(self) -> TestResponse {

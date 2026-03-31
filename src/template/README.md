@@ -1,7 +1,13 @@
 # modo::template
 
-MiniJinja-based template rendering for the modo web framework. Requires the **`templates`**
-feature flag.
+MiniJinja-based template rendering for the modo web framework.
+
+Requires the **`templates`** feature flag:
+
+```toml
+[dependencies]
+modo = { version = "0.2", features = ["templates"] }
+```
 
 Provides: filesystem template loading, built-in `t()` i18n function, `static_url()` for
 cache-busted asset paths, per-request locale resolution, Tower middleware for request-scoped
@@ -149,3 +155,7 @@ The locale chain resolves in order: query param → cookie → session (when the
 | `locale`         | Resolved locale string (e.g. `"en"`)                            |
 | `csrf_token`     | CSRF token string (if `csrf()` middleware is active)            |
 | `flash_messages` | Callable that returns flash entries (if `FlashLayer` is active) |
+| `tier_name`      | Name of the active tier (requires **`tier`** feature, if `TierInfo` present) |
+| `tier_has`       | `tier_has(name)` — returns `true` if the feature exists in the tier |
+| `tier_enabled`   | `tier_enabled(name)` — returns `true` if the feature is enabled |
+| `tier_limit`     | `tier_limit(name)` — returns the numeric limit for a feature    |

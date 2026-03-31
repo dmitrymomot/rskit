@@ -74,7 +74,11 @@ impl Event {
 
     /// Set the data payload as JSON-serialized data.
     ///
-    /// Replaces any previous data. Returns an error if serialization fails.
+    /// Replaces any previous data.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if JSON serialization fails.
     pub fn json<T: Serialize>(mut self, data: &T) -> Result<Self, Error> {
         let json = serde_json::to_string(data)
             .map_err(|e| Error::internal(format!("SSE JSON serialization failed: {e}")))?;

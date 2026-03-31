@@ -64,7 +64,7 @@ let resolver = TierResolver::from_backend(Arc::new(MyTierBackend { /* ... */ }))
 Guards run after route matching via `.route_layer()`.
 
 ```rust,ignore
-use modo::tier::{TierLayer, TierInfo, require_feature, require_limit};
+use modo::tier::{TierLayer, TierResolver, TierInfo, require_feature, require_limit};
 use axum::{Router, routing::get};
 
 fn app(resolver: TierResolver) -> Router {

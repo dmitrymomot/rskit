@@ -192,6 +192,14 @@ impl RequestBuilder {
     }
 
     /// Send the request and return the response.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The URL is invalid.
+    /// - A builder method recorded a deferred error (e.g. invalid auth header).
+    /// - The request body failed to serialize.
+    /// - The underlying HTTP request fails after exhausting retries.
     pub async fn send(self) -> Result<Response> {
         // Check deferred URL error first.
         let uri = self.url?;

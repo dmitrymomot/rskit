@@ -2,6 +2,8 @@
 
 Type-map service registry and axum application state for the modo web framework.
 
+Always available — no feature flag required.
+
 ## Overview
 
 The module provides two complementary public types:
@@ -14,10 +16,10 @@ second `add` call for the same type overwrites the previous entry.
 
 ## Key Types
 
-| Type       | Description                                                          |
-| ---------- | -------------------------------------------------------------------- |
-| `Registry` | Mutable type-map; add services at startup, then call `into_state()`. |
-| `AppState` | Frozen service map wrapped in `Arc`; used as axum router state.      |
+| Type       | Description                                                                          |
+| ---------- | ------------------------------------------------------------------------------------ |
+| `Registry` | Mutable type-map; add services at startup, then call `into_state()`. Impl `Default`. |
+| `AppState` | Frozen service map wrapped in `Arc`; used as axum router state. Impl `Clone`.        |
 
 ## Usage
 

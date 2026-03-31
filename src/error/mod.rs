@@ -1,11 +1,19 @@
+//! # modo::error
+//!
 //! HTTP-aware error type for the modo web framework.
 //!
 //! This module provides [`Error`], an opinionated error type that carries an HTTP status code,
 //! a human-readable message, an optional structured details payload, an optional source error, and
-//! an optional machine-readable error code. `Error` implements `axum::response::IntoResponse`,
+//! an optional machine-readable error code. `Error` implements [`axum::response::IntoResponse`],
 //! so it can be returned directly from axum handlers.
 //!
-//! [`Result<T>`] is a type alias for `std::result::Result<T, Error>`.
+//! Provides:
+//! - [`Error`] — primary framework error with status code, message, optional source/details/code
+//! - [`Result<T>`] — type alias for `std::result::Result<T, Error>`
+//! - [`HttpError`] — lightweight `Copy` enum of common HTTP error statuses, converts into `Error`
+//!
+//! Automatic `From` conversions are provided for [`std::io::Error`], [`serde_json::Error`],
+//! and [`serde_yaml_ng::Error`].
 //!
 //! # Quick start
 //!

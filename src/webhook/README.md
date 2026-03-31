@@ -6,7 +6,7 @@ Requires feature `"webhooks"`:
 
 ```toml
 [dependencies]
-modo = { version = "0.1", features = ["webhooks"] }
+modo = { version = "0.2", features = ["webhooks"] }
 ```
 
 ## Key Types
@@ -26,7 +26,7 @@ modo = { version = "0.1", features = ["webhooks"] }
 
 ### Sending a Webhook
 
-```rust
+```rust,ignore
 use modo::webhook::{WebhookSender, WebhookSecret};
 
 async fn example() -> modo::Result<()> {
@@ -49,7 +49,7 @@ async fn example() -> modo::Result<()> {
 
 Call `with_user_agent` immediately after construction, before cloning:
 
-```rust
+```rust,ignore
 use modo::webhook::WebhookSender;
 
 let sender = WebhookSender::default_client()
@@ -60,7 +60,7 @@ let sender = WebhookSender::default_client()
 
 Pass an existing `modo::http::Client` to share connection pools across modules:
 
-```rust
+```rust,ignore
 use modo::webhook::WebhookSender;
 
 let client = modo::http::Client::builder()
@@ -73,7 +73,7 @@ let sender = WebhookSender::new(client);
 
 `WebhookSecret` serializes as a `whsec_<base64>` string and implements `FromStr`:
 
-```rust
+```rust,ignore
 use modo::webhook::WebhookSecret;
 
 fn roundtrip() -> modo::Result<()> {
@@ -90,7 +90,7 @@ fn roundtrip() -> modo::Result<()> {
 Pass multiple secrets to `send` -- each produces a `v1,<sig>` entry in the
 `webhook-signature` header. A receiver accepts the message if any entry matches:
 
-```rust
+```rust,ignore
 use modo::webhook::{WebhookSender, WebhookSecret};
 
 async fn rotate(sender: &WebhookSender) -> modo::Result<()> {
@@ -113,7 +113,7 @@ async fn rotate(sender: &WebhookSender) -> modo::Result<()> {
 from the request headers, enforces a replay-attack tolerance window, and performs
 a constant-time signature check:
 
-```rust
+```rust,ignore
 use std::time::Duration;
 use modo::webhook::{WebhookSecret, verify_headers};
 
@@ -136,7 +136,7 @@ webhooks:
     endpoint_secret: "whsec_dGVzdC1rZXktYnl0ZXM="
 ```
 
-```rust
+```rust,ignore
 use modo::webhook::WebhookSecret;
 
 #[derive(serde::Deserialize)]
@@ -144,3 +144,18 @@ struct WebhooksConfig {
     endpoint_secret: WebhookSecret,
 }
 ```
+
+## Error handling
+
+All errors are returned as `modo::Error` with a 400 Bad Request status:
+
+| Condition | Message |
+|-----------|---------|
+| Empty `secrets` slice passed to `send` | `"at least one secret required"` |
+| Empty `id` passed to `send` | `"webhook id must not be empty"` |
+| Invalid URL passed to `send` | `"invalid webhook url: ..."` |
+| Missing webhook header in `verify_headers` | `"missing <name> header"` |
+| Timestamp outside tolerance in `verify_headers` | `"webhook timestamp outside tolerance"` |
+| No signature matches in `verify_headers` | `"no valid webhook signature found"` |
+| Secret string missing `whsec_` prefix | `"webhook secret must start with 'whsec_'"` |
+| Invalid base64 in secret string | `"invalid base64 in webhook secret: ..."` |

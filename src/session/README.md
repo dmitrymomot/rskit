@@ -227,4 +227,4 @@ async fn cleanup_job(store: Store) -> modo::Result<u64> {
 | ------------- | ------------------------------------------------------------ |
 | `device`      | User-agent parsing helpers (`parse_device_name`, `parse_device_type`) |
 | `fingerprint` | Browser fingerprinting for session hijacking detection (`compute_fingerprint`) |
-| `meta`        | Request metadata (`SessionMeta`) derived from headers        |
+| `meta`        | Request metadata (`SessionMeta`, `header_str`) derived from headers |

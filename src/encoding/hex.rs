@@ -1,3 +1,5 @@
+//! Lowercase hexadecimal encoding and SHA-256 digest helper.
+
 use sha2::{Digest as _, Sha256};
 
 const HEX_TABLE: &[u8; 16] = b"0123456789abcdef";

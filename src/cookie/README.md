@@ -31,15 +31,10 @@ cookie:
 
 ### Derive a signing key at startup
 
-```rust
+```rust,no_run
 use modo::cookie::{CookieConfig, key_from_config};
 
-let cfg = CookieConfig {
-    secret: "s".repeat(64),
-    secure: true,
-    http_only: true,
-    same_site: "lax".to_string(),
-};
+let cfg = CookieConfig::new("s".repeat(64));
 let key = key_from_config(&cfg).expect("secret must be at least 64 characters");
 ```
 
@@ -63,15 +58,16 @@ if let Some(cookie_cfg) = &config.cookie {
 use modo::cookie::key_from_config;
 use modo::flash::FlashLayer;
 use modo::session::{self, Store, SessionConfig};
+use modo::db::Database;
 
-// Assumes `cookie_cfg: &CookieConfig` and `pool` are already available.
+// Assumes `cookie_cfg: &CookieConfig` and `db` are already available.
 # async fn example(
 #     router: axum::Router,
 #     cookie_cfg: &modo::cookie::CookieConfig,
-#     pool: impl modo::db::Reader + modo::db::Writer,
+#     db: Database,
 # ) -> modo::Result<()> {
 let key = key_from_config(cookie_cfg)?;
-let store = Store::new(&pool, SessionConfig::default());
+let store = Store::new(db, SessionConfig::default());
 
 let router = router
     .layer(FlashLayer::new(cookie_cfg, &key))

@@ -55,8 +55,11 @@ impl Validator {
         self
     }
 
-    /// Finalize validation. Returns `Ok(())` if no errors were collected,
-    /// or `Err(ValidationError)` with all field-level errors.
+    /// Finalize validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationError`] when one or more fields have errors.
     pub fn check(self) -> Result<(), ValidationError> {
         if self.errors.is_empty() {
             Ok(())

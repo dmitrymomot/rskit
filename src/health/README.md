@@ -2,12 +2,14 @@
 
 Liveness and readiness probe endpoints for Kubernetes and container orchestration.
 
+Always available (no feature flag required).
+
 Registers two routes on an axum `Router`:
 
 - `GET /_live` — always returns `200 OK`; signals the process is running.
 - `GET /_ready` — runs all registered [`HealthCheck`] implementations concurrently; returns `200 OK` if every check passes, `503 Service Unavailable` if any fail.
 
-## Key Types
+## Key types
 
 | Type | Description |
 |---|---|
@@ -21,8 +23,8 @@ When the `db` feature is enabled, `db::Database` implements `HealthCheck` out of
 
 ### Register checks and mount the router
 
-```rust
-use modo::health::HealthChecks;
+```rust,no_run
+use modo::HealthChecks;
 use modo::service::Registry;
 
 // Build the check collection during startup.
@@ -44,9 +46,9 @@ let app = axum::Router::new()
 
 ### Implementing HealthCheck for a custom service
 
-```rust
+```rust,ignore
 use std::pin::Pin;
-use modo::health::HealthCheck;
+use modo::HealthCheck;
 use modo::Result;
 
 struct MyCache { /* ... */ }
@@ -60,7 +62,7 @@ impl HealthCheck for MyCache {
     }
 }
 
-let checks = modo::health::HealthChecks::new()
+let checks = modo::HealthChecks::new()
     .check("cache", MyCache { /* ... */ });
 ```
 

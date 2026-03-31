@@ -1,25 +1,28 @@
+//! # modo::template
+//!
 //! MiniJinja-based template rendering for modo.
+//!
+//! Requires the **`templates`** feature flag.
 //!
 //! This module provides an opinionated template layer built on top of
 //! [MiniJinja](https://docs.rs/minijinja). It covers:
 //!
-//! - [`Engine`] / [`EngineBuilder`] — compile and cache templates from disk, register
-//!   custom functions and filters, manage locale resolvers, and serve static files.
-//! - [`TemplateContextLayer`] — Tower middleware that injects per-request data
-//!   (`locale`, `current_url`, `is_htmx`, `csrf_token`, `flash_messages`) into every
-//!   request's extensions before the handler runs.
-//! - [`Renderer`] — axum extractor that gives handlers a ready-to-use render handle.
-//! - [`TemplateContext`] — a typed key-value map that middleware and handlers share;
-//!   handler values override middleware values on key conflicts.
-//! - [`HxRequest`] — infallible extractor that detects whether the request carries the
-//!   `HX-Request: true` header.
-//! - [`context`] — re-export of [`minijinja::context!`] for building template data in
-//!   handlers.
-//! - Locale resolution chain: [`LocaleResolver`] trait plus built-in resolvers
-//!   ([`QueryParamResolver`], [`CookieResolver`], [`AcceptLanguageResolver`], and
-//!   `SessionResolver` when the **`session`** feature is also enabled).
+//! ## Provided types
 //!
-//! Requires the **`templates`** feature flag.
+//! | Type / Trait                | Description |
+//! |-----------------------------|-------------|
+//! | [`Engine`] / [`EngineBuilder`] | Compile and cache templates from disk, register custom functions and filters, manage locale resolvers, and serve static files. |
+//! | [`TemplateConfig`]          | Configuration for template paths, static-asset prefix, locale defaults, and cookie/query-param names. |
+//! | [`TemplateContext`]         | Per-request key-value map shared between middleware and handlers; handler values override middleware values on key conflicts. |
+//! | [`TemplateContextLayer`]    | Tower middleware that injects per-request data (`locale`, `current_url`, `is_htmx`, `csrf_token`, `flash_messages`) into every request's extensions before the handler runs. |
+//! | [`Renderer`]                | Axum extractor that gives handlers a ready-to-use render handle. |
+//! | [`HxRequest`]               | Infallible axum extractor that detects the `HX-Request: true` header. |
+//! | [`context`]                 | Re-export of [`minijinja::context!`] for building template data in handlers. |
+//! | [`LocaleResolver`]          | Trait for pluggable locale detection from a request. |
+//! | [`QueryParamResolver`]      | Resolves the active locale from a URL query parameter. |
+//! | [`CookieResolver`]          | Resolves the active locale from a cookie. |
+//! | [`AcceptLanguageResolver`]  | Resolves the active locale from the `Accept-Language` header. |
+//! | `SessionResolver`           | Resolves the active locale from session data (requires the **`session`** feature). |
 //!
 //! # Quick start
 //!

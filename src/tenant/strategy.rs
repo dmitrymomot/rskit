@@ -29,6 +29,11 @@ fn host_from_parts(parts: &http::request::Parts) -> Result<String> {
 // ---------------------------------------------------------------------------
 
 /// Extracts tenant slug from a single-level subdomain relative to a base domain.
+///
+/// Created by [`subdomain()`]. Produces [`TenantId::Slug`].
+///
+/// Multi-level subdomains (e.g., `a.b.base.com`) and bare base-domain
+/// requests are rejected with 400 Bad Request.
 pub struct SubdomainStrategy {
     base_domain: String,
 }
@@ -65,7 +70,7 @@ impl TenantStrategy for SubdomainStrategy {
     }
 }
 
-/// Returns a strategy that extracts the tenant slug from a subdomain.
+/// Returns a strategy that extracts the tenant slug from a subdomain of `base_domain`.
 pub fn subdomain(base_domain: &str) -> SubdomainStrategy {
     SubdomainStrategy::new(base_domain)
 }
@@ -74,7 +79,9 @@ pub fn subdomain(base_domain: &str) -> SubdomainStrategy {
 // Strategy 2: Domain
 // ---------------------------------------------------------------------------
 
-/// Extracts tenant identifier from the full domain name.
+/// Extracts tenant identifier from the full domain name in the `Host` header.
+///
+/// Created by [`domain()`]. Produces [`TenantId::Domain`].
 pub struct DomainStrategy;
 
 impl TenantStrategy for DomainStrategy {
@@ -93,12 +100,14 @@ pub fn domain() -> DomainStrategy {
 // Strategy 3: Subdomain or Domain
 // ---------------------------------------------------------------------------
 
-/// Extracts tenant from subdomain (as slug) or full domain (as custom domain).
+/// Extracts tenant from subdomain (as slug) or falls back to the full domain (as custom domain).
 ///
-/// - Single-level subdomain of base -> `TenantId::Slug`
-/// - Unrelated host -> `TenantId::Domain` (custom domain)
-/// - Base domain exactly -> Error
-/// - Multi-level subdomain -> Error
+/// Created by [`subdomain_or_domain()`]. Produces [`TenantId::Slug`] or [`TenantId::Domain`].
+///
+/// - Single-level subdomain of base -> [`TenantId::Slug`]
+/// - Unrelated host -> [`TenantId::Domain`] (custom domain)
+/// - Base domain exactly -> 400 Bad Request
+/// - Multi-level subdomain -> 400 Bad Request
 pub struct SubdomainOrDomainStrategy {
     base_domain: String,
 }
@@ -147,6 +156,8 @@ pub fn subdomain_or_domain(base_domain: &str) -> SubdomainOrDomainStrategy {
 // ---------------------------------------------------------------------------
 
 /// Extracts tenant identifier from a named request header.
+///
+/// Created by [`header()`]. Produces [`TenantId::Id`].
 pub struct HeaderStrategy {
     header_name: http::HeaderName,
 }
@@ -174,7 +185,11 @@ impl TenantStrategy for HeaderStrategy {
     }
 }
 
-/// Returns a strategy that reads the tenant identifier from the given header.
+/// Returns a strategy that reads the tenant identifier from the given request header.
+///
+/// # Panics
+///
+/// Panics if `name` is not a valid HTTP header name.
 pub fn header(name: &str) -> HeaderStrategy {
     HeaderStrategy::new(name)
 }
@@ -184,6 +199,9 @@ pub fn header(name: &str) -> HeaderStrategy {
 // ---------------------------------------------------------------------------
 
 /// Extracts tenant API key from a named request header.
+///
+/// Created by [`api_key_header()`]. Produces [`TenantId::ApiKey`], which is
+/// **redacted** in `Display` and `Debug` output.
 pub struct ApiKeyHeaderStrategy {
     header_name: http::HeaderName,
 }
@@ -211,7 +229,11 @@ impl TenantStrategy for ApiKeyHeaderStrategy {
     }
 }
 
-/// Returns a strategy that reads an API key from the given header.
+/// Returns a strategy that reads an API key from the given request header.
+///
+/// # Panics
+///
+/// Panics if `name` is not a valid HTTP header name.
 pub fn api_key_header(name: &str) -> ApiKeyHeaderStrategy {
     ApiKeyHeaderStrategy::new(name)
 }
@@ -220,8 +242,14 @@ pub fn api_key_header(name: &str) -> ApiKeyHeaderStrategy {
 // Strategy 6: Path Prefix
 // ---------------------------------------------------------------------------
 
-/// Extracts tenant slug from a path prefix and rewrites the URI
-/// (strips prefix + slug, preserves query string).
+/// Extracts tenant slug from a path prefix and rewrites the URI.
+///
+/// Created by [`path_prefix()`]. Produces [`TenantId::Slug`].
+///
+/// Strips the prefix and tenant slug from the URI before the request reaches
+/// handlers, preserving the query string. For example, with prefix `/org`,
+/// a request to `/org/acme/settings?tab=billing` becomes `/settings?tab=billing`
+/// and the slug `acme` is extracted.
 pub struct PathPrefixStrategy {
     prefix: String,
 }
@@ -295,6 +323,8 @@ pub fn path_prefix(prefix: &str) -> PathPrefixStrategy {
 // ---------------------------------------------------------------------------
 
 /// Extracts tenant slug from a named axum path parameter.
+///
+/// Created by [`path_param()`]. Produces [`TenantId::Slug`].
 ///
 /// This strategy requires `.route_layer()` instead of `.layer()` because
 /// axum path parameters are only available after route matching.

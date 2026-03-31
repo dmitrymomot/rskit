@@ -1,6 +1,9 @@
 use serde::Serialize;
 
-/// What the caller provides to create a key.
+/// Input for [`super::ApiKeyStore::create`].
+///
+/// All fields except `expires_at` are required. Pass `None` for
+/// `expires_at` to create a non-expiring key.
 pub struct CreateKeyRequest {
     /// Tenant this key belongs to. Required.
     pub tenant_id: String,
@@ -12,7 +15,10 @@ pub struct CreateKeyRequest {
     pub expires_at: Option<String>,
 }
 
-/// Returned once at creation — contains the raw token shown to the user.
+/// One-time result from [`super::ApiKeyStore::create`].
+///
+/// Contains the raw token that must be shown to the user exactly once.
+/// The raw token is not retrievable after creation.
 #[derive(Debug, Clone, Serialize)]
 pub struct ApiKeyCreated {
     /// ULID primary key.
@@ -31,8 +37,11 @@ pub struct ApiKeyCreated {
     pub created_at: String,
 }
 
-/// Public metadata — extracted by middleware, used in handlers.
+/// Public metadata extracted by [`super::ApiKeyLayer`] middleware.
 ///
+/// Available as an axum extractor in handlers (implements
+/// [`FromRequestParts`](axum::extract::FromRequestParts) and
+/// [`OptionalFromRequestParts`](axum::extract::OptionalFromRequestParts)).
 /// Does not contain the key hash or revocation timestamp.
 #[derive(Debug, Clone, Serialize)]
 pub struct ApiKeyMeta {
@@ -52,7 +61,10 @@ pub struct ApiKeyMeta {
     pub created_at: String,
 }
 
-/// Stored form — used by the backend trait.
+/// Full stored record used by [`super::ApiKeyBackend`] implementations.
+///
+/// Contains the hash and revocation fields that are stripped when
+/// converting to [`ApiKeyMeta`] via [`into_meta`](Self::into_meta).
 #[derive(Clone)]
 pub struct ApiKeyRecord {
     /// ULID primary key.

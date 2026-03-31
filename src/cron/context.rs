@@ -9,8 +9,10 @@ use super::meta::Meta;
 /// Execution context passed to every cron handler invocation.
 ///
 /// Carries a snapshot of the service registry and the job metadata for the
-/// current tick. Use [`FromCronContext`] to extract individual values from the
-/// context as handler arguments.
+/// current tick. This type is constructed by the scheduler and passed to
+/// [`CronHandler::call`] — handlers do not create it directly. Use
+/// [`FromCronContext`] to extract individual values from the context as
+/// handler arguments.
 pub struct CronContext {
     pub(crate) registry: Arc<RegistrySnapshot>,
     pub(crate) meta: Meta,

@@ -1,15 +1,22 @@
 use std::fmt;
 
-/// Identifier extracted from an HTTP request by a tenant strategy.
+/// Identifier extracted from an HTTP request by a [`TenantStrategy`](super::TenantStrategy).
+///
+/// Each variant corresponds to a particular extraction strategy. The
+/// [`ApiKey`](Self::ApiKey) variant is **redacted** in both [`Display`](std::fmt::Display)
+/// and [`Debug`](std::fmt::Debug) output to prevent accidental secret logging.
 #[derive(Clone, PartialEq, Eq)]
 pub enum TenantId {
-    /// From subdomain, path_prefix, path_param strategies.
+    /// Tenant slug from [`subdomain()`](super::subdomain),
+    /// [`path_prefix()`](super::path_prefix), or [`path_param()`](super::path_param).
     Slug(String),
-    /// From domain(), combined strategy's domain branch.
+    /// Full domain name from [`domain()`](super::domain) or the custom-domain
+    /// branch of [`subdomain_or_domain()`](super::subdomain_or_domain).
     Domain(String),
-    /// From header() — generic identifier.
+    /// Opaque identifier from [`header()`](super::header).
     Id(String),
-    /// From api_key_header() — raw API key.
+    /// Raw API key from [`api_key_header()`](super::api_key_header).
+    /// **Redacted** in `Display` and `Debug`.
     ApiKey(String),
 }
 

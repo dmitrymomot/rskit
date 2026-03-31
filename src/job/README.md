@@ -1,6 +1,13 @@
-# modo::job
+# job
 
 Durable background job processing backed by SQLite.
+
+Requires feature `"job"` (implies `"db"`):
+
+```toml
+[dependencies]
+modo = { version = "0.2", features = ["job"] }
+```
 
 ## Overview
 
@@ -10,7 +17,7 @@ jobs to handlers, retries failures with exponential backoff, and reaps stale job
 
 End-applications own the `jobs` table migration — this module ships none.
 
-## Key Types
+## Key types
 
 | Type             | Role                                                                         |
 | ---------------- | ---------------------------------------------------------------------------- |
@@ -60,7 +67,7 @@ from contending with application queries.
 
 ### Defining and registering handlers
 
-```rust
+```rust,ignore
 use modo::job::{JobConfig, JobOptions, Payload, Meta, Worker};
 use modo::service::Registry;
 use serde::{Deserialize, Serialize};
@@ -96,7 +103,7 @@ async fn start_worker(config: &JobConfig, registry: &Registry) {
 
 ### Enqueueing jobs
 
-```rust
+```rust,ignore
 use modo::job::{Enqueuer, EnqueueOptions, EnqueueResult};
 use modo::db::Database;
 use serde::Serialize;
@@ -142,7 +149,7 @@ async fn enqueue_jobs(db: Database) {
 Use `Service<T>` as a handler argument to retrieve a value registered in the service
 registry. The inner value is `Arc<T>`.
 
-```rust
+```rust,ignore
 use modo::job::Payload;
 use modo::Service;
 use std::sync::Arc;

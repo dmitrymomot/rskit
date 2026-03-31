@@ -1,4 +1,4 @@
-//! # Encoding
+//! # modo::encoding
 //!
 //! Binary-to-text encoding utilities.
 //!

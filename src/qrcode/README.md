@@ -7,13 +7,13 @@ QR code generation with customizable SVG output, feature-gated under `qrcode`.
 Enable in `Cargo.toml`:
 
 ```toml
-modo = { version = "0.1", features = ["qrcode"] }
+modo = { version = "0.2", features = ["qrcode"] }
 ```
 
 For template integration (MiniJinja), also enable `templates`:
 
 ```toml
-modo = { version = "0.1", features = ["qrcode", "templates"] }
+modo = { version = "0.2", features = ["qrcode", "templates"] }
 ```
 
 ## Key Types

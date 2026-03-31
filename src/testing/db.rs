@@ -27,6 +27,8 @@ pub struct TestDb {
 impl TestDb {
     /// Create a new in-memory SQLite database.
     ///
+    /// # Panics
+    ///
     /// Panics if the database cannot be opened.
     pub async fn new() -> Self {
         let config = Config {
@@ -41,6 +43,8 @@ impl TestDb {
 
     /// Execute a raw SQL statement and return `self` for chaining.
     ///
+    /// # Panics
+    ///
     /// Panics if the statement fails.
     pub async fn exec(self, sql: &str) -> Self {
         use crate::db::ConnExt;
@@ -54,6 +58,8 @@ impl TestDb {
 
     /// Run all migrations found under `path` (a directory of `.sql` files)
     /// and return `self` for chaining.
+    ///
+    /// # Panics
     ///
     /// Panics if the migration path is invalid or any migration fails.
     pub async fn migrate(self, path: &str) -> Self {

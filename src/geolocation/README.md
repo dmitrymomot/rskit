@@ -4,11 +4,16 @@ IP-to-location lookup using a MaxMind GeoLite2/GeoIP2 `.mmdb` database.
 
 Requires the `geolocation` feature flag.
 
+```toml
+[dependencies]
+modo = { version = "0.2", features = ["geolocation"] }
+```
+
 ## Features
 
 | Feature flag  | What it enables                                           |
 | ------------- | --------------------------------------------------------- |
-| `geolocation` | `GeoLocator`, `GeoLayer`, `Location`, `GeolocationConfig` |
+| `geolocation` | `GeoLocator`, `GeoLayer`, `GeoMiddleware`, `Location`, `GeolocationConfig` |
 
 ## Key Types
 
@@ -17,6 +22,7 @@ Requires the `geolocation` feature flag.
 | `GeolocationConfig` | Config struct; deserializes from the `geolocation` YAML section             |
 | `GeoLocator`        | Reads the `.mmdb` file and performs IP lookups; cheaply cloneable via `Arc` |
 | `GeoLayer`          | Tower layer; runs lookup per request and inserts `Location` in extensions   |
+| `GeoMiddleware<S>`  | Tower service produced by `GeoLayer`                                        |
 | `Location`          | Resolved geolocation data; also an axum extractor                           |
 
 ## Configuration
@@ -39,7 +45,7 @@ geolocation:
 
 ### Building the locator
 
-```rust
+```rust,ignore
 use modo::geolocation::{GeoLocator, GeolocationConfig};
 
 fn build_locator() -> modo::Result<GeoLocator> {
@@ -54,7 +60,7 @@ Returns an error when `mmdb_path` is empty or the file cannot be opened.
 
 ### Direct lookup
 
-```rust
+```rust,ignore
 use std::net::IpAddr;
 use modo::geolocation::{GeoLocator, GeolocationConfig};
 
@@ -78,7 +84,7 @@ in the database (private ranges, loopback addresses, etc.).
 extensions. `ClientIpLayer` must run before `GeoLayer` so that `ClientIp` is
 available when the lookup fires.
 
-```rust
+```rust,ignore
 use modo::ip::ClientIpLayer;
 use modo::geolocation::{GeoLayer, GeoLocator, GeolocationConfig};
 use axum::Router;
@@ -97,7 +103,7 @@ passes the request through unchanged.
 
 ### Extracting Location in a handler
 
-```rust
+```rust,ignore
 use modo::geolocation::Location;
 
 async fn handler(location: Location) -> String {

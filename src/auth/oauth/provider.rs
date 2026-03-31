@@ -1,5 +1,3 @@
-use std::future::Future;
-
 use super::{
     config::CallbackParams,
     profile::UserProfile,

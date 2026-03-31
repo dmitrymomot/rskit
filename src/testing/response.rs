@@ -50,12 +50,16 @@ impl TestResponse {
 
     /// Interpret the response body as a UTF-8 string.
     ///
+    /// # Panics
+    ///
     /// Panics if the body is not valid UTF-8.
     pub fn text(&self) -> &str {
         std::str::from_utf8(&self.body).expect("response body is not valid UTF-8")
     }
 
     /// Deserialize the response body as JSON into `T`.
+    ///
+    /// # Panics
     ///
     /// Panics if deserialization fails.
     pub fn json<T: DeserializeOwned>(&self) -> T {

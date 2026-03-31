@@ -5,6 +5,12 @@ use crate::error::Error;
 
 pub use super::types::TierInfo;
 
+/// Extracts [`TierInfo`] from request extensions.
+///
+/// # Errors
+///
+/// Returns [`Error::internal`](crate::Error::internal) if [`TierLayer`](super::TierLayer)
+/// has not been applied (i.e., `TierInfo` is missing from extensions).
 impl<S: Send + Sync> FromRequestParts<S> for TierInfo {
     type Rejection = Error;
 
@@ -17,6 +23,10 @@ impl<S: Send + Sync> FromRequestParts<S> for TierInfo {
     }
 }
 
+/// Optionally extracts [`TierInfo`] from request extensions.
+///
+/// Returns `Ok(None)` when [`TierLayer`](super::TierLayer) has not been applied
+/// or the owner extractor returned `None` without a default tier configured.
 impl<S: Send + Sync> OptionalFromRequestParts<S> for TierInfo {
     type Rejection = Error;
 

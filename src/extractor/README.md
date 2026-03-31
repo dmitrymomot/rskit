@@ -19,6 +19,7 @@ happen automatically.
 | `UploadedFile`        | Single file from a multipart upload  | —                             |
 | `Files`               | Map of field names to uploaded files | —                             |
 | `UploadValidator<'_>` | Fluent file validator                | —                             |
+| `ClientInfo`          | Client IP, user-agent, fingerprint   | —                             |
 
 ## Usage
 
@@ -142,6 +143,36 @@ struct EmailService { /* ... */ }
 
 async fn handler(Service(email): Service<EmailService>) {
     // email is Arc<EmailService>
+}
+```
+
+### Client info
+
+`ClientInfo` extracts the client IP address, `User-Agent` header, and
+`X-Fingerprint` header from the request. Requires `ClientIpLayer` for the IP
+field; without it, `ip_value()` returns `None`.
+
+For non-HTTP contexts (background jobs, CLI tools), use the builder:
+
+```rust
+use modo::extractor::ClientInfo;
+
+let info = ClientInfo::new()
+    .ip("1.2.3.4")
+    .user_agent("my-script/1.0");
+
+assert_eq!(info.ip_value(), Some("1.2.3.4"));
+```
+
+In a handler:
+
+```rust,ignore
+use modo::ClientInfo;
+
+async fn handler(client: ClientInfo) {
+    if let Some(ip) = client.ip_value() {
+        // ...
+    }
 }
 ```
 

@@ -1,4 +1,4 @@
-//! # Cookie
+//! # modo::cookie
 //!
 //! Cookie utilities: configuration, key derivation, and re-exports of
 //! `axum_extra` cookie jar types.

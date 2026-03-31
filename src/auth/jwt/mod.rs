@@ -1,27 +1,43 @@
+//! # modo::auth::jwt
+//!
 //! JWT authentication — token encoding, decoding, middleware, and revocation.
 //!
-//! Requires the `auth` feature.
+//! Requires feature `"auth"`.
 //!
-//! # Provides
+//! ## Provides
 //!
-//! - [`Claims`] — JWT claims with registered and custom fields; axum extractor
-//! - [`JwtConfig`] — YAML-deserialized configuration (secret, expiry, leeway, issuer, audience)
-//! - [`JwtEncoder`] — signs and produces JWT token strings (HS256)
-//! - [`JwtDecoder`] — verifies signatures and validates claims
-//! - [`JwtLayer`] — Tower middleware that enforces JWT auth on axum routes
-//! - [`Bearer`] — standalone axum extractor for the raw Bearer token string
-//! - [`JwtError`] — typed error enum with static `code()` strings
-//! - [`Revocation`] — trait for pluggable async token revocation backends
-//! - [`TokenSource`] — trait for pluggable token extraction locations
-//! - [`BearerSource`], [`CookieSource`], [`QuerySource`], [`HeaderSource`] — built-in token sources
-//! - [`HmacSigner`] — HMAC-SHA256 implementation of [`TokenSigner`] and [`TokenVerifier`]
-//! - [`TokenSigner`] — trait for JWT signing
-//! - [`TokenVerifier`] — trait for JWT signature verification
-//! - [`ValidationConfig`] — runtime validation policy (leeway, issuer, audience)
+//! | Type | Purpose |
+//! |------|---------|
+//! | [`Claims`] | JWT claims with registered and custom fields; axum extractor |
+//! | [`JwtConfig`] | YAML-deserialized configuration (secret, expiry, leeway, issuer, audience) |
+//! | [`JwtEncoder`] | Signs and produces JWT token strings (HS256) |
+//! | [`JwtDecoder`] | Verifies signatures and validates claims |
+//! | [`JwtLayer`] | Tower middleware that enforces JWT auth on axum routes |
+//! | [`Bearer`] | Standalone axum extractor for the raw Bearer token string |
+//! | [`JwtError`] | Typed error enum with static `code()` strings |
+//! | [`ValidationConfig`] | Runtime validation policy (leeway, issuer, audience) |
 //!
-//! # Quick start
+//! | Trait | Purpose |
+//! |-------|---------|
+//! | [`Revocation`] | Pluggable async token revocation backend |
+//! | [`TokenSource`] | Pluggable token extraction from HTTP requests |
+//! | [`TokenSigner`] | JWT signing (extends [`TokenVerifier`]) |
+//! | [`TokenVerifier`] | JWT signature verification |
 //!
-//! ```
+//! | Token source | Extracts from |
+//! |--------------|---------------|
+//! | [`BearerSource`] | `Authorization: Bearer <token>` header |
+//! | [`CookieSource`] | Named cookie |
+//! | [`QuerySource`] | Named query parameter |
+//! | [`HeaderSource`] | Custom request header |
+//!
+//! | Signer | Algorithm |
+//! |--------|-----------|
+//! | [`HmacSigner`] | HMAC-SHA256 (HS256), implements [`TokenSigner`] and [`TokenVerifier`] |
+//!
+//! ## Quick start
+//!
+//! ```rust,ignore
 //! use modo::auth::jwt::{JwtConfig, JwtEncoder, JwtDecoder, JwtLayer, Claims};
 //! use serde::{Serialize, Deserialize};
 //!
