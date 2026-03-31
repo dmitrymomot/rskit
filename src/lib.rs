@@ -84,6 +84,9 @@ pub mod dns;
 #[cfg(feature = "apikey")]
 pub mod apikey;
 
+#[cfg(feature = "tier")]
+pub mod tier;
+
 #[cfg(feature = "geolocation")]
 pub mod geolocation;
 
