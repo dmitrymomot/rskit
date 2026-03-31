@@ -6,7 +6,7 @@ Requires feature `"job"` (implies `"db"`):
 
 ```toml
 [dependencies]
-modo = { version = "0.2", features = ["job"] }
+modo = { version = "0.3", features = ["job"] }
 ```
 
 ## Overview

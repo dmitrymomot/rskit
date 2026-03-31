@@ -163,26 +163,36 @@ Rate limiting, CORS, CSRF, compression, security headers, request tracing, panic
 
 ## Feature flags
 
-Everything above the table is always available. The table modules are opt-in:
+Core modules are always available: cache, config, cookie, cron, encoding, error, extractor, flash, health, id, ip, middleware, rbac, runtime, sanitize, server, service, tenant, tracing, validate.
+
+Optional modules are behind feature flags:
 
 ```toml
 [dependencies]
-modo-rs = { version = "0.1", features = ["auth", "templates"] }
+modo-rs = { version = "0.3", features = ["auth", "templates"] }
 ```
 
-| Feature        | Modules                                              |
-| -------------- | ---------------------------------------------------- |
-| `auth`         | password, otp, totp, backup codes, jwt, oauth        |
-| `templates`    | MiniJinja engine with i18n and static file serving    |
-| `sse`          | Server-Sent Events broadcasting                      |
-| `email`        | Markdown email rendering + SMTP                      |
-| `storage`      | S3-compatible object storage                         |
-| `webhooks`     | Outbound webhook delivery                            |
-| `dns`          | DNS domain verification                              |
-| `geolocation`  | MaxMind GeoIP2 lookup                                |
-| `sentry`       | Sentry error tracking                                |
-| `test-helpers` | TestDb, TestApp, TestSession, in-memory/stub backends |
-| `full`         | All of the above                                     |
+| Feature          | Modules                                               | Implies        |
+| ---------------- | ----------------------------------------------------- | -------------- |
+| `db` (default)   | Database handle, migrations, query traits, pagination  |                |
+| `session`        | Database-backed sessions with signed cookies           | `db`           |
+| `job`            | Background job queue with retries and scheduling       | `db`           |
+| `http-client`    | HTTP client with retries, timeouts, connection pooling |                |
+| `auth`           | Password hashing, JWT, OAuth2, TOTP, backup codes      | `http-client`  |
+| `templates`      | MiniJinja engine with i18n and static file serving     |                |
+| `sse`            | Server-Sent Events broadcasting                        |                |
+| `email`          | Markdown-to-HTML email rendering with SMTP             |                |
+| `storage`        | S3-compatible object storage with ACL                  | `http-client`  |
+| `webhooks`       | Outbound webhook delivery with Standard Webhooks signing | `http-client` |
+| `dns`            | DNS TXT/CNAME domain verification                      |                |
+| `geolocation`    | MaxMind GeoIP2 location lookup                         |                |
+| `qrcode`         | QR code generation with SVG rendering                  |                |
+| `apikey`         | API key issuance, verification, and scoping            | `db`           |
+| `text-embedding` | Text-to-vector embeddings (OpenAI, Gemini, Mistral, Voyage) | `http-client` |
+| `tier`           | Feature-tier access control (plan-based gating)        |                |
+| `sentry`         | Sentry error tracking and performance monitoring       |                |
+| `test-helpers`   | TestDb, TestApp, TestSession, in-memory/stub backends  | `db`, `session`|
+| `full`           | All of the above                                       |                |
 
 ## Re-exports
 

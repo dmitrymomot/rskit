@@ -6,7 +6,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "*", features = ["apikey"] }
+//! modo = { version = "0.3", features = ["apikey"] }
 //! ```
 //!
 //! ## Provides

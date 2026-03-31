@@ -10,7 +10,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "0.2", features = ["storage"] }
+//! modo = { version = "0.3", features = ["storage"] }
 //! ```
 //!
 //! # Provides

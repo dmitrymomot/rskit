@@ -4,7 +4,7 @@ Feature flag: `dns`
 
 ```toml
 [dependencies]
-modo = { version = "*", features = ["dns"] }
+modo = { version = "0.3", features = ["dns"] }
 ```
 
 DNS-based domain ownership verification via raw UDP queries. Used in custom-domain flows where a user must prove they control a domain before activation.

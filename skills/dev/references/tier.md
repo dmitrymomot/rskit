@@ -3,7 +3,7 @@
 Plan-based feature gating for SaaS applications. Feature-gated under `tier` (no dependencies).
 
 ```toml
-modo = { version = "*", features = ["tier"] }
+modo = { version = "0.3", features = ["tier"] }
 ```
 
 All types are re-exported from the crate root under `#[cfg(feature = "tier")]`:

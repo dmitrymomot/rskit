@@ -6,7 +6,7 @@ Requires the `http-client` feature flag.
 
 ```toml
 [dependencies]
-modo = { version = "0.2", features = ["http-client"] }
+modo = { version = "0.3", features = ["http-client"] }
 ```
 
 The primary types are also re-exported at the crate root as `HttpClient`,

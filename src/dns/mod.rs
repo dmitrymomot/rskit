@@ -40,7 +40,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "*", features = ["dns"] }
+//! modo = { version = "0.3", features = ["dns"] }
 //! ```
 
 mod config;

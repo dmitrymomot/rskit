@@ -6,7 +6,7 @@ Requires feature `"webhooks"`:
 
 ```toml
 [dependencies]
-modo = { version = "0.2", features = ["webhooks"] }
+modo = { version = "0.3", features = ["webhooks"] }
 ```
 
 ## Key Types
