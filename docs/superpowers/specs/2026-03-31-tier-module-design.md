@@ -4,16 +4,16 @@ Plan-based feature gating for SaaS apps. Resolves the current owner's plan and g
 
 ## Design Decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Trait pattern | `Arc<dyn TierBackend>` with `Pin<Box<dyn Future>>` | Object-safe, simple ergonomics, vtable cost negligible vs I/O |
-| Owner ID extraction | Sync closure `Fn(&Parts) -> Option<String>` | Decoupled from tenant module; works with any ID source |
-| Caching | None in module; app caches inside `TierBackend` impl | Keeps module simple; caching strategies vary per app |
-| `require_limit` | Both route-level guard (async closure) and handler-level `check_limit()` | Guard for route enforcement; method for inline checks |
-| Missing owner ID | Skip (no `TierInfo` in extensions); optional default | Guards handle absence; `.with_default()` for anonymous tiers |
-| Template integration | Safe functions (`tier_has`, `tier_enabled`, `tier_limit`, `tier_name`) | Never errors on undefined features regardless of MiniJinja strict mode |
-| Extractor | `TierInfo` from extensions + `Service<TierResolver>` for manual resolution | Covers both middleware path and admin use case |
-| Error handling | All middleware/guard errors return `Error` | App's error handler decides rendering; never raw HTTP responses |
+| Decision             | Choice                                                                     | Rationale                                                              |
+| -------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Trait pattern        | `Arc<dyn TierBackend>` with `Pin<Box<dyn Future>>`                         | Object-safe, simple ergonomics, vtable cost negligible vs I/O          |
+| Owner ID extraction  | Sync closure `Fn(&Parts) -> Option<String>`                                | Decoupled from tenant module; works with any ID source                 |
+| Caching              | None in module; app caches inside `TierBackend` impl                       | Keeps module simple; caching strategies vary per app                   |
+| `require_limit`      | Both route-level guard (async closure) and handler-level `check_limit()`   | Guard for route enforcement; method for inline checks                  |
+| Missing owner ID     | Skip (no `TierInfo` in extensions); optional default                       | Guards handle absence; `.with_default()` for anonymous tiers           |
+| Template integration | Safe functions (`tier_has`, `tier_enabled`, `tier_limit`, `tier_name`)     | Never errors on undefined features regardless of MiniJinja strict mode |
+| Extractor            | `TierInfo` from extensions + `Service<TierResolver>` for manual resolution | Covers both middleware path and admin use case                         |
+| Error handling       | All middleware/guard errors return `Error`                                 | App's error handler decides rendering; never raw HTTP responses        |
 
 ## Dependencies
 
@@ -161,12 +161,12 @@ When both `templates` and `tier` features are enabled, `TemplateContextMiddlewar
 
 **Injected template globals:**
 
-| Name | Type | Description |
-|------|------|-------------|
-| `tier_name` | `String` | Current plan name (e.g., "free", "pro") |
-| `tier_has(name)` | `fn(&str) -> bool` | Feature available? (Toggle=true or Limit>0) |
-| `tier_enabled(name)` | `fn(&str) -> bool` | Feature enabled? (Toggle only) |
-| `tier_limit(name)` | `fn(&str) -> Option<u64>` | Limit ceiling (Limit only) |
+| Name                 | Type                      | Description                                 |
+| -------------------- | ------------------------- | ------------------------------------------- |
+| `tier_name`          | `String`                  | Current plan name (e.g., "free", "pro")     |
+| `tier_has(name)`     | `fn(&str) -> bool`        | Feature available? (Toggle=true or Limit>0) |
+| `tier_enabled(name)` | `fn(&str) -> bool`        | Feature enabled? (Toggle only)              |
+| `tier_limit(name)`   | `fn(&str) -> Option<u64>` | Limit ceiling (Limit only)                  |
 
 All functions return safe defaults for undefined features — `false` for booleans, `None` for limits. No template errors regardless of MiniJinja's undefined behavior setting.
 
@@ -202,11 +202,9 @@ if let Some(tier_info) = parts.extensions.get::<crate::tier::TierInfo>() {
 <span class="badge">{{ tier_name }}</span>
 
 {% if tier_has("sso") %}
-  <a href="/settings/sso">SSO Settings</a>
-{% endif %}
-
-{% if tier_has("api_calls") %}
-  <p>API limit: {{ tier_limit("api_calls") }}</p>
+<a href="/settings/sso">SSO Settings</a>
+{% endif %} {% if tier_has("api_calls") %}
+<p>API limit: {{ tier_limit("api_calls") }}</p>
 {% endif %}
 ```
 
@@ -336,21 +334,17 @@ async fn admin_view_plan(
 
 ```html
 <nav>
-  <span class="plan-badge">{{ tier_name }}</span>
+    <span class="plan-badge">{{ tier_name }}</span>
 
-  {% if tier_has("custom_domain") %}
+    {% if tier_has("custom_domain") %}
     <a href="/settings/domain">Custom Domain</a>
-  {% endif %}
-
-  {% if tier_has("sso") %}
+    {% endif %} {% if tier_has("sso") %}
     <a href="/settings/sso">SSO</a>
-  {% else %}
+    {% else %}
     <a href="/upgrade" class="upgrade">Upgrade for SSO</a>
-  {% endif %}
-
-  {% if tier_has("api_calls") %}
+    {% endif %} {% if tier_has("api_calls") %}
     <p>API call limit: {{ tier_limit("api_calls") }}</p>
-  {% endif %}
+    {% endif %}
 </nav>
 ```
 
@@ -374,14 +368,14 @@ src/tier/
 
 ## Error Handling
 
-| Situation | Error |
-|-----------|-------|
-| `TierBackend::resolve` fails | `Error` from backend (app-defined) |
-| Guard: `TierInfo` missing in extensions | `Error::internal("require_feature() called without TierLayer")` |
-| Guard: feature missing or disabled | `Error::forbidden("Feature 'X' is not available on your current plan")` |
-| Guard: limit exceeded | `Error::forbidden("Limit exceeded for 'X': 150/100")` |
-| Guard: feature is not a Limit | `Error::internal("Feature 'X' is not a limit")` |
-| Extractor: `TierInfo` missing | `Error::internal("Tier middleware not applied")` |
+| Situation                               | Error                                                                   |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| `TierBackend::resolve` fails            | `Error` from backend (app-defined)                                      |
+| Guard: `TierInfo` missing in extensions | `Error::internal("require_feature() called without TierLayer")`         |
+| Guard: feature missing or disabled      | `Error::forbidden("Feature 'X' is not available on your current plan")` |
+| Guard: limit exceeded                   | `Error::forbidden("Limit exceeded for 'X': 150/100")`                   |
+| Guard: feature is not a Limit           | `Error::internal("Feature 'X' is not a limit")`                         |
+| Extractor: `TierInfo` missing           | `Error::internal("Tier middleware not applied")`                        |
 
 All errors return `Error` — the app's error handler decides rendering. Guards and middleware never construct raw HTTP responses.
 
@@ -390,14 +384,14 @@ All errors return `Error` — the app's error handler decides rendering. Guards 
 - **Unit tests:** `TierInfo` methods (`has_feature`, `is_enabled`, `limit`, `check_limit`)
 - **Unit tests:** `FeatureAccess` serialization/deserialization
 - **Middleware tests:** Using in-memory `TierBackend` impl with `tower::ServiceExt::oneshot`
-  - Extractor returns `Some` → `TierInfo` in extensions
-  - Extractor returns `None` → no `TierInfo`, inner service called
-  - Extractor returns `None` + default → default `TierInfo` in extensions
-  - Backend error → error response
+    - Extractor returns `Some` → `TierInfo` in extensions
+    - Extractor returns `None` → no `TierInfo`, inner service called
+    - Extractor returns `None` + default → default `TierInfo` in extensions
+    - Backend error → error response
 - **Guard tests:**
-  - `require_feature` with present/missing/disabled features
-  - `require_limit` with under/over/equal usage
-  - Both guards with missing `TierInfo` → internal error
+    - `require_feature` with present/missing/disabled features
+    - `require_limit` with under/over/equal usage
+    - Both guards with missing `TierInfo` → internal error
 - **Extractor tests:** `TierInfo` from extensions, missing extensions
 - **Test helper:** `#[cfg(any(test, feature = "test-helpers"))]` in-memory backend
 
