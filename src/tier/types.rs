@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 
 /// Whether a feature is a boolean toggle or a usage limit.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FeatureAccess {
     /// Feature is enabled or disabled.
     Toggle(bool),
@@ -17,7 +17,7 @@ pub enum FeatureAccess {
 }
 
 /// Resolved tier information for an owner.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TierInfo {
     /// Plan name (e.g., "free", "pro", "enterprise").
     pub name: String,
