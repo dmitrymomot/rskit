@@ -219,9 +219,10 @@ where
             };
 
             if ceiling == 0 {
-                return Ok(
-                    Error::forbidden(format!("Limit exceeded for '{name}': 0/0")).into_response(),
-                );
+                return Ok(Error::forbidden(format!(
+                    "Feature '{name}' is not available on your current plan"
+                ))
+                .into_response());
             }
 
             let current = match (usage_fn)(&parts).await {

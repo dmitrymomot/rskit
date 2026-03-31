@@ -15,7 +15,7 @@
 //!
 //! Enable optional modules via feature flags: `http-client`, `templates`,
 //! `auth`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`,
-//! `qrcode`, `sentry`.
+//! `qrcode`, `sentry`, `apikey`, `text-embedding`, `tier`.
 //!
 //! Or enable everything:
 //!
