@@ -157,23 +157,24 @@ where
                 if let Some(tier_info) = parts.extensions.get::<crate::tier::TierInfo>() {
                     ctx.set("tier_name", minijinja::Value::from(tier_info.name.clone()));
 
-                    let ti = tier_info.clone();
+                    let ti = Arc::new(tier_info.clone());
+
+                    let t = ti.clone();
                     ctx.set(
                         "tier_has",
                         minijinja::Value::from_function(move |name: &str| -> bool {
-                            ti.has_feature(name)
+                            t.has_feature(name)
                         }),
                     );
 
-                    let ti = tier_info.clone();
+                    let t = ti.clone();
                     ctx.set(
                         "tier_enabled",
                         minijinja::Value::from_function(move |name: &str| -> bool {
-                            ti.is_enabled(name)
+                            t.is_enabled(name)
                         }),
                     );
 
-                    let ti = tier_info.clone();
                     ctx.set(
                         "tier_limit",
                         minijinja::Value::from_function(move |name: &str| -> Option<u64> {

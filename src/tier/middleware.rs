@@ -33,7 +33,7 @@ type OwnerExtractor = Arc<dyn Fn(&Parts) -> Option<String> + Send + Sync>;
 pub struct TierLayer {
     resolver: TierResolver,
     extractor: OwnerExtractor,
-    default: Option<TierInfo>,
+    default: Option<Arc<TierInfo>>,
 }
 
 impl TierLayer {
@@ -55,7 +55,7 @@ impl TierLayer {
     /// When the extractor returns `None`, inject this `TierInfo` instead of
     /// skipping.
     pub fn with_default(mut self, default: TierInfo) -> Self {
-        self.default = Some(default);
+        self.default = Some(Arc::new(default));
         self
     }
 }
@@ -88,7 +88,7 @@ pub struct TierMiddleware<S> {
     inner: S,
     resolver: TierResolver,
     extractor: OwnerExtractor,
-    default: Option<TierInfo>,
+    default: Option<Arc<TierInfo>>,
 }
 
 impl<S: Clone> Clone for TierMiddleware<S> {
@@ -131,7 +131,7 @@ where
                     Ok(info) => Some(info),
                     Err(e) => return Ok(e.into_response()),
                 },
-                None => default,
+                None => default.map(|arc| (*arc).clone()),
             };
 
             if let Some(info) = tier_info {
@@ -153,8 +153,8 @@ mod tests {
     use http::{Response, StatusCode};
     use tower::ServiceExt;
 
-    use super::super::types::{FeatureAccess, TierBackend};
-    use crate::error::Error;
+    use super::super::types::FeatureAccess;
+    use super::super::types::test_support::{FailingTierBackend, StaticTierBackend};
 
     fn pro_tier() -> TierInfo {
         TierInfo {
@@ -170,34 +170,12 @@ mod tests {
         }
     }
 
-    struct StaticBackend(TierInfo);
-
-    impl TierBackend for StaticBackend {
-        fn resolve(
-            &self,
-            _owner_id: &str,
-        ) -> Pin<Box<dyn Future<Output = crate::Result<TierInfo>> + Send + '_>> {
-            Box::pin(async { Ok(self.0.clone()) })
-        }
-    }
-
-    struct FailingBackend;
-
-    impl TierBackend for FailingBackend {
-        fn resolve(
-            &self,
-            _owner_id: &str,
-        ) -> Pin<Box<dyn Future<Output = crate::Result<TierInfo>> + Send + '_>> {
-            Box::pin(async { Err(Error::internal("db is down")) })
-        }
-    }
-
     fn resolver(tier: TierInfo) -> TierResolver {
-        TierResolver::from_backend(Arc::new(StaticBackend(tier)))
+        TierResolver::from_backend(Arc::new(StaticTierBackend::new(tier)))
     }
 
     fn failing_resolver() -> TierResolver {
-        TierResolver::from_backend(Arc::new(FailingBackend))
+        TierResolver::from_backend(Arc::new(FailingTierBackend))
     }
 
     async fn ok_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {

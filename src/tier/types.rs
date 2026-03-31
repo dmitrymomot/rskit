@@ -64,28 +64,36 @@ impl TierInfo {
         }
     }
 
+    /// Get the limit ceiling, returning typed errors for missing or non-limit features.
+    ///
+    /// Returns `Ok(ceiling)` for `Limit` features.
+    /// Returns `Err(forbidden)` if the feature is missing.
+    /// Returns `Err(internal)` if the feature is a `Toggle` (not a limit).
+    pub fn limit_ceiling(&self, name: &str) -> Result<u64> {
+        match self.features.get(name) {
+            Some(FeatureAccess::Limit(v)) => Ok(*v),
+            Some(FeatureAccess::Toggle(_)) => {
+                Err(Error::internal(format!("Feature '{name}' is not a limit")))
+            }
+            None => Err(Error::forbidden(format!(
+                "Feature '{name}' is not available on your current plan"
+            ))),
+        }
+    }
+
     /// Check current usage against limit ceiling.
     ///
     /// Returns `Ok(())` if usage is under the limit.
     /// Returns `Err(forbidden)` if the feature is missing, disabled, or usage >= limit.
     /// Returns `Err(internal)` if the feature is a Toggle (not a limit).
     pub fn check_limit(&self, name: &str, current: u64) -> Result<()> {
-        match self.features.get(name) {
-            None => Err(Error::forbidden(format!(
-                "Feature '{name}' is not available on your current plan"
-            ))),
-            Some(FeatureAccess::Toggle(_)) => {
-                Err(Error::internal(format!("Feature '{name}' is not a limit")))
-            }
-            Some(FeatureAccess::Limit(ceiling)) => {
-                if current >= *ceiling {
-                    Err(Error::forbidden(format!(
-                        "Limit exceeded for '{name}': {current}/{ceiling}"
-                    )))
-                } else {
-                    Ok(())
-                }
-            }
+        let ceiling = self.limit_ceiling(name)?;
+        if current >= ceiling {
+            Err(Error::forbidden(format!(
+                "Limit exceeded for '{name}': {current}/{ceiling}"
+            )))
+        } else {
+            Ok(())
         }
     }
 }

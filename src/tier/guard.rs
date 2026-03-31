@@ -10,7 +10,7 @@ use tower::{Layer, Service};
 
 use crate::error::Error;
 
-use super::types::{FeatureAccess, TierInfo};
+use super::types::TierInfo;
 
 // ---------------------------------------------------------------------------
 // require_feature
@@ -213,20 +213,16 @@ where
                 );
             };
 
-            let ceiling = match tier.features.get(&name) {
-                Some(FeatureAccess::Limit(v)) => *v,
-                Some(FeatureAccess::Toggle(_)) => {
-                    return Ok(
-                        Error::internal(format!("Feature '{name}' is not a limit")).into_response()
-                    );
-                }
-                None => {
-                    return Ok(Error::forbidden(format!(
-                        "Feature '{name}' is not available on your current plan"
-                    ))
-                    .into_response());
-                }
+            let ceiling = match tier.limit_ceiling(&name) {
+                Ok(v) => v,
+                Err(e) => return Ok(e.into_response()),
             };
+
+            if ceiling == 0 {
+                return Ok(
+                    Error::forbidden(format!("Limit exceeded for '{name}': 0/0")).into_response(),
+                );
+            }
 
             let current = match (usage_fn)(&parts).await {
                 Ok(v) => v,
