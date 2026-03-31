@@ -102,6 +102,47 @@ impl TierResolver {
     }
 }
 
+/// Test helpers for the tier module.
+///
+/// Available when running tests or when the `test-helpers` feature is enabled.
+#[cfg_attr(not(any(test, feature = "test-helpers")), allow(dead_code))]
+pub mod test_support {
+    use super::*;
+
+    /// In-memory backend that returns a fixed `TierInfo` for any owner ID.
+    pub struct StaticTierBackend {
+        tier: TierInfo,
+    }
+
+    impl StaticTierBackend {
+        /// Create a backend that always returns the given tier.
+        pub fn new(tier: TierInfo) -> Self {
+            Self { tier }
+        }
+    }
+
+    impl TierBackend for StaticTierBackend {
+        fn resolve(
+            &self,
+            _owner_id: &str,
+        ) -> Pin<Box<dyn Future<Output = Result<TierInfo>> + Send + '_>> {
+            Box::pin(async { Ok(self.tier.clone()) })
+        }
+    }
+
+    /// In-memory backend that always returns an error.
+    pub struct FailingTierBackend;
+
+    impl TierBackend for FailingTierBackend {
+        fn resolve(
+            &self,
+            _owner_id: &str,
+        ) -> Pin<Box<dyn Future<Output = Result<TierInfo>> + Send + '_>> {
+            Box::pin(async { Err(Error::internal("test: backend failure")) })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -42,3 +42,11 @@ pub use extractor::TierInfo;
 pub use guard::{require_feature, require_limit};
 pub use middleware::TierLayer;
 pub use types::{FeatureAccess, TierBackend, TierResolver};
+
+/// Test helpers for the tier module.
+///
+/// Available when running tests or when the `test-helpers` feature is enabled.
+#[cfg_attr(not(any(test, feature = "test-helpers")), allow(dead_code))]
+pub mod test {
+    pub use super::types::test_support::{FailingTierBackend, StaticTierBackend};
+}

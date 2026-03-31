@@ -162,6 +162,11 @@ pub use apikey::{
     CreateKeyRequest, require_scope,
 };
 
+#[cfg(feature = "tier")]
+pub use tier::{
+    FeatureAccess, TierBackend, TierInfo, TierLayer, TierResolver, require_feature, require_limit,
+};
+
 #[cfg(feature = "geolocation")]
 pub use geolocation::{GeoLayer, GeoLocator, GeolocationConfig, Location};
 
