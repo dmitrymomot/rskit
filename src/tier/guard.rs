@@ -1,6 +1,5 @@
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use axum::body::Body;
@@ -93,7 +92,7 @@ where
         Box::pin(async move {
             let Some(tier) = request.extensions().get::<TierInfo>() else {
                 return Ok(
-                    Error::internal("require_feature() called without TierLayer").into_response()
+                    Error::internal("require_feature() called without TierLayer").into_response(),
                 );
             };
 
@@ -252,6 +251,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::convert::Infallible;
+    use std::sync::Arc;
 
     use http::{Response, StatusCode};
     use tower::ServiceExt;
@@ -277,9 +277,10 @@ mod tests {
         let svc = layer.layer(tower::service_fn(ok_handler));
 
         let mut req = Request::builder().body(Body::empty()).unwrap();
-        req.extensions_mut().insert(tier_with(HashMap::from([
-            ("sso".into(), FeatureAccess::Toggle(true)),
-        ])));
+        req.extensions_mut().insert(tier_with(HashMap::from([(
+            "sso".into(),
+            FeatureAccess::Toggle(true),
+        )])));
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
     }
@@ -290,9 +291,10 @@ mod tests {
         let svc = layer.layer(tower::service_fn(ok_handler));
 
         let mut req = Request::builder().body(Body::empty()).unwrap();
-        req.extensions_mut().insert(tier_with(HashMap::from([
-            ("api_calls".into(), FeatureAccess::Limit(1_000)),
-        ])));
+        req.extensions_mut().insert(tier_with(HashMap::from([(
+            "api_calls".into(),
+            FeatureAccess::Limit(1_000),
+        )])));
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
     }
@@ -303,9 +305,10 @@ mod tests {
         let svc = layer.layer(tower::service_fn(ok_handler));
 
         let mut req = Request::builder().body(Body::empty()).unwrap();
-        req.extensions_mut().insert(tier_with(HashMap::from([
-            ("sso".into(), FeatureAccess::Toggle(false)),
-        ])));
+        req.extensions_mut().insert(tier_with(HashMap::from([(
+            "sso".into(),
+            FeatureAccess::Toggle(false),
+        )])));
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
     }
@@ -348,9 +351,10 @@ mod tests {
         }));
 
         let mut req = Request::builder().body(Body::empty()).unwrap();
-        req.extensions_mut().insert(tier_with(HashMap::from([
-            ("sso".into(), FeatureAccess::Toggle(false)),
-        ])));
+        req.extensions_mut().insert(tier_with(HashMap::from([(
+            "sso".into(),
+            FeatureAccess::Toggle(false),
+        )])));
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
         assert!(!called.load(Ordering::SeqCst));
@@ -364,9 +368,10 @@ mod tests {
         let svc = layer.layer(tower::service_fn(ok_handler));
 
         let mut req = Request::builder().body(Body::empty()).unwrap();
-        req.extensions_mut().insert(tier_with(HashMap::from([
-            ("api_calls".into(), FeatureAccess::Limit(1_000)),
-        ])));
+        req.extensions_mut().insert(tier_with(HashMap::from([(
+            "api_calls".into(),
+            FeatureAccess::Limit(1_000),
+        )])));
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
     }
@@ -377,9 +382,10 @@ mod tests {
         let svc = layer.layer(tower::service_fn(ok_handler));
 
         let mut req = Request::builder().body(Body::empty()).unwrap();
-        req.extensions_mut().insert(tier_with(HashMap::from([
-            ("api_calls".into(), FeatureAccess::Limit(1_000)),
-        ])));
+        req.extensions_mut().insert(tier_with(HashMap::from([(
+            "api_calls".into(),
+            FeatureAccess::Limit(1_000),
+        )])));
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
     }
@@ -390,9 +396,10 @@ mod tests {
         let svc = layer.layer(tower::service_fn(ok_handler));
 
         let mut req = Request::builder().body(Body::empty()).unwrap();
-        req.extensions_mut().insert(tier_with(HashMap::from([
-            ("api_calls".into(), FeatureAccess::Limit(1_000)),
-        ])));
+        req.extensions_mut().insert(tier_with(HashMap::from([(
+            "api_calls".into(),
+            FeatureAccess::Limit(1_000),
+        )])));
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
     }
@@ -403,9 +410,10 @@ mod tests {
         let svc = layer.layer(tower::service_fn(ok_handler));
 
         let mut req = Request::builder().body(Body::empty()).unwrap();
-        req.extensions_mut().insert(tier_with(HashMap::from([
-            ("sso".into(), FeatureAccess::Toggle(true)),
-        ])));
+        req.extensions_mut().insert(tier_with(HashMap::from([(
+            "sso".into(),
+            FeatureAccess::Toggle(true),
+        )])));
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
@@ -439,9 +447,10 @@ mod tests {
         let svc = layer.layer(tower::service_fn(ok_handler));
 
         let mut req = Request::builder().body(Body::empty()).unwrap();
-        req.extensions_mut().insert(tier_with(HashMap::from([
-            ("api_calls".into(), FeatureAccess::Limit(1_000)),
-        ])));
+        req.extensions_mut().insert(tier_with(HashMap::from([(
+            "api_calls".into(),
+            FeatureAccess::Limit(1_000),
+        )])));
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
@@ -463,9 +472,10 @@ mod tests {
         }));
 
         let mut req = Request::builder().body(Body::empty()).unwrap();
-        req.extensions_mut().insert(tier_with(HashMap::from([
-            ("api_calls".into(), FeatureAccess::Limit(1_000)),
-        ])));
+        req.extensions_mut().insert(tier_with(HashMap::from([(
+            "api_calls".into(),
+            FeatureAccess::Limit(1_000),
+        )])));
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
         assert!(!called.load(Ordering::SeqCst));

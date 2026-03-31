@@ -155,33 +155,30 @@ where
                 // tier info (if tier feature enabled and TierInfo in extensions)
                 #[cfg(feature = "tier")]
                 if let Some(tier_info) = parts.extensions.get::<crate::tier::TierInfo>() {
-                    ctx.set(
-                        "tier_name",
-                        minijinja::Value::from(tier_info.name.clone()),
-                    );
+                    ctx.set("tier_name", minijinja::Value::from(tier_info.name.clone()));
 
                     let ti = tier_info.clone();
                     ctx.set(
                         "tier_has",
-                        minijinja::Value::from_function(
-                            move |name: &str| -> bool { ti.has_feature(name) },
-                        ),
+                        minijinja::Value::from_function(move |name: &str| -> bool {
+                            ti.has_feature(name)
+                        }),
                     );
 
                     let ti = tier_info.clone();
                     ctx.set(
                         "tier_enabled",
-                        minijinja::Value::from_function(
-                            move |name: &str| -> bool { ti.is_enabled(name) },
-                        ),
+                        minijinja::Value::from_function(move |name: &str| -> bool {
+                            ti.is_enabled(name)
+                        }),
                     );
 
                     let ti = tier_info.clone();
                     ctx.set(
                         "tier_limit",
-                        minijinja::Value::from_function(
-                            move |name: &str| -> Option<u64> { ti.limit(name) },
-                        ),
+                        minijinja::Value::from_function(move |name: &str| -> Option<u64> {
+                            ti.limit(name)
+                        }),
                     );
                 }
 
@@ -471,9 +468,7 @@ mod tests {
             let ti = tier.clone();
             ctx.set(
                 "tier_has",
-                minijinja::Value::from_function(move |name: &str| -> bool {
-                    ti.has_feature(name)
-                }),
+                minijinja::Value::from_function(move |name: &str| -> bool { ti.has_feature(name) }),
             );
 
             let merged = ctx.merge(minijinja::context! {});
@@ -497,9 +492,7 @@ mod tests {
             let ti = tier.clone();
             ctx.set(
                 "tier_has",
-                minijinja::Value::from_function(move |name: &str| -> bool {
-                    ti.has_feature(name)
-                }),
+                minijinja::Value::from_function(move |name: &str| -> bool { ti.has_feature(name) }),
             );
 
             let merged = ctx.merge(minijinja::context! {});

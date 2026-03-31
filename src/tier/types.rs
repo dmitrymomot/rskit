@@ -74,9 +74,9 @@ impl TierInfo {
             None => Err(Error::forbidden(format!(
                 "Feature '{name}' is not available on your current plan"
             ))),
-            Some(FeatureAccess::Toggle(_)) => Err(Error::internal(format!(
-                "Feature '{name}' is not a limit"
-            ))),
+            Some(FeatureAccess::Toggle(_)) => {
+                Err(Error::internal(format!("Feature '{name}' is not a limit")))
+            }
             Some(FeatureAccess::Limit(ceiling)) => {
                 if current >= *ceiling {
                     Err(Error::forbidden(format!(

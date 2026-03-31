@@ -5,8 +5,8 @@ use std::task::{Context, Poll};
 
 use axum::body::Body;
 use axum::response::IntoResponse;
-use http::request::Parts;
 use http::Request;
+use http::request::Parts;
 use tower::{Layer, Service};
 
 use super::types::{TierInfo, TierResolver};
@@ -153,24 +153,20 @@ mod tests {
     use http::{Response, StatusCode};
     use tower::ServiceExt;
 
-    use crate::error::Error;
     use super::super::types::{FeatureAccess, TierBackend};
+    use crate::error::Error;
 
     fn pro_tier() -> TierInfo {
         TierInfo {
             name: "pro".into(),
-            features: HashMap::from([
-                ("sso".into(), FeatureAccess::Toggle(true)),
-            ]),
+            features: HashMap::from([("sso".into(), FeatureAccess::Toggle(true))]),
         }
     }
 
     fn anon_tier() -> TierInfo {
         TierInfo {
             name: "anonymous".into(),
-            features: HashMap::from([
-                ("public_api".into(), FeatureAccess::Toggle(true)),
-            ]),
+            features: HashMap::from([("public_api".into(), FeatureAccess::Toggle(true))]),
         }
     }
 
@@ -219,7 +215,9 @@ mod tests {
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         assert_eq!(body, "tier-present");
     }
 
@@ -231,20 +229,23 @@ mod tests {
         let req = Request::builder().body(Body::empty()).unwrap();
         let resp = svc.oneshot(req).await.unwrap();
 
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         assert_eq!(body, "no-tier");
     }
 
     #[tokio::test]
     async fn extractor_none_with_default_injects_default() {
-        let layer = TierLayer::new(resolver(pro_tier()), |_| None)
-            .with_default(anon_tier());
+        let layer = TierLayer::new(resolver(pro_tier()), |_| None).with_default(anon_tier());
         let svc = layer.layer(tower::service_fn(ok_handler));
 
         let req = Request::builder().body(Body::empty()).unwrap();
         let resp = svc.oneshot(req).await.unwrap();
 
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         assert_eq!(body, "tier-present");
     }
 
@@ -310,7 +311,9 @@ mod tests {
         req.extensions_mut().insert(OwnerId("owner_42".into()));
         let resp = svc.oneshot(req).await.unwrap();
 
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         assert_eq!(body, "tier-present");
     }
 }

@@ -38,9 +38,7 @@ mod tests {
     fn test_tier() -> TierInfo {
         TierInfo {
             name: "pro".into(),
-            features: HashMap::from([
-                ("sso".into(), FeatureAccess::Toggle(true)),
-            ]),
+            features: HashMap::from([("sso".into(), FeatureAccess::Toggle(true))]),
         }
     }
 
