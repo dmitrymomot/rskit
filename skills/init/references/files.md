@@ -40,25 +40,31 @@ modo = { git = "https://github.com/dmitrymomot/modo.git", branch = "modo-v2", fe
 
 Build the `features` list from selected components:
 
-| Component   | Feature string    |
-|-------------|-------------------|
-| Templates   | `"templates"`     |
-| Auth        | `"auth"`          |
-| Email       | `"email"`         |
-| Storage     | `"storage"`       |
-| SSE         | `"sse"`           |
-| Webhooks    | `"webhooks"`      |
-| DNS         | `"dns"`           |
-| Geolocation | `"geolocation"`   |
-| Sentry      | `"sentry"`        |
-| Session     | `"session"`       |
-| Jobs        | `"job"`           |
+| Component        | Feature string      |
+|------------------|---------------------|
+| Database         | `"db"` (default)    |
+| Session          | `"session"`         |
+| Jobs             | `"job"`             |
+| HTTP Client      | `"http-client"`     |
+| Templates        | `"templates"`       |
+| Auth             | `"auth"`            |
+| Email            | `"email"`           |
+| Storage          | `"storage"`         |
+| SSE              | `"sse"`             |
+| Webhooks         | `"webhooks"`        |
+| DNS              | `"dns"`             |
+| Geolocation      | `"geolocation"`     |
+| QR Codes         | `"qrcode"`          |
+| Sentry           | `"sentry"`          |
+| API Keys         | `"apikey"`          |
+| Text Embeddings  | `"text-embedding"`  |
+| Tier / Feature Gates | `"tier"`        |
 
 If ALL of these are selected, use `"full"` instead of listing them individually.
 
 For dev-dependencies, append `"test-helpers"`, `"session"`, and `"job"` to the features list.
 
-Cron, Multi-tenancy, and RBAC do NOT require feature flags. Jobs requires `"job"`. Session (used by core) requires `"session"` — always include it.
+Cron, Multi-tenancy, and RBAC do NOT require feature flags. Database (`"db"`) is a default feature. Session (used by core) requires `"session"` — always include it.
 
 ---
 
