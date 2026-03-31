@@ -27,13 +27,13 @@ edition = "2024"
 rust-version = "1.92"
 
 [dependencies]
-modo = { git = "https://github.com/dmitrymomot/modo.git", branch = "modo-v2", features = [{{features}}] }
+modo = { git = "https://github.com/dmitrymomot/modo.git", branch = "main", features = [{{features}}] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 
 [dev-dependencies]
-modo = { git = "https://github.com/dmitrymomot/modo.git", branch = "modo-v2", features = [{{features_with_test_helpers}}] }
+modo = { git = "https://github.com/dmitrymomot/modo.git", branch = "main", features = [{{features_with_test_helpers}}] }
 ```
 
 ### Feature mapping

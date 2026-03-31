@@ -28,15 +28,17 @@ cat > "$PROJECT_DIR/templates/base.html" << 'HTML'
 </head>
 <body class="min-h-screen bg-gray-50 text-gray-900 antialiased">
   {% for msg in flash_messages() %}
-  {% if msg.level == "success" %}
-  <div class="mx-4 mt-2 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800" role="alert">{{ msg.message }}</div>
-  {% elif msg.level == "error" %}
-  <div class="mx-4 mt-2 rounded-md bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{{ msg.message }}</div>
-  {% elif msg.level == "warning" %}
-  <div class="mx-4 mt-2 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800" role="alert">{{ msg.message }}</div>
+  {% for level, text in msg|items %}
+  {% if level == "success" %}
+  <div class="mx-4 mt-2 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800" role="alert">{{ text }}</div>
+  {% elif level == "error" %}
+  <div class="mx-4 mt-2 rounded-md bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{{ text }}</div>
+  {% elif level == "warning" %}
+  <div class="mx-4 mt-2 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800" role="alert">{{ text }}</div>
   {% else %}
-  <div class="mx-4 mt-2 rounded-md bg-blue-50 px-4 py-3 text-sm text-blue-800" role="alert">{{ msg.message }}</div>
+  <div class="mx-4 mt-2 rounded-md bg-blue-50 px-4 py-3 text-sm text-blue-800" role="alert">{{ text }}</div>
   {% endif %}
+  {% endfor %}
   {% endfor %}
 
   {% block content %}{% endblock %}
@@ -92,13 +94,12 @@ YAML
 # ── src/handlers/home.rs ────────────────────────────────────
 cat > "$PROJECT_DIR/src/handlers/home.rs" << 'RUST'
 use modo::axum::response::Html;
-use modo::{Flash, Renderer, Result};
+use modo::{Renderer, Result};
 
-pub async fn get(renderer: Renderer, flash: Flash) -> Result<Html<String>> {
-    let messages = flash.messages();
+pub async fn get(renderer: Renderer) -> Result<Html<String>> {
     renderer.html(
         "home.html",
-        modo::template::context! { title => "Welcome", messages => messages },
+        modo::template::context! { title => "Welcome" },
     )
 }
 RUST
