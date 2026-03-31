@@ -25,11 +25,9 @@
 //! use modo::email::{EmailConfig, Mailer, SendEmail};
 //!
 //! # async fn run() -> modo::Result<()> {
-//! let config = EmailConfig {
-//!     templates_path: "emails".into(),
-//!     default_from_email: "noreply@example.com".into(),
-//!     ..Default::default()
-//! };
+//! let mut config = EmailConfig::default();
+//! config.templates_path = "emails".into();
+//! config.default_from_email = "noreply@example.com".into();
 //! let mailer = Mailer::new(&config)?;
 //!
 //! mailer.send(
