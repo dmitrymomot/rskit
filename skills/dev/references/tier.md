@@ -31,6 +31,7 @@ Whether a feature is a boolean toggle or a usage limit.
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum FeatureAccess {
     Toggle(bool),
     Limit(u64),

@@ -283,7 +283,7 @@ Sub-modules `session::device`, `session::fingerprint`, and `session::meta` are p
 
 Cookie-based one-time cross-request notifications. Messages survive exactly one redirect: current request writes, next request reads and clears.
 
-### FlashLayer
+### FlashLayer and FlashMiddleware
 
 ```rust
 use modo::flash::FlashLayer;
@@ -296,6 +296,10 @@ let router = Router::new()
     .route("/save", post(save_handler))
     .layer(flash_layer);
 ```
+
+Constructor: `FlashLayer::new(config: &CookieConfig, key: &Key) -> Self`
+
+`FlashMiddleware<S>` is the Tower `Service` produced by `FlashLayer`. It is re-exported from `modo::flash::FlashMiddleware` but users never construct it directly.
 
 Cookie details:
 
@@ -389,7 +393,7 @@ So `modo::Flash`, `modo::FlashEntry`, `modo::FlashLayer` work directly. `modo::S
 
 11. **Flash outgoing wins over read**: If a handler both reads incoming messages and writes new ones, only the new outgoing messages are written to the cookie (the old ones are not preserved).
 
-12. **`SessionState` is `pub(crate)`**: Not accessible outside the crate. Handlers use the `Session` extractor.
+12. **`SessionState` and `FlashState` are `pub(crate)`**: Not accessible outside the crate. Handlers use the `Session` and `Flash` extractors respectively.
 
 13. **Handler-level `async fn` for axum bounds**: Handler functions inside `#[tokio::test]` closures do not satisfy axum's `Handler` bounds. Define test handlers as module-level `async fn`.
 

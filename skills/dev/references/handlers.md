@@ -18,7 +18,7 @@ async fn get_item(
     axum::extract::Path(id): axum::extract::Path<String>,
     Service(db): Service<DbPool>,
 ) -> modo::Result<Json<Item>> {
-    let item = db.find(&id).await.map_err(|_| modo::Error::not_found())?;
+    let item = db.find(&id).await.map_err(|_| modo::Error::not_found("item not found"))?;
     Ok(Json(item))
 }
 ```
@@ -35,7 +35,7 @@ Extractors are function parameters. modo provides:
 
 Return types: `Json<T>`, `Html<String>`, `axum::response::Redirect`, `axum::response::Response`, or `modo::Result<T>` for fallible handlers.
 
-Error constructors: `Error::not_found()`, `Error::bad_request()`, `Error::internal()`, `Error::unauthorized()`, `Error::forbidden()`, `Error::too_many_requests()`.
+Error constructors (all take `msg: impl Into<String>`): `Error::not_found(msg)`, `Error::bad_request(msg)`, `Error::internal(msg)`, `Error::unauthorized(msg)`, `Error::forbidden(msg)`, `Error::too_many_requests(msg)`, `Error::conflict(msg)`, `Error::unprocessable_entity(msg)`.
 
 ## Routing with axum::Router
 
@@ -96,14 +96,12 @@ Token-bucket algorithm. Each key gets `burst_size` tokens; tokens replenish at `
 use modo::middleware::RateLimitConfig;
 
 // #[non_exhaustive] -- use Default + field mutation (struct literals won't compile outside the crate)
-let config = RateLimitConfig {
-    per_second: 1,          // token replenish rate
-    burst_size: 10,         // max tokens per key
-    use_headers: true,      // include x-ratelimit-* headers
-    cleanup_interval_secs: 60,
-    max_keys: 10_000,       // 0 = unlimited
-    ..Default::default()
-};
+let mut config = RateLimitConfig::default();
+config.per_second = 1;          // token replenish rate (default: 1)
+config.burst_size = 10;         // max tokens per key (default: 10)
+config.use_headers = true;      // include x-ratelimit-* headers (default: true)
+config.cleanup_interval_secs = 60; // (default: 60)
+config.max_keys = 10_000;       // 0 = unlimited (default: 10_000)
 ```
 
 **IP-based rate limiting (`rate_limit`):**
@@ -174,14 +172,12 @@ Built on `tower_http::trace::TraceLayer` with a custom `ModoMakeSpan`.
 ```rust
 use modo::middleware::{cors, CorsConfig};
 
-let config = CorsConfig {
-    origins: vec!["https://example.com".into()],
-    methods: vec!["GET".into(), "POST".into(), "PUT".into(), "DELETE".into(), "PATCH".into()],
-    headers: vec!["Content-Type".into(), "Authorization".into()],
-    max_age_secs: 86400,
-    allow_credentials: true,
-    ..Default::default()
-};
+// #[non_exhaustive] -- use Default + field mutation
+let mut config = CorsConfig::default();
+config.origins = vec!["https://example.com".into()];
+// defaults: methods=["GET","POST","PUT","DELETE","PATCH"],
+//   headers=["Content-Type","Authorization"], max_age_secs=86400,
+//   allow_credentials=true
 let layer = cors(&config);
 ```
 
@@ -252,15 +248,12 @@ Adds security response headers. `SecurityHeadersConfig` is `#[non_exhaustive]` w
 ```rust
 use modo::middleware::{security_headers, SecurityHeadersConfig};
 
-let config = SecurityHeadersConfig {
-    x_content_type_options: true,       // X-Content-Type-Options: nosniff
-    x_frame_options: "DENY".into(),
-    referrer_policy: "strict-origin-when-cross-origin".into(),
-    hsts_max_age: Some(31536000),       // Strict-Transport-Security
-    content_security_policy: None,
-    permissions_policy: None,
-    ..Default::default()
-};
+// #[non_exhaustive] -- use Default + field mutation
+let mut config = SecurityHeadersConfig::default();
+// defaults: x_content_type_options=true, x_frame_options="DENY",
+//   referrer_policy="strict-origin-when-cross-origin",
+//   hsts_max_age=None, content_security_policy=None, permissions_policy=None
+config.hsts_max_age = Some(31536000);       // enable Strict-Transport-Security
 let layer = security_headers(&config)?;
 ```
 
@@ -272,14 +265,12 @@ Double-submit signed-cookie pattern. Exempt methods (GET, HEAD, OPTIONS by defau
 use modo::middleware::{csrf, CsrfConfig};
 use modo::cookie::Key;
 
-let config = CsrfConfig {
-    cookie_name: "_csrf".into(),
-    header_name: "X-CSRF-Token".into(),
-    field_name: "_csrf_token".into(),
-    ttl_secs: 21600,
-    exempt_methods: vec!["GET".into(), "HEAD".into(), "OPTIONS".into()],
-    ..Default::default()
-};
+// #[non_exhaustive] -- use Default + field mutation
+let mut config = CsrfConfig::default();
+// defaults: cookie_name="_csrf", header_name="X-CSRF-Token",
+//   field_name="_csrf_token", ttl_secs=21600,
+//   exempt_methods=["GET","HEAD","OPTIONS"]
+config.ttl_secs = 3600; // override if needed
 let key = Key::generate();
 let layer = csrf(&config, &key);
 ```

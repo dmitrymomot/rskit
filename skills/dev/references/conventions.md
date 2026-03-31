@@ -7,24 +7,58 @@
 ```
 src/
   error/
-    mod.rs          # mod core; mod convert; mod http_error; pub use ...
-    core.rs         # Error struct, Result alias, constructors
-    convert.rs      # From impls for std/third-party errors
-    http_error.rs   # HttpError enum
+    mod.rs              # mod core; mod convert; mod http_error; pub use ...
+    core.rs             # Error struct, Result alias, constructors
+    convert.rs          # From impls for std/third-party errors
+    http_error.rs       # HttpError enum
   extractor/
-    mod.rs          # mod json; mod form; ... pub use ...
-    json.rs         # JsonRequest<T>
-    form.rs         # FormRequest<T>
-    query.rs        # Query<T>
-    service.rs      # Service<T>
-    multipart.rs    # MultipartRequest<T>, UploadedFile, Files
-    upload_validator.rs  # UploadValidator
+    mod.rs              # mod json; mod form; ... pub use ...
+    json.rs             # JsonRequest<T>
+    form.rs             # FormRequest<T>
+    query.rs            # Query<T>
+    service.rs          # Service<T>
+    client_info.rs      # ClientInfo
+    multipart.rs        # MultipartRequest<T>, UploadedFile, Files
+    upload_validator.rs # UploadValidator
+  service/
+    mod.rs              # mod registry; mod state; mod snapshot; pub use ...
+    registry.rs         # Registry
+    state.rs            # AppState
+    snapshot.rs         # RegistrySnapshot (pub(crate))
+  sanitize/
+    mod.rs              # mod functions; mod html; mod traits; pub use ...
+    traits.rs           # Sanitize trait
+    functions.rs        # trim, trim_lowercase, collapse_whitespace, strip_html, truncate, normalize_email
+    html.rs             # html_to_text (internal)
+  validate/
+    mod.rs              # mod error; mod rules; mod traits; mod validator; pub use ...
+    traits.rs           # Validate trait
+    validator.rs        # Validator builder
+    error.rs            # ValidationError
+    rules.rs            # FieldValidator (internal)
+  id/
+    mod.rs              # mod ulid; mod short; pub use ...
+    ulid.rs             # ulid()
+    short.rs            # short()
+  encoding/
+    mod.rs              # pub mod base32; pub mod base64url; pub mod hex;
+    base32.rs           # encode, decode
+    base64url.rs        # encode, decode
+    hex.rs              # encode, sha256
+  cache/
+    mod.rs              # mod lru; pub use ...
+    lru.rs              # LruCache<K, V>
+  health/
+    mod.rs              # mod check; mod router; pub use ...
+    check.rs            # HealthCheck trait, HealthChecks builder
+    router.rs           # router() -> Router<AppState>
 ```
 
 `lib.rs` re-exports key types at crate root for convenience:
 
 ```rust
 pub use error::{Error, Result};
+pub use extractor::ClientInfo;
 pub use extractor::Service;
 pub use health::{HealthCheck, HealthChecks};
 pub use sanitize::Sanitize;
@@ -176,7 +210,7 @@ Methods:
 
 **Module:** `src/extractor/`
 
-All extractors except `Path` and `Service<T>` require `T: Sanitize`. They call `sanitize()` automatically after deserialization.
+All extractors except `Path`, `Service<T>`, and `ClientInfo` require `T: Sanitize`. They call `sanitize()` automatically after deserialization.
 
 ### `Service<T>`
 
@@ -190,6 +224,38 @@ pub struct Service<T>(pub Arc<T>);
 ```rust
 async fn handler(Service(db): Service<Pool>) {
     // db is Arc<Pool>
+}
+```
+
+### `ClientInfo`
+
+Client request context: IP address, user-agent, and fingerprint. Implements `FromRequestParts`. Requires `ClientIpLayer` for the `ip` field; if absent, `ip` will be `None`.
+
+```rust
+#[derive(Debug, Clone, Default)]
+pub struct ClientInfo {
+    ip: Option<String>,
+    user_agent: Option<String>,
+    fingerprint: Option<String>,
+}
+
+// Builder (for non-HTTP contexts like background jobs)
+fn new() -> Self                                          // all fields None
+fn ip(self, ip: impl Into<String>) -> Self
+fn user_agent(self, ua: impl Into<String>) -> Self
+fn fingerprint(self, fp: impl Into<String>) -> Self
+
+// Accessors
+fn ip_value(&self) -> Option<&str>
+fn user_agent_value(&self) -> Option<&str>
+fn fingerprint_value(&self) -> Option<&str>
+```
+
+Fingerprint is read from the `x-fingerprint` request header.
+
+```rust
+async fn handler(info: ClientInfo) {
+    if let Some(ip) = info.ip_value() { /* ... */ }
 }
 ```
 

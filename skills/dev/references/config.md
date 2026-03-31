@@ -121,6 +121,7 @@ Source: `src/config/modo.rs`
 | `storage`     | `storage::BucketConfig`          | `storage`     | `storage`     |
 | `dns`         | `dns::DnsConfig`                 | `dns`         | `dns`         |
 | `geolocation` | `geolocation::GeolocationConfig` | `geolocation` | `geolocation` |
+| `apikey`      | `apikey::ApiKeyConfig`           | `apikey`      | `apikey`      |
 
 ## Sub-Config Details
 
@@ -330,6 +331,14 @@ Size format for `max_file_size`: `<number><unit>` where unit is `b`, `kb`, `mb`,
 | `issuer`         | `Option<String>` | `None`  | Required `iss` claim. Decoder rejects non-matching tokens                                        |
 | `audience`       | `Option<String>` | `None`  | Required `aud` claim. Decoder rejects non-matching tokens                                        |
 
+### `apikey::ApiKeyConfig` (feature: `apikey`)
+
+| Field                  | Type    | Default  | Description                                          |
+| ---------------------- | ------- | -------- | ---------------------------------------------------- |
+| `prefix`               | `String`| `"modo"` | Key prefix before the underscore. `[a-zA-Z0-9]`, 1-20 chars |
+| `secret_length`        | `usize` | `32`     | Length of the random secret portion in base62 characters. Min 16 |
+| `touch_threshold_secs` | `u64`   | `60`     | Min interval between `last_used_at` updates (1 min)  |
+
 ## Feature Flags
 
 Defined in `Cargo.toml`. Default feature: `db`.
@@ -350,8 +359,11 @@ Defined in `Cargo.toml`. Default feature: `db`.
 | `dns`          | DNS domain verification (TXT, CNAME)                     | `simple-dns`                                                                                |
 | `geolocation`  | MaxMind GeoIP2 geolocation                               | `maxminddb`                                                                                 |
 | `qrcode`       | QR code generation                                       | `fast_qr`                                                                                   |
-| `sentry`       | Sentry error reporting via tracing                       | `sentry`, `sentry-tracing`                                                                  |
-| `test-helpers` | `modo::testing` module for test utilities                | (implies `db`, `session`)                                                                   |
+| `sentry`         | Sentry error reporting via tracing                       | `sentry`, `sentry-tracing`                                                                  |
+| `apikey`         | API key generation, hashing, and verification            | (implies `db`)                                                                              |
+| `text-embedding` | Text embedding providers (OpenAI, Gemini, Mistral, Voyage) | (implies `http-client`)                                                                   |
+| `tier`           | Feature-tier access control                              | (no extra deps)                                                                             |
+| `test-helpers`   | `modo::testing` module for test utilities                | (implies `db`, `session`)                                                                   |
 
 ### Test Feature Flags
 
