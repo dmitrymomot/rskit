@@ -152,6 +152,39 @@ where
                     );
                 }
 
+                // tier info (if tier feature enabled and TierInfo in extensions)
+                #[cfg(feature = "tier")]
+                if let Some(tier_info) = parts.extensions.get::<crate::tier::TierInfo>() {
+                    ctx.set(
+                        "tier_name",
+                        minijinja::Value::from(tier_info.name.clone()),
+                    );
+
+                    let ti = tier_info.clone();
+                    ctx.set(
+                        "tier_has",
+                        minijinja::Value::from_function(
+                            move |name: &str| -> bool { ti.has_feature(name) },
+                        ),
+                    );
+
+                    let ti = tier_info.clone();
+                    ctx.set(
+                        "tier_enabled",
+                        minijinja::Value::from_function(
+                            move |name: &str| -> bool { ti.is_enabled(name) },
+                        ),
+                    );
+
+                    let ti = tier_info.clone();
+                    ctx.set(
+                        "tier_limit",
+                        minijinja::Value::from_function(
+                            move |name: &str| -> Option<u64> { ti.limit(name) },
+                        ),
+                    );
+                }
+
                 // Insert TemplateContext into extensions
                 parts.extensions.insert(ctx);
 
@@ -376,5 +409,144 @@ mod tests {
         assert!(result.contains("error:bad;"));
         assert!(result.contains("info:ok;"));
         assert!(flash_state.was_read());
+    }
+
+    #[cfg(feature = "tier")]
+    mod tier_tests {
+        use super::*;
+        use std::collections::HashMap;
+
+        use crate::tier::{FeatureAccess, TierInfo};
+
+        fn test_tier() -> TierInfo {
+            TierInfo {
+                name: "pro".into(),
+                features: HashMap::from([
+                    ("sso".into(), FeatureAccess::Toggle(true)),
+                    ("custom_domain".into(), FeatureAccess::Toggle(false)),
+                    ("api_calls".into(), FeatureAccess::Limit(100_000)),
+                ]),
+            }
+        }
+
+        async fn extract_tier_name(req: Request<Body>) -> (StatusCode, String) {
+            let ctx = req.extensions().get::<TemplateContext>().unwrap();
+            let name = ctx
+                .get("tier_name")
+                .map(|v| v.to_string())
+                .unwrap_or_default();
+            (StatusCode::OK, name)
+        }
+
+        #[tokio::test]
+        async fn injects_tier_name() {
+            let (_dir, engine) = test_engine();
+            let app = Router::new()
+                .route("/test", get(extract_tier_name))
+                .layer(TemplateContextLayer::new(engine));
+
+            let mut req = Request::builder().uri("/test").body(Body::empty()).unwrap();
+            req.extensions_mut().insert(test_tier());
+            let resp = app.oneshot(req).await.unwrap();
+            let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            assert_eq!(body, "pro");
+        }
+
+        #[tokio::test]
+        async fn tier_has_function_works() {
+            let (_dir, engine) = test_engine();
+            let tpl_dir = _dir.path().join("templates");
+            std::fs::write(
+                tpl_dir.join("tier_has_test.html"),
+                "{% if tier_has('sso') %}yes{% else %}no{% endif %}",
+            )
+            .unwrap();
+
+            let mut ctx = TemplateContext::default();
+            let tier = test_tier();
+            ctx.set("tier_name", minijinja::Value::from(tier.name.clone()));
+
+            let ti = tier.clone();
+            ctx.set(
+                "tier_has",
+                minijinja::Value::from_function(move |name: &str| -> bool {
+                    ti.has_feature(name)
+                }),
+            );
+
+            let merged = ctx.merge(minijinja::context! {});
+            let result = engine.render("tier_has_test.html", merged).unwrap();
+            assert_eq!(result, "yes");
+        }
+
+        #[tokio::test]
+        async fn tier_has_returns_false_for_disabled() {
+            let (_dir, engine) = test_engine();
+            let tpl_dir = _dir.path().join("templates");
+            std::fs::write(
+                tpl_dir.join("tier_disabled_test.html"),
+                "{% if tier_has('custom_domain') %}yes{% else %}no{% endif %}",
+            )
+            .unwrap();
+
+            let mut ctx = TemplateContext::default();
+            let tier = test_tier();
+
+            let ti = tier.clone();
+            ctx.set(
+                "tier_has",
+                minijinja::Value::from_function(move |name: &str| -> bool {
+                    ti.has_feature(name)
+                }),
+            );
+
+            let merged = ctx.merge(minijinja::context! {});
+            let result = engine.render("tier_disabled_test.html", merged).unwrap();
+            assert_eq!(result, "no");
+        }
+
+        #[tokio::test]
+        async fn tier_limit_function_works() {
+            let (_dir, engine) = test_engine();
+            let tpl_dir = _dir.path().join("templates");
+            std::fs::write(
+                tpl_dir.join("tier_limit_test.html"),
+                "{{ tier_limit('api_calls') }}",
+            )
+            .unwrap();
+
+            let mut ctx = TemplateContext::default();
+            let tier = test_tier();
+
+            let ti = tier.clone();
+            ctx.set(
+                "tier_limit",
+                minijinja::Value::from_function(move |name: &str| -> Option<u64> {
+                    ti.limit(name)
+                }),
+            );
+
+            let merged = ctx.merge(minijinja::context! {});
+            let result = engine.render("tier_limit_test.html", merged).unwrap();
+            assert_eq!(result, "100000");
+        }
+
+        #[tokio::test]
+        async fn no_tier_info_no_injection() {
+            let (_dir, engine) = test_engine();
+            let app = Router::new()
+                .route("/test", get(extract_tier_name))
+                .layer(TemplateContextLayer::new(engine));
+
+            let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
+            let resp = app.oneshot(req).await.unwrap();
+            let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            // tier_name not set — returns empty string
+            assert_eq!(body, "");
+        }
     }
 }
