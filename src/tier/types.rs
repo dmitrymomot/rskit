@@ -9,6 +9,7 @@ use crate::error::{Error, Result};
 
 /// Whether a feature is a boolean toggle or a usage limit.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum FeatureAccess {
     /// Feature is enabled or disabled.
     Toggle(bool),
