@@ -149,6 +149,10 @@ let router = axum::Router::new()
 | `locale`         | Locale resolver chain, falls back to `default_locale`               |
 | `csrf_token`     | `CsrfToken` extension (if CSRF middleware installed)                |
 | `flash_messages` | Template function from `FlashState` (if flash middleware installed) |
+| `tier_name`      | Plan name string from `TierInfo` (if `tier` feature enabled and `TierInfo` in extensions) |
+| `tier_has`       | Template function: `tier_has('feature_name')` → `bool` (calls `TierInfo::has_feature`) |
+| `tier_enabled`   | Template function: `tier_enabled('feature_name')` → `bool` (calls `TierInfo::is_enabled`) |
+| `tier_limit`     | Template function: `tier_limit('feature_name')` → `Option<u64>` (calls `TierInfo::limit`) |
 
 ---
 
