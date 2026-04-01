@@ -53,7 +53,10 @@ pub struct HostRouter {
 #[derive(Clone)]
 struct HostRouterInner {
     exact: HashMap<String, Router>,
-    wildcard: HashMap<String, Router>,
+    /// Key is the suffix (e.g. `"acme.com"`), value is `(pattern, router)` where
+    /// pattern is the full wildcard string (e.g. `"*.acme.com"`), preformatted at
+    /// registration time to avoid per-request allocation.
+    wildcard: HashMap<String, (String, Router)>,
     fallback: Option<Router>,
 }
 
@@ -129,7 +132,10 @@ impl HostRouter {
                 suffix.contains('.'),
                 "invalid wildcard pattern \"{pattern}\": suffix must contain at least one dot (e.g. \"*.example.com\")"
             );
-            let prev = inner.wildcard.insert(suffix.to_owned(), router);
+            let full_pattern = format!("*.{suffix}");
+            let prev = inner
+                .wildcard
+                .insert(suffix.to_owned(), (full_pattern, router));
             assert!(
                 prev.is_none(),
                 "duplicate wildcard suffix: \"*.{suffix}\" registered twice"
@@ -162,25 +168,22 @@ impl HostRouter {
 
 impl HostRouterInner {
     fn match_host(&self, host: &str) -> Match<'_> {
-        // 1. Exact match
         if let Some(router) = self.exact.get(host) {
             return Match::Exact(router);
         }
 
-        // 2. Wildcard match — split at first dot
         if let Some(dot) = host.find('.') {
             let subdomain = &host[..dot];
             let suffix = &host[dot + 1..];
-            if let Some(router) = self.wildcard.get(suffix) {
+            if let Some((pattern, router)) = self.wildcard.get(suffix) {
                 return Match::Wildcard {
                     router,
                     subdomain: subdomain.to_owned(),
-                    pattern: format!("*.{suffix}"),
+                    pattern: pattern.clone(),
                 };
             }
         }
 
-        // 3. Fallback or 404
         match &self.fallback {
             Some(router) => Match::Fallback(router),
             None => Match::NotFound,
@@ -266,26 +269,23 @@ impl Service<Request<Body>> for HostRouterService {
                 Err(e) => return Ok(e.into_response()),
             };
 
-            match inner.match_host(&host) {
-                Match::Exact(router) => {
-                    let req = Request::from_parts(parts, body);
-                    Ok(router.clone().call(req).await.into_response())
-                }
+            let router = match inner.match_host(&host) {
+                Match::Exact(router) | Match::Fallback(router) => router,
                 Match::Wildcard {
                     router,
                     subdomain,
                     pattern,
                 } => {
                     parts.extensions.insert(MatchedHost { subdomain, pattern });
-                    let req = Request::from_parts(parts, body);
-                    Ok(router.clone().call(req).await.into_response())
+                    router
                 }
-                Match::Fallback(router) => {
-                    let req = Request::from_parts(parts, body);
-                    Ok(router.clone().call(req).await.into_response())
+                Match::NotFound => {
+                    return Ok(Error::not_found("no route for host").into_response());
                 }
-                Match::NotFound => Ok(Error::not_found("no route for host").into_response()),
-            }
+            };
+
+            let req = Request::from_parts(parts, body);
+            Ok(router.clone().call(req).await.into_response())
         })
     }
 }
@@ -305,20 +305,20 @@ impl From<HostRouter> for axum::Router {
 ///
 /// After extraction the value is lowercased and any trailing port is stripped.
 fn resolve_host(parts: &Parts) -> Result<String, Error> {
-    // 1. Forwarded: host=...
+    const HOST_DIRECTIVE: &str = "host=";
+
     if let Some(fwd) = parts.headers.get("forwarded")
         && let Ok(fwd_str) = fwd.to_str()
     {
-        // Parse "host=" directive from the first element.
-        // The Forwarded header can have comma-separated entries for multiple hops;
-        // only the first element is relevant.
-        // Format: "for=...; host=example.com; proto=https"
+        // Comma-separated entries represent multiple hops; only the first is relevant.
         let first_element = fwd_str.split(',').next().unwrap_or(fwd_str);
         for directive in first_element.split(';') {
             let directive = directive.trim();
             // RFC 7239: directive names are case-insensitive
-            if directive.len() > 5 && directive[..5].eq_ignore_ascii_case("host=") {
-                let host = directive[5..].trim();
+            if directive.len() >= HOST_DIRECTIVE.len()
+                && directive[..HOST_DIRECTIVE.len()].eq_ignore_ascii_case(HOST_DIRECTIVE)
+            {
+                let host = directive[HOST_DIRECTIVE.len()..].trim();
                 if !host.is_empty() {
                     return Ok(strip_port(host).to_lowercase());
                 }
@@ -326,7 +326,6 @@ fn resolve_host(parts: &Parts) -> Result<String, Error> {
         }
     }
 
-    // 2. X-Forwarded-Host
     if let Some(xfh) = parts.headers.get("x-forwarded-host")
         && let Ok(host) = xfh.to_str()
     {
@@ -336,7 +335,6 @@ fn resolve_host(parts: &Parts) -> Result<String, Error> {
         }
     }
 
-    // 3. Host header
     if let Some(h) = parts.headers.get(http::header::HOST)
         && let Ok(host) = h.to_str()
     {
