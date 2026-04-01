@@ -1,14 +1,16 @@
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
+use crate::error::{Error, Result};
+
+use super::config::{Config, PoolConfig};
+use super::connect::connect;
 use super::database::Database;
 
 // ---------------------------------------------------------------------------
 // Sharded map
 // ---------------------------------------------------------------------------
-
-const DEFAULT_SHARDS: usize = 16;
 
 struct ShardedMap {
     shards: Vec<RwLock<HashMap<String, Database>>>,
@@ -45,6 +47,114 @@ impl ShardedMap {
         let shard = &self.shards[idx];
         let mut write = shard.write().expect("pool shard lock poisoned");
         write.insert(key, db);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DatabasePool
+// ---------------------------------------------------------------------------
+
+/// Multi-database connection pool with lazy shard opening.
+///
+/// Wraps a default [`Database`] (the main database) plus a sharded cache of
+/// lazily-opened shard databases. All shards share the same PRAGMAs and
+/// migrations from the parent [`Config`].
+///
+/// Cloning is cheap (reference count increment via `Arc`).
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use modo::db::{self, ConnExt, ConnQueryExt, DatabasePool};
+///
+/// let pool = DatabasePool::new(&config).await?;
+///
+/// // Default database:
+/// let user: User = pool.conn(None).await?
+///     .conn()
+///     .query_one("SELECT id, name FROM users WHERE id = ?1", libsql::params!["u1"])
+///     .await?;
+///
+/// // Tenant shard (lazy open + cache):
+/// let user: User = pool.conn(tenant.db_shard.as_deref()).await?
+///     .conn()
+///     .query_one("SELECT id, name FROM users WHERE id = ?1", libsql::params!["u1"])
+///     .await?;
+/// ```
+#[derive(Clone)]
+pub struct DatabasePool {
+    inner: Arc<Inner>,
+}
+
+struct Inner {
+    default: Database,
+    config: Config,
+    pool_config: PoolConfig,
+    shards: ShardedMap,
+}
+
+impl DatabasePool {
+    /// Create a new pool from the given config.
+    ///
+    /// Opens the default database immediately. Shard databases are opened
+    /// lazily on first [`conn`](Self::conn) call.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `config.pool` is `None` or the default database
+    /// fails to open.
+    pub async fn new(config: &Config) -> Result<Self> {
+        let pool_config = config
+            .pool
+            .clone()
+            .ok_or_else(|| Error::internal("database pool config is required"))?;
+
+        let default = connect(config).await?;
+        let shards = ShardedMap::new(pool_config.shard_count);
+
+        Ok(Self {
+            inner: Arc::new(Inner {
+                default,
+                config: config.clone(),
+                pool_config,
+                shards,
+            }),
+        })
+    }
+
+    /// Get a database connection by shard name.
+    ///
+    /// - `None` — returns the default database (instant, no lock).
+    /// - `Some("name")` — returns the cached shard database, opening it on
+    ///   first access at `{base_path}/{name}.db`.
+    pub async fn conn(&self, shard: Option<&str>) -> Result<Database> {
+        let Some(name) = shard else {
+            return Ok(self.inner.default.clone());
+        };
+
+        // Fast path: read-lock lookup
+        if let Some(db) = self.inner.shards.get(name) {
+            return Ok(db);
+        }
+
+        // Slow path: open new connection, then insert
+        let shard_path = if self.inner.pool_config.base_path == ":memory:" {
+            ":memory:".to_string()
+        } else {
+            format!("{}/{}.db", self.inner.pool_config.base_path, name)
+        };
+        let shard_config = Config {
+            path: shard_path,
+            pool: None, // shards don't nest pools
+            ..self.inner.config.clone()
+        };
+
+        let db = connect(&shard_config).await.map_err(|e| {
+            Error::internal(format!("failed to open shard database: {name}")).chain(e)
+        })?;
+
+        self.inner.shards.insert(name.to_string(), db.clone());
+        Ok(db)
     }
 }
 
