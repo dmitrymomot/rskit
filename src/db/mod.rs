@@ -86,7 +86,7 @@
 mod error;
 
 mod config;
-pub use config::{Config, JournalMode, SynchronousMode, TempStore};
+pub use config::{Config, JournalMode, PoolConfig, SynchronousMode, TempStore};
 
 mod database;
 pub use database::Database;
