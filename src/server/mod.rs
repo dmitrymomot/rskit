@@ -6,6 +6,8 @@
 //! - [`http`] — starts a TCP listener and returns an [`HttpServer`] handle.
 //! - [`HttpServer`] — opaque server handle that implements
 //!   [`crate::runtime::Task`] for use with the [`crate::run!`] macro.
+//! - [`HostRouter`] — host-based request routing to different axum routers.
+//! - [`MatchedHost`] — extractor for the subdomain matched by a wildcard pattern.
 //!
 //! # Example
 //!
@@ -26,4 +28,5 @@ mod host_router;
 mod http;
 
 pub use config::Config;
+pub use host_router::{HostRouter, MatchedHost};
 pub use http::{HttpServer, http};

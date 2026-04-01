@@ -1,9 +1,16 @@
 use std::collections::HashMap;
+use std::convert::Infallible;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use axum::Router;
+use axum::body::Body;
 use axum::extract::{FromRequestParts, OptionalFromRequestParts};
+use axum::response::IntoResponse;
+use http::Request;
 use http::request::Parts;
+use tower::Service;
 
 use crate::Error;
 
@@ -32,7 +39,6 @@ use crate::Error;
 ///     .host("*.acme.com", Router::new())
 ///     .fallback(Router::new());
 /// ```
-#[allow(dead_code)]
 pub struct HostRouter {
     inner: Arc<HostRouterInner>,
 }
@@ -43,7 +49,6 @@ struct HostRouterInner {
     fallback: Option<Router>,
 }
 
-#[allow(dead_code)]
 enum Match<'a> {
     Exact(&'a Router),
     Wildcard {
@@ -61,7 +66,14 @@ impl Default for HostRouter {
     }
 }
 
-#[allow(dead_code)]
+impl Clone for HostRouter {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
 impl HostRouter {
     /// Create a new empty `HostRouter` with no registered hosts and no fallback.
     pub fn new() -> Self {
@@ -131,7 +143,6 @@ impl HostRouter {
 }
 
 impl HostRouterInner {
-    #[allow(dead_code)]
     fn match_host(&self, host: &str) -> Match<'_> {
         // 1. Exact match
         if let Some(router) = self.exact.get(host) {
@@ -174,7 +185,6 @@ impl HostRouterInner {
 ///     format!("subdomain: {}", matched.subdomain)
 /// }
 /// ```
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone)]
 pub struct MatchedHost {
     /// The subdomain that matched (e.g. `"tenant1"` from `"tenant1.acme.com"`).
@@ -212,6 +222,76 @@ where
     }
 }
 
+impl Clone for HostRouterInner {
+    fn clone(&self) -> Self {
+        Self {
+            exact: self.exact.clone(),
+            wildcard: self.wildcard.clone(),
+            fallback: self.fallback.clone(),
+        }
+    }
+}
+
+impl Service<Request<Body>> for HostRouterInner {
+    type Response = http::Response<Body>;
+    type Error = Infallible;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
+        let exact = self.exact.clone();
+        let wildcard = self.wildcard.clone();
+        let fallback = self.fallback.clone();
+
+        Box::pin(async move {
+            let (mut parts, body) = req.into_parts();
+
+            let host = match resolve_host(&parts) {
+                Ok(h) => h,
+                Err(e) => return Ok(e.into_response()),
+            };
+
+            // Build a temporary inner for matching
+            let inner = HostRouterInner {
+                exact,
+                wildcard,
+                fallback,
+            };
+
+            match inner.match_host(&host) {
+                Match::Exact(router) => {
+                    let req = Request::from_parts(parts, body);
+                    Ok(router.clone().call(req).await.into_response())
+                }
+                Match::Wildcard {
+                    router,
+                    subdomain,
+                    pattern,
+                } => {
+                    parts.extensions.insert(MatchedHost { subdomain, pattern });
+                    let req = Request::from_parts(parts, body);
+                    Ok(router.clone().call(req).await.into_response())
+                }
+                Match::Fallback(router) => {
+                    let req = Request::from_parts(parts, body);
+                    Ok(router.clone().call(req).await.into_response())
+                }
+                Match::NotFound => Ok(Error::not_found("no route for host").into_response()),
+            }
+        })
+    }
+}
+
+impl From<HostRouter> for axum::Router {
+    fn from(host_router: HostRouter) -> axum::Router {
+        let inner = Arc::try_unwrap(host_router.inner).unwrap_or_else(|arc| (*arc).clone());
+        axum::Router::new().fallback_service(inner)
+    }
+}
+
 /// Resolve the effective host from a request, checking proxy headers first.
 ///
 /// Checks in order:
@@ -220,7 +300,6 @@ where
 /// 3. `Host` header
 ///
 /// After extraction the value is lowercased and any trailing port is stripped.
-#[cfg_attr(not(test), expect(dead_code))]
 fn resolve_host(parts: &Parts) -> Result<String, Error> {
     // 1. Forwarded: host=...
     if let Some(fwd) = parts.headers.get("forwarded")
@@ -515,5 +594,154 @@ mod tests {
         let matched = result.unwrap().unwrap();
         assert_eq!(matched.subdomain, "t1");
         assert_eq!(matched.pattern, "*.acme.com");
+    }
+
+    // ── Full dispatch tests ──────────────────────────────────
+
+    use axum::body::Body;
+    use http::{Request, StatusCode};
+    use tower::ServiceExt;
+
+    async fn response_body(resp: http::Response<Body>) -> String {
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        String::from_utf8(bytes.to_vec()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn dispatch_exact_match() {
+        let hr = HostRouter::new()
+            .host("acme.com", router_with_body("landing"))
+            .host("app.acme.com", router_with_body("admin"));
+
+        let router: axum::Router = hr.into();
+        let req = Request::builder()
+            .uri("/")
+            .header("host", "acme.com")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(response_body(resp).await, "landing");
+    }
+
+    #[tokio::test]
+    async fn dispatch_wildcard_match() {
+        let hr = HostRouter::new().host("*.acme.com", router_with_body("tenant"));
+
+        let router: axum::Router = hr.into();
+        let req = Request::builder()
+            .uri("/")
+            .header("host", "tenant1.acme.com")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(response_body(resp).await, "tenant");
+    }
+
+    #[tokio::test]
+    async fn dispatch_wildcard_injects_matched_host() {
+        let tenant_router = Router::new().route(
+            "/",
+            axum::routing::get(|matched: MatchedHost| async move {
+                format!("{}:{}", matched.subdomain, matched.pattern)
+            }),
+        );
+
+        let hr = HostRouter::new().host("*.acme.com", tenant_router);
+
+        let router: axum::Router = hr.into();
+        let req = Request::builder()
+            .uri("/")
+            .header("host", "tenant1.acme.com")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(response_body(resp).await, "tenant1:*.acme.com");
+    }
+
+    #[tokio::test]
+    async fn dispatch_exact_wins_over_wildcard() {
+        let hr = HostRouter::new()
+            .host("app.acme.com", router_with_body("admin"))
+            .host("*.acme.com", router_with_body("tenant"));
+
+        let router: axum::Router = hr.into();
+        let req = Request::builder()
+            .uri("/")
+            .header("host", "app.acme.com")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(response_body(resp).await, "admin");
+    }
+
+    #[tokio::test]
+    async fn dispatch_fallback() {
+        let hr = HostRouter::new()
+            .host("acme.com", router_with_body("landing"))
+            .fallback(router_with_body("fallback"));
+
+        let router: axum::Router = hr.into();
+        let req = Request::builder()
+            .uri("/")
+            .header("host", "unknown.com")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(response_body(resp).await, "fallback");
+    }
+
+    #[tokio::test]
+    async fn dispatch_404_no_match_no_fallback() {
+        let hr = HostRouter::new().host("acme.com", router_with_body("landing"));
+
+        let router: axum::Router = hr.into();
+        let req = Request::builder()
+            .uri("/")
+            .header("host", "unknown.com")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn dispatch_400_missing_host() {
+        let hr = HostRouter::new().host("acme.com", router_with_body("landing"));
+
+        let router: axum::Router = hr.into();
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn dispatch_via_x_forwarded_host() {
+        let hr = HostRouter::new().host("acme.com", router_with_body("landing"));
+
+        let router: axum::Router = hr.into();
+        let req = Request::builder()
+            .uri("/")
+            .header("host", "proxy.internal")
+            .header("x-forwarded-host", "acme.com")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(response_body(resp).await, "landing");
     }
 }

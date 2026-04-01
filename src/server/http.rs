@@ -57,7 +57,24 @@ impl Task for HttpServer {
 ///     modo::run!(server).await
 /// }
 /// ```
-pub async fn http(router: axum::Router, config: &Config) -> Result<HttpServer> {
+///
+/// With a [`HostRouter`](super::HostRouter):
+///
+/// ```no_run
+/// use modo::server::{self, Config, HostRouter};
+///
+/// #[tokio::main]
+/// async fn main() -> modo::Result<()> {
+///     let config = Config::default();
+///     let app = HostRouter::new()
+///         .host("acme.com", modo::axum::Router::new())
+///         .host("*.acme.com", modo::axum::Router::new());
+///     let server = server::http(app, &config).await?;
+///     modo::run!(server).await
+/// }
+/// ```
+pub async fn http(router: impl Into<axum::Router>, config: &Config) -> Result<HttpServer> {
+    let router = router.into();
     let addr = format!("{}:{}", config.host, config.port);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
