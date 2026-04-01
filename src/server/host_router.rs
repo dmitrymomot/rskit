@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::fmt;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -39,10 +40,12 @@ use crate::Error;
 ///     .host("*.acme.com", Router::new())
 ///     .fallback(Router::new());
 /// ```
+#[derive(Clone)]
 pub struct HostRouter {
     inner: Arc<HostRouterInner>,
 }
 
+#[derive(Clone)]
 struct HostRouterInner {
     exact: HashMap<String, Router>,
     wildcard: HashMap<String, Router>,
@@ -60,17 +63,27 @@ enum Match<'a> {
     NotFound,
 }
 
-impl Default for HostRouter {
-    fn default() -> Self {
-        Self::new()
+impl fmt::Debug for HostRouter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HostRouter")
+            .field("exact_hosts", &self.inner.exact.keys().collect::<Vec<_>>())
+            .field(
+                "wildcard_hosts",
+                &self
+                    .inner
+                    .wildcard
+                    .keys()
+                    .map(|k| format!("*.{k}"))
+                    .collect::<Vec<_>>(),
+            )
+            .field("has_fallback", &self.inner.fallback.is_some())
+            .finish()
     }
 }
 
-impl Clone for HostRouter {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
+impl Default for HostRouter {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -222,16 +235,6 @@ where
     }
 }
 
-impl Clone for HostRouterInner {
-    fn clone(&self) -> Self {
-        Self {
-            exact: self.exact.clone(),
-            wildcard: self.wildcard.clone(),
-            fallback: self.fallback.clone(),
-        }
-    }
-}
-
 impl Service<Request<Body>> for HostRouterInner {
     type Response = http::Response<Body>;
     type Error = Infallible;
@@ -242,9 +245,7 @@ impl Service<Request<Body>> for HostRouterInner {
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        let exact = self.exact.clone();
-        let wildcard = self.wildcard.clone();
-        let fallback = self.fallback.clone();
+        let inner = self.clone();
 
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
@@ -252,13 +253,6 @@ impl Service<Request<Body>> for HostRouterInner {
             let host = match resolve_host(&parts) {
                 Ok(h) => h,
                 Err(e) => return Ok(e.into_response()),
-            };
-
-            // Build a temporary inner for matching
-            let inner = HostRouterInner {
-                exact,
-                wildcard,
-                fallback,
             };
 
             match inner.match_host(&host) {
@@ -312,8 +306,9 @@ fn resolve_host(parts: &Parts) -> Result<String, Error> {
         let first_element = fwd_str.split(',').next().unwrap_or(fwd_str);
         for directive in first_element.split(';') {
             let directive = directive.trim();
-            if let Some(host) = directive.strip_prefix("host=") {
-                let host = host.trim();
+            // RFC 7239: directive names are case-insensitive
+            if directive.len() > 5 && directive[..5].eq_ignore_ascii_case("host=") {
+                let host = directive[5..].trim();
                 if !host.is_empty() {
                     return Ok(strip_port(host).to_lowercase());
                 }
@@ -417,6 +412,12 @@ mod tests {
         let parts = parts_with_headers(&[]);
         let err = resolve_host(&parts).unwrap_err();
         assert_eq!(err.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn resolve_forwarded_case_insensitive_host_directive() {
+        let parts = parts_with_headers(&[("forwarded", "for=1.2.3.4; Host=acme.com")]);
+        assert_eq!(resolve_host(&parts).unwrap(), "acme.com");
     }
 
     #[test]
