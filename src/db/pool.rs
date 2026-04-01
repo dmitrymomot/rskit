@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::path::Path;
 use std::sync::{Arc, RwLock};
 
 use crate::error::{Error, Result};
@@ -7,10 +8,6 @@ use crate::error::{Error, Result};
 use super::config::{Config, PoolConfig};
 use super::connect::connect;
 use super::database::Database;
-
-// ---------------------------------------------------------------------------
-// Sharded map
-// ---------------------------------------------------------------------------
 
 struct ShardedMap {
     shards: Vec<RwLock<HashMap<String, Database>>>,
@@ -49,10 +46,6 @@ impl ShardedMap {
         write.insert(key, db);
     }
 }
-
-// ---------------------------------------------------------------------------
-// DatabasePool
-// ---------------------------------------------------------------------------
 
 /// Multi-database connection pool with lazy shard opening.
 ///
@@ -127,25 +120,31 @@ impl DatabasePool {
     /// - `None` — returns the default database (instant, no lock).
     /// - `Some("name")` — returns the cached shard database, opening it on
     ///   first access at `{base_path}/{name}.db`.
+    ///
+    /// Concurrent first-access to the same shard may open duplicate
+    /// connections; the last writer wins and the extra connection is dropped.
+    /// This is benign because `connect` is idempotent (PRAGMAs are
+    /// re-applied, migrations use checksum tracking).
     pub async fn conn(&self, shard: Option<&str>) -> Result<Database> {
         let Some(name) = shard else {
             return Ok(self.inner.default.clone());
         };
 
-        // Fast path: read-lock lookup
         if let Some(db) = self.inner.shards.get(name) {
             return Ok(db);
         }
 
-        // Slow path: open new connection, then insert
         let shard_path = if self.inner.pool_config.base_path == ":memory:" {
             ":memory:".to_string()
         } else {
-            format!("{}/{}.db", self.inner.pool_config.base_path, name)
+            Path::new(&self.inner.pool_config.base_path)
+                .join(format!("{name}.db"))
+                .to_string_lossy()
+                .into_owned()
         };
         let shard_config = Config {
             path: shard_path,
-            pool: None, // shards don't nest pools
+            pool: None,
             ..self.inner.config.clone()
         };
 
@@ -157,10 +156,6 @@ impl DatabasePool {
         Ok(db)
     }
 }
-
-// ---------------------------------------------------------------------------
-// Graceful shutdown
-// ---------------------------------------------------------------------------
 
 /// Wrapper for graceful shutdown integration with [`crate::run!`].
 ///
@@ -201,16 +196,12 @@ pub fn managed_pool(pool: DatabasePool) -> ManagedDatabasePool {
 mod tests {
     use super::*;
 
-    fn make_test_db() -> Database {
-        // Directly construct a Database for unit testing the map.
-        // We only need it as a value in the map — no real queries.
-        tokio::runtime::Runtime::new().unwrap().block_on(async {
-            let config = super::super::config::Config {
-                path: ":memory:".to_string(),
-                ..Default::default()
-            };
-            super::super::connect::connect(&config).await.unwrap()
-        })
+    async fn make_test_db() -> Database {
+        let config = super::super::config::Config {
+            path: ":memory:".to_string(),
+            ..Default::default()
+        };
+        super::super::connect::connect(&config).await.unwrap()
     }
 
     #[test]
@@ -219,28 +210,28 @@ mod tests {
         assert!(map.get("missing").is_none());
     }
 
-    #[test]
-    fn sharded_map_insert_and_get() {
+    #[tokio::test]
+    async fn sharded_map_insert_and_get() {
         let map = ShardedMap::new(4);
-        let db = make_test_db();
+        let db = make_test_db().await;
         map.insert("tenant_a".to_string(), db);
         assert!(map.get("tenant_a").is_some());
     }
 
-    #[test]
-    fn sharded_map_different_keys_independent() {
+    #[tokio::test]
+    async fn sharded_map_different_keys_independent() {
         let map = ShardedMap::new(4);
-        let db = make_test_db();
+        let db = make_test_db().await;
         map.insert("tenant_a".to_string(), db);
         assert!(map.get("tenant_a").is_some());
         assert!(map.get("tenant_b").is_none());
     }
 
-    #[test]
-    fn sharded_map_insert_idempotent() {
+    #[tokio::test]
+    async fn sharded_map_insert_idempotent() {
         let map = ShardedMap::new(4);
-        let db1 = make_test_db();
-        let db2 = make_test_db();
+        let db1 = make_test_db().await;
+        let db2 = make_test_db().await;
         map.insert("key".to_string(), db1);
         map.insert("key".to_string(), db2);
         assert!(map.get("key").is_some());
