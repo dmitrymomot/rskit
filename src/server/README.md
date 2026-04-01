@@ -1,22 +1,26 @@
 # modo::server
 
-HTTP server startup and graceful shutdown for the modo framework.
+HTTP server startup, host-based routing, and graceful shutdown.
 
 ## Overview
 
-The module exposes three items:
+The module provides:
 
 - `Config` — bind address and shutdown timeout, loaded from the `server` YAML section.
 - `http(router, config)` — binds a TCP port, starts serving on a background task, and
   returns an `HttpServer` handle.
 - `HttpServer` — opaque handle to the running server; implements the `Task` trait, so it
   integrates directly with the `modo::run!` macro for coordinated, signal-driven shutdown.
+- `HostRouter` — routes requests to different axum routers based on the `Host` header,
+  supporting exact matches and single-level wildcard subdomains.
+- `MatchedHost` — axum extractor that provides the subdomain captured by a wildcard
+  pattern match.
 
 ## Usage
 
 ### Minimal server
 
-```rust
+```rust,no_run
 use modo::server::{Config, http};
 
 #[tokio::main]
@@ -28,9 +32,52 @@ async fn main() -> modo::Result<()> {
 }
 ```
 
+### Host-based routing
+
+`HostRouter` dispatches requests to different routers based on the `Host` header.
+Exact hosts take priority over wildcards, and an optional fallback catches unmatched
+hosts.
+
+```rust,no_run
+use modo::server::{self, Config, HostRouter};
+
+#[tokio::main]
+async fn main() -> modo::Result<()> {
+    let config = Config::default();
+
+    let app = HostRouter::new()
+        .host("acme.com", modo::axum::Router::new())         // exact match
+        .host("app.acme.com", modo::axum::Router::new())     // exact match
+        .host("*.acme.com", modo::axum::Router::new())       // wildcard subdomain
+        .fallback(modo::axum::Router::new());                 // unmatched hosts
+
+    // HostRouter implements Into<axum::Router>, so it can be passed directly to http()
+    let server = server::http(app, &config).await?;
+    modo::run!(server).await
+}
+```
+
+### Extracting the matched subdomain
+
+When a request matches a wildcard pattern, `MatchedHost` is available as an axum
+extractor. Use `Option<MatchedHost>` for handlers that serve both exact and wildcard
+routes.
+
+```rust,ignore
+use modo::server::MatchedHost;
+use axum::response::IntoResponse;
+
+async fn handler(matched: MatchedHost) -> impl IntoResponse {
+    // For a request to "tenant1.acme.com" matching "*.acme.com":
+    //   matched.subdomain == "tenant1"
+    //   matched.pattern   == "*.acme.com"
+    format!("Hello, {}!", matched.subdomain)
+}
+```
+
 ### Loading config from YAML
 
-```rust
+```rust,ignore
 use modo::config::load;
 
 // Reads config/development.yaml (or the file named after APP_ENV)
@@ -44,7 +91,7 @@ let _ = config.server;
 `modo::run!` accepts any number of `Task` values and shuts them down in order
 after a `SIGTERM` or `Ctrl-C` signal is received.
 
-```rust
+```rust,no_run
 use modo::server::{Config, http};
 
 #[tokio::main]
@@ -78,10 +125,23 @@ server:
   shutdown_timeout_secs: 30
 ```
 
-## Key Types
+## Key types
 
-| Symbol       | Description                                                                  |
-| ------------ | ---------------------------------------------------------------------------- |
-| `Config`     | Server bind address and shutdown timeout; deserializes from YAML             |
-| `HttpServer` | Opaque handle to the running server; implements `Task` for graceful shutdown |
-| `http`       | `async fn http(router: axum::Router, config: &Config) -> Result<HttpServer>` |
+| Type          | Description                                                                          |
+| ------------- | ------------------------------------------------------------------------------------ |
+| `Config`      | Server bind address and shutdown timeout; deserializes from YAML                     |
+| `HttpServer`  | Opaque handle to the running server; implements `Task` for graceful shutdown         |
+| `http`        | Binds a TCP listener and starts serving; accepts `impl Into<axum::Router>`           |
+| `HostRouter`  | Routes requests to different routers by `Host` header; exact and wildcard matching   |
+| `MatchedHost` | Axum extractor providing the subdomain captured by a wildcard `HostRouter` pattern   |
+
+## Host resolution
+
+`HostRouter` resolves the effective host from incoming requests by checking headers in
+this order:
+
+1. `Forwarded` header (RFC 7239) -- `host=` directive
+2. `X-Forwarded-Host` header
+3. `Host` header
+
+The resolved value is lowercased and any trailing port is stripped before matching.

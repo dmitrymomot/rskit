@@ -366,7 +366,7 @@ server:
 
 ### Starting the Server
 
-`modo::server::http()` binds a TCP listener and returns an `HttpServer` (a public struct) that implements `Task`:
+`modo::server::http()` binds a TCP listener and returns an `HttpServer` (a public struct) that implements `Task`. Accepts `impl Into<axum::Router>`, so both a plain `axum::Router` and a `HostRouter` can be passed directly:
 
 ```rust
 use modo::server::{Config, http};
@@ -383,6 +383,44 @@ async fn main() -> modo::Result<()> {
 
 async fn health() -> &'static str { "ok" }
 ```
+
+### Host-Based Routing
+
+`HostRouter` dispatches requests to different `axum::Router`s based on the `Host` header. Supports exact matches, single-level wildcard subdomains (`*.acme.com`), and an optional fallback. Both use `HashMap` lookups for O(1) matching.
+
+```rust
+use modo::server::{self, Config, HostRouter};
+
+let app = HostRouter::new()
+    .host("acme.com", landing_router)
+    .host("app.acme.com", admin_router)
+    .host("*.acme.com", tenant_router)
+    .fallback(not_found_router);
+
+let server = server::http(app, &config).await?;
+```
+
+Builder methods panic on misconfiguration (duplicates, invalid wildcards like `*.com`). Complete all route registration before passing the router to `http()` or cloning it.
+
+**`MatchedHost` extractor** -- available in handlers on wildcard-matched routes. Contains `subdomain` (e.g. `"tenant1"`) and `pattern` (e.g. `"*.acme.com"`):
+
+```rust,ignore
+use modo::server::MatchedHost;
+
+async fn handler(matched: MatchedHost) -> String {
+    format!("tenant: {}", matched.subdomain)
+}
+
+// For handlers serving both exact and wildcard routes:
+async fn handler(matched: Option<MatchedHost>) -> String {
+    match matched {
+        Some(h) => format!("tenant: {}", h.subdomain),
+        None => "no tenant".to_string(),
+    }
+}
+```
+
+Host resolution checks headers in order: `Forwarded` (RFC 7239 `host=` directive), `X-Forwarded-Host`, then `Host`. Values are lowercased and port-stripped.
 
 ### Graceful Shutdown
 
