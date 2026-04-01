@@ -158,6 +158,45 @@ impl DatabasePool {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Graceful shutdown
+// ---------------------------------------------------------------------------
+
+/// Wrapper for graceful shutdown integration with [`crate::run!`].
+///
+/// Wraps a [`DatabasePool`] so it can be registered as a [`Task`](crate::runtime::Task)
+/// with the modo runtime. On shutdown all database handles (default and shards)
+/// are dropped.
+///
+/// Created by [`managed_pool`].
+pub struct ManagedDatabasePool(DatabasePool);
+
+impl crate::runtime::Task for ManagedDatabasePool {
+    async fn shutdown(self) -> Result<()> {
+        drop(self.0);
+        Ok(())
+    }
+}
+
+/// Wrap a [`DatabasePool`] for use with [`crate::run!`].
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use modo::db;
+///
+/// # async fn example() -> modo::Result<()> {
+/// let config = db::Config::default();
+/// let pool = db::DatabasePool::new(&config).await?;
+/// let task = db::managed_pool(pool.clone());
+/// // Register `task` with modo::run!() for graceful shutdown
+/// # Ok(())
+/// # }
+/// ```
+pub fn managed_pool(pool: DatabasePool) -> ManagedDatabasePool {
+    ManagedDatabasePool(pool)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

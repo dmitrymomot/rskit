@@ -104,7 +104,7 @@ mod managed;
 pub use managed::{ManagedDatabase, managed};
 
 mod pool;
-pub use pool::DatabasePool;
+pub use pool::{DatabasePool, ManagedDatabasePool, managed_pool};
 
 mod migrate;
 pub use migrate::migrate;

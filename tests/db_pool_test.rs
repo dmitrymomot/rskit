@@ -193,3 +193,20 @@ async fn pool_shard_runs_migrations() {
         .await
         .unwrap();
 }
+
+#[tokio::test]
+async fn managed_pool_can_shutdown() {
+    let config = db::Config {
+        path: ":memory:".to_string(),
+        pool: Some(db::PoolConfig {
+            base_path: "data/test_shards".to_string(),
+            shard_count: 4,
+        }),
+        ..Default::default()
+    };
+    let pool = db::DatabasePool::new(&config).await.unwrap();
+    let managed = db::managed_pool(pool);
+    // Verify it implements Task by calling shutdown
+    use modo::runtime::Task;
+    managed.shutdown().await.unwrap();
+}
