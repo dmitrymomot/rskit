@@ -311,7 +311,8 @@ fn resolve_host(parts: &Parts) -> Result<String, Error> {
         && let Ok(fwd_str) = fwd.to_str()
     {
         // Comma-separated entries represent multiple hops; only the first is relevant.
-        let first_element = fwd_str.split(',').next().unwrap_or(fwd_str);
+        // split() always yields at least one element on a non-empty string.
+        let first_element = fwd_str.split(',').next().unwrap();
         for directive in first_element.split(';') {
             let directive = directive.trim();
             // RFC 7239: directive names are case-insensitive
