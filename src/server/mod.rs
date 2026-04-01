@@ -3,7 +3,7 @@
 //! This module provides:
 //!
 //! - [`Config`] — bind address and shutdown timeout, loaded from YAML.
-//! - [`http`] — starts a TCP listener and returns an [`HttpServer`] handle.
+//! - [`http()`] — starts a TCP listener and returns an [`HttpServer`] handle.
 //! - [`HttpServer`] — opaque server handle that implements
 //!   [`crate::runtime::Task`] for use with the [`crate::run!`] macro.
 //! - [`HostRouter`] — host-based request routing to different axum routers.

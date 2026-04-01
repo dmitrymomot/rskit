@@ -25,7 +25,7 @@ use crate::Error;
 ///
 /// The [`host`](Self::host) and [`fallback`](Self::fallback) methods panic if
 /// called after the `HostRouter` has been cloned or converted. Complete all
-/// route registration before passing the router to [`server::http()`](crate::server::http)
+/// route registration before passing the router to [`server::http()`](crate::server::http())
 /// or cloning it.
 ///
 /// The [`host`](Self::host) method also panics on:
