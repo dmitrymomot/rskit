@@ -35,7 +35,7 @@ impl TestPool {
             path: ":memory:".to_string(),
             pool: Some(PoolConfig {
                 base_path: ":memory:".to_string(),
-                shard_count: 4,
+                lock_shards: 4,
             }),
             ..Default::default()
         };

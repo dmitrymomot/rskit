@@ -101,12 +101,12 @@ impl DatabasePool {
             .as_ref()
             .ok_or_else(|| Error::internal("database pool config is required"))?;
 
-        if pool_config.shard_count == 0 {
-            return Err(Error::internal("pool shard_count must be greater than 0"));
+        if pool_config.lock_shards == 0 {
+            return Err(Error::internal("pool lock_shards must be greater than 0"));
         }
 
         let default = connect(config).await?;
-        let shards = ShardedMap::new(pool_config.shard_count);
+        let shards = ShardedMap::new(pool_config.lock_shards);
 
         Ok(Self {
             inner: Arc::new(Inner {
@@ -132,7 +132,12 @@ impl DatabasePool {
             return Ok(self.inner.default.clone());
         };
 
-        if name.is_empty() || name.contains('/') || name.contains('\\') {
+        if name.is_empty()
+            || name.starts_with('.')
+            || name.contains('/')
+            || name.contains('\\')
+            || name.contains('\0')
+        {
             return Err(Error::bad_request(format!("invalid shard name: {name:?}")));
         }
 

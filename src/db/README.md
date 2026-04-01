@@ -19,7 +19,7 @@ modo = { version = "...", features = ["db"] }
 | `ManagedDatabase`  | Wrapper for graceful shutdown via `modo::run!`                           |
 | `managed`          | Wraps a `Database` into a `ManagedDatabase`                              |
 | `DatabasePool`     | Multi-database pool with lazy shard opening for tenant isolation         |
-| `PoolConfig`       | Configuration for database sharding (base_path, shard_count)             |
+| `PoolConfig`       | Configuration for database sharding (base_path, lock_shards)             |
 | `ManagedDatabasePool` | Wrapper for graceful pool shutdown via `modo::run!`                   |
 | `managed_pool`     | Wraps a `DatabasePool` into a `ManagedDatabasePool`                      |
 | `ConnExt`          | Low-level `query_raw`/`execute_raw` trait for Connection and Transaction |
@@ -83,7 +83,7 @@ let config = db::Config {
     migrations: Some("migrations".to_string()),
     pool: Some(db::PoolConfig {
         base_path: "data/shards".to_string(),
-        shard_count: 16,
+        lock_shards: 16,
     }),
     ..Default::default()
 };
@@ -256,7 +256,7 @@ database:
     temp_store: memory # default | file | memory
     pool: # optional — enables DatabasePool
         base_path: "data/shards" # directory for shard .db files
-        shard_count: 16 # number of lock shards for the connection map
+        lock_shards: 16 # number of lock shards for the connection map
 ```
 
 ## Filter query string syntax

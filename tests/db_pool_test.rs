@@ -14,12 +14,12 @@ fn config_pool_deserializes_from_yaml() {
 path: "data/app.db"
 pool:
   base_path: "data/shards"
-  shard_count: 8
+  lock_shards: 8
 "#;
     let config: db::Config = serde_yaml_ng::from_str(yaml).unwrap();
     let pool = config.pool.unwrap();
     assert_eq!(pool.base_path, "data/shards");
-    assert_eq!(pool.shard_count, 8);
+    assert_eq!(pool.lock_shards, 8);
 }
 
 #[test]
@@ -31,7 +31,7 @@ pool: {}
     let config: db::Config = serde_yaml_ng::from_str(yaml).unwrap();
     let pool = config.pool.unwrap();
     assert_eq!(pool.base_path, "data/shards");
-    assert_eq!(pool.shard_count, 16);
+    assert_eq!(pool.lock_shards, 16);
 }
 
 #[tokio::test]
@@ -47,7 +47,7 @@ async fn pool_conn_none_returns_default() {
         path: ":memory:".to_string(),
         pool: Some(db::PoolConfig {
             base_path: "data/test_shards".to_string(),
-            shard_count: 4,
+            lock_shards: 4,
         }),
         ..Default::default()
     };
@@ -70,7 +70,7 @@ async fn pool_conn_shard_opens_new_database() {
         path: ":memory:".to_string(),
         pool: Some(db::PoolConfig {
             base_path: dir.path().to_str().unwrap().to_string(),
-            shard_count: 4,
+            lock_shards: 4,
         }),
         ..Default::default()
     };
@@ -100,7 +100,7 @@ async fn pool_shards_are_independent() {
         path: ":memory:".to_string(),
         pool: Some(db::PoolConfig {
             base_path: dir.path().to_str().unwrap().to_string(),
-            shard_count: 4,
+            lock_shards: 4,
         }),
         ..Default::default()
     };
@@ -129,7 +129,7 @@ async fn pool_is_clone() {
         path: ":memory:".to_string(),
         pool: Some(db::PoolConfig {
             base_path: "data/test_shards".to_string(),
-            shard_count: 4,
+            lock_shards: 4,
         }),
         ..Default::default()
     };
@@ -171,7 +171,7 @@ async fn pool_shard_runs_migrations() {
         migrations: Some(migrations_dir.to_str().unwrap().to_string()),
         pool: Some(db::PoolConfig {
             base_path: dir.path().join("shards").to_str().unwrap().to_string(),
-            shard_count: 4,
+            lock_shards: 4,
         }),
         ..Default::default()
     };
@@ -192,7 +192,7 @@ async fn managed_pool_can_shutdown() {
         path: ":memory:".to_string(),
         pool: Some(db::PoolConfig {
             base_path: "data/test_shards".to_string(),
-            shard_count: 4,
+            lock_shards: 4,
         }),
         ..Default::default()
     };
@@ -204,12 +204,12 @@ async fn managed_pool_can_shutdown() {
 }
 
 #[tokio::test]
-async fn pool_rejects_zero_shard_count() {
+async fn pool_rejects_zero_lock_shards() {
     let config = db::Config {
         path: ":memory:".to_string(),
         pool: Some(db::PoolConfig {
             base_path: ":memory:".to_string(),
-            shard_count: 0,
+            lock_shards: 0,
         }),
         ..Default::default()
     };
@@ -222,7 +222,7 @@ async fn pool_rejects_invalid_shard_names() {
         path: ":memory:".to_string(),
         pool: Some(db::PoolConfig {
             base_path: ":memory:".to_string(),
-            shard_count: 4,
+            lock_shards: 4,
         }),
         ..Default::default()
     };
@@ -231,5 +231,7 @@ async fn pool_rejects_invalid_shard_names() {
     assert!(pool.conn(Some("")).await.is_err());
     assert!(pool.conn(Some("../escape")).await.is_err());
     assert!(pool.conn(Some("back\\slash")).await.is_err());
+    assert!(pool.conn(Some(".hidden")).await.is_err());
+    assert!(pool.conn(Some("null\0byte")).await.is_err());
     assert!(pool.conn(Some("valid_name")).await.is_ok());
 }

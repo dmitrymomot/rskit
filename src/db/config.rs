@@ -158,9 +158,19 @@ pub struct PoolConfig {
     #[serde(default = "defaults::base_path")]
     pub base_path: String,
 
-    /// Number of lock shards for the connection map.
-    #[serde(default = "defaults::shard_count")]
-    pub shard_count: usize,
+    /// Number of internal lock shards for the connection map.
+    /// Controls lock contention parallelism, not the number of tenant databases.
+    #[serde(default = "defaults::lock_shards")]
+    pub lock_shards: usize,
+}
+
+impl Default for PoolConfig {
+    fn default() -> Self {
+        Self {
+            base_path: defaults::base_path(),
+            lock_shards: defaults::lock_shards(),
+        }
+    }
 }
 
 mod defaults {
@@ -202,7 +212,7 @@ mod defaults {
         "data/shards".to_string()
     }
 
-    pub fn shard_count() -> usize {
+    pub fn lock_shards() -> usize {
         16
     }
 }

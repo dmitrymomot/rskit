@@ -45,7 +45,7 @@ Derives `Debug`, `Clone`, `Deserialize`. Nested inside `Config` to enable `Datab
 | Field          | Type     | Default          |
 | -------------- | -------- | ---------------- |
 | `base_path`    | `String` | `"data/shards"`  |
-| `shard_count`  | `usize`  | `16`             |
+| `lock_shards`  | `usize`  | `16`             |
 
 ### Enum types
 
@@ -396,7 +396,7 @@ impl DatabasePool {
 
 ### `new(config: &Config) -> Result<Self>`
 
-Opens the default database immediately. Shard databases are opened lazily on first `conn()` call. Requires `config.pool` to be `Some`. Rejects `shard_count == 0`.
+Opens the default database immediately. Shard databases are opened lazily on first `conn()` call. Requires `config.pool` to be `Some`. Rejects `lock_shards == 0`.
 
 ### `conn(&self, shard: Option<&str>) -> Result<Database>`
 
