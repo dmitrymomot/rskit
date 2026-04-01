@@ -13,6 +13,10 @@
 //! | [`Config`] | YAML-deserializable database configuration with PRAGMA defaults |
 //! | [`ManagedDatabase`] | Wrapper for graceful shutdown via [`crate::run!`] |
 //! | [`managed`] | Wraps a [`Database`] into a [`ManagedDatabase`] |
+//! | [`DatabasePool`] | Multi-database pool with lazy shard opening for tenant isolation |
+//! | [`PoolConfig`] | Configuration for database sharding (base path, shard count) |
+//! | [`ManagedDatabasePool`] | Wrapper for graceful pool shutdown via [`crate::run!`] |
+//! | [`managed_pool`] | Wraps a [`DatabasePool`] into a [`ManagedDatabasePool`] |
 //!
 //! ## Connection & querying
 //!
