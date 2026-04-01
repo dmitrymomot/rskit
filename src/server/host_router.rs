@@ -23,7 +23,12 @@ use crate::Error;
 ///
 /// # Panics
 ///
-/// The [`host`](Self::host) method panics on:
+/// The [`host`](Self::host) and [`fallback`](Self::fallback) methods panic if
+/// called after the `HostRouter` has been cloned or converted. Complete all
+/// route registration before passing the router to [`server::http()`](crate::server::http)
+/// or cloning it.
+///
+/// The [`host`](Self::host) method also panics on:
 /// - Duplicate exact host patterns
 /// - Duplicate wildcard suffixes
 /// - Invalid wildcard patterns (suffix must contain at least one dot)
@@ -217,7 +222,7 @@ where
             .extensions
             .get::<MatchedHost>()
             .cloned()
-            .ok_or_else(|| Error::internal("MatchedHost not found in request extensions"))
+            .ok_or_else(|| Error::internal("internal routing error"))
     }
 }
 
@@ -235,7 +240,13 @@ where
     }
 }
 
-impl Service<Request<Body>> for HostRouterInner {
+/// Newtype around `Arc<HostRouterInner>` so we can implement `tower::Service`
+/// without hitting orphan rules. Each `call()` does a cheap `Arc::clone`
+/// instead of cloning all `HashMap`s.
+#[derive(Clone)]
+struct HostRouterService(Arc<HostRouterInner>);
+
+impl Service<Request<Body>> for HostRouterService {
     type Response = http::Response<Body>;
     type Error = Infallible;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
@@ -245,7 +256,7 @@ impl Service<Request<Body>> for HostRouterInner {
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        let inner = self.clone();
+        let inner = Arc::clone(&self.0);
 
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
@@ -281,8 +292,7 @@ impl Service<Request<Body>> for HostRouterInner {
 
 impl From<HostRouter> for axum::Router {
     fn from(host_router: HostRouter) -> axum::Router {
-        let inner = Arc::try_unwrap(host_router.inner).unwrap_or_else(|arc| (*arc).clone());
-        axum::Router::new().fallback_service(inner)
+        axum::Router::new().fallback_service(HostRouterService(host_router.inner))
     }
 }
 
@@ -340,6 +350,10 @@ fn resolve_host(parts: &Parts) -> Result<String, Error> {
 }
 
 /// Strip an optional `:port` suffix from a host string.
+///
+/// Assumes RFC 7230 formatting: IPv6 addresses must be bracketed (e.g.
+/// `[::1]:8080`), so a bare `::1` would not be correctly handled. In
+/// practice, all valid Host header values follow this convention.
 fn strip_port(host: &str) -> &str {
     match host.rfind(':') {
         Some(pos) if host[pos + 1..].bytes().all(|b| b.is_ascii_digit()) => &host[..pos],
