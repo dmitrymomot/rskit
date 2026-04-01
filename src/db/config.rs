@@ -44,6 +44,12 @@ pub struct Config {
     /// Temp store location.
     #[serde(default = "defaults::temp_store")]
     pub temp_store: TempStore,
+
+    /// Optional pool configuration for multi-database sharding.
+    /// When set, [`DatabasePool::new`](super::DatabasePool::new) can be used
+    /// to manage shard databases that share this config's PRAGMAs and migrations.
+    #[serde(default)]
+    pub pool: Option<PoolConfig>,
 }
 
 impl Default for Config {
@@ -58,6 +64,7 @@ impl Default for Config {
             synchronous: defaults::synchronous(),
             foreign_keys: defaults::foreign_keys(),
             temp_store: defaults::temp_store(),
+            pool: None,
         }
     }
 }
@@ -139,6 +146,33 @@ impl TempStore {
     }
 }
 
+/// Pool configuration for multi-database sharding.
+///
+/// When nested inside [`Config`], enables [`DatabasePool`](super::DatabasePool)
+/// to manage lazily-opened shard databases that share the parent config's
+/// PRAGMAs and migrations.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PoolConfig {
+    /// Directory where shard databases are stored.
+    /// Each shard creates `{base_path}/{shard_name}.db`.
+    #[serde(default = "defaults::base_path")]
+    pub base_path: String,
+
+    /// Number of internal lock shards for the connection map.
+    /// Controls lock contention parallelism, not the number of tenant databases.
+    #[serde(default = "defaults::lock_shards")]
+    pub lock_shards: usize,
+}
+
+impl Default for PoolConfig {
+    fn default() -> Self {
+        Self {
+            base_path: defaults::base_path(),
+            lock_shards: defaults::lock_shards(),
+        }
+    }
+}
+
 mod defaults {
     use super::*;
 
@@ -172,5 +206,13 @@ mod defaults {
 
     pub fn temp_store() -> TempStore {
         TempStore::Memory
+    }
+
+    pub fn base_path() -> String {
+        "data/shards".to_string()
+    }
+
+    pub fn lock_shards() -> usize {
+        16
     }
 }

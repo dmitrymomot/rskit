@@ -1,6 +1,6 @@
 # Database (`modo::db`)
 
-Lightweight libsql (SQLite) database layer. Single connection, no ORM, no pool. One module: `src/db/`.
+Lightweight libsql (SQLite) database layer. Single connection per handle, no ORM. Optional `DatabasePool` for multi-database sharding. One module: `src/db/`.
 
 Feature flag: `db` (default). Dependencies: `libsql`, `urlencoding`.
 
@@ -36,6 +36,16 @@ Derives `Debug`, `Clone`, `Deserialize`. All fields have serde defaults. `impl D
 | `synchronous`  | `SynchronousMode` | `Normal`             |
 | `foreign_keys` | `bool`            | `true`               |
 | `temp_store`   | `TempStore`       | `Memory`             |
+| `pool`         | `Option<PoolConfig>` | `None`            |
+
+### PoolConfig
+
+Derives `Debug`, `Clone`, `Deserialize`. Nested inside `Config` to enable `DatabasePool`.
+
+| Field          | Type     | Default          |
+| -------------- | -------- | ---------------- |
+| `base_path`    | `String` | `"data/shards"`  |
+| `lock_shards`  | `usize`  | `16`             |
 
 ### Enum types
 
@@ -370,6 +380,41 @@ pub struct ManagedDatabase(Database);
 pub fn managed(db: Database) -> ManagedDatabase;
 ```
 
+## DatabasePool (Multi-Database Sharding)
+
+`DatabasePool` — manages a default `Database` plus lazily-opened shard databases. Wraps `Arc<Inner>`, cheap to clone. Created by `DatabasePool::new()`.
+
+```rust
+#[derive(Clone)]
+pub struct DatabasePool { /* inner: Arc<Inner> */ }
+
+impl DatabasePool {
+    pub async fn new(config: &Config) -> Result<Self>;
+    pub async fn conn(&self, shard: Option<&str>) -> Result<Database>;
+}
+```
+
+### `new(config: &Config) -> Result<Self>`
+
+Opens the default database immediately. Shard databases are opened lazily on first `conn()` call. Requires `config.pool` to be `Some`. Rejects `lock_shards == 0`.
+
+### `conn(&self, shard: Option<&str>) -> Result<Database>`
+
+- `None` — returns the default database (instant, no lock).
+- `Some("name")` — returns the cached shard database, opening it on first access at `{base_path}/{name}.db`.
+
+Rejects empty shard names and names containing `/` or `\` (path traversal prevention). Concurrent first-access to the same shard may open duplicate connections; last writer wins (benign — `connect` is idempotent).
+
+### `ManagedDatabasePool`
+
+Implements `Task`. Wraps a `DatabasePool` for use with `run!` macro. On shutdown, drops the pool handle.
+
+```rust
+pub struct ManagedDatabasePool(DatabasePool);
+
+pub fn managed_pool(pool: DatabasePool) -> ManagedDatabasePool;
+```
+
 ## libsql Error Conversion
 
 `libsql::Error` converts into `modo::Error` via `From`:
@@ -476,7 +521,9 @@ impl FromRow for User {
 
 ## Gotchas
 
-- **Single connection**: `Database` wraps one `libsql::Connection` in `Arc`. No pool. All clones share the same connection.
+- **Single connection per handle**: `Database` wraps one `libsql::Connection` in `Arc`. All clones share the same connection. `DatabasePool` manages multiple `Database` handles (one per shard).
+
+- **Pool memory at scale**: Each shard connection uses its own SQLite page cache (default 16 MB `cache_size`) and mmap region (default 256 MB virtual). At 100 shards: ~1.6 GB page cache. Consider lowering `cache_size` for large shard counts.
 
 - **999 bind params limit**: SQLite limits a single statement to 999 bound parameters. Batch operations must chunk accordingly.
 

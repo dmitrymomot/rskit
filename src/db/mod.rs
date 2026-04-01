@@ -13,6 +13,10 @@
 //! | [`Config`] | YAML-deserializable database configuration with PRAGMA defaults |
 //! | [`ManagedDatabase`] | Wrapper for graceful shutdown via [`crate::run!`] |
 //! | [`managed`] | Wraps a [`Database`] into a [`ManagedDatabase`] |
+//! | [`DatabasePool`] | Multi-database pool with lazy shard opening for tenant isolation |
+//! | [`PoolConfig`] | Configuration for database sharding (base path, shard count) |
+//! | [`ManagedDatabasePool`] | Wrapper for graceful pool shutdown via [`crate::run!`] |
+//! | [`managed_pool`] | Wraps a [`DatabasePool`] into a [`ManagedDatabasePool`] |
 //!
 //! ## Connection & querying
 //!
@@ -86,7 +90,7 @@
 mod error;
 
 mod config;
-pub use config::{Config, JournalMode, SynchronousMode, TempStore};
+pub use config::{Config, JournalMode, PoolConfig, SynchronousMode, TempStore};
 
 mod database;
 pub use database::Database;
@@ -102,6 +106,9 @@ pub use conn::{ConnExt, ConnQueryExt};
 
 mod managed;
 pub use managed::{ManagedDatabase, managed};
+
+mod pool;
+pub use pool::{DatabasePool, ManagedDatabasePool, managed_pool};
 
 mod migrate;
 pub use migrate::migrate;

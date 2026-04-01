@@ -10,6 +10,8 @@
 //!   services, and middleware; send requests via HTTP-method helpers.
 //! - [`TestDb`] — in-memory libsql database with chainable `exec` / `migrate`
 //!   setup; exposes a [`Database`](crate::db::Database) handle via [`db()`](TestDb::db).
+//! - [`TestPool`] — in-memory [`DatabasePool`](crate::db::DatabasePool) with chainable
+//!   `exec` setup; both default and shard databases use `:memory:`.
 //! - [`TestRequestBuilder`] — fluent builder for a single in-process HTTP request
 //!   with JSON, form, and raw-body support.
 //! - [`TestResponse`] — captured response with status, header, and body accessors.
@@ -47,12 +49,14 @@
 
 mod app;
 mod db;
+mod pool;
 mod request;
 mod response;
 mod session;
 
 pub use app::{TestApp, TestAppBuilder};
 pub use db::TestDb;
+pub use pool::TestPool;
 pub use request::TestRequestBuilder;
 pub use response::TestResponse;
 pub use session::TestSession;
