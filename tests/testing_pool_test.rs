@@ -30,15 +30,15 @@ async fn test_pool_default_works() {
         .await
         .unwrap();
     db.conn()
-        .execute_raw(
-            "INSERT INTO items (id, name) VALUES ('i1', 'Widget')",
-            (),
-        )
+        .execute_raw("INSERT INTO items (id, name) VALUES ('i1', 'Widget')", ())
         .await
         .unwrap();
     let item: Item = db
         .conn()
-        .query_one("SELECT id, name FROM items WHERE id = ?1", libsql::params!["i1"])
+        .query_one(
+            "SELECT id, name FROM items WHERE id = ?1",
+            libsql::params!["i1"],
+        )
         .await
         .unwrap();
     assert_eq!(item.id, "i1");

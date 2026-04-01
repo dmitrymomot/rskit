@@ -186,10 +186,7 @@ async fn pool_shard_runs_migrations() {
     let shard = pool.conn(Some("tenant_xyz")).await.unwrap();
     shard
         .conn()
-        .execute_raw(
-            "INSERT INTO users (id, name) VALUES ('u1', 'Alice')",
-            (),
-        )
+        .execute_raw("INSERT INTO users (id, name) VALUES ('u1', 'Alice')", ())
         .await
         .unwrap();
 }
