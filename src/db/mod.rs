@@ -103,6 +103,8 @@ pub use conn::{ConnExt, ConnQueryExt};
 mod managed;
 pub use managed::{ManagedDatabase, managed};
 
+mod pool;
+
 mod migrate;
 pub use migrate::migrate;
 
