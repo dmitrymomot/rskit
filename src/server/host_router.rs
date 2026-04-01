@@ -583,6 +583,7 @@ mod tests {
             <MatchedHost as FromRequestParts<()>>::from_request_parts(&mut parts, &()).await;
         let err = result.unwrap_err();
         assert_eq!(err.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(err.to_string(), "internal routing error");
     }
 
     #[tokio::test]
