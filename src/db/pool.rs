@@ -5,7 +5,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::error::{Error, Result};
 
-use super::config::{Config, PoolConfig};
+use super::config::Config;
 use super::connect::connect;
 use super::database::Database;
 
@@ -82,7 +82,6 @@ pub struct DatabasePool {
 struct Inner {
     default: Database,
     config: Config,
-    pool_config: PoolConfig,
     shards: ShardedMap,
 }
 
@@ -99,8 +98,12 @@ impl DatabasePool {
     pub async fn new(config: &Config) -> Result<Self> {
         let pool_config = config
             .pool
-            .clone()
+            .as_ref()
             .ok_or_else(|| Error::internal("database pool config is required"))?;
+
+        if pool_config.shard_count == 0 {
+            return Err(Error::internal("pool shard_count must be greater than 0"));
+        }
 
         let default = connect(config).await?;
         let shards = ShardedMap::new(pool_config.shard_count);
@@ -109,7 +112,6 @@ impl DatabasePool {
             inner: Arc::new(Inner {
                 default,
                 config: config.clone(),
-                pool_config,
                 shards,
             }),
         })
@@ -130,14 +132,20 @@ impl DatabasePool {
             return Ok(self.inner.default.clone());
         };
 
+        if name.is_empty() || name.contains('/') || name.contains('\\') {
+            return Err(Error::bad_request(format!("invalid shard name: {name:?}")));
+        }
+
         if let Some(db) = self.inner.shards.get(name) {
             return Ok(db);
         }
 
-        let shard_path = if self.inner.pool_config.base_path == ":memory:" {
+        // Safety: pool config is validated as Some in new()
+        let pool_config = self.inner.config.pool.as_ref().unwrap();
+        let shard_path = if pool_config.base_path == ":memory:" {
             ":memory:".to_string()
         } else {
-            Path::new(&self.inner.pool_config.base_path)
+            Path::new(&pool_config.base_path)
                 .join(format!("{name}.db"))
                 .to_string_lossy()
                 .into_owned()

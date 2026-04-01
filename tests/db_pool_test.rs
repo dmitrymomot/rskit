@@ -1,6 +1,6 @@
 #![cfg(feature = "db")]
 
-use modo::db;
+use modo::db::{self, ConnExt};
 
 #[test]
 fn config_pool_defaults_to_none() {
@@ -55,7 +55,6 @@ async fn pool_conn_none_returns_default() {
 
     // conn(None) returns the default database — verify it works
     let db = pool.conn(None).await.unwrap();
-    use modo::db::ConnExt;
     let result: u64 = db
         .conn()
         .execute_raw("CREATE TABLE test_default (id TEXT PRIMARY KEY)", ())
@@ -79,7 +78,6 @@ async fn pool_conn_shard_opens_new_database() {
 
     // First call to a shard creates the database
     let shard_db = pool.conn(Some("tenant_abc")).await.unwrap();
-    use modo::db::ConnExt;
     shard_db
         .conn()
         .execute_raw("CREATE TABLE shard_test (id TEXT PRIMARY KEY)", ())
@@ -109,7 +107,6 @@ async fn pool_shards_are_independent() {
     let pool = db::DatabasePool::new(&config).await.unwrap();
 
     // Create a table in shard A
-    use modo::db::ConnExt;
     let shard_a = pool.conn(Some("shard_a")).await.unwrap();
     shard_a
         .conn()
@@ -140,7 +137,6 @@ async fn pool_is_clone() {
     let pool2 = pool.clone();
 
     // Both clones access the same default database
-    use modo::db::ConnExt;
     pool.conn(None)
         .await
         .unwrap()
@@ -182,7 +178,6 @@ async fn pool_shard_runs_migrations() {
     let pool = db::DatabasePool::new(&config).await.unwrap();
 
     // Shard should have the users table from migrations
-    use modo::db::ConnExt;
     let shard = pool.conn(Some("tenant_xyz")).await.unwrap();
     shard
         .conn()
@@ -206,4 +201,35 @@ async fn managed_pool_can_shutdown() {
     // Verify it implements Task by calling shutdown
     use modo::runtime::Task;
     managed.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn pool_rejects_zero_shard_count() {
+    let config = db::Config {
+        path: ":memory:".to_string(),
+        pool: Some(db::PoolConfig {
+            base_path: ":memory:".to_string(),
+            shard_count: 0,
+        }),
+        ..Default::default()
+    };
+    assert!(db::DatabasePool::new(&config).await.is_err());
+}
+
+#[tokio::test]
+async fn pool_rejects_invalid_shard_names() {
+    let config = db::Config {
+        path: ":memory:".to_string(),
+        pool: Some(db::PoolConfig {
+            base_path: ":memory:".to_string(),
+            shard_count: 4,
+        }),
+        ..Default::default()
+    };
+    let pool = db::DatabasePool::new(&config).await.unwrap();
+
+    assert!(pool.conn(Some("")).await.is_err());
+    assert!(pool.conn(Some("../escape")).await.is_err());
+    assert!(pool.conn(Some("back\\slash")).await.is_err());
+    assert!(pool.conn(Some("valid_name")).await.is_ok());
 }
