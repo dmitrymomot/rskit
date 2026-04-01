@@ -22,6 +22,7 @@
 //! ```
 
 mod config;
+mod host_router;
 mod http;
 
 pub use config::Config;
