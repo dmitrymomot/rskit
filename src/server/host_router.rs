@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::Router;
+use axum::extract::{FromRequestParts, OptionalFromRequestParts};
 use http::request::Parts;
 
 use crate::Error;
@@ -155,6 +156,59 @@ impl HostRouterInner {
             Some(router) => Match::Fallback(router),
             None => Match::NotFound,
         }
+    }
+}
+
+/// Information about a wildcard host match.
+///
+/// Inserted into request extensions when a request matches a wildcard
+/// pattern (e.g. `*.acme.com`). Not present for exact or fallback matches.
+///
+/// Use `Option<MatchedHost>` for handlers that serve both exact and wildcard
+/// routes.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// async fn handler(matched: MatchedHost) -> impl IntoResponse {
+///     format!("subdomain: {}", matched.subdomain)
+/// }
+/// ```
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Clone)]
+pub struct MatchedHost {
+    /// The subdomain that matched (e.g. `"tenant1"` from `"tenant1.acme.com"`).
+    pub subdomain: String,
+    /// The wildcard pattern that matched (e.g. `"*.acme.com"`).
+    pub pattern: String,
+}
+
+impl<S> FromRequestParts<S> for MatchedHost
+where
+    S: Send + Sync,
+{
+    type Rejection = Error;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        parts
+            .extensions
+            .get::<MatchedHost>()
+            .cloned()
+            .ok_or_else(|| Error::internal("MatchedHost not found in request extensions"))
+    }
+}
+
+impl<S> OptionalFromRequestParts<S> for MatchedHost
+where
+    S: Send + Sync,
+{
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        Ok(parts.extensions.get::<MatchedHost>().cloned())
     }
 }
 
@@ -408,5 +462,58 @@ mod tests {
     #[should_panic(expected = "empty suffix")]
     fn panic_on_star_dot_only() {
         HostRouter::new().host("*.", router_with_body("a"));
+    }
+
+    // ── MatchedHost extractor ─────────────────────────────────
+
+    #[tokio::test]
+    async fn extract_matched_host_present() {
+        let (mut parts, _) = http::Request::builder().body(()).unwrap().into_parts();
+        parts.extensions.insert(MatchedHost {
+            subdomain: "tenant1".into(),
+            pattern: "*.acme.com".into(),
+        });
+
+        let result =
+            <MatchedHost as FromRequestParts<()>>::from_request_parts(&mut parts, &()).await;
+        let matched = result.unwrap();
+        assert_eq!(matched.subdomain, "tenant1");
+        assert_eq!(matched.pattern, "*.acme.com");
+    }
+
+    #[tokio::test]
+    async fn extract_matched_host_missing_returns_500() {
+        let (mut parts, _) = http::Request::builder().body(()).unwrap().into_parts();
+
+        let result =
+            <MatchedHost as FromRequestParts<()>>::from_request_parts(&mut parts, &()).await;
+        let err = result.unwrap_err();
+        assert_eq!(err.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn optional_matched_host_none_when_missing() {
+        let (mut parts, _) = http::Request::builder().body(()).unwrap().into_parts();
+
+        let result =
+            <MatchedHost as OptionalFromRequestParts<()>>::from_request_parts(&mut parts, &())
+                .await;
+        assert!(result.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn optional_matched_host_some_when_present() {
+        let (mut parts, _) = http::Request::builder().body(()).unwrap().into_parts();
+        parts.extensions.insert(MatchedHost {
+            subdomain: "t1".into(),
+            pattern: "*.acme.com".into(),
+        });
+
+        let result =
+            <MatchedHost as OptionalFromRequestParts<()>>::from_request_parts(&mut parts, &())
+                .await;
+        let matched = result.unwrap().unwrap();
+        assert_eq!(matched.subdomain, "t1");
+        assert_eq!(matched.pattern, "*.acme.com");
     }
 }
