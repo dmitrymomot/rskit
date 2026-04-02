@@ -773,7 +773,7 @@ async fn select_with_multi_column_sort() {
         .validate(&schema)
         .unwrap();
 
-    #[derive(serde::Serialize)]
+    #[allow(dead_code)]
     struct Task {
         id: String,
         name: String,

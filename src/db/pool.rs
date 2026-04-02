@@ -131,7 +131,8 @@ impl DatabasePool {
     /// # Errors
     ///
     /// Returns an error if the shard name is invalid (empty, starts with `.`,
-    /// or contains path separators) or if the shard database fails to open.
+    /// or contains path separators or a null byte) or if the shard database
+    /// fails to open.
     pub async fn conn(&self, shard: Option<&str>) -> Result<Database> {
         let Some(name) = shard else {
             return Ok(self.inner.default.clone());
