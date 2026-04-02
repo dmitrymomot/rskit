@@ -773,26 +773,21 @@ async fn select_with_multi_column_sort() {
         .validate(&schema)
         .unwrap();
 
-    #[derive(serde::Serialize)]
     struct Task {
-        id: String,
         name: String,
         priority: i64,
-        status: String,
     }
     impl FromRow for Task {
         fn from_row(row: &libsql::Row) -> Result<Self> {
             Ok(Self {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                priority: row.get(2)?,
-                status: row.get(3)?,
+                name: row.get(0)?,
+                priority: row.get(1)?,
             })
         }
     }
 
     let items: Vec<Task> = conn
-        .select("SELECT id, name, priority, status FROM tasks")
+        .select("SELECT name, priority FROM tasks")
         .filter(filter)
         .fetch_all()
         .await
@@ -800,10 +795,14 @@ async fn select_with_multi_column_sort() {
 
     assert_eq!(items.len(), 4);
     // priority ASC: 1, 1, 2, 2 — then name ASC within same priority
-    assert_eq!(items[0].name, "Audit"); // priority=1, name=Audit
-    assert_eq!(items[1].name, "Review"); // priority=1, name=Review
-    assert_eq!(items[2].name, "Build"); // priority=2, name=Build
-    assert_eq!(items[3].name, "Deploy"); // priority=2, name=Deploy
+    assert_eq!(items[0].priority, 1);
+    assert_eq!(items[0].name, "Audit");
+    assert_eq!(items[1].priority, 1);
+    assert_eq!(items[1].name, "Review");
+    assert_eq!(items[2].priority, 2);
+    assert_eq!(items[2].name, "Build");
+    assert_eq!(items[3].priority, 2);
+    assert_eq!(items[3].name, "Deploy");
 }
 
 #[tokio::test]
