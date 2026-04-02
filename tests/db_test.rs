@@ -508,6 +508,27 @@ fn filter_sort_unknown_field_ignored() {
 }
 
 #[test]
+fn filter_sort_multi_column() {
+    let schema = FilterSchema::new()
+        .field("status", FieldType::Text)
+        .sort_fields(&["priority", "end_date", "name"]);
+
+    let mut params = HashMap::new();
+    params.insert("sort".into(), vec![
+        "priority".into(),
+        "-end_date".into(),
+        "name".into(),
+    ]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(
+        validated.sort_clause,
+        Some("\"priority\" ASC, \"end_date\" DESC, \"name\" ASC".into())
+    );
+}
+
+#[test]
 fn filter_int_type_validation() {
     let schema = FilterSchema::new().field("age", FieldType::Int);
     let mut params = HashMap::new();
