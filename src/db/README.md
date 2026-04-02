@@ -3,6 +3,8 @@
 Lightweight libsql (SQLite) database layer with typed row mapping,
 composable query building, filtering, and pagination.
 
+Requires feature `"db"` (enabled by default).
+
 ```toml
 [dependencies]
 modo = { version = "...", features = ["db"] }
@@ -275,9 +277,11 @@ database:
 | `?deleted_at.null=false`         | `WHERE "deleted_at" IS NOT NULL` |
 | `?sort=name`                     | `ORDER BY "name" ASC`            |
 | `?sort=-name`                    | `ORDER BY "name" DESC`           |
+| `?sort=name&sort=-age`           | `ORDER BY "name" ASC, "age" DESC` |
 
-Unknown fields and operators are silently ignored. Type mismatches
-return a 400 error.
+Repeat `sort` for multi-column ordering. Unknown fields and operators
+are silently ignored. Duplicate sort fields are deduplicated (first
+occurrence wins). Type mismatches return a 400 error.
 
 ## Error handling
 

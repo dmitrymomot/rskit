@@ -3,7 +3,7 @@
 //! Lightweight libsql (SQLite) database layer with typed row mapping,
 //! composable query building, filtering, and pagination.
 //!
-//! Requires feature `"db"`.
+//! Requires feature `"db"` (enabled by default).
 //!
 //! ## Core types
 //!

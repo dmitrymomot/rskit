@@ -83,6 +83,7 @@ let sort_clause = {
 ### No changes to `SelectBuilder`
 
 The existing precedence is preserved:
+
 1. Filter `sort_clause` (from user query string) — if present
 2. `SelectBuilder::order_by()` — fallback default if filter has no sort
 
