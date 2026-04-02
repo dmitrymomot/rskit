@@ -5,7 +5,7 @@ Text-to-vector embeddings via LLM provider APIs.
 ## Feature flag
 
 ```toml
-modo = { version = "0.3", features = ["text-embedding"] }
+modo = { version = "0.5", features = ["text-embedding"] }
 ```
 
 Depends on `http-client`. No new crate dependencies.

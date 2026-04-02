@@ -4,7 +4,7 @@ Feature flag: `http-client`
 
 ```toml
 [dependencies]
-modo = { version = "0.3", features = ["http-client"] }
+modo = { version = "0.5", features = ["http-client"] }
 ```
 
 HTTP client with connection pooling, TLS (rustls), timeouts, and automatic retries with exponential backoff. Built on hyper + hyper-rustls. Dependencies: `dep:hyper`, `dep:hyper-rustls`, `dep:hyper-util`, `dep:http-body-util`, `dep:base64`.

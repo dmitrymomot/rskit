@@ -11,7 +11,7 @@ Requires the **`db`** feature flag (enabled by default).
 
 ```toml
 [dependencies]
-modo = { version = "0.3", features = ["db"] }
+modo = { version = "0.5", features = ["db"] }
 ```
 
 ## Schema

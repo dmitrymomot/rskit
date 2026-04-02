@@ -6,7 +6,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "0.3", features = ["text-embedding"] }
+//! modo = { version = "0.5", features = ["text-embedding"] }
 //! ```
 //!
 //! Provides:

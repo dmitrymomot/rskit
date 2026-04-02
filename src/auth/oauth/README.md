@@ -9,7 +9,7 @@ Requires the `auth` feature flag.
 
 ```toml
 [dependencies]
-modo = { version = "0.3", features = ["auth"] }
+modo = { version = "0.5", features = ["auth"] }
 ```
 
 ## Key Types
