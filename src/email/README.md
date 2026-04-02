@@ -6,7 +6,7 @@ Requires feature `"email"`.
 
 ```toml
 [dependencies]
-modo = { version = "0.3", features = ["email"] }
+modo = { version = "0.5", features = ["email"] }
 ```
 
 `Mailer::with_stub_transport` is available with the `test-helpers` feature or in `#[cfg(test)]` blocks.

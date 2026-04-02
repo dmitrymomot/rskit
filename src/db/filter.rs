@@ -93,10 +93,10 @@ struct FilterCondition {
 /// | `field.lte=value` | Less than or equal (`<=`) |
 /// | `field.like=value` | SQL `LIKE` |
 /// | `field.null=true` | `IS NULL` / `IS NOT NULL` |
-/// | `sort=field` | Sort ascending; `sort=-field` for descending |
+/// | `sort=field` | Sort ascending; `sort=-field` for descending; repeat for multi-column |
 pub struct Filter {
     conditions: Vec<FilterCondition>,
-    sort: Option<String>,
+    sort: Vec<String>,
 }
 
 /// Schema-validated filter, safe for SQL generation.
@@ -127,13 +127,11 @@ impl Filter {
     /// skipped. Unknown operators are ignored.
     pub fn from_query_params(params: &HashMap<String, Vec<String>>) -> Self {
         let mut conditions: HashMap<String, FilterCondition> = HashMap::new();
-        let mut sort = None;
+        let mut sort = Vec::new();
 
         for (key, values) in params {
             if key == "sort" {
-                if let Some(v) = values.first() {
-                    sort = Some(v.clone());
-                }
+                sort = values.clone();
                 continue;
             }
 
@@ -247,19 +245,26 @@ impl Filter {
         }
 
         // Validate sort
-        let sort_clause = self.sort.and_then(|s| {
-            let (field, desc) = if let Some(stripped) = s.strip_prefix('-') {
-                (stripped, true)
-            } else {
-                (s.as_str(), false)
-            };
-            if schema.is_sort_field(field) {
-                let direction = if desc { "DESC" } else { "ASC" };
-                Some(format!("\"{field}\" {direction}"))
-            } else {
-                None // Unknown sort field — ignore
+        let sort_clause = {
+            let mut seen = HashSet::new();
+            let mut parts = Vec::new();
+            for s in &self.sort {
+                let (field, desc) = if let Some(stripped) = s.strip_prefix('-') {
+                    (stripped, true)
+                } else {
+                    (s.as_str(), false)
+                };
+                if schema.is_sort_field(field) && seen.insert(field) {
+                    let direction = if desc { "DESC" } else { "ASC" };
+                    parts.push(format!("\"{field}\" {direction}"));
+                }
             }
-        });
+            if parts.is_empty() {
+                None
+            } else {
+                Some(parts.join(", "))
+            }
+        };
 
         Ok(ValidatedFilter {
             clauses,

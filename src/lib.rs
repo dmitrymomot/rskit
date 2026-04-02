@@ -22,7 +22,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "0.3", features = ["full"] }
+//! modo = { version = "0.5", features = ["full"] }
 //! ```
 
 #[cfg(feature = "db")]

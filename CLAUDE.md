@@ -38,6 +38,7 @@ modo — Rust web framework. Single crate, zero proc macros, plain `async fn` ha
 - Config durations: use `_secs: u64` fields (e.g., `touch_threshold_secs`), not `std::time::Duration` — matches `session_ttl_secs`, `touch_interval_secs` pattern
 - Database: single `Database` handle (`Arc<Connection>`); `connect()` opens one connection with PRAGMA defaults; `ConnExt` for raw queries, `ConnQueryExt` for typed helpers; `libsql::params!` for bind parameters
 - No TODOs, no workarounds — every declared field and API must be fully implemented
+- Version sync: `Cargo.toml`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, all doc comments (`//!` in `mod.rs`/`lib.rs`), READMEs (`src/**/README.md`), skill references (`skills/dev/references/*.md`), and root `README.md` must always use the same version
 
 ## Feature Flags
 

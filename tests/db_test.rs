@@ -508,6 +508,73 @@ fn filter_sort_unknown_field_ignored() {
 }
 
 #[test]
+fn filter_sort_multi_column() {
+    let schema = FilterSchema::new()
+        .field("status", FieldType::Text)
+        .sort_fields(&["priority", "end_date", "name"]);
+
+    let mut params = HashMap::new();
+    params.insert(
+        "sort".into(),
+        vec!["priority".into(), "-end_date".into(), "name".into()],
+    );
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(
+        validated.sort_clause,
+        Some("\"priority\" ASC, \"end_date\" DESC, \"name\" ASC".into())
+    );
+}
+
+#[test]
+fn filter_sort_duplicate_first_wins() {
+    let schema = FilterSchema::new().sort_fields(&["name"]);
+
+    let mut params = HashMap::new();
+    params.insert("sort".into(), vec!["name".into(), "-name".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(validated.sort_clause, Some("\"name\" ASC".into()));
+}
+
+#[test]
+fn filter_sort_unknown_fields_dropped() {
+    let schema = FilterSchema::new().sort_fields(&["name", "created_at"]);
+
+    let mut params = HashMap::new();
+    params.insert(
+        "sort".into(),
+        vec![
+            "unknown".into(),
+            "-name".into(),
+            "password".into(),
+            "created_at".into(),
+        ],
+    );
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(
+        validated.sort_clause,
+        Some("\"name\" DESC, \"created_at\" ASC".into())
+    );
+}
+
+#[test]
+fn filter_sort_all_unknown_produces_none() {
+    let schema = FilterSchema::new().sort_fields(&["name"]);
+
+    let mut params = HashMap::new();
+    params.insert("sort".into(), vec!["unknown".into(), "password".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(validated.sort_clause, None);
+}
+
+#[test]
 fn filter_int_type_validation() {
     let schema = FilterSchema::new().field("age", FieldType::Int);
     let mut params = HashMap::new();
@@ -665,6 +732,77 @@ async fn select_with_sort() {
 
     // Should be sorted by name DESC
     assert!(items[0].name > items[1].name);
+}
+
+#[tokio::test]
+async fn select_with_multi_column_sort() {
+    let db = test_db().await;
+    let conn = db.conn();
+
+    conn.execute(
+        "CREATE TABLE tasks (id TEXT PRIMARY KEY, name TEXT NOT NULL, priority INTEGER NOT NULL, status TEXT NOT NULL)",
+        (),
+    )
+    .await
+    .unwrap();
+
+    // Insert rows with varying priority and name to verify multi-column ordering
+    for (id, name, priority, status) in [
+        ("t1", "Deploy", 2, "active"),
+        ("t2", "Review", 1, "active"),
+        ("t3", "Build", 2, "active"),
+        ("t4", "Audit", 1, "active"),
+    ] {
+        conn.execute(
+            "INSERT INTO tasks (id, name, priority, status) VALUES (?1, ?2, ?3, ?4)",
+            libsql::params![id, name, priority, status],
+        )
+        .await
+        .unwrap();
+    }
+
+    let schema = FilterSchema::new()
+        .field("status", FieldType::Text)
+        .sort_fields(&["priority", "name"]);
+
+    // Sort by priority ASC, then name ASC as tiebreaker
+    let mut params = HashMap::new();
+    params.insert("sort".into(), vec!["priority".into(), "name".into()]);
+    params.insert("status".into(), vec!["active".into()]);
+    let filter = Filter::from_query_params(&params)
+        .validate(&schema)
+        .unwrap();
+
+    struct Task {
+        name: String,
+        priority: i64,
+    }
+    impl FromRow for Task {
+        fn from_row(row: &libsql::Row) -> Result<Self> {
+            Ok(Self {
+                name: row.get(0)?,
+                priority: row.get(1)?,
+            })
+        }
+    }
+
+    let items: Vec<Task> = conn
+        .select("SELECT name, priority FROM tasks")
+        .filter(filter)
+        .fetch_all()
+        .await
+        .unwrap();
+
+    assert_eq!(items.len(), 4);
+    // priority ASC: 1, 1, 2, 2 — then name ASC within same priority
+    assert_eq!(items[0].priority, 1);
+    assert_eq!(items[0].name, "Audit");
+    assert_eq!(items[1].priority, 1);
+    assert_eq!(items[1].name, "Review");
+    assert_eq!(items[2].priority, 2);
+    assert_eq!(items[2].name, "Build");
+    assert_eq!(items[3].priority, 2);
+    assert_eq!(items[3].name, "Deploy");
 }
 
 #[tokio::test]

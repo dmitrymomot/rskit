@@ -10,7 +10,7 @@ All items in this module require the `auth` feature (which implies `http-client`
 
 ```toml
 [dependencies]
-modo = { version = "0.3", features = ["auth"] }
+modo = { version = "0.5", features = ["auth"] }
 ```
 
 ## Modules

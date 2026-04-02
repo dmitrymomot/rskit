@@ -169,7 +169,7 @@ Optional modules are behind feature flags:
 
 ```toml
 [dependencies]
-modo-rs = { version = "0.3", features = ["auth", "templates"] }
+modo-rs = { version = "0.5", features = ["auth", "templates"] }
 ```
 
 | Feature          | Modules                                               | Implies        |

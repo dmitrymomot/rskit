@@ -8,7 +8,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "0.3", features = ["webhooks"] }
+//! modo = { version = "0.5", features = ["webhooks"] }
 //! ```
 //!
 //! # Provides

@@ -15,9 +15,10 @@ pub trait FromRow: Sized {
     fn from_row(row: &libsql::Row) -> Result<Self>;
 }
 
-/// Column name → index lookup. Built from a single row's column metadata.
-/// When used inside a `FromRow` impl, this is constructed per row. For bulk
-/// queries, the `ConnQueryExt` helpers handle optimization internally.
+/// Column name to index lookup built from a single row's column metadata.
+///
+/// Construct one inside your [`FromRow`] implementation to access columns by
+/// name instead of positional index.
 pub struct ColumnMap {
     map: HashMap<String, i32>,
 }

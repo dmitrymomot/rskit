@@ -6,7 +6,7 @@ Requires the `apikey` feature flag (depends on `db`):
 
 ```toml
 [dependencies]
-modo = { version = "0.3", features = ["apikey"] }
+modo = { version = "0.5", features = ["apikey"] }
 ```
 
 ## Key types
