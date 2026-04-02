@@ -529,6 +529,50 @@ fn filter_sort_multi_column() {
 }
 
 #[test]
+fn filter_sort_duplicate_first_wins() {
+    let schema = FilterSchema::new().sort_fields(&["name"]);
+
+    let mut params = HashMap::new();
+    params.insert("sort".into(), vec!["name".into(), "-name".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(validated.sort_clause, Some("\"name\" ASC".into()));
+}
+
+#[test]
+fn filter_sort_unknown_fields_dropped() {
+    let schema = FilterSchema::new().sort_fields(&["name", "created_at"]);
+
+    let mut params = HashMap::new();
+    params.insert("sort".into(), vec![
+        "unknown".into(),
+        "-name".into(),
+        "password".into(),
+        "created_at".into(),
+    ]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(
+        validated.sort_clause,
+        Some("\"name\" DESC, \"created_at\" ASC".into())
+    );
+}
+
+#[test]
+fn filter_sort_all_unknown_produces_none() {
+    let schema = FilterSchema::new().sort_fields(&["name"]);
+
+    let mut params = HashMap::new();
+    params.insert("sort".into(), vec!["unknown".into(), "password".into()]);
+
+    let filter = Filter::from_query_params(&params);
+    let validated = filter.validate(&schema).unwrap();
+    assert_eq!(validated.sort_clause, None);
+}
+
+#[test]
 fn filter_int_type_validation() {
     let schema = FilterSchema::new().field("age", FieldType::Int);
     let mut params = HashMap::new();
