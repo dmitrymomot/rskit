@@ -93,7 +93,7 @@ struct FilterCondition {
 /// | `field.lte=value` | Less than or equal (`<=`) |
 /// | `field.like=value` | SQL `LIKE` |
 /// | `field.null=true` | `IS NULL` / `IS NOT NULL` |
-/// | `sort=field` | Sort ascending; `sort=-field` for descending |
+/// | `sort=field` | Sort ascending; `sort=-field` for descending; repeat for multi-column |
 pub struct Filter {
     conditions: Vec<FilterCondition>,
     sort: Vec<String>,
