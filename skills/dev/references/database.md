@@ -240,7 +240,7 @@ Supported query-string syntax:
 | `field.lte=value`| Less than or equal                |
 | `field.like=value`| SQL `LIKE`                       |
 | `field.null=true`| `IS NULL` / `IS NOT NULL`         |
-| `sort=field`     | Sort ascending; `-field` for desc |
+| `sort=field`     | Sort ascending; `-field` for desc; repeat for multi-column |
 
 ```rust
 pub struct Filter { /* conditions, sort */ }
