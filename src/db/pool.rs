@@ -127,6 +127,11 @@ impl DatabasePool {
     /// connections; the last writer wins and the extra connection is dropped.
     /// This is benign because `connect` is idempotent (PRAGMAs are
     /// re-applied, migrations use checksum tracking).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the shard name is invalid (empty, starts with `.`,
+    /// or contains path separators) or if the shard database fails to open.
     pub async fn conn(&self, shard: Option<&str>) -> Result<Database> {
         let Some(name) = shard else {
             return Ok(self.inner.default.clone());
