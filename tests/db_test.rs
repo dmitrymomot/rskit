@@ -514,11 +514,10 @@ fn filter_sort_multi_column() {
         .sort_fields(&["priority", "end_date", "name"]);
 
     let mut params = HashMap::new();
-    params.insert("sort".into(), vec![
-        "priority".into(),
-        "-end_date".into(),
-        "name".into(),
-    ]);
+    params.insert(
+        "sort".into(),
+        vec!["priority".into(), "-end_date".into(), "name".into()],
+    );
 
     let filter = Filter::from_query_params(&params);
     let validated = filter.validate(&schema).unwrap();
@@ -545,12 +544,15 @@ fn filter_sort_unknown_fields_dropped() {
     let schema = FilterSchema::new().sort_fields(&["name", "created_at"]);
 
     let mut params = HashMap::new();
-    params.insert("sort".into(), vec![
-        "unknown".into(),
-        "-name".into(),
-        "password".into(),
-        "created_at".into(),
-    ]);
+    params.insert(
+        "sort".into(),
+        vec![
+            "unknown".into(),
+            "-name".into(),
+            "password".into(),
+            "created_at".into(),
+        ],
+    );
 
     let filter = Filter::from_query_params(&params);
     let validated = filter.validate(&schema).unwrap();
@@ -798,10 +800,10 @@ async fn select_with_multi_column_sort() {
 
     assert_eq!(items.len(), 4);
     // priority ASC: 1, 1, 2, 2 — then name ASC within same priority
-    assert_eq!(items[0].name, "Audit");    // priority=1, name=Audit
-    assert_eq!(items[1].name, "Review");   // priority=1, name=Review
-    assert_eq!(items[2].name, "Build");    // priority=2, name=Build
-    assert_eq!(items[3].name, "Deploy");   // priority=2, name=Deploy
+    assert_eq!(items[0].name, "Audit"); // priority=1, name=Audit
+    assert_eq!(items[1].name, "Review"); // priority=1, name=Review
+    assert_eq!(items[2].name, "Build"); // priority=2, name=Build
+    assert_eq!(items[3].name, "Deploy"); // priority=2, name=Deploy
 }
 
 #[tokio::test]
