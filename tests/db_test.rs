@@ -733,6 +733,78 @@ async fn select_with_sort() {
 }
 
 #[tokio::test]
+async fn select_with_multi_column_sort() {
+    let db = test_db().await;
+    let conn = db.conn();
+
+    conn.execute(
+        "CREATE TABLE tasks (id TEXT PRIMARY KEY, name TEXT NOT NULL, priority INTEGER NOT NULL, status TEXT NOT NULL)",
+        (),
+    )
+    .await
+    .unwrap();
+
+    // Insert rows with varying priority and name to verify multi-column ordering
+    for (id, name, priority, status) in [
+        ("t1", "Deploy", 2, "active"),
+        ("t2", "Review", 1, "active"),
+        ("t3", "Build", 2, "active"),
+        ("t4", "Audit", 1, "active"),
+    ] {
+        conn.execute(
+            "INSERT INTO tasks (id, name, priority, status) VALUES (?1, ?2, ?3, ?4)",
+            libsql::params![id, name, priority, status],
+        )
+        .await
+        .unwrap();
+    }
+
+    let schema = FilterSchema::new()
+        .field("status", FieldType::Text)
+        .sort_fields(&["priority", "name"]);
+
+    // Sort by priority ASC, then name ASC as tiebreaker
+    let mut params = HashMap::new();
+    params.insert("sort".into(), vec!["priority".into(), "name".into()]);
+    params.insert("status".into(), vec!["active".into()]);
+    let filter = Filter::from_query_params(&params)
+        .validate(&schema)
+        .unwrap();
+
+    #[derive(serde::Serialize)]
+    struct Task {
+        id: String,
+        name: String,
+        priority: i64,
+        status: String,
+    }
+    impl FromRow for Task {
+        fn from_row(row: &libsql::Row) -> Result<Self> {
+            Ok(Self {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                priority: row.get(2)?,
+                status: row.get(3)?,
+            })
+        }
+    }
+
+    let items: Vec<Task> = conn
+        .select("SELECT id, name, priority, status FROM tasks")
+        .filter(filter)
+        .fetch_all()
+        .await
+        .unwrap();
+
+    assert_eq!(items.len(), 4);
+    // priority ASC: 1, 1, 2, 2 — then name ASC within same priority
+    assert_eq!(items[0].name, "Audit");    // priority=1, name=Audit
+    assert_eq!(items[1].name, "Review");   // priority=1, name=Review
+    assert_eq!(items[2].name, "Build");    // priority=2, name=Build
+    assert_eq!(items[3].name, "Deploy");   // priority=2, name=Deploy
+}
+
+#[tokio::test]
 async fn select_no_filter() {
     let db = test_db_with_users().await;
     let conn = db.conn();
