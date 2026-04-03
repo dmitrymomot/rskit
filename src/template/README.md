@@ -6,7 +6,7 @@ Requires the **`templates`** feature flag:
 
 ```toml
 [dependencies]
-modo = { version = "0.5", features = ["templates"] }
+modo = { version = "0.6", features = ["templates"] }
 ```
 
 Provides: filesystem template loading, built-in `t()` i18n function, `static_url()` for

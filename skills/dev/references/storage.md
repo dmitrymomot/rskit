@@ -5,7 +5,7 @@ S3-compatible object storage with ACL support and upload-from-URL. Feature-gated
 ## Feature Flag
 
 ```toml
-modo = { version = "0.5", features = ["storage"] }
+modo = { version = "0.6", features = ["storage"] }
 ```
 
 Re-exports from `modo` crate root:

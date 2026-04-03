@@ -3,7 +3,7 @@
 Prefixed API key issuance, verification, scoping, and lifecycle management. Feature-gated under `apikey` (depends on `db`).
 
 ```toml
-modo = { version = "0.5", features = ["apikey"] }
+modo = { version = "0.6", features = ["apikey"] }
 ```
 
 All types are re-exported from the crate root under `#[cfg(feature = "apikey")]`:

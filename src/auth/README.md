@@ -10,7 +10,7 @@ All items in this module require the `auth` feature:
 
 ```toml
 [dependencies]
-modo = { version = "0.5", features = ["auth"] }
+modo = { version = "0.6", features = ["auth"] }
 ```
 
 ## Modules

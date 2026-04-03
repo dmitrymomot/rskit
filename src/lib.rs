@@ -10,7 +10,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = "0.5"
+//! modo = "0.6"
 //! ```
 //!
 //! The `db` feature is enabled by default. Enable additional modules via
@@ -22,7 +22,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "0.5", features = ["full"] }
+//! modo = { version = "0.6", features = ["full"] }
 //! ```
 
 #[cfg(feature = "db")]

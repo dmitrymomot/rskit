@@ -3,7 +3,7 @@
 Text-to-vector embeddings via LLM provider APIs. Feature-gated under `text-embedding`.
 
 ```toml
-modo = { version = "0.5", features = ["text-embedding"] }
+modo = { version = "0.6", features = ["text-embedding"] }
 ```
 
 All types are re-exported from `modo::embed` under `#[cfg(feature = "text-embedding")]`:

@@ -13,7 +13,7 @@ Requires the `storage` feature flag:
 
 ```toml
 [dependencies]
-modo = { version = "0.5", features = ["storage"] }
+modo = { version = "0.6", features = ["storage"] }
 ```
 
 The memory backend is available inside `#[cfg(test)]` unit-test blocks and

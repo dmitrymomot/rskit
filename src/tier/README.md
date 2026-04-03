@@ -6,7 +6,7 @@ Requires feature `"tier"`.
 
 ```toml
 [dependencies]
-modo = { version = "0.5", features = ["tier"] }
+modo = { version = "0.6", features = ["tier"] }
 ```
 
 ## Key types
