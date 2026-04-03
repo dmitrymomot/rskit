@@ -232,9 +232,9 @@ let key = storage.put_from_url_with(&input, PutOptions {
 
 - **S3 keys must be URI-encoded**: All keys are passed through `uri_encode(key, false)` (encodes everything except `A-Za-z0-9_.-~/`). Omitting this breaks keys with spaces, `+`, or other special characters.
 - **`delete_prefix()` is O(n) network calls**: Lists all keys under the prefix, then deletes each one individually. Not suitable for large prefixes.
-- **Streaming body reads use `BodyExt::frame()` loop**: `fetch_url` reads response bodies frame-by-frame via `http_body_util::BodyExt`, NOT `body.collect().await` -- collect buffers everything, defeating mid-stream abort on size limit.
+- **Streaming body reads use `response.chunk()` loop**: `fetch_url` reads response bodies chunk-by-chunk via `reqwest::Response::chunk()`, NOT `body.collect().await` -- collect buffers everything, defeating mid-stream abort on size limit.
 - **`put_from_url()` does not follow redirects (SSRF prevention)**: Callers must provide the final URL. A 301/302 response is treated as a non-2xx error.
-- **30-second hard-coded timeout**: `put_from_url()` wraps the fetch in `tokio::time::timeout(Duration::from_secs(30), ...)`.
+- **30-second hard-coded timeout**: `put_from_url()` sets a per-request timeout via `reqwest::RequestBuilder::timeout(Duration::from_secs(30))`.
 - **`x-amz-acl` may be silently ignored by providers**: S3-compatible providers (RustFS/MinIO) may ignore the ACL header if ACLs are disabled at server level.
 - **`put_from_url()` on memory backend returns `Error::internal`**: It is inherently a network operation. The memory backend has no HTTP client.
 - **URL scheme validation**: Only `http` and `https` URLs are accepted. `ftp`, schemeless, etc. return `Error::bad_request`.

@@ -342,26 +342,26 @@ Size format for `max_file_size`: `<number><unit>` where unit is `b`, `kb`, `mb`,
 
 Defined in `Cargo.toml`. Default feature: `db`.
 
-| Feature        | What it enables                                          | Dependencies                                                                                |
-| -------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `full`         | All optional features below                              | (meta)                                                                                      |
-| `db`           | libsql (SQLite) database connection and queries          | `libsql`, `urlencoding`                                                                     |
-| `session`      | Session management (requires `db`)                       | (implies `db`)                                                                              |
-| `job`          | Background job queue (requires `db`)                     | (implies `db`)                                                                              |
-| `auth`         | OAuth 2.0 (Google, GitHub), JWT, Argon2 password hashing | `argon2`, `hmac`, `sha1`, `dep:reqwest`                                                    |
-| `templates`    | MiniJinja template engine with i18n                      | `minijinja`, `minijinja-contrib`, `intl_pluralrules`, `unic-langid`                         |
-| `sse`          | Server-Sent Events broadcaster                           | `futures-util`                                                                              |
-| `email`        | SMTP email delivery with Markdown-to-HTML                | `lettre`, `pulldown-cmark`                                                                  |
-| `storage`      | S3-compatible object storage                             | `hmac`, `dep:reqwest`                                                                       |
-| `webhooks`     | Webhook delivery with Standard Webhooks signing          | `hmac`, `dep:reqwest`                                                                       |
-| `dns`          | DNS domain verification (TXT, CNAME)                     | `simple-dns`                                                                                |
-| `geolocation`  | MaxMind GeoIP2 geolocation                               | `maxminddb`                                                                                 |
-| `qrcode`       | QR code generation                                       | `fast_qr`                                                                                   |
-| `sentry`         | Sentry error reporting via tracing                       | `sentry`, `sentry-tracing`                                                                  |
-| `apikey`         | API key generation, hashing, and verification            | (implies `db`)                                                                              |
-| `text-embedding` | Text embedding providers (OpenAI, Gemini, Mistral, Voyage) | `dep:reqwest`                                                                             |
-| `tier`           | Feature-tier access control                              | (no extra deps)                                                                             |
-| `test-helpers`   | `modo::testing` module for test utilities                | (implies `db`, `session`)                                                                   |
+| Feature          | What it enables                                            | Dependencies                                                        |
+| ---------------- | ---------------------------------------------------------- | ------------------------------------------------------------------- |
+| `full`           | All optional features below                                | (meta)                                                              |
+| `db`             | libsql (SQLite) database connection and queries            | `libsql`, `urlencoding`                                             |
+| `session`        | Session management (requires `db`)                         | (implies `db`)                                                      |
+| `job`            | Background job queue (requires `db`)                       | (implies `db`)                                                      |
+| `auth`           | OAuth 2.0 (Google, GitHub), JWT, Argon2 password hashing   | `argon2`, `hmac`, `sha1`, `ring`, `dep:reqwest`                     |
+| `templates`      | MiniJinja template engine with i18n                        | `minijinja`, `minijinja-contrib`, `intl_pluralrules`, `unic-langid` |
+| `sse`            | Server-Sent Events broadcaster                             | `futures-util`                                                      |
+| `email`          | SMTP email delivery with Markdown-to-HTML                  | `lettre`, `pulldown-cmark`                                          |
+| `storage`        | S3-compatible object storage                               | `hmac`, `ring`, `dep:reqwest`                                       |
+| `webhooks`       | Webhook delivery with Standard Webhooks signing            | `hmac`, `ring`, `base64`, `dep:reqwest`                             |
+| `dns`            | DNS domain verification (TXT, CNAME)                       | `simple-dns`                                                        |
+| `geolocation`    | MaxMind GeoIP2 geolocation                                 | `maxminddb`                                                         |
+| `qrcode`         | QR code generation                                         | `fast_qr`                                                           |
+| `sentry`         | Sentry error reporting via tracing                         | `sentry`, `sentry-tracing`, `ring`                                  |
+| `apikey`         | API key generation, hashing, and verification              | (implies `db`)                                                      |
+| `text-embedding` | Text embedding providers (OpenAI, Gemini, Mistral, Voyage) | `ring`, `dep:reqwest`                                               |
+| `tier`           | Feature-tier access control                                | (no extra deps)                                                     |
+| `test-helpers`   | `modo::testing` module for test utilities                  | (implies `db`, `session`)                                           |
 
 ### Test Feature Flags
 
