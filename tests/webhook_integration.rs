@@ -37,15 +37,15 @@ async fn start_test_server(
     (url, handle)
 }
 
-fn test_client() -> modo::http::Client {
-    modo::http::Client::builder()
+fn test_client() -> reqwest::Client {
+    reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
         .build()
+        .expect("failed to build test HTTP client")
 }
 
 #[tokio::test]
 async fn http_client_post_reaches_server() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
     let (url, handle) = start_test_server(200).await;
     let client = test_client();
 
@@ -71,7 +71,6 @@ async fn http_client_post_reaches_server() {
 
 #[tokio::test]
 async fn http_client_timeout_on_slow_server() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let url = format!("http://127.0.0.1:{}", addr.port());
@@ -83,7 +82,9 @@ async fn http_client_timeout_on_slow_server() {
         drop(stream);
     });
 
-    let client = modo::http::Client::builder().build();
+    let client = reqwest::Client::builder()
+        .build()
+        .expect("failed to build test HTTP client");
 
     let result = client
         .post(&url)
@@ -93,12 +94,12 @@ async fn http_client_timeout_on_slow_server() {
         .await;
 
     assert!(result.is_err());
-    assert!(result.err().unwrap().message().contains("timed out"));
+    let err = result.unwrap_err();
+    assert!(err.is_timeout(), "expected timeout error, got: {err}");
 }
 
 #[tokio::test]
 async fn end_to_end_send_and_verify() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
     let (url, handle) = start_test_server(200).await;
     let sender = WebhookSender::new(test_client());
     let secret = WebhookSecret::new(b"e2e-test-secret".to_vec());
