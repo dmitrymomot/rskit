@@ -127,10 +127,6 @@ lint:
 fmt:
     cargo fmt
 
-# Check formatting
-fmt-check:
-    cargo fmt --check
-
 # --- Maintenance ---
 
 # Remove build artifacts and databases
@@ -149,12 +145,6 @@ db-reset:
 # Seed the database with development data
 seed:
     @echo "No seed data configured. Edit this recipe in justfile to add seed logic."
-
-# --- Migrations ---
-
-# Apply pending migrations (starts app; press Ctrl+C after "Listening")
-migrate:
-    cargo run
 
 # Create a new migration file
 migrate-create name:
@@ -432,7 +422,6 @@ just clean            # Remove build artifacts and databases
 just deps             # Update dependencies
 just db-reset         # Remove all database files
 just seed             # Seed the database with dev data
-just migrate          # Apply pending migrations (Ctrl+C after startup)
 just migrate-create name  # Create new migration file
 ```
 
