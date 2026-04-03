@@ -44,3 +44,24 @@ async fn ready_returns_200_with_database() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn test_health_failing_check_returns_503() {
+    let checks = HealthChecks::new()
+        .check_fn("always_down", || async {
+            Err(modo::Error::internal("simulated failure"))
+        });
+
+    let mut registry = Registry::new();
+    registry.add(checks);
+
+    let app = Router::new()
+        .merge(modo::health::router())
+        .with_state(registry.into_state());
+
+    let resp = app
+        .oneshot(Request::get("/_ready").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+}

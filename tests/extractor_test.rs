@@ -3,6 +3,7 @@ use axum::body::Body;
 use axum::http::Request;
 use axum::routing::get;
 use http::StatusCode;
+use modo::extractor::ClientInfo;
 use modo::sanitize::Sanitize;
 use modo::service::Registry;
 use serde::Deserialize;
@@ -210,6 +211,37 @@ async fn test_multipart_request_text_fields() {
         .await
         .unwrap();
     assert_eq!(&body[..], b"Alice");
+}
+
+#[tokio::test]
+async fn test_client_info_extraction() {
+    async fn handler(info: ClientInfo) -> String {
+        let ua = info.user_agent_value().unwrap_or("none");
+        // ip is None without ClientIpLayer; fingerprint comes from x-fingerprint header.
+        let fp = info.fingerprint_value().unwrap_or("none");
+        format!("{ua}|{fp}")
+    }
+
+    let app = Router::new().route("/", get(handler));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header("user-agent", "TestBot/2.0")
+                .header("x-fingerprint", "fp_test_123")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let text = String::from_utf8(body.to_vec()).unwrap();
+    assert_eq!(text, "TestBot/2.0|fp_test_123");
 }
 
 #[test]

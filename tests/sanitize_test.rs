@@ -70,6 +70,20 @@ fn test_normalize_email_no_plus() {
 }
 
 #[test]
+fn test_strip_html_removes_script_tags() {
+    // Script content (including the tag itself) must be completely discarded.
+    let mut s = "<p>Hello</p><script>alert('xss')</script><p>World</p>".to_string();
+    modo::sanitize::strip_html(&mut s);
+    // The <p> tags produce a separating space; script content is gone entirely.
+    assert!(!s.contains("script"), "script tag must be removed");
+    assert!(!s.contains("alert"), "script content must be removed");
+    assert!(s.contains("Hello"), "Hello must be preserved");
+    assert!(s.contains("World"), "World must be preserved");
+    // Collapsed output should be "Hello World"
+    assert_eq!(s.trim(), "Hello World");
+}
+
+#[test]
 fn test_sanitize_trait() {
     use modo::sanitize::Sanitize;
 
