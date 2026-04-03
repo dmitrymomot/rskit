@@ -86,8 +86,8 @@ impl RemoteBackend {
             req = req.header(k.as_str(), v.as_str());
         }
         req = req
-            .header("authorization", &auth)
-            .header("content-length", content_length)
+            .header(http::header::AUTHORIZATION, &auth)
+            .header(http::header::CONTENT_LENGTH, content_length)
             .body(data);
 
         let response = req
@@ -128,7 +128,7 @@ impl RemoteBackend {
         for (k, v) in &signed_headers {
             req = req.header(k.as_str(), v.as_str());
         }
-        req = req.header("authorization", &auth);
+        req = req.header(http::header::AUTHORIZATION, &auth);
 
         let response = req
             .send()
@@ -168,7 +168,7 @@ impl RemoteBackend {
         for (k, v) in &signed_headers {
             req = req.header(k.as_str(), v.as_str());
         }
-        req = req.header("authorization", &auth);
+        req = req.header(http::header::AUTHORIZATION, &auth);
 
         let response = req
             .send()
@@ -228,7 +228,7 @@ impl RemoteBackend {
             for (k, v) in &signed_headers {
                 req = req.header(k.as_str(), v.as_str());
             }
-            req = req.header("authorization", &auth);
+            req = req.header(http::header::AUTHORIZATION, &auth);
 
             let response = req
                 .send()
