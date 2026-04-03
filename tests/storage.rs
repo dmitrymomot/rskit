@@ -64,6 +64,9 @@ async fn multi_bucket_isolation() {
 
 #[tokio::test]
 async fn put_with_options() {
+    // Memory backend does not expose stored ACL/content-type for verification.
+    // This test confirms the operation succeeds without error; actual ACL/content-type
+    // validation requires a real S3 backend.
     let storage = Storage::memory();
     let input = {
         let mut i = PutInput::new(bytes::Bytes::from("a,b,c"), "exports/", "text/csv");
@@ -136,6 +139,9 @@ async fn delete_prefix_empty_is_noop() {
 
 #[tokio::test]
 async fn put_with_acl_public_read() {
+    // Memory backend does not expose stored ACL/content-type for verification.
+    // This test confirms the operation succeeds without error; actual ACL/content-type
+    // validation requires a real S3 backend.
     let storage = Storage::memory();
     let input = {
         let mut i = PutInput::new(bytes::Bytes::from("public data"), "public/", "image/png");
@@ -157,6 +163,9 @@ async fn put_with_acl_public_read() {
 
 #[tokio::test]
 async fn put_with_acl_private() {
+    // Memory backend does not expose stored ACL/content-type for verification.
+    // This test confirms the operation succeeds without error; actual ACL/content-type
+    // validation requires a real S3 backend.
     let storage = Storage::memory();
     let input = {
         let mut i = PutInput::new(

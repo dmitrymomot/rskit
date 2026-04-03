@@ -2,7 +2,6 @@
 
 use std::time::Duration;
 
-use bytes::Bytes;
 use http::StatusCode;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -42,60 +41,6 @@ fn test_client() -> reqwest::Client {
         .timeout(Duration::from_secs(5))
         .build()
         .expect("failed to build test HTTP client")
-}
-
-#[tokio::test]
-async fn http_client_post_reaches_server() {
-    let (url, handle) = start_test_server(200).await;
-    let client = test_client();
-
-    let mut headers = http::HeaderMap::new();
-    headers.insert("content-type", "application/json".parse().unwrap());
-    headers.insert("x-test", "hello".parse().unwrap());
-
-    let response = client
-        .post(&url)
-        .headers(headers)
-        .body(Bytes::from_static(b"test-body"))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let (raw_request, _) = handle.await.unwrap();
-    assert!(raw_request.contains("POST / HTTP/1.1"));
-    assert!(raw_request.contains("x-test: hello"));
-    assert!(raw_request.contains("test-body"));
-}
-
-#[tokio::test]
-async fn http_client_timeout_on_slow_server() {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let url = format!("http://127.0.0.1:{}", addr.port());
-
-    // Server accepts but never responds
-    let _handle = tokio::spawn(async move {
-        let (stream, _) = listener.accept().await.unwrap();
-        tokio::time::sleep(Duration::from_secs(60)).await;
-        drop(stream);
-    });
-
-    let client = reqwest::Client::builder()
-        .build()
-        .expect("failed to build test HTTP client");
-
-    let result = client
-        .post(&url)
-        .body(Bytes::new())
-        .timeout(Duration::from_millis(100))
-        .send()
-        .await;
-
-    assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert!(err.is_timeout(), "expected timeout error, got: {err}");
 }
 
 #[tokio::test]

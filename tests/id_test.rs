@@ -13,8 +13,9 @@ fn test_ulid_uniqueness() {
 
 #[test]
 fn test_ulid_is_alphanumeric() {
+    const CROCKFORD: &str = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
     let id = modo::id::ulid();
-    assert!(id.chars().all(|c| c.is_ascii_alphanumeric()));
+    assert!(id.chars().all(|c| CROCKFORD.contains(c)));
 }
 
 #[test]
