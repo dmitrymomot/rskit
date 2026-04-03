@@ -748,6 +748,493 @@ async fn test_logout_removes_cookie_in_response() {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers for the new tests
+// ---------------------------------------------------------------------------
+
+async fn setup_store_with_config(config: SessionConfig) -> Store {
+    let db_config = db::Config {
+        path: ":memory:".into(),
+        ..Default::default()
+    };
+    let db = db::connect(&db_config).await.unwrap();
+    db.conn()
+        .execute_raw(
+            "CREATE TABLE sessions (
+                id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
+                user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
+                user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
+                device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,
+                data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
+                last_active_at TEXT NOT NULL, expires_at TEXT NOT NULL
+            )",
+            (),
+        )
+        .await
+        .unwrap();
+    Store::new(db, config)
+}
+
+// Module-level handlers for new tests
+
+/// Set "color" = "blue" on an already-authenticated session.
+async fn handler_set_color(session: Session) -> modo::Result<&'static str> {
+    session.set("color", &"blue".to_string())?;
+    Ok("ok")
+}
+
+async fn handler_get_color(session: Session) -> modo::Result<String> {
+    let color: Option<String> = session.get("color")?;
+    Ok(color.unwrap_or_else(|| "none".to_string()))
+}
+
+async fn handler_rotate_only(session: Session) -> modo::Result<&'static str> {
+    session.rotate().await?;
+    Ok("ok")
+}
+
+async fn handler_authenticate_with_role(session: Session) -> modo::Result<&'static str> {
+    session
+        .authenticate_with("user-role", serde_json::json!({"role": "admin"}))
+        .await?;
+    Ok("ok")
+}
+
+async fn handler_get_role(session: Session) -> modo::Result<String> {
+    let role: Option<String> = session.get("role")?;
+    Ok(role.unwrap_or_else(|| "none".to_string()))
+}
+
+async fn handler_set_key_then_remove(session: Session) -> modo::Result<&'static str> {
+    session.authenticate("user-remove").await?;
+    session.set("key", &"value".to_string())?;
+    Ok("ok")
+}
+
+async fn handler_remove_key_and_read(session: Session) -> modo::Result<String> {
+    session.remove_key("key");
+    let val: Option<String> = session.get("key")?;
+    Ok(val.unwrap_or_else(|| "none".to_string()))
+}
+
+async fn handler_current(session: Session) -> modo::Result<String> {
+    match session.current() {
+        Some(data) => Ok(data.user_id),
+        None => Ok("none".to_string()),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Test 11: Session data persists across requests
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn test_session_data_persists_across_requests() {
+    let store = setup_store().await;
+    let cookie_config = test_cookie_config();
+    let key = key_from_config(&cookie_config).unwrap();
+
+    // Request 1: authenticate to get a session cookie
+    let app1 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    let resp1 = app1
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/login")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp1.status(), StatusCode::OK);
+    let cookie_val =
+        cookie_header_value(&extract_set_cookie(&resp1).expect("must set session cookie"));
+
+    // Request 2: set "color" = "blue" on the existing authenticated session
+    // (handler_set_color does NOT call authenticate — just calls session.set)
+    let app2 = build_app(
+        &store,
+        &cookie_config,
+        &key,
+        "/set-color",
+        post(handler_set_color),
+    );
+    let resp2 = app2
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/set-color")
+                .header("cookie", &cookie_val)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp2.status(), StatusCode::OK);
+    // Cookie may or may not be refreshed; use the original cookie_val — it is still valid
+    // (rotate was not called, same session ID)
+
+    // Request 3: read "color" from session
+    let app3 = build_app(
+        &store,
+        &cookie_config,
+        &key,
+        "/get-color",
+        get(handler_get_color),
+    );
+    let resp3 = app3
+        .oneshot(
+            Request::builder()
+                .uri("/get-color")
+                .header("cookie", &cookie_val)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp3.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp3.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        std::str::from_utf8(&body).unwrap(),
+        "blue",
+        "session data must persist across requests"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Test 12: Rotate invalidates old token; new token is valid
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn test_rotate_authenticated_session() {
+    let store = setup_store().await;
+    let cookie_config = test_cookie_config();
+    let key = key_from_config(&cookie_config).unwrap();
+
+    // Step 1: authenticate, obtain cookie A
+    let app1 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    let resp1 = app1
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/login")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp1.status(), StatusCode::OK);
+    let cookie_a = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie A required"));
+
+    // Step 2: rotate using cookie A, obtain cookie B
+    let app2 = build_app(
+        &store,
+        &cookie_config,
+        &key,
+        "/rotate",
+        post(handler_rotate_only),
+    );
+    let resp2 = app2
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/rotate")
+                .header("cookie", &cookie_a)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp2.status(), StatusCode::OK);
+    let cookie_b = cookie_header_value(&extract_set_cookie(&resp2).expect("cookie B required"));
+
+    // cookie A and cookie B must differ
+    assert_ne!(cookie_a, cookie_b, "rotate must issue a new cookie");
+
+    // Step 3: old cookie A should no longer load a session
+    let app3 = build_app(
+        &store,
+        &cookie_config,
+        &key,
+        "/check",
+        get(handler_check_auth),
+    );
+    let resp3 = app3
+        .oneshot(
+            Request::builder()
+                .uri("/check")
+                .header("cookie", &cookie_a)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(resp3.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        std::str::from_utf8(&body).unwrap(),
+        "none",
+        "old cookie must be invalid after rotate"
+    );
+
+    // Step 4: new cookie B should load the session successfully
+    let app4 = build_app(
+        &store,
+        &cookie_config,
+        &key,
+        "/check",
+        get(handler_check_auth),
+    );
+    let resp4 = app4
+        .oneshot(
+            Request::builder()
+                .uri("/check")
+                .header("cookie", &cookie_b)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(resp4.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        std::str::from_utf8(&body).unwrap(),
+        "user-1",
+        "new cookie must be valid after rotate"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Test 13: authenticate_with stores initial data readable in next request
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn test_session_authenticate_with_initial_data() {
+    let store = setup_store().await;
+    let cookie_config = test_cookie_config();
+    let key = key_from_config(&cookie_config).unwrap();
+
+    // Request 1: authenticate_with initial role=admin
+    let app1 = build_app(
+        &store,
+        &cookie_config,
+        &key,
+        "/auth-with",
+        post(handler_authenticate_with_role),
+    );
+    let resp1 = app1
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth-with")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp1.status(), StatusCode::OK);
+    let cookie_val = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
+
+    // Request 2: read "role" from session
+    let app2 = build_app(
+        &store,
+        &cookie_config,
+        &key,
+        "/get-role",
+        get(handler_get_role),
+    );
+    let resp2 = app2
+        .oneshot(
+            Request::builder()
+                .uri("/get-role")
+                .header("cookie", &cookie_val)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp2.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp2.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        std::str::from_utf8(&body).unwrap(),
+        "admin",
+        "authenticate_with initial data must persist to next request"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Test 14: remove_key removes a previously set key
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn test_session_remove_key() {
+    let store = setup_store().await;
+    let cookie_config = test_cookie_config();
+    let key = key_from_config(&cookie_config).unwrap();
+
+    // Request 1: authenticate and set "key" = "value"
+    let app1 = build_app(
+        &store,
+        &cookie_config,
+        &key,
+        "/set",
+        post(handler_set_key_then_remove),
+    );
+    let resp1 = app1
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/set")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp1.status(), StatusCode::OK);
+    let cookie_val = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
+
+    // Request 2: remove_key("key") and then get("key") should be None
+    let app2 = build_app(
+        &store,
+        &cookie_config,
+        &key,
+        "/remove",
+        post(handler_remove_key_and_read),
+    );
+    let resp2 = app2
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/remove")
+                .header("cookie", &cookie_val)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp2.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp2.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        std::str::from_utf8(&body).unwrap(),
+        "none",
+        "remove_key must remove the value so get returns None"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Test 15: session.current() returns the authenticated user's data
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn test_session_current() {
+    let store = setup_store().await;
+    let cookie_config = test_cookie_config();
+    let key = key_from_config(&cookie_config).unwrap();
+
+    // Request 1: authenticate as user-current
+    let app1 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    let resp1 = app1
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/login")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp1.status(), StatusCode::OK);
+    let cookie_val = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
+
+    // Request 2: call current() and verify user_id
+    let app2 = build_app(
+        &store,
+        &cookie_config,
+        &key,
+        "/current",
+        get(handler_current),
+    );
+    let resp2 = app2
+        .oneshot(
+            Request::builder()
+                .uri("/current")
+                .header("cookie", &cookie_val)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp2.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp2.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        std::str::from_utf8(&body).unwrap(),
+        "user-1",
+        "current() must return the authenticated user's data"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Test 16: validate_fingerprint=false allows different User-Agent in subsequent requests
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn test_validate_fingerprint_disabled() {
+    let mut config = SessionConfig::default();
+    config.validate_fingerprint = false;
+    let store = setup_store_with_config(config).await;
+    let cookie_config = test_cookie_config();
+    let key = key_from_config(&cookie_config).unwrap();
+
+    // Request 1: authenticate with User-Agent "Chrome/100"
+    let app1 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    let resp1 = app1
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/login")
+                .header("user-agent", "Chrome/100")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp1.status(), StatusCode::OK);
+    let cookie_val = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
+
+    // Request 2: send a DIFFERENT User-Agent — fingerprint check is disabled, so session is valid
+    let app2 = build_app(
+        &store,
+        &cookie_config,
+        &key,
+        "/check",
+        get(handler_check_auth),
+    );
+    let resp2 = app2
+        .oneshot(
+            Request::builder()
+                .uri("/check")
+                .header("cookie", &cookie_val)
+                .header("user-agent", "Firefox/120")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp2.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp2.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        std::str::from_utf8(&body).unwrap(),
+        "user-1",
+        "with validate_fingerprint=false, different User-Agent must not destroy the session"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Test 10: set() is a no-op when unauthenticated (no session in store, no cookie set)
 // ---------------------------------------------------------------------------
 #[tokio::test]

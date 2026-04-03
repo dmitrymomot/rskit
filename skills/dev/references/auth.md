@@ -36,11 +36,11 @@ Both use Authorization Code flow with PKCE (S256).
 **Constructor:**
 
 ```rust
-GitHub::new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key, http_client: modo::http::Client) -> Self
-Google::new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key, http_client: modo::http::Client) -> Self
+GitHub::new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key, http_client: reqwest::Client) -> Self
+Google::new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key, http_client: reqwest::Client) -> Self
 ```
 
-`Key` is `axum_extra::extract::cookie::Key`. Must be registered in the `Registry` for `OAuthState` extraction. `http_client` is the framework-wide HTTP client used for token exchange and profile fetching.
+`Key` is `axum_extra::extract::cookie::Key`. Must be registered in the `Registry` for `OAuthState` extraction. `http_client` is a `reqwest::Client` used for token exchange and profile fetching.
 
 ### OAuthConfig
 
@@ -94,6 +94,7 @@ oauth:
 
     ```rust
     #[non_exhaustive]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct UserProfile {
         pub provider: String,          // "google", "github"
         pub provider_user_id: String,
@@ -209,11 +210,13 @@ Totp::generate_secret() -> String  // 20-byte random, base32-encoded
 
 Methods:
 
-- `generate() -> String` -- current TOTP code using system clock
-- `generate_at(timestamp: u64) -> String` -- code for a specific Unix timestamp
-- `verify(code: &str) -> bool` -- verify against current time with window tolerance
-- `verify_at(code: &str, timestamp: u64) -> bool` -- verify against specific timestamp
-- `otpauth_uri(issuer: &str, account: &str) -> String` -- `otpauth://totp/` URI for QR provisioning
+```rust
+pub fn generate(&self) -> String                            // current TOTP code using system clock
+pub fn generate_at(&self, timestamp: u64) -> String         // code for a specific Unix timestamp
+pub fn verify(&self, code: &str) -> bool                    // verify against current time with window tolerance
+pub fn verify_at(&self, code: &str, timestamp: u64) -> bool // verify against specific timestamp
+pub fn otpauth_uri(&self, issuer: &str, account: &str) -> String // otpauth://totp/ URI for QR provisioning
+```
 
 Verification uses constant-time comparison.
 
@@ -294,15 +297,28 @@ pub struct Claims<T> {
 
 Builder methods (all consume and return `Self`):
 
-- `Claims::new(custom: T)` -- all registered fields `None`
-- `.with_iss(iss)`, `.with_sub(sub)`, `.with_aud(aud)`
-- `.with_exp(timestamp)`, `.with_exp_in(Duration)` -- absolute or relative
-- `.with_nbf(timestamp)`, `.with_iat_now()`, `.with_jti(jti)`
+```rust
+Claims::new(custom: T) -> Self                              // all registered fields None
+    .with_iss(self, iss: impl Into<String>) -> Self
+    .with_sub(self, sub: impl Into<String>) -> Self
+    .with_aud(self, aud: impl Into<String>) -> Self
+    .with_exp(self, exp: u64) -> Self                       // absolute Unix timestamp
+    .with_exp_in(self, duration: Duration) -> Self           // relative to now
+    .with_nbf(self, nbf: u64) -> Self
+    .with_iat_now(self) -> Self
+    .with_jti(self, jti: impl Into<String>) -> Self
+```
 
 Query methods:
 
-- `.subject()`, `.token_id()`, `.issuer()`, `.audience()` -- return `Option<&str>`
-- `.is_expired()`, `.is_not_yet_valid()` -- check `exp`/`nbf` against current time
+```rust
+pub fn subject(&self) -> Option<&str>
+pub fn token_id(&self) -> Option<&str>
+pub fn issuer(&self) -> Option<&str>
+pub fn audience(&self) -> Option<&str>
+pub fn is_expired(&self) -> bool           // checks exp against current time
+pub fn is_not_yet_valid(&self) -> bool     // checks nbf against current time
+```
 
 Custom fields are flattened into the top-level JSON object (not nested under `"custom"`).
 
@@ -367,8 +383,8 @@ Tower middleware layer. Decodes JWT, validates claims, optionally checks revocat
 
 ```rust
 JwtLayer::<MyClaims>::new(decoder: JwtDecoder) -> Self
-    .with_sources(sources: Vec<Arc<dyn TokenSource>>)  // override token sources
-    .with_revocation(revocation: Arc<dyn Revocation>)  // attach revocation backend
+    .with_sources(self, sources: Vec<Arc<dyn TokenSource>>) -> Self  // override token sources
+    .with_revocation(self, revocation: Arc<dyn Revocation>) -> Self  // attach revocation backend
 ```
 
 Default token source: `BearerSource` (`Authorization: Bearer <token>`).
@@ -425,6 +441,18 @@ pub struct Bearer(pub String);
 Axum `FromRequestParts` extractor. Reads raw token string from `Authorization: Bearer <token>`. Does **not** decode or validate -- independent of `JwtLayer`. Returns 401 with `jwt:missing_token` if absent.
 
 ### JwtError
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JwtError { /* variants below */ }
+
+impl JwtError {
+    pub fn code(&self) -> &'static str   // returns static error code string for Error::with_code()
+}
+
+impl fmt::Display for JwtError { /* human-readable messages */ }
+impl std::error::Error for JwtError {}
+```
 
 Typed error enum chained into `modo::Error` via `chain()`.
 

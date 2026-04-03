@@ -95,7 +95,7 @@ modo is a single Rust crate with zero proc macros. Everything is explicit:
 - **Config** loads from YAML files with `${VAR}` / `${VAR:default}` env var substitution.
 
 Optional modules are behind feature flags (`db` [default], `session`, `job`,
-`http-client`, `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`,
+`auth`, `templates`, `sse`, `email`, `storage`, `webhooks`,
 `dns`, `geolocation`, `qrcode`, `sentry`, `apikey`, `tier`, `test-helpers`). Core modules
 (flash, RBAC, cron, cache, encoding, tenant, IP) are always available.
 
@@ -159,7 +159,6 @@ All paths are relative to the `references/` directory inside this skill folder.
 | File organization, error handling, extractors, response types, service registry, IDs, health checks | `references/conventions.md` |
 | YAML config, env var substitution, feature flags                                                    | `references/config.md`      |
 | Database: libsql (SQLite), Database handle, ConnExt/ConnQueryExt traits                             | `references/database.md`    |
-| HTTP client with retries, connection pooling, timeouts                                              | `references/http-client.md` |
 | Handlers, routing, axum Router, middleware (rate limit, CORS, tracing)                              | `references/handlers.md`    |
 | Sessions, cookies, flash messages                                                                   | `references/sessions.md`    |
 | OAuth2, JWT, password hashing, OTP, TOTP, backup codes, RBAC                                        | `references/auth.md`        |

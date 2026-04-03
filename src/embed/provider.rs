@@ -12,8 +12,9 @@ use super::backend::EmbeddingBackend;
 /// # Example
 ///
 /// ```rust,ignore
+/// let client = reqwest::Client::new();
 /// let embedder = EmbeddingProvider::new(
-///     OpenAIEmbedding::new(http_client, &config)?,
+///     OpenAIEmbedding::new(client, &config)?,
 /// );
 /// let blob = embedder.embed("hello world").await?;
 /// ```

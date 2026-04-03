@@ -27,13 +27,13 @@ edition = "2024"
 rust-version = "1.92"
 
 [dependencies]
-modo = { package = "modo-rs", version = "0.5", features = [{{features}}] }
+modo = { package = "modo-rs", version = "0.6", features = [{{features}}] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.5", features = [{{features_with_test_helpers}}] }
+modo = { package = "modo-rs", version = "0.6", features = [{{features_with_test_helpers}}] }
 ```
 
 ### Feature mapping
@@ -45,7 +45,6 @@ Build the `features` list from selected components:
 | Database         | `"db"` (default)    |
 | Session          | `"session"`         |
 | Jobs             | `"job"`             |
-| HTTP Client      | `"http-client"`     |
 | Templates        | `"templates"`       |
 | Auth             | `"auth"`            |
 | Email            | `"email"`           |

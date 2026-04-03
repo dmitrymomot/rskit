@@ -307,6 +307,38 @@ fn test_error_from_yaml_via_config_load() {
     assert_eq!(err.message(), "YAML error");
 }
 
+// --- New tests: error_code in response ---
+
+#[tokio::test]
+async fn test_error_code_in_response_body() {
+    use axum::response::IntoResponse;
+
+    let err = Error::unauthorized("access denied").with_code("CUSTOM_CODE");
+    let response = err.into_response();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    // error_code is stored in response extensions so middleware can inspect it
+    // after the response boundary; it is NOT included in the JSON body
+    let ext_err = response.extensions().get::<Error>().unwrap();
+    assert_eq!(ext_err.error_code(), Some("CUSTOM_CODE"));
+
+    // Verify the JSON body does NOT leak the internal error_code
+    let bytes = axum::body::to_bytes(
+        axum::response::IntoResponse::into_response(
+            Error::unauthorized("access denied").with_code("CUSTOM_CODE"),
+        )
+        .into_body(),
+        usize::MAX,
+    )
+    .await
+    .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body["error"]["status"], 401);
+    assert_eq!(body["error"]["message"], "access denied");
+    // error_code is intentionally absent from the JSON body
+    assert!(body["error"]["error_code"].is_null());
+}
+
 // --- New tests: Error.details ---
 
 #[test]
@@ -327,11 +359,18 @@ fn test_error_without_details() {
     assert!(err.details().is_none());
 }
 
-#[test]
-fn test_error_with_details_into_response() {
+#[tokio::test]
+async fn test_error_with_details_into_response() {
     use axum::response::IntoResponse;
     let err = modo::Error::unprocessable_entity("validation failed")
         .with_details(serde_json::json!({"title": ["too short"]}));
     let response = err.into_response();
     assert_eq!(response.status(), http::StatusCode::UNPROCESSABLE_ENTITY);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["error"]["status"], 422);
+    assert_eq!(json["error"]["message"], "validation failed");
+    assert_eq!(json["error"]["details"]["title"][0], "too short");
 }

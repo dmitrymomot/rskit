@@ -10,11 +10,11 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = "0.3"
+//! modo = "0.6"
 //! ```
 //!
 //! The `db` feature is enabled by default. Enable additional modules via
-//! feature flags: `session`, `job`, `http-client`, `auth`, `templates`,
+//! feature flags: `session`, `job`, `auth`, `templates`,
 //! `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`, `qrcode`,
 //! `sentry`, `apikey`, `text-embedding`, `tier`.
 //!
@@ -22,7 +22,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { version = "0.5", features = ["full"] }
+//! modo = { version = "0.6", features = ["full"] }
 //! ```
 
 #[cfg(feature = "db")]
@@ -54,9 +54,6 @@ pub mod cron;
 pub mod job;
 pub mod rbac;
 pub mod tenant;
-
-#[cfg(feature = "http-client")]
-pub mod http;
 
 #[cfg(feature = "text-embedding")]
 pub mod embed;
@@ -112,10 +109,6 @@ pub use extractor::ClientInfo;
 pub use extractor::Service;
 pub use flash::{Flash, FlashEntry, FlashLayer};
 pub use health::{HealthCheck, HealthChecks};
-#[cfg(feature = "http-client")]
-pub use http::{
-    Client as HttpClient, ClientBuilder as HttpClientBuilder, ClientConfig as HttpClientConfig,
-};
 pub use ip::{ClientIp, ClientIpLayer};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;

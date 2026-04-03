@@ -31,19 +31,20 @@ pub struct GitHub {
     config: OAuthProviderConfig,
     cookie_config: CookieConfig,
     key: Key,
-    http_client: crate::http::Client,
+    http_client: reqwest::Client,
 }
 
 impl GitHub {
     /// Creates a new `GitHub` provider from the given configuration.
     ///
     /// `cookie_config` and `key` are used to sign the `_oauth_state` cookie that carries the
-    /// PKCE verifier and state nonce across the redirect.
+    /// PKCE verifier and state nonce across the redirect. `http_client` is a
+    /// [`reqwest::Client`] used for the token exchange and user-info API calls.
     pub fn new(
         config: &OAuthProviderConfig,
         cookie_config: &CookieConfig,
         key: &Key,
-        http_client: crate::http::Client,
+        http_client: reqwest::Client,
     ) -> Self {
         Self {
             config: config.clone(),

@@ -4,7 +4,6 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
-use crate::http;
 
 use super::backend::EmbeddingBackend;
 use super::config::GeminiConfig;
@@ -13,7 +12,7 @@ use super::convert::to_f32_blob;
 const BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta";
 
 struct Inner {
-    client: http::Client,
+    client: reqwest::Client,
     api_key: String,
     model: String,
     dimensions: usize,
@@ -26,7 +25,8 @@ struct Inner {
 /// # Example
 ///
 /// ```rust,ignore
-/// let provider = GeminiEmbedding::new(http_client, &config)?;
+/// let client = reqwest::Client::new();
+/// let provider = GeminiEmbedding::new(client, &config)?;
 /// let embedder = EmbeddingProvider::new(provider);
 /// ```
 pub struct GeminiEmbedding(Arc<Inner>);
@@ -43,7 +43,7 @@ impl GeminiEmbedding {
     /// # Errors
     ///
     /// Returns `Error::bad_request` if config validation fails.
-    pub fn new(client: http::Client, config: &GeminiConfig) -> Result<Self> {
+    pub fn new(client: reqwest::Client, config: &GeminiConfig) -> Result<Self> {
         config.validate()?;
         Ok(Self(Arc::new(Inner {
             client,
@@ -70,14 +70,11 @@ impl EmbeddingBackend for GeminiEmbedding {
                 .0
                 .client
                 .post(&url)
-                .header(
-                    ::http::header::HeaderName::from_static("x-goog-api-key"),
-                    ::http::header::HeaderValue::from_str(&self.0.api_key)
-                        .map_err(|e| Error::internal("invalid gemini api key header").chain(e))?,
-                )
+                .header("x-goog-api-key", &self.0.api_key)
                 .json(&body)
                 .send()
-                .await?;
+                .await
+                .map_err(|e| Error::internal("gemini embeddings request failed").chain(e))?;
 
             if !resp.status().is_success() {
                 let status = resp.status();

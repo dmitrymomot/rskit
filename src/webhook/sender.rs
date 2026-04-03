@@ -9,7 +9,7 @@ use super::signature::sign_headers;
 use crate::error::{Error, Result};
 
 struct WebhookSenderInner {
-    client: crate::http::Client,
+    client: reqwest::Client,
     user_agent: String,
 }
 
@@ -31,7 +31,7 @@ impl Clone for WebhookSender {
 
 impl WebhookSender {
     /// Create a new sender with the given HTTP client.
-    pub fn new(client: crate::http::Client) -> Self {
+    pub fn new(client: reqwest::Client) -> Self {
         Self {
             inner: Arc::new(WebhookSenderInner {
                 client,
@@ -61,14 +61,14 @@ impl WebhookSender {
         self
     }
 
-    /// Convenience constructor using a default [`crate::http::Client`] with a
+    /// Convenience constructor using a default `reqwest::Client` with a
     /// 30-second timeout.
     pub fn default_client() -> Self {
-        Self::new(
-            crate::http::Client::builder()
-                .timeout(std::time::Duration::from_secs(30))
-                .build(),
-        )
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .expect("failed to build default webhook HTTP client");
+        Self::new(client)
     }
 
     /// Send a webhook following the Standard Webhooks protocol.
@@ -183,15 +183,15 @@ mod tests {
         (url, handle)
     }
 
-    fn test_client() -> crate::http::Client {
-        crate::http::Client::builder()
+    fn test_client() -> reqwest::Client {
+        reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
             .build()
+            .expect("failed to build test HTTP client")
     }
 
     #[tokio::test]
     async fn send_sets_correct_headers() {
-        let _ = rustls::crypto::ring::default_provider().install_default();
         let (url, handle) = start_test_server(200).await;
 
         let sender = WebhookSender::new(test_client());
@@ -209,7 +209,6 @@ mod tests {
 
     #[tokio::test]
     async fn send_default_user_agent() {
-        let _ = rustls::crypto::ring::default_provider().install_default();
         let (url, handle) = start_test_server(200).await;
 
         let sender = WebhookSender::new(test_client());
@@ -223,7 +222,6 @@ mod tests {
 
     #[tokio::test]
     async fn send_custom_user_agent() {
-        let _ = rustls::crypto::ring::default_provider().install_default();
         let (url, handle) = start_test_server(200).await;
 
         let sender = WebhookSender::new(test_client()).with_user_agent("my-app/2.0");
@@ -260,7 +258,6 @@ mod tests {
 
     #[tokio::test]
     async fn send_empty_body_accepted() {
-        let _ = rustls::crypto::ring::default_provider().install_default();
         let (url, handle) = start_test_server(200).await;
 
         let sender = WebhookSender::new(test_client());
@@ -276,7 +273,6 @@ mod tests {
 
     #[tokio::test]
     async fn send_returns_response_status() {
-        let _ = rustls::crypto::ring::default_provider().install_default();
         let (url, handle) = start_test_server(410).await;
 
         let sender = WebhookSender::new(test_client());

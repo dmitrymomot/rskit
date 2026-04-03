@@ -6,7 +6,7 @@ Requires the `geolocation` feature flag.
 
 ```toml
 [dependencies]
-modo = { version = "0.5", features = ["geolocation"] }
+modo = { version = "0.6", features = ["geolocation"] }
 ```
 
 ## Features

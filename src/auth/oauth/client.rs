@@ -1,24 +1,19 @@
 //! Internal HTTP helpers used by provider implementations.
-//!
-//! Functions take a shared `http::Client` reference, gaining connection pooling
-//! via the framework-wide HTTP client.
 
 use serde::de::DeserializeOwned;
 
 pub(crate) async fn post_form<T: DeserializeOwned>(
-    client: &crate::http::Client,
+    client: &reqwest::Client,
     url: &str,
     params: &[(&str, &str)],
 ) -> crate::Result<T> {
     let resp = client
         .post(url)
-        .header(
-            http::header::ACCEPT,
-            http::header::HeaderValue::from_static("application/json"),
-        )
+        .header(http::header::ACCEPT, "application/json")
         .form(&params)
         .send()
-        .await?;
+        .await
+        .map_err(|e| crate::Error::internal("OAuth token exchange failed").chain(e))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -28,23 +23,23 @@ pub(crate) async fn post_form<T: DeserializeOwned>(
         )));
     }
 
-    resp.json().await
+    resp.json()
+        .await
+        .map_err(|e| crate::Error::internal("failed to parse OAuth token response").chain(e))
 }
 
 pub(crate) async fn get_json<T: DeserializeOwned>(
-    client: &crate::http::Client,
+    client: &reqwest::Client,
     url: &str,
     token: &str,
 ) -> crate::Result<T> {
     let resp = client
         .get(url)
-        .bearer_token(token)
-        .header(
-            http::header::ACCEPT,
-            http::header::HeaderValue::from_static("application/json"),
-        )
+        .bearer_auth(token)
+        .header(http::header::ACCEPT, "application/json")
         .send()
-        .await?;
+        .await
+        .map_err(|e| crate::Error::internal("OAuth API request failed").chain(e))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -54,5 +49,7 @@ pub(crate) async fn get_json<T: DeserializeOwned>(
         )));
     }
 
-    resp.json().await
+    resp.json()
+        .await
+        .map_err(|e| crate::Error::internal("failed to parse OAuth API response").chain(e))
 }

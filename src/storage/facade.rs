@@ -87,6 +87,7 @@ pub(crate) struct StorageInner {
     pub(crate) backend: BackendKind,
     pub(crate) public_url: Option<String>,
     pub(crate) max_file_size: Option<usize>,
+    pub(crate) fetch_client: Option<reqwest::Client>,
 }
 
 /// S3-compatible file storage.
@@ -107,16 +108,17 @@ impl Clone for Storage {
 }
 
 impl Storage {
-    /// Create from a bucket configuration using a shared HTTP client.
+    /// Create from a bucket configuration using a shared [`reqwest::Client`].
     ///
-    /// This allows multiple `Storage` instances (and other modules) to share
-    /// the same connection pool and configuration.
+    /// The shared client is used for S3 operations (PUT, DELETE, HEAD, LIST).
+    /// URL fetching ([`Storage::put_from_url`]) uses a separate internal client
+    /// with redirects disabled.
     ///
     /// # Errors
     ///
     /// Returns an error if required [`BucketConfig`] fields are missing
     /// (e.g. empty `bucket` or `endpoint`) or if `max_file_size` is invalid.
-    pub fn with_client(config: &BucketConfig, client: crate::http::Client) -> Result<Self> {
+    pub fn with_client(config: &BucketConfig, client: reqwest::Client) -> Result<Self> {
         config.validate()?;
 
         let region = config
@@ -133,16 +135,22 @@ impl Storage {
             config.path_style,
         )?;
 
+        let fetch_client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| Error::internal(format!("failed to build fetch HTTP client: {e}")))?;
+
         Ok(Self {
             inner: Arc::new(StorageInner {
                 backend: BackendKind::Remote(Box::new(backend)),
                 public_url: config.normalized_public_url(),
                 max_file_size: config.max_file_size_bytes()?,
+                fetch_client: Some(fetch_client),
             }),
         })
     }
 
-    /// Create from a bucket configuration (builds its own default HTTP client).
+    /// Create from a bucket configuration (builds its own default [`reqwest::Client`]).
     ///
     /// For shared connection pooling, prefer [`Storage::with_client`].
     ///
@@ -151,7 +159,7 @@ impl Storage {
     /// Returns an error if required [`BucketConfig`] fields are missing
     /// (e.g. empty `bucket` or `endpoint`) or if `max_file_size` is invalid.
     pub fn new(config: &BucketConfig) -> Result<Self> {
-        Self::with_client(config, crate::http::Client::default())
+        Self::with_client(config, reqwest::Client::new())
     }
 
     /// In-memory storage for testing.
@@ -165,6 +173,7 @@ impl Storage {
                 backend: BackendKind::Memory(MemoryBackend::new()),
                 public_url: Some("https://test.example.com".to_string()),
                 max_file_size: None,
+                fetch_client: None,
             }),
         }
     }
@@ -353,7 +362,11 @@ impl Storage {
         input: &PutFromUrlInput,
         opts: &PutOptions,
     ) -> Result<String> {
-        let client = self.inner.backend.http_client()?;
+        let client = self
+            .inner
+            .fetch_client
+            .as_ref()
+            .ok_or_else(|| Error::internal("URL fetch not supported in memory backend"))?;
         let fetched = fetch_url(client, &input.url, self.inner.max_file_size).await?;
 
         let put_input = PutInput {
@@ -433,6 +446,7 @@ mod tests {
                 backend: BackendKind::Memory(MemoryBackend::new()),
                 public_url: None,
                 max_file_size: Some(5),
+                fetch_client: None,
             }),
         };
         let input = PutInput {
@@ -526,6 +540,7 @@ mod tests {
                 backend: BackendKind::Memory(MemoryBackend::new()),
                 public_url: None,
                 max_file_size: None,
+                fetch_client: None,
             }),
         };
         assert!(storage.url("key.jpg").is_err());

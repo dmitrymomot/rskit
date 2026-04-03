@@ -9,7 +9,7 @@ Requires the `auth` feature flag.
 
 ```toml
 [dependencies]
-modo = { version = "0.5", features = ["auth"] }
+modo = { version = "0.6", features = ["auth"] }
 ```
 
 ## Key Types
@@ -59,7 +59,7 @@ use modo::auth::oauth::{GitHub, Google, OAuthConfig, OAuthProviderConfig};
 use modo::cookie::{CookieConfig, key_from_config};
 use modo::service::Registry;
 
-fn build_router(oauth_cfg: &OAuthConfig, cookie_cfg: &CookieConfig, http_client: modo::http::Client) -> Router {
+fn build_router(oauth_cfg: &OAuthConfig, cookie_cfg: &CookieConfig, http_client: reqwest::Client) -> Router {
     let key = key_from_config(cookie_cfg).expect("cookie secret must be at least 64 chars");
 
     let mut registry = Registry::new();

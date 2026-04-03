@@ -36,11 +36,6 @@ pub struct Config {
     #[cfg(feature = "session")]
     #[serde(default)]
     pub session: crate::session::SessionConfig,
-    /// HTTP client settings (timeout, retries, user agent).
-    /// Requires the `http-client` feature.
-    #[cfg(feature = "http-client")]
-    #[serde(default)]
-    pub http: crate::http::ClientConfig,
     /// Background job queue settings. Requires the `job` feature.
     #[cfg(feature = "job")]
     #[serde(default)]

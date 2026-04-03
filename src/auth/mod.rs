@@ -3,7 +3,7 @@
 //! Authentication utilities for the modo framework: Argon2id password hashing,
 //! numeric OTP, RFC 6238 TOTP, backup recovery codes, JWT middleware, and OAuth 2.0.
 //!
-//! Requires feature `"auth"` (which implies `"http-client"`).
+//! Requires feature `"auth"`.
 //!
 //! ## Submodules
 //!

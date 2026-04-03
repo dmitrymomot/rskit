@@ -6,11 +6,11 @@ provider integrations (GitHub, Google).
 
 ## Feature Flag
 
-All items in this module require the `auth` feature (which implies `http-client`):
+All items in this module require the `auth` feature:
 
 ```toml
 [dependencies]
-modo = { version = "0.5", features = ["auth"] }
+modo = { version = "0.6", features = ["auth"] }
 ```
 
 ## Modules
@@ -218,7 +218,8 @@ let provider_config = OAuthProviderConfig::new(
     "my-client-secret",
     "https://example.com/auth/google/callback",
 );
-// Construct the provider (cookie_config, key, and http_client come from your app config)
+// Construct the provider (cookie_config, key come from your app config)
+let http_client = reqwest::Client::new();
 let google = Google::new(&provider_config, &cookie_config, &key, http_client);
 
 // Login handler — returns a 303 redirect to Google's authorization page

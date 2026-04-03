@@ -12,7 +12,7 @@ This module is compiled only when the `dns` feature is enabled.
 
 ```toml
 [dependencies]
-modo = { version = "0.5", features = ["dns"] }
+modo = { version = "0.6", features = ["dns"] }
 ```
 
 ## Key types

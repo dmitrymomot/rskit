@@ -42,7 +42,7 @@ modo — Rust web framework. Single crate, zero proc macros, plain `async fn` ha
 
 ## Feature Flags
 
-Feature-gated modules: `db` (default), `session`, `job`, `http-client`, `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`, `qrcode`, `sentry`, `apikey`, `text-embedding`, `tier`. Always-available: cache, encoding, flash, ip, tenant, rbac, cron. Test-only: `test-helpers` (gates TestDb, TestApp, TestSession, and all in-memory/stub backends).
+Feature-gated modules: `db` (default), `session`, `job`, `auth`, `templates`, `sse`, `email`, `storage`, `webhooks`, `dns`, `geolocation`, `qrcode`, `sentry`, `apikey`, `text-embedding`, `tier`. Always-available: cache, encoding, flash, ip, tenant, rbac, cron. Test-only: `test-helpers` (gates TestDb, TestApp, TestSession, and all in-memory/stub backends).
 
 - Integration test files need `#![cfg(feature = "X")]`
 - Feature-gated modules for integration tests must use `pub mod` (not `pub(crate) mod`)

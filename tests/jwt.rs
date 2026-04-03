@@ -12,8 +12,8 @@ use tower::ServiceExt;
 
 use modo::Error;
 use modo::auth::jwt::{
-    BearerSource, Claims, JwtConfig, JwtDecoder, JwtEncoder, JwtLayer, QuerySource, Revocation,
-    TokenSource,
+    BearerSource, Claims, CookieSource, HeaderSource, JwtConfig, JwtDecoder, JwtEncoder, JwtLayer,
+    QuerySource, Revocation, TokenSource,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -392,4 +392,166 @@ async fn optional_claims_some_with_valid_token() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
     assert_eq!(&body[..], b"auth:editor");
+}
+
+// ── Source variant tests ──
+
+#[tokio::test]
+async fn test_jwt_cookie_source() {
+    let config = test_config();
+    let encoder = JwtEncoder::from_config(&config);
+    let decoder = JwtDecoder::from_config(&config);
+    let token = make_token_with(&encoder, "admin", now_secs() + 3600);
+
+    let app = Router::new().route("/me", get(claims_handler)).layer(
+        JwtLayer::<TestClaims>::new(decoder)
+            .with_sources(vec![Arc::new(CookieSource("token")) as Arc<dyn TokenSource>]),
+    );
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/me")
+                .header("Cookie", format!("token={token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+    assert_eq!(&body[..], b"user_1:admin");
+}
+
+#[tokio::test]
+async fn test_jwt_header_source() {
+    let config = test_config();
+    let encoder = JwtEncoder::from_config(&config);
+    let decoder = JwtDecoder::from_config(&config);
+    let token = make_token_with(&encoder, "admin", now_secs() + 3600);
+
+    let app = Router::new().route("/me", get(claims_handler)).layer(
+        JwtLayer::<TestClaims>::new(decoder).with_sources(vec![Arc::new(HeaderSource(
+            "X-Auth-Token",
+        )) as Arc<dyn TokenSource>]),
+    );
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/me")
+                .header("X-Auth-Token", token)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+// ── Validation tests ──
+
+#[tokio::test]
+async fn test_jwt_issuer_validation() {
+    let mut config = test_config();
+    config.issuer = Some("expected-issuer".into());
+    let encoder_config = test_config(); // encoder without issuer requirement
+    let encoder = JwtEncoder::from_config(&encoder_config);
+    let decoder = JwtDecoder::from_config(&config);
+
+    // Token with the wrong issuer
+    let claims = Claims::new(TestClaims {
+        role: "admin".into(),
+    })
+    .with_sub("user_1")
+    .with_exp(now_secs() + 3600)
+    .with_iss("wrong-issuer");
+    let token = encoder.encode(&claims).unwrap();
+
+    let app = Router::new()
+        .route("/me", get(claims_handler))
+        .layer(JwtLayer::<TestClaims>::new(decoder));
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/me")
+                .header("Authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_jwt_audience_validation() {
+    let mut config = test_config();
+    config.audience = Some("expected-audience".into());
+    let encoder_config = test_config(); // encoder without audience requirement
+    let encoder = JwtEncoder::from_config(&encoder_config);
+    let decoder = JwtDecoder::from_config(&config);
+
+    // Token with the wrong audience
+    let claims = Claims::new(TestClaims {
+        role: "admin".into(),
+    })
+    .with_sub("user_1")
+    .with_exp(now_secs() + 3600)
+    .with_aud("wrong-audience");
+    let token = encoder.encode(&claims).unwrap();
+
+    let app = Router::new()
+        .route("/me", get(claims_handler))
+        .layer(JwtLayer::<TestClaims>::new(decoder));
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/me")
+                .header("Authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_jwt_tampered_signature() {
+    let config = test_config();
+    let encoder = JwtEncoder::from_config(&config);
+    let decoder = JwtDecoder::from_config(&config);
+    let token = make_token_with(&encoder, "admin", now_secs() + 3600);
+
+    // Flip a character in the middle of the signature portion (not at the end
+    // where base64 padding bits may be insignificant).
+    let dot = token.rfind('.').unwrap();
+    let mid = dot + (token.len() - dot) / 2;
+    let mut bytes = token.into_bytes();
+    bytes[mid] = if bytes[mid] == b'A' { b'Z' } else { b'A' };
+    let tampered = String::from_utf8(bytes).unwrap();
+
+    let app = Router::new()
+        .route("/me", get(claims_handler))
+        .layer(JwtLayer::<TestClaims>::new(decoder));
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/me")
+                .header("Authorization", format!("Bearer {tampered}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }

@@ -1,6 +1,6 @@
 [package]
 name = "modo-rs"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 description = "Rust web framework for small monolithic apps"
 license = "Apache-2.0"
@@ -19,24 +19,24 @@ default = ["db"]
 db = ["dep:libsql", "dep:urlencoding"]
 session = ["db"]
 job = ["db"]
-full = ["db", "session", "job", "http-client", "templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns", "geolocation", "qrcode", "apikey", "text-embedding", "tier"]
+full = ["db", "session", "job", "templates", "sse", "auth", "sentry", "email", "storage", "webhooks", "dns", "geolocation", "qrcode", "apikey", "text-embedding", "tier"]
 tier = []
-sentry = ["dep:sentry", "dep:sentry-tracing"]
+sentry = ["dep:sentry", "dep:sentry-tracing", "dep:ring"]
 templates = ["dep:minijinja", "dep:minijinja-contrib", "dep:intl_pluralrules", "dep:unic-langid"]
 sse = ["dep:futures-util"]
-http-client = ["dep:hyper", "dep:hyper-rustls", "dep:hyper-util", "dep:http-body-util", "dep:base64"]
 auth = [
-  "http-client",
+  "dep:reqwest",
+  "dep:ring",
   "dep:argon2",
   "dep:hmac",
   "dep:sha1",
 ]
 email = ["dep:lettre", "dep:pulldown-cmark"]
-storage = ["http-client", "dep:hmac"]
-webhooks = ["http-client", "dep:hmac"]
+storage = ["dep:reqwest", "dep:ring", "dep:hmac"]
+webhooks = ["dep:reqwest", "dep:ring", "dep:hmac", "dep:base64"]
 dns = ["dep:simple-dns"]
 apikey = ["db"]
-text-embedding = ["http-client"]
+text-embedding = ["dep:reqwest", "dep:ring"]
 geolocation = ["dep:maxminddb"]
 qrcode = ["dep:fast_qr"]
 test-helpers = ["db", "session"]
@@ -101,16 +101,8 @@ argon2 = { version = "0.5", optional = true }
 hmac = { version = "0.13", optional = true }
 sha1 = { version = "0.11", optional = true }
 subtle = "2"
-hyper = { version = "1", optional = true }
-hyper-rustls = { version = "0.27", optional = true, default-features = false, features = [
-  "ring",
-  "http1",
-  "tls12",
-  "logging",
-  "webpki-roots",
-] }
-hyper-util = { version = "0.1", optional = true, features = ["client-legacy", "http1", "tokio"] }
-http-body-util = { version = "0.1", optional = true }
+ring = { version = "0.17", optional = true }
+reqwest = { version = "0.13.2", optional = true, default-features = false, features = ["rustls", "json", "stream", "form"] }
 base64 = { version = "0.22", optional = true }
 
 # Email (optional, gated by "email" feature)
@@ -149,4 +141,3 @@ urlencoding = { version = "2", optional = true }
 tokio = { version = "1", features = ["full", "test-util"] }
 tempfile = "3"
 serial_test = "3"
-rustls = { version = "0.23", default-features = false, features = ["ring"] }

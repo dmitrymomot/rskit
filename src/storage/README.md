@@ -9,11 +9,11 @@ Request signing uses AWS Signature Version 4. Both path-style
 
 ## Feature gate
 
-Requires the `storage` feature flag (which also enables `http-client`):
+Requires the `storage` feature flag:
 
 ```toml
 [dependencies]
-modo = { version = "0.5", features = ["storage"] }
+modo = { version = "0.6", features = ["storage"] }
 ```
 
 The memory backend is available inside `#[cfg(test)]` unit-test blocks and
@@ -56,13 +56,13 @@ let public_url = storage.url(&key)?;
 
 ### Shared HTTP client
 
-Use `Storage::with_client` to share a connection pool across multiple `Storage`
-instances or other modules:
+Use `Storage::with_client` to share a `reqwest::Client` connection pool across
+multiple `Storage` instances or other modules:
 
 ```rust,ignore
 use modo::storage::{BucketConfig, Storage};
 
-let client = modo::http::Client::default();
+let client = reqwest::Client::new();
 let storage = Storage::with_client(&config, client)?;
 ```
 

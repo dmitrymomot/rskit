@@ -5,7 +5,7 @@ S3-compatible object storage with ACL support and upload-from-URL. Feature-gated
 ## Feature Flag
 
 ```toml
-modo = { version = "0.5", features = ["storage"] }
+modo = { version = "0.6", features = ["storage"] }
 ```
 
 Re-exports from `modo` crate root:
@@ -40,7 +40,7 @@ let storage = Storage::new(&config)?;
 | Constructor    | Signature                                                                      | Notes                                                         |
 | -------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------- |
 | `new`          | `pub fn new(config: &BucketConfig) -> Result<Self>`                            | Builds its own default HTTP client                            |
-| `with_client`  | `pub fn with_client(config: &BucketConfig, client: crate::http::Client) -> Result<Self>` | Shared connection pool; preferred for multiple `Storage` instances |
+| `with_client`  | `pub fn with_client(config: &BucketConfig, client: reqwest::Client) -> Result<Self>` | Shared connection pool; preferred for multiple `Storage` instances |
 | `memory`       | `pub fn memory() -> Self`                                                      | In-memory backend, `#[cfg(test)]` or `test-helpers` feature   |
 
 ### Methods
@@ -224,7 +224,7 @@ let key = storage.put_from_url_with(&input, PutOptions {
 - **Signing**: AWS SigV4 signing implemented in `signing.rs`. All S3 requests are signed with HMAC-SHA256.
 - **Presigning**: `presign.rs` generates presigned GET URLs with configurable expiry.
 - **Backend enum**: `BackendKind::Remote(Box<RemoteBackend>)` for real S3, `BackendKind::Memory(MemoryBackend)` for tests.
-- **HTTP client**: Uses `crate::http::Client` (wraps `hyper` + `hyper-rustls`). `Storage::new()` creates its own client; `Storage::with_client()` accepts a shared client for connection pooling across multiple `Storage` instances.
+- **HTTP client**: Uses `reqwest::Client`. `Storage::new()` creates its own client; `Storage::with_client()` accepts a shared client for connection pooling across multiple `Storage` instances.
 - **XML parsing**: Hand-parsed `<Key>` and `<IsTruncated>` tags from ListObjectsV2 responses.
 - **Bridge**: `PutInput::from_upload()` bridges the multipart `UploadedFile` extractor to storage input.
 
@@ -232,9 +232,9 @@ let key = storage.put_from_url_with(&input, PutOptions {
 
 - **S3 keys must be URI-encoded**: All keys are passed through `uri_encode(key, false)` (encodes everything except `A-Za-z0-9_.-~/`). Omitting this breaks keys with spaces, `+`, or other special characters.
 - **`delete_prefix()` is O(n) network calls**: Lists all keys under the prefix, then deletes each one individually. Not suitable for large prefixes.
-- **Streaming body reads use `BodyExt::frame()` loop**: `fetch_url` reads response bodies frame-by-frame via `http_body_util::BodyExt`, NOT `body.collect().await` -- collect buffers everything, defeating mid-stream abort on size limit.
+- **Streaming body reads use `response.chunk()` loop**: `fetch_url` reads response bodies chunk-by-chunk via `reqwest::Response::chunk()`, NOT `body.collect().await` -- collect buffers everything, defeating mid-stream abort on size limit.
 - **`put_from_url()` does not follow redirects (SSRF prevention)**: Callers must provide the final URL. A 301/302 response is treated as a non-2xx error.
-- **30-second hard-coded timeout**: `put_from_url()` wraps the fetch in `tokio::time::timeout(Duration::from_secs(30), ...)`.
+- **30-second hard-coded timeout**: `put_from_url()` sets a per-request timeout via `reqwest::RequestBuilder::timeout(Duration::from_secs(30))`.
 - **`x-amz-acl` may be silently ignored by providers**: S3-compatible providers (RustFS/MinIO) may ignore the ACL header if ACLs are disabled at server level.
 - **`put_from_url()` on memory backend returns `Error::internal`**: It is inherently a network operation. The memory backend has no HTTP client.
 - **URL scheme validation**: Only `http` and `https` URLs are accepted. `ftp`, schemeless, etc. return `Error::bad_request`.
