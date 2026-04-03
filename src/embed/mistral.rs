@@ -4,7 +4,6 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
-use crate::http;
 
 use super::backend::EmbeddingBackend;
 use super::config::MistralConfig;
@@ -16,7 +15,7 @@ use super::convert::to_f32_blob;
 const DIMENSIONS: usize = 1024;
 
 struct Inner {
-    client: http::Client,
+    client: reqwest::Client,
     api_key: String,
     model: String,
 }
@@ -46,7 +45,7 @@ impl MistralEmbedding {
     /// # Errors
     ///
     /// Returns `Error::bad_request` if config validation fails.
-    pub fn new(client: http::Client, config: &MistralConfig) -> Result<Self> {
+    pub fn new(client: reqwest::Client, config: &MistralConfig) -> Result<Self> {
         config.validate()?;
         Ok(Self(Arc::new(Inner {
             client,
@@ -70,10 +69,11 @@ impl EmbeddingBackend for MistralEmbedding {
                 .0
                 .client
                 .post(URL)
-                .bearer_token(&self.0.api_key)
+                .bearer_auth(&self.0.api_key)
                 .json(&body)
                 .send()
-                .await?;
+                .await
+                .map_err(|e| Error::internal(format!("mistral embeddings request failed: {e}")).chain(e))?;
 
             if !resp.status().is_success() {
                 let status = resp.status();

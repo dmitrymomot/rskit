@@ -4,7 +4,6 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
-use crate::http;
 
 use super::backend::EmbeddingBackend;
 use super::config::OpenAIConfig;
@@ -13,7 +12,7 @@ use super::convert::to_f32_blob;
 const DEFAULT_BASE_URL: &str = "https://api.openai.com";
 
 struct Inner {
-    client: http::Client,
+    client: reqwest::Client,
     api_key: String,
     model: String,
     dimensions: usize,
@@ -44,7 +43,7 @@ impl OpenAIEmbedding {
     /// # Errors
     ///
     /// Returns `Error::bad_request` if config validation fails.
-    pub fn new(client: http::Client, config: &OpenAIConfig) -> Result<Self> {
+    pub fn new(client: reqwest::Client, config: &OpenAIConfig) -> Result<Self> {
         config.validate()?;
         let base_url = config
             .base_url
@@ -77,10 +76,11 @@ impl EmbeddingBackend for OpenAIEmbedding {
                 .0
                 .client
                 .post(&url)
-                .bearer_token(&self.0.api_key)
+                .bearer_auth(&self.0.api_key)
                 .json(&body)
                 .send()
-                .await?;
+                .await
+                .map_err(|e| Error::internal(format!("openai embeddings request failed: {e}")).chain(e))?;
 
             if !resp.status().is_success() {
                 let status = resp.status();

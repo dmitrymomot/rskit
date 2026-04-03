@@ -4,14 +4,13 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
-use crate::http;
 
 use super::backend::EmbeddingBackend;
 use super::config::VoyageConfig;
 use super::convert::to_f32_blob;
 
 struct Inner {
-    client: http::Client,
+    client: reqwest::Client,
     api_key: String,
     model: String,
     dimensions: usize,
@@ -42,7 +41,7 @@ impl VoyageEmbedding {
     /// # Errors
     ///
     /// Returns `Error::bad_request` if config validation fails.
-    pub fn new(client: http::Client, config: &VoyageConfig) -> Result<Self> {
+    pub fn new(client: reqwest::Client, config: &VoyageConfig) -> Result<Self> {
         config.validate()?;
         Ok(Self(Arc::new(Inner {
             client,
@@ -68,10 +67,11 @@ impl EmbeddingBackend for VoyageEmbedding {
                 .0
                 .client
                 .post(URL)
-                .bearer_token(&self.0.api_key)
+                .bearer_auth(&self.0.api_key)
                 .json(&body)
                 .send()
-                .await?;
+                .await
+                .map_err(|e| Error::internal(format!("voyage embeddings request failed: {e}")).chain(e))?;
 
             if !resp.status().is_success() {
                 let status = resp.status();
