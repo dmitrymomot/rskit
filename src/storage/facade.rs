@@ -110,8 +110,9 @@ impl Clone for Storage {
 impl Storage {
     /// Create from a bucket configuration using a shared [`reqwest::Client`].
     ///
-    /// This allows multiple `Storage` instances (and other modules) to share
-    /// the same connection pool and configuration.
+    /// The shared client is used for S3 operations (PUT, DELETE, HEAD, LIST).
+    /// URL fetching ([`Storage::put_from_url`]) uses a separate internal client
+    /// with redirects disabled.
     ///
     /// # Errors
     ///

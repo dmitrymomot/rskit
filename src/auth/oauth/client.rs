@@ -13,9 +13,7 @@ pub(crate) async fn post_form<T: DeserializeOwned>(
         .form(&params)
         .send()
         .await
-        .map_err(|e| {
-            crate::Error::internal(format!("OAuth token exchange failed: {e}")).chain(e)
-        })?;
+        .map_err(|e| crate::Error::internal("OAuth token exchange failed").chain(e))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -41,7 +39,7 @@ pub(crate) async fn get_json<T: DeserializeOwned>(
         .header(http::header::ACCEPT, "application/json")
         .send()
         .await
-        .map_err(|e| crate::Error::internal(format!("OAuth API request failed: {e}")).chain(e))?;
+        .map_err(|e| crate::Error::internal("OAuth API request failed").chain(e))?;
 
     if !resp.status().is_success() {
         let status = resp.status();

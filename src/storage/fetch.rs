@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use bytes::Bytes;
-use http::Uri;
 
 use crate::error::{Error, Result};
 
@@ -11,12 +10,12 @@ pub(crate) struct FetchResult {
 }
 
 /// Validate that a URL uses http or https scheme.
-fn validate_url(url: &str) -> Result<Uri> {
-    let uri: Uri = url
+fn validate_url(url: &str) -> Result<()> {
+    let uri: http::Uri = url
         .parse()
         .map_err(|e| Error::bad_request(format!("invalid URL: {e}")))?;
     match uri.scheme_str() {
-        Some("http") | Some("https") => Ok(uri),
+        Some("http") | Some("https") => Ok(()),
         Some(scheme) => Err(Error::bad_request(format!(
             "URL must use http or https scheme, got {scheme}"
         ))),

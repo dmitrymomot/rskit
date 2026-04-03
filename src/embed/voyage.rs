@@ -72,9 +72,7 @@ impl EmbeddingBackend for VoyageEmbedding {
                 .json(&body)
                 .send()
                 .await
-                .map_err(|e| {
-                    Error::internal(format!("voyage embeddings request failed: {e}")).chain(e)
-                })?;
+                .map_err(|e| Error::internal("voyage embeddings request failed").chain(e))?;
 
             if !resp.status().is_success() {
                 let status = resp.status();

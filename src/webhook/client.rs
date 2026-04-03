@@ -24,12 +24,12 @@ pub(crate) async fn post(
         .body(body)
         .send()
         .await
-        .map_err(|e| Error::internal(format!("webhook delivery failed: {e}")).chain(e))?;
+        .map_err(|e| Error::internal("webhook delivery failed").chain(e))?;
     let status = response.status();
     let response_body = response
         .bytes()
         .await
-        .map_err(|e| Error::internal(format!("failed to read webhook response: {e}")).chain(e))?;
+        .map_err(|e| Error::internal("failed to read webhook response").chain(e))?;
 
     Ok(WebhookResponse {
         status,

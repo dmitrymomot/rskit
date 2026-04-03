@@ -74,9 +74,7 @@ impl EmbeddingBackend for MistralEmbedding {
                 .json(&body)
                 .send()
                 .await
-                .map_err(|e| {
-                    Error::internal(format!("mistral embeddings request failed: {e}")).chain(e)
-                })?;
+                .map_err(|e| Error::internal("mistral embeddings request failed").chain(e))?;
 
             if !resp.status().is_success() {
                 let status = resp.status();
