@@ -89,10 +89,6 @@ dev:
     @command -v cargo-watch >/dev/null 2>&1 || { echo "Error: cargo-watch not found. Install: cargo install cargo-watch"; exit 1; }
     cargo watch -w src -w templates -w config -x run
 
-# Run without auto-reload
-run *ARGS:
-    cargo run {{ ARGS }}
-
 # Build release binary
 build:
     cargo build --release
@@ -391,7 +387,6 @@ Generate dynamically using `Write`. Replace `{{project_name}}` with the actual p
 
 ```bash
 just dev              # Run with auto-reload (cargo-watch)
-just run              # Run without auto-reload
 just build            # Build release binary
 just check            # Format, lint, and test (parallel)
 just test             # Run tests
