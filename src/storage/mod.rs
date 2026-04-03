@@ -6,7 +6,7 @@
 //! (AWS S3, RustFS, MinIO, etc.). Features include upload from bytes or URL,
 //! presigned URLs, configurable ACLs, and file-size limits.
 //!
-//! Requires the `storage` feature flag (which also enables `http-client`):
+//! Requires the `storage` feature flag:
 //!
 //! ```toml
 //! [dependencies]
@@ -25,6 +25,9 @@
 //! | [`Acl`] | Access control: `Private` (default) or `PublicRead` |
 //! | [`BucketConfig`] | Deserialisable configuration for one bucket |
 //! | [`kb()`] / [`mb()`] / [`gb()`] | Size-unit helpers (bytes conversion) |
+//!
+//! Use [`Storage::with_client()`] to share a [`reqwest::Client`] connection pool
+//! across multiple `Storage` instances or other modules.
 //!
 //! # Quick start
 //!

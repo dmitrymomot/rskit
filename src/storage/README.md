@@ -56,13 +56,13 @@ let public_url = storage.url(&key)?;
 
 ### Shared HTTP client
 
-Use `Storage::with_client` to share a connection pool across multiple `Storage`
-instances or other modules:
+Use `Storage::with_client` to share a `reqwest::Client` connection pool across
+multiple `Storage` instances or other modules:
 
 ```rust,ignore
 use modo::storage::{BucketConfig, Storage};
 
-let client = reqwest::Client::default();
+let client = reqwest::Client::new();
 let storage = Storage::with_client(&config, client)?;
 ```
 

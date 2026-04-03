@@ -2,7 +2,7 @@
 //!
 //! Text-to-vector embeddings via LLM provider APIs.
 //!
-//! Requires feature `"text-embedding"` (depends on `"http-client"`).
+//! Requires feature `"text-embedding"`.
 //!
 //! ```toml
 //! [dependencies]
@@ -30,8 +30,9 @@
 //!     api_key: "sk-...".into(),
 //!     ..Default::default()
 //! };
+//! let client = reqwest::Client::new();
 //! let embedder = EmbeddingProvider::new(
-//!     OpenAIEmbedding::new(http_client, &config)?,
+//!     OpenAIEmbedding::new(client, &config)?,
 //! );
 //!
 //! let blob = embedder.embed("hello world").await?;

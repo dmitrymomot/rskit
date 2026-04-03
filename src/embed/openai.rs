@@ -26,7 +26,8 @@ struct Inner {
 /// # Example
 ///
 /// ```rust,ignore
-/// let provider = OpenAIEmbedding::new(http_client, &config)?;
+/// let client = reqwest::Client::new();
+/// let provider = OpenAIEmbedding::new(client, &config)?;
 /// let embedder = EmbeddingProvider::new(provider);
 /// ```
 pub struct OpenAIEmbedding(Arc<Inner>);

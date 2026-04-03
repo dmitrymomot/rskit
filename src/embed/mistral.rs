@@ -28,7 +28,8 @@ struct Inner {
 /// # Example
 ///
 /// ```rust,ignore
-/// let provider = MistralEmbedding::new(http_client, &config)?;
+/// let client = reqwest::Client::new();
+/// let provider = MistralEmbedding::new(client, &config)?;
 /// let embedder = EmbeddingProvider::new(provider);
 /// ```
 pub struct MistralEmbedding(Arc<Inner>);

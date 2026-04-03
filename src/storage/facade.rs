@@ -108,7 +108,7 @@ impl Clone for Storage {
 }
 
 impl Storage {
-    /// Create from a bucket configuration using a shared HTTP client.
+    /// Create from a bucket configuration using a shared [`reqwest::Client`].
     ///
     /// This allows multiple `Storage` instances (and other modules) to share
     /// the same connection pool and configuration.
@@ -149,7 +149,7 @@ impl Storage {
         })
     }
 
-    /// Create from a bucket configuration (builds its own default HTTP client).
+    /// Create from a bucket configuration (builds its own default [`reqwest::Client`]).
     ///
     /// For shared connection pooling, prefer [`Storage::with_client`].
     ///

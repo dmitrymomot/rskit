@@ -25,7 +25,8 @@ struct Inner {
 /// # Example
 ///
 /// ```rust,ignore
-/// let provider = GeminiEmbedding::new(http_client, &config)?;
+/// let client = reqwest::Client::new();
+/// let provider = GeminiEmbedding::new(client, &config)?;
 /// let embedder = EmbeddingProvider::new(provider);
 /// ```
 pub struct GeminiEmbedding(Arc<Inner>);
