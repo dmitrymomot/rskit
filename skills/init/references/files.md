@@ -141,27 +141,6 @@ deps:
 # Remove all database files
 db-reset:
     rm -rf data/*.db data/*.db-*
-
-# Seed the database with development data
-seed:
-    @echo "No seed data configured. Edit this recipe in justfile to add seed logic."
-
-# Create a new migration file
-migrate-create name:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    dir="migrations/app"
-    mkdir -p "$dir"
-    last=$(ls -1 "$dir"/*.sql 2>/dev/null | sort | tail -n1 || true)
-    if [ -n "$last" ]; then
-        num=$(basename "$last" | cut -d_ -f1 | sed 's/^0*//')
-    else
-        num=0
-    fi
-    next=$(printf "%03d" $((num + 1)))
-    file="${dir}/${next}_{{ name }}.sql"
-    touch "$file"
-    echo "Created $file"
 ```
 
 ### Conditional: Templates (add when Templates is selected)
@@ -421,8 +400,6 @@ just fmt              # Format code
 just clean            # Remove build artifacts and databases
 just deps             # Update dependencies
 just db-reset         # Remove all database files
-just seed             # Seed the database with dev data
-just migrate-create name  # Create new migration file
 ```
 
 <!-- CONDITIONAL_COMMANDS -->
