@@ -152,7 +152,7 @@ seed:
 
 # --- Migrations ---
 
-# Apply pending migrations (runs on app startup)
+# Apply pending migrations (starts app; press Ctrl+C after "Listening")
 migrate:
     cargo run
 
@@ -183,7 +183,7 @@ assets-download:
     curl -sL https://unpkg.com/htmx.org@2/dist/htmx.min.js -o assets/static/js/htmx.min.js
     curl -sL https://unpkg.com/htmx-ext-sse@2/sse.js -o assets/static/js/htmx-sse.js
     curl -sL https://unpkg.com/alpinejs@3/dist/cdn.min.js -o assets/static/js/alpine.min.js
-    curl -sL https://unpkg.com/@tailwindplus/elements@1/dist/index.js -o assets/static/js/elements.min.js
+    curl -sL https://unpkg.com/@tailwindplus/elements@1/dist/index.js -o assets/static/js/elements.js
     @echo "Assets downloaded to assets/static/js/"
 
 # Compile Tailwind CSS
@@ -432,7 +432,7 @@ just clean            # Remove build artifacts and databases
 just deps             # Update dependencies
 just db-reset         # Remove all database files
 just seed             # Seed the database with dev data
-just migrate          # Apply pending migrations (runs app)
+just migrate          # Apply pending migrations (Ctrl+C after startup)
 just migrate-create name  # Create new migration file
 ```
 
