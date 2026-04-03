@@ -95,8 +95,21 @@ build:
 
 # --- Quality ---
 
-# Run all checks: format, lint, test
-check: fmt-check lint test
+# Run all checks in parallel: format, lint, test
+check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo fmt --check &
+    pid_fmt=$!
+    cargo clippy -- -D warnings &
+    pid_lint=$!
+    cargo test &
+    pid_test=$!
+    fail=0
+    wait $pid_fmt  || { echo "fmt-check failed"; fail=1; }
+    wait $pid_lint || { echo "lint failed"; fail=1; }
+    wait $pid_test || { echo "test failed"; fail=1; }
+    exit $fail
 
 # Run tests
 test:
@@ -109,10 +122,6 @@ lint:
 # Format code
 fmt:
     cargo fmt
-
-# Check formatting
-fmt-check:
-    cargo fmt --check
 
 # --- Maintenance ---
 
@@ -133,12 +142,13 @@ db-reset:
 ### Conditional: Templates (add when Templates is selected)
 
 ```makefile
-# Download vendored JS assets (htmx, alpine)
+# Download vendored JS assets (htmx, alpine, elements)
 assets-download:
     mkdir -p assets/static/js
     curl -sL https://unpkg.com/htmx.org@2/dist/htmx.min.js -o assets/static/js/htmx.min.js
     curl -sL https://unpkg.com/htmx-ext-sse@2/sse.js -o assets/static/js/htmx-sse.js
     curl -sL https://unpkg.com/alpinejs@3/dist/cdn.min.js -o assets/static/js/alpine.min.js
+    curl -sL https://unpkg.com/@tailwindplus/elements@1/dist/index.js -o assets/static/js/elements.js
     @echo "Assets downloaded to assets/static/js/"
 
 # Compile Tailwind CSS
@@ -156,6 +166,23 @@ When Templates is selected, also add to the `setup` recipe body:
 ```makefile
     just assets-download
     just css
+```
+
+When Templates is selected, replace the base `dev` recipe with:
+```makefile
+# Run with auto-reload (app + CSS)
+dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v cargo-watch >/dev/null 2>&1 || { echo "Error: cargo-watch not found. Install: cargo install cargo-watch"; exit 1; }
+    css_pid=""
+    cleanup() { if [ -n "$css_pid" ]; then kill "$css_pid" 2>/dev/null; fi; }
+    trap cleanup EXIT
+    if command -v tailwindcss >/dev/null 2>&1; then
+        tailwindcss -i assets/src/app.css -o assets/static/css/app.css --watch &
+        css_pid=$!
+    fi
+    cargo watch -w src -w templates -w config -x run
 ```
 
 ### Conditional: Geolocation (add when Geolocation is selected)
@@ -359,15 +386,15 @@ Generate dynamically using `Write`. Replace `{{project_name}}` with the actual p
 ## Commands
 
 ```bash
-just dev          # Run with auto-reload (cargo-watch)
-just build        # Build release binary
-just check        # Format, lint, and test
-just test         # Run tests
-just lint         # Run clippy
-just fmt          # Format code
-just clean        # Remove build artifacts and databases
-just deps         # Update dependencies
-just db-reset     # Remove all database files
+just dev              # Run with auto-reload (cargo-watch)
+just build            # Build release binary
+just check            # Format, lint, and test (parallel)
+just test             # Run tests
+just lint             # Run clippy
+just fmt              # Format code
+just clean            # Remove build artifacts and databases
+just deps             # Update dependencies
+just db-reset         # Remove all database files
 ```
 
 <!-- CONDITIONAL_COMMANDS -->
@@ -406,7 +433,7 @@ just db-reset     # Remove all database files
 If Templates:
 ````
 ```bash
-just assets-download  # Download vendored JS (htmx, alpine)
+just assets-download  # Download vendored JS (htmx, alpine, elements)
 just css              # Compile Tailwind CSS
 just css-watch        # Watch and recompile CSS
 ```

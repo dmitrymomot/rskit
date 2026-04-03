@@ -24,6 +24,7 @@ cat > "$PROJECT_DIR/templates/base.html" << 'HTML'
   <title>{% block title %}App{% endblock %}</title>
   <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
   <script defer src="{{ static_url('js/alpine.min.js') }}"></script>
+  <script defer src="{{ static_url('js/elements.js') }}"></script>
   {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen bg-gray-50 text-gray-900 antialiased">
