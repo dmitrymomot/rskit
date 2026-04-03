@@ -6,7 +6,7 @@ provider integrations (GitHub, Google).
 
 ## Feature Flag
 
-All items in this module require the `auth` feature (which implies `http-client`):
+All items in this module require the `auth` feature:
 
 ```toml
 [dependencies]

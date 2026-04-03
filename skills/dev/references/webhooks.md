@@ -27,18 +27,19 @@ use modo::webhook::{sign, verify, sign_headers, verify_headers};
 
 ## WebhookSender
 
-High-level sender that signs payloads per the Standard Webhooks protocol and delivers them via `modo::http::Client` (from the `http-client` feature). Clone-cheap (`Arc<Inner>` pattern).
+High-level sender that signs payloads per the Standard Webhooks protocol and delivers them via `reqwest::Client`. Clone-cheap (`Arc<Inner>` pattern).
 
 ### Construction
 
 ```rust
-// With default http::Client (30s timeout):
+// With default reqwest::Client (30s timeout):
 let sender = WebhookSender::default_client();
 
 // With custom client:
-let client = modo::http::Client::builder()
+let client = reqwest::Client::builder()
     .timeout(Duration::from_secs(10))
-    .build();
+    .build()
+    .unwrap();
 let sender = WebhookSender::new(client);
 
 // Override User-Agent (builder pattern, must be called before cloning):
@@ -49,13 +50,13 @@ let sender = WebhookSender::default_client()
 ### Constructors and methods
 
 ```rust
-pub fn new(client: crate::http::Client) -> Self
+pub fn new(client: reqwest::Client) -> Self
 pub fn default_client() -> Self
 pub fn with_user_agent(mut self, user_agent: impl Into<String>) -> Self
 ```
 
-- `new()` takes a `modo::http::Client` instance.
-- `default_client()` creates a sender with a default `http::Client` using a 30-second timeout.
+- `new()` takes a `reqwest::Client` instance.
+- `default_client()` creates a sender with a default `reqwest::Client` using a 30-second timeout.
 - Default User-Agent: `modo-webhooks/<version>`.
 - `with_user_agent()` consumes and returns `Self` (builder pattern). Panics if called after the sender has been cloned (uses `Arc::get_mut`). Invalid header values are silently ignored.
 
@@ -84,7 +85,7 @@ Behavior:
 - Gets current UTC timestamp.
 - Calls `sign_headers()` to produce Standard Webhooks headers.
 - Sets headers: `content-type: application/json`, `user-agent`, `webhook-id`, `webhook-timestamp`, `webhook-signature`.
-- Delegates to internal `client::post()` which uses `http::Client`.
+- Delegates to internal `client::post()` which uses `reqwest::Client`.
 - Empty body is accepted.
 
 ---
@@ -200,7 +201,7 @@ For verifying incoming webhooks:
 
 The following are `pub(crate)` and not part of the public API:
 
-- `client::post()` -- sends the actual HTTP POST via `crate::http::Client`. Not exported.
+- `client::post()` -- sends the actual HTTP POST via `reqwest::Client`. Not exported.
 
 ---
 
@@ -212,4 +213,4 @@ The following are `pub(crate)` and not part of the public API:
 - **sign_headers panics on empty secrets**: `WebhookSender::send()` validates this before calling, but direct callers of `sign_headers()` must ensure non-empty.
 - **No retry logic**: `WebhookSender` sends once. Retry/backoff is the caller's responsibility (e.g., via the job queue).
 - **Content-Type is always `application/json`**: Hardcoded in `WebhookSender::send()`.
-- **Uses `http::Client` not a trait**: The webhook module uses the concrete `modo::http::Client` struct (from the `http-client` feature), not a trait. There is no `dyn` dispatch.
+- **Uses `reqwest::Client` not a trait**: The webhook module uses the concrete `reqwest::Client` directly, not a trait. There is no `dyn` dispatch.

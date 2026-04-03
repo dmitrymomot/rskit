@@ -58,14 +58,15 @@ let sender = WebhookSender::default_client()
 
 ### Shared HTTP Client
 
-Pass an existing `modo::http::Client` to share connection pools across modules:
+Pass an existing `reqwest::Client` to share connection pools across modules:
 
 ```rust,ignore
 use modo::webhook::WebhookSender;
 
-let client = modo::http::Client::builder()
+let client = reqwest::Client::builder()
     .timeout(std::time::Duration::from_secs(10))
-    .build();
+    .build()
+    .unwrap();
 let sender = WebhookSender::new(client);
 ```
 

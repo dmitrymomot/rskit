@@ -112,7 +112,6 @@ Source: `src/config/modo.rs`
 | ------------- | -------------------------------- | ------------- | ------------- |
 | `database`    | `db::Config`                     | `database`    | `db`          |
 | `session`     | `session::SessionConfig`         | `session`     | `session`     |
-| `http`        | `http::ClientConfig`             | `http`        | `http-client` |
 | `job`         | `job::JobConfig`                 | `job`         | `job`         |
 | `oauth`       | `auth::oauth::OAuthConfig`       | `oauth`       | `auth`        |
 | `jwt`         | `auth::jwt::JwtConfig`           | `jwt`         | `auth`        |
@@ -349,19 +348,18 @@ Defined in `Cargo.toml`. Default feature: `db`.
 | `db`           | libsql (SQLite) database connection and queries          | `libsql`, `urlencoding`                                                                     |
 | `session`      | Session management (requires `db`)                       | (implies `db`)                                                                              |
 | `job`          | Background job queue (requires `db`)                     | (implies `db`)                                                                              |
-| `http-client`  | HTTP client for outgoing requests                        | `hyper`, `hyper-rustls`, `hyper-util`, `http-body-util`, `base64`                           |
-| `auth`         | OAuth 2.0 (Google, GitHub), JWT, Argon2 password hashing | `argon2`, `hmac`, `sha1` (implies `http-client`)                                           |
+| `auth`         | OAuth 2.0 (Google, GitHub), JWT, Argon2 password hashing | `argon2`, `hmac`, `sha1`, `dep:reqwest`                                                    |
 | `templates`    | MiniJinja template engine with i18n                      | `minijinja`, `minijinja-contrib`, `intl_pluralrules`, `unic-langid`                         |
 | `sse`          | Server-Sent Events broadcaster                           | `futures-util`                                                                              |
 | `email`        | SMTP email delivery with Markdown-to-HTML                | `lettre`, `pulldown-cmark`                                                                  |
-| `storage`      | S3-compatible object storage                             | `hmac` (implies `http-client`)                                                              |
-| `webhooks`     | Webhook delivery with Standard Webhooks signing          | `hmac` (implies `http-client`)                                                              |
+| `storage`      | S3-compatible object storage                             | `hmac`, `dep:reqwest`                                                                       |
+| `webhooks`     | Webhook delivery with Standard Webhooks signing          | `hmac`, `dep:reqwest`                                                                       |
 | `dns`          | DNS domain verification (TXT, CNAME)                     | `simple-dns`                                                                                |
 | `geolocation`  | MaxMind GeoIP2 geolocation                               | `maxminddb`                                                                                 |
 | `qrcode`       | QR code generation                                       | `fast_qr`                                                                                   |
 | `sentry`         | Sentry error reporting via tracing                       | `sentry`, `sentry-tracing`                                                                  |
 | `apikey`         | API key generation, hashing, and verification            | (implies `db`)                                                                              |
-| `text-embedding` | Text embedding providers (OpenAI, Gemini, Mistral, Voyage) | (implies `http-client`)                                                                   |
+| `text-embedding` | Text embedding providers (OpenAI, Gemini, Mistral, Voyage) | `dep:reqwest`                                                                             |
 | `tier`           | Feature-tier access control                              | (no extra deps)                                                                             |
 | `test-helpers`   | `modo::testing` module for test utilities                | (implies `db`, `session`)                                                                   |
 
@@ -385,7 +383,7 @@ These activate the parent feature for integration tests:
 
 6. **`load()` is not async** -- it reads the file synchronously with `std::fs::read_to_string`. Call it at startup before entering the async runtime's hot path.
 
-7. **`database`, `session`, `job`, `http` are feature-gated** -- these fields only exist on `Config` when their respective features (`db`, `session`, `job`, `http-client`) are enabled. `db` is a default feature. Unknown YAML keys are silently ignored by serde, so the YAML can contain sections for disabled features without error.
+7. **`database`, `session`, `job` are feature-gated** -- these fields only exist on `Config` when their respective features (`db`, `session`, `job`) are enabled. `db` is a default feature. Unknown YAML keys are silently ignored by serde, so the YAML can contain sections for disabled features without error.
 
 8. **`max_sessions_per_user` must be > 0** -- deserialization fails if set to `0` (custom deserializer rejects it to prevent locking out all users).
 

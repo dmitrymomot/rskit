@@ -174,25 +174,24 @@ modo-rs = { version = "0.5", features = ["auth", "templates"] }
 
 | Feature          | Modules                                               | Implies        |
 | ---------------- | ----------------------------------------------------- | -------------- |
-| `db` (default)   | Database handle, migrations, query traits, pagination  |                |
-| `session`        | Database-backed sessions with signed cookies           | `db`           |
-| `job`            | Background job queue with retries and scheduling       | `db`           |
-| `http-client`    | HTTP client with retries, timeouts, connection pooling |                |
-| `auth`           | Password hashing, JWT, OAuth2, TOTP, backup codes      | `http-client`  |
-| `templates`      | MiniJinja engine with i18n and static file serving     |                |
-| `sse`            | Server-Sent Events broadcasting                        |                |
-| `email`          | Markdown-to-HTML email rendering with SMTP             |                |
-| `storage`        | S3-compatible object storage with ACL                  | `http-client`  |
-| `webhooks`       | Outbound webhook delivery with Standard Webhooks signing | `http-client` |
-| `dns`            | DNS TXT/CNAME domain verification                      |                |
-| `geolocation`    | MaxMind GeoIP2 location lookup                         |                |
-| `qrcode`         | QR code generation with SVG rendering                  |                |
-| `apikey`         | API key issuance, verification, and scoping            | `db`           |
-| `text-embedding` | Text-to-vector embeddings (OpenAI, Gemini, Mistral, Voyage) | `http-client` |
-| `tier`           | Feature-tier access control (plan-based gating)        |                |
-| `sentry`         | Sentry error tracking and performance monitoring       |                |
-| `test-helpers`   | TestDb, TestApp, TestSession, in-memory/stub backends  | `db`, `session`|
-| `full`           | All of the above                                       |                |
+| `db` (default)   | Database handle, migrations, query traits, pagination        |                |
+| `session`        | Database-backed sessions with signed cookies                 | `db`           |
+| `job`            | Background job queue with retries and scheduling             | `db`           |
+| `auth`           | Password hashing, JWT, OAuth2, TOTP, backup codes            |                |
+| `templates`      | MiniJinja engine with i18n and static file serving           |                |
+| `sse`            | Server-Sent Events broadcasting                              |                |
+| `email`          | Markdown-to-HTML email rendering with SMTP                   |                |
+| `storage`        | S3-compatible object storage with ACL                        |                |
+| `webhooks`       | Outbound webhook delivery with Standard Webhooks signing     |                |
+| `dns`            | DNS TXT/CNAME domain verification                            |                |
+| `geolocation`    | MaxMind GeoIP2 location lookup                               |                |
+| `qrcode`         | QR code generation with SVG rendering                        |                |
+| `apikey`         | API key issuance, verification, and scoping                  | `db`           |
+| `text-embedding` | Text-to-vector embeddings (OpenAI, Gemini, Mistral, Voyage)  |                |
+| `tier`           | Feature-tier access control (plan-based gating)              |                |
+| `sentry`         | Sentry error tracking and performance monitoring             |                |
+| `test-helpers`   | TestDb, TestApp, TestSession, in-memory/stub backends        | `db`, `session`|
+| `full`           | All of the above                                             |                |
 
 ## Re-exports
 

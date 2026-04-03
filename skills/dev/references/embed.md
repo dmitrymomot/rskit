@@ -1,6 +1,6 @@
 # Embeddings
 
-Text-to-vector embeddings via LLM provider APIs. Feature-gated under `text-embedding` (depends on `http-client`).
+Text-to-vector embeddings via LLM provider APIs. Feature-gated under `text-embedding`.
 
 ```toml
 modo = { version = "0.5", features = ["text-embedding"] }
@@ -181,7 +181,7 @@ Calls `POST {base_url}/v1/embeddings`. Uses `Authorization: Bearer` token.
 pub struct OpenAIEmbedding(Arc<Inner>); // cheap to clone
 ```
 
-### new(client: http::Client, config: &OpenAIConfig) -> Result\<Self\>
+### new(client: reqwest::Client, config: &OpenAIConfig) -> Result\<Self\>
 
 Validates config at construction. Returns `bad_request` if config validation fails.
 
@@ -195,7 +195,7 @@ Calls `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:embe
 pub struct GeminiEmbedding(Arc<Inner>); // cheap to clone
 ```
 
-### new(client: http::Client, config: &GeminiConfig) -> Result\<Self\>
+### new(client: reqwest::Client, config: &GeminiConfig) -> Result\<Self\>
 
 Validates config at construction. Returns `bad_request` if config validation fails.
 
@@ -209,7 +209,7 @@ Calls `POST https://api.mistral.ai/v1/embeddings`. Uses `Authorization: Bearer` 
 pub struct MistralEmbedding(Arc<Inner>); // cheap to clone
 ```
 
-### new(client: http::Client, config: &MistralConfig) -> Result\<Self\>
+### new(client: reqwest::Client, config: &MistralConfig) -> Result\<Self\>
 
 Validates config at construction. Returns `bad_request` if config validation fails.
 
@@ -223,7 +223,7 @@ Calls `POST https://api.voyageai.com/v1/embeddings`. Uses `Authorization: Bearer
 pub struct VoyageEmbedding(Arc<Inner>); // cheap to clone
 ```
 
-### new(client: http::Client, config: &VoyageConfig) -> Result\<Self\>
+### new(client: reqwest::Client, config: &VoyageConfig) -> Result\<Self\>
 
 Validates config at construction. Returns `bad_request` if config validation fails.
 
@@ -297,10 +297,9 @@ assert_eq!(blob.len(), 1536 * 4);
 
 ```rust
 use modo::embed::{EmbeddingProvider, OpenAIEmbedding, OpenAIConfig};
-use modo::http::Client;
 
 // In main() or service factory:
-let http_client = Client::new(&config.http_client);
+let http_client = reqwest::Client::new();
 let embed_config = OpenAIConfig {
     api_key: config.openai_api_key.clone(),
     ..Default::default()
@@ -367,5 +366,5 @@ let floats = from_f32_blob(&blob)?;
 - **All providers are `Arc<Inner>`** — already cheap to clone; do not wrap in an extra `Arc` yourself.
 - **Gemini uses header auth** — unlike OpenAI and Mistral (Bearer token), the Gemini provider passes the API key via the `x-goog-api-key` header.
 - **`OpenAIConfig::base_url`** — supports Azure OpenAI or compatible proxies. Trailing slashes are stripped automatically.
-- **No crate deps added** — the embed module reuses existing `http::Client`, `serde_json`, and `serde` — no new dependencies.
+- **No new crate deps** — the embed module reuses `reqwest`, `serde_json`, and `serde` — no dependencies beyond what other features already pull in.
 - **`test-helpers` gate** — `InMemoryBackend` is gated by `#[cfg(any(test, feature = "test-helpers"))]`. Integration test files need `#![cfg(feature = "text-embedding")]` as the first attribute.

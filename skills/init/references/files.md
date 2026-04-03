@@ -45,7 +45,6 @@ Build the `features` list from selected components:
 | Database         | `"db"` (default)    |
 | Session          | `"session"`         |
 | Jobs             | `"job"`             |
-| HTTP Client      | `"http-client"`     |
 | Templates        | `"templates"`       |
 | Auth             | `"auth"`            |
 | Email            | `"email"`           |

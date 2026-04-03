@@ -8,7 +8,7 @@ Text-to-vector embeddings via LLM provider APIs.
 modo = { version = "0.5", features = ["text-embedding"] }
 ```
 
-Depends on `http-client`. No new crate dependencies.
+Uses `reqwest` for HTTP calls. No new crate dependencies beyond what other consumer features already pull in.
 
 ## Key types
 
@@ -36,11 +36,10 @@ Depends on `http-client`. No new crate dependencies.
 ## Usage
 
 ```rust,ignore
-use modo::http;
 use modo::embed::{EmbeddingProvider, OpenAIEmbedding, OpenAIConfig};
 
 // Build provider
-let http_client = http::Client::new(&http_config);
+let http_client = reqwest::Client::new();
 let config = OpenAIConfig {
     api_key: "sk-...".into(),
     ..Default::default()

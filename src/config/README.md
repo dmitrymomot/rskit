@@ -134,7 +134,6 @@ silently ignored:
 | `csrf`             | `middleware::CsrfConfig`            | always         |
 | `rate_limit`       | `middleware::RateLimitConfig`       | always         |
 | `session`          | `session::SessionConfig`            | `session`      |
-| `http`             | `http::ClientConfig`               | `http-client`  |
 | `job`              | `job::JobConfig`                    | `job`          |
 | `trusted_proxies`  | `Vec<String>`                       | always         |
 | `oauth`            | `auth::oauth::OAuthConfig`          | `auth`         |

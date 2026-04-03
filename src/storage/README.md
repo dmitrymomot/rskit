@@ -9,7 +9,7 @@ Request signing uses AWS Signature Version 4. Both path-style
 
 ## Feature gate
 
-Requires the `storage` feature flag (which also enables `http-client`):
+Requires the `storage` feature flag:
 
 ```toml
 [dependencies]
@@ -62,7 +62,7 @@ instances or other modules:
 ```rust,ignore
 use modo::storage::{BucketConfig, Storage};
 
-let client = modo::http::Client::default();
+let client = reqwest::Client::default();
 let storage = Storage::with_client(&config, client)?;
 ```
 
