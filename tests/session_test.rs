@@ -1033,8 +1033,7 @@ async fn test_session_authenticate_with_initial_data() {
         .await
         .unwrap();
     assert_eq!(resp1.status(), StatusCode::OK);
-    let cookie_val =
-        cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
+    let cookie_val = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
 
     // Request 2: read "role" from session
     let app2 = build_app(
@@ -1093,8 +1092,7 @@ async fn test_session_remove_key() {
         .await
         .unwrap();
     assert_eq!(resp1.status(), StatusCode::OK);
-    let cookie_val =
-        cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
+    let cookie_val = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
 
     // Request 2: remove_key("key") and then get("key") should be None
     let app2 = build_app(
@@ -1148,8 +1146,7 @@ async fn test_session_current() {
         .await
         .unwrap();
     assert_eq!(resp1.status(), StatusCode::OK);
-    let cookie_val =
-        cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
+    let cookie_val = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
 
     // Request 2: call current() and verify user_id
     let app2 = build_app(
@@ -1205,8 +1202,7 @@ async fn test_validate_fingerprint_disabled() {
         .await
         .unwrap();
     assert_eq!(resp1.status(), StatusCode::OK);
-    let cookie_val =
-        cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
+    let cookie_val = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
 
     // Request 2: send a DIFFERENT User-Agent — fingerprint check is disabled, so session is valid
     let app2 = build_app(

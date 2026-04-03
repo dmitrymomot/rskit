@@ -432,9 +432,9 @@ async fn test_jwt_header_source() {
     let token = make_token_with(&encoder, "admin", now_secs() + 3600);
 
     let app = Router::new().route("/me", get(claims_handler)).layer(
-        JwtLayer::<TestClaims>::new(decoder).with_sources(vec![
-            Arc::new(HeaderSource("X-Auth-Token")) as Arc<dyn TokenSource>
-        ]),
+        JwtLayer::<TestClaims>::new(decoder).with_sources(vec![Arc::new(HeaderSource(
+            "X-Auth-Token",
+        )) as Arc<dyn TokenSource>]),
     );
 
     let resp = app
@@ -462,10 +462,12 @@ async fn test_jwt_issuer_validation() {
     let decoder = JwtDecoder::from_config(&config);
 
     // Token with the wrong issuer
-    let claims = Claims::new(TestClaims { role: "admin".into() })
-        .with_sub("user_1")
-        .with_exp(now_secs() + 3600)
-        .with_iss("wrong-issuer");
+    let claims = Claims::new(TestClaims {
+        role: "admin".into(),
+    })
+    .with_sub("user_1")
+    .with_exp(now_secs() + 3600)
+    .with_iss("wrong-issuer");
     let token = encoder.encode(&claims).unwrap();
 
     let app = Router::new()
@@ -495,10 +497,12 @@ async fn test_jwt_audience_validation() {
     let decoder = JwtDecoder::from_config(&config);
 
     // Token with the wrong audience
-    let claims = Claims::new(TestClaims { role: "admin".into() })
-        .with_sub("user_1")
-        .with_exp(now_secs() + 3600)
-        .with_aud("wrong-audience");
+    let claims = Claims::new(TestClaims {
+        role: "admin".into(),
+    })
+    .with_sub("user_1")
+    .with_exp(now_secs() + 3600)
+    .with_aud("wrong-audience");
     let token = encoder.encode(&claims).unwrap();
 
     let app = Router::new()

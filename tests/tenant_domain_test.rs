@@ -113,10 +113,7 @@ async fn test_domain_enable_disable_email() {
     svc.enable_email(&claim.id).await.unwrap();
 
     // lookup_email_domain should now find the tenant.
-    let result = svc
-        .lookup_email_domain("user@mail.test.com")
-        .await
-        .unwrap();
+    let result = svc.lookup_email_domain("user@mail.test.com").await.unwrap();
     assert!(result.is_some());
     let m = result.unwrap();
     assert_eq!(m.tenant_id, "tenant-e");
@@ -124,10 +121,7 @@ async fn test_domain_enable_disable_email() {
 
     // disable_email should make it invisible again.
     svc.disable_email(&claim.id).await.unwrap();
-    let result = svc
-        .lookup_email_domain("user@mail.test.com")
-        .await
-        .unwrap();
+    let result = svc.lookup_email_domain("user@mail.test.com").await.unwrap();
     assert!(result.is_none());
 }
 

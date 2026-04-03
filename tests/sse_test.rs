@@ -167,12 +167,7 @@ async fn test_last_event_id() {
 
     // Request without Last-Event-ID header — body should be empty string
     let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/")
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
         .await
         .unwrap();
 

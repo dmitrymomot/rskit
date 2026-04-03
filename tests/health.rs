@@ -47,10 +47,9 @@ async fn ready_returns_200_with_database() {
 
 #[tokio::test]
 async fn test_health_failing_check_returns_503() {
-    let checks = HealthChecks::new()
-        .check_fn("always_down", || async {
-            Err(modo::Error::internal("simulated failure"))
-        });
+    let checks = HealthChecks::new().check_fn("always_down", || async {
+        Err(modo::Error::internal("simulated failure"))
+    });
 
     let mut registry = Registry::new();
     registry.add(checks);

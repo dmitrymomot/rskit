@@ -4,15 +4,18 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use http::StatusCode;
-use modo::embed::{EmbeddingBackend, EmbeddingProvider, from_f32_blob};
 use modo::embed::test::InMemoryBackend;
+use modo::embed::{EmbeddingBackend, EmbeddingProvider, from_f32_blob};
 
 /// Wrapper that keeps a shared reference to `InMemoryBackend` so tests can
 /// read `call_count()` after the backend has been moved into `EmbeddingProvider`.
 struct SharedBackend(Arc<InMemoryBackend>);
 
 impl EmbeddingBackend for SharedBackend {
-    fn embed(&self, input: &str) -> Pin<Box<dyn Future<Output = modo::Result<Vec<u8>>> + Send + '_>> {
+    fn embed(
+        &self,
+        input: &str,
+    ) -> Pin<Box<dyn Future<Output = modo::Result<Vec<u8>>> + Send + '_>> {
         self.0.embed(input)
     }
 
