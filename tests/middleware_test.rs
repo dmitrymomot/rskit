@@ -890,3 +890,77 @@ async fn test_security_headers_does_not_overwrite_handler_set() {
         "nosniff"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Task 8: Additional CORS and rate-limit tests
+// ---------------------------------------------------------------------------
+
+/// Verify that an OPTIONS preflight request with a matching `Origin` and
+/// `Access-Control-Request-Method` header receives the appropriate CORS
+/// allow headers in the response.
+#[tokio::test]
+async fn test_cors_preflight_options() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = {
+        let mut c = modo::middleware::CorsConfig::default();
+        c.origins = vec!["https://example.com".to_string()];
+        c
+    };
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::cors(&config))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("OPTIONS")
+                .uri("/")
+                .header("origin", "https://example.com")
+                .header("access-control-request-method", "POST")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Preflight responses should be 200 (tower-http CorsLayer returns 200 for
+    // valid preflight requests when the origin is allowed).
+    assert!(
+        response.status().is_success(),
+        "preflight should succeed, got {}",
+        response.status()
+    );
+
+    let allow_origin = response.headers().get("access-control-allow-origin");
+    assert!(
+        allow_origin.is_some(),
+        "expected Access-Control-Allow-Origin header in preflight response"
+    );
+    assert_eq!(
+        allow_origin.unwrap().to_str().unwrap(),
+        "https://example.com"
+    );
+
+    let allow_methods = response.headers().get("access-control-allow-methods");
+    assert!(
+        allow_methods.is_some(),
+        "expected Access-Control-Allow-Methods header in preflight response"
+    );
+}
+
+// NOTE: `test_rate_limit_default_extractor` is intentionally omitted.
+//
+// The default `rate_limit()` function uses `PeerIpKeyExtractor`, which reads
+// the peer IP from `ConnectInfo<SocketAddr>` in the request extensions. That
+// extension is only present when the server is started with
+// `into_make_service_with_connect_info::<SocketAddr>()`. The `tower::ServiceExt::oneshot()`
+// helper used in these unit-style integration tests does not inject
+// `ConnectInfo`, so any request would cause `PeerIpKeyExtractor::extract` to
+// return `None`, resulting in a 500 "unable to extract rate-limit key" response
+// rather than exercising the rate-limit logic. Use `rate_limit_with` together
+// with `GlobalKeyExtractor` (as the existing `test_rate_limit_*` tests above
+// already demonstrate) to test rate-limit behaviour without a real TCP listener.
