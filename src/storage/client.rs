@@ -1,8 +1,6 @@
 use std::time::Duration;
 
 use bytes::Bytes;
-use http::Uri;
-use http_body_util::{BodyExt, Full};
 
 use super::options::PutOptions;
 use super::presign::{PresignParams, presign_url};
@@ -10,7 +8,7 @@ use super::signing::{SigningParams, sign_request, uri_encode};
 use crate::error::{Error, Result};
 
 pub(crate) struct RemoteBackend {
-    client: crate::http::Client,
+    client: reqwest::Client,
     bucket: String,
     endpoint: String,
     endpoint_host: String,
@@ -25,7 +23,7 @@ const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495
 
 impl RemoteBackend {
     pub fn new(
-        client: crate::http::Client,
+        client: reqwest::Client,
         bucket: String,
         endpoint: String,
         access_key: String,
@@ -82,42 +80,24 @@ impl RemoteBackend {
         };
         let (auth, signed_headers) = sign_request(&params);
 
-        let uri: Uri = url
-            .parse()
-            .map_err(|e| Error::internal(format!("invalid URL: {e}")))?;
-
         let content_length = data.len();
-        let mut builder = hyper::Request::builder()
-            .method(hyper::Method::PUT)
-            .uri(uri);
-
+        let mut req = self.client.put(&url);
         for (k, v) in &signed_headers {
-            builder = builder.header(k.as_str(), v.as_str());
+            req = req.header(k.as_str(), v.as_str());
         }
-        builder = builder
+        req = req
             .header("authorization", &auth)
-            .header("content-length", content_length);
+            .header("content-length", content_length)
+            .body(data);
 
-        let request = builder
-            .body(Full::new(data))
-            .map_err(|e| Error::internal(format!("failed to build request: {e}")))?;
-
-        let response = self
-            .client
-            .raw_client()
-            .request(request)
+        let response = req
+            .send()
             .await
             .map_err(|e| Error::internal(format!("PUT request failed: {e}")))?;
 
         let status = response.status();
         if !status.is_success() {
-            let body = response
-                .into_body()
-                .collect()
-                .await
-                .map_err(|e| Error::internal(format!("failed to read response: {e}")))?
-                .to_bytes();
-            let body_str = String::from_utf8_lossy(&body);
+            let body_str = response.text().await.unwrap_or_default();
             return Err(Error::internal(format!(
                 "PUT failed ({status}): {body_str}"
             )));
@@ -144,39 +124,20 @@ impl RemoteBackend {
         };
         let (auth, signed_headers) = sign_request(&params);
 
-        let uri: Uri = url
-            .parse()
-            .map_err(|e| Error::internal(format!("invalid URL: {e}")))?;
-
-        let mut builder = hyper::Request::builder()
-            .method(hyper::Method::DELETE)
-            .uri(uri);
-
+        let mut req = self.client.delete(&url);
         for (k, v) in &signed_headers {
-            builder = builder.header(k.as_str(), v.as_str());
+            req = req.header(k.as_str(), v.as_str());
         }
-        builder = builder.header("authorization", &auth);
+        req = req.header("authorization", &auth);
 
-        let request = builder
-            .body(Full::new(Bytes::new()))
-            .map_err(|e| Error::internal(format!("failed to build request: {e}")))?;
-
-        let response = self
-            .client
-            .raw_client()
-            .request(request)
+        let response = req
+            .send()
             .await
             .map_err(|e| Error::internal(format!("DELETE request failed: {e}")))?;
 
         let status = response.status();
         if !status.is_success() {
-            let body = response
-                .into_body()
-                .collect()
-                .await
-                .map_err(|e| Error::internal(format!("failed to read response: {e}")))?
-                .to_bytes();
-            let body_str = String::from_utf8_lossy(&body);
+            let body_str = response.text().await.unwrap_or_default();
             return Err(Error::internal(format!(
                 "DELETE failed ({status}): {body_str}"
             )));
@@ -203,33 +164,20 @@ impl RemoteBackend {
         };
         let (auth, signed_headers) = sign_request(&params);
 
-        let uri: Uri = url
-            .parse()
-            .map_err(|e| Error::internal(format!("invalid URL: {e}")))?;
-
-        let mut builder = hyper::Request::builder()
-            .method(hyper::Method::HEAD)
-            .uri(uri);
-
+        let mut req = self.client.head(&url);
         for (k, v) in &signed_headers {
-            builder = builder.header(k.as_str(), v.as_str());
+            req = req.header(k.as_str(), v.as_str());
         }
-        builder = builder.header("authorization", &auth);
+        req = req.header("authorization", &auth);
 
-        let request = builder
-            .body(Full::new(Bytes::new()))
-            .map_err(|e| Error::internal(format!("failed to build request: {e}")))?;
-
-        let response = self
-            .client
-            .raw_client()
-            .request(request)
+        let response = req
+            .send()
             .await
             .map_err(|e| Error::internal(format!("HEAD request failed: {e}")))?;
 
         match response.status() {
             s if s.is_success() => Ok(true),
-            http::StatusCode::NOT_FOUND => Ok(false),
+            s if s == reqwest::StatusCode::NOT_FOUND => Ok(false),
             status => Err(Error::internal(format!("HEAD failed ({status})"))),
         }
     }
@@ -276,37 +224,22 @@ impl RemoteBackend {
             };
             let (auth, signed_headers) = sign_request(&params);
 
-            let uri: Uri = base_url
-                .parse()
-                .map_err(|e| Error::internal(format!("invalid URL: {e}")))?;
-
-            let mut builder = hyper::Request::builder()
-                .method(hyper::Method::GET)
-                .uri(uri);
-
+            let mut req = self.client.get(&base_url);
             for (k, v) in &signed_headers {
-                builder = builder.header(k.as_str(), v.as_str());
+                req = req.header(k.as_str(), v.as_str());
             }
-            builder = builder.header("authorization", &auth);
+            req = req.header("authorization", &auth);
 
-            let request = builder
-                .body(Full::new(Bytes::new()))
-                .map_err(|e| Error::internal(format!("failed to build request: {e}")))?;
-
-            let response = self
-                .client
-                .raw_client()
-                .request(request)
+            let response = req
+                .send()
                 .await
                 .map_err(|e| Error::internal(format!("LIST request failed: {e}")))?;
 
             let status = response.status();
             let body = response
-                .into_body()
-                .collect()
+                .bytes()
                 .await
-                .map_err(|e| Error::internal(format!("failed to read response: {e}")))?
-                .to_bytes();
+                .map_err(|e| Error::internal(format!("failed to read response: {e}")))?;
 
             if !status.is_success() {
                 let body_str = String::from_utf8_lossy(&body);
@@ -351,10 +284,6 @@ impl RemoteBackend {
             now: chrono::Utc::now(),
         };
         Ok(presign_url(&params))
-    }
-
-    pub(crate) fn client(&self) -> &crate::http::Client {
-        &self.client
     }
 
     fn url_and_host(&self, key: &str) -> (String, String) {
