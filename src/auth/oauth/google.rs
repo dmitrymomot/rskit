@@ -26,7 +26,7 @@ pub struct Google {
     config: OAuthProviderConfig,
     cookie_config: CookieConfig,
     key: Key,
-    http_client: crate::http::Client,
+    http_client: reqwest::Client,
 }
 
 impl Google {
@@ -38,7 +38,7 @@ impl Google {
         config: &OAuthProviderConfig,
         cookie_config: &CookieConfig,
         key: &Key,
-        http_client: crate::http::Client,
+        http_client: reqwest::Client,
     ) -> Self {
         Self {
             config: config.clone(),

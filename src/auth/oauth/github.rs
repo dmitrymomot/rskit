@@ -31,7 +31,7 @@ pub struct GitHub {
     config: OAuthProviderConfig,
     cookie_config: CookieConfig,
     key: Key,
-    http_client: crate::http::Client,
+    http_client: reqwest::Client,
 }
 
 impl GitHub {
@@ -43,7 +43,7 @@ impl GitHub {
         config: &OAuthProviderConfig,
         cookie_config: &CookieConfig,
         key: &Key,
-        http_client: crate::http::Client,
+        http_client: reqwest::Client,
     ) -> Self {
         Self {
             config: config.clone(),
