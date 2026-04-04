@@ -67,6 +67,7 @@ impl DbHealth {
 }
 
 /// Options for [`run_vacuum`].
+#[derive(Debug, Clone)]
 pub struct VacuumOptions {
     /// Only vacuum if freelist exceeds this percentage. Default: `20.0`.
     pub threshold_percent: f64,
@@ -84,6 +85,7 @@ impl Default for VacuumOptions {
 }
 
 /// Result of a [`run_vacuum`] call.
+#[derive(Debug, Clone)]
 pub struct VacuumResult {
     /// Health snapshot taken before the vacuum decision.
     pub health_before: DbHealth,
