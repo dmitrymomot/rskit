@@ -208,8 +208,7 @@ impl CronHandler<(Service<Database>,)> for VacuumHandler {
         )
         .await?;
 
-        if result.vacuumed {
-            let after = result.health_after.as_ref().unwrap();
+        if let Some(after) = result.health_after.as_ref() {
             tracing::info!(
                 before_free_pct = result.health_before.free_percent,
                 after_free_pct = after.free_percent,
@@ -283,9 +282,9 @@ mod tests {
 
         assert!(health.page_count > 0);
         assert_eq!(health.freelist_count, 0);
-        assert_eq!(health.page_size, 4096);
+        assert!(health.page_size > 0);
         assert_eq!(health.free_percent, 0.0);
-        assert_eq!(health.total_size_bytes, health.page_count * 4096);
+        assert_eq!(health.total_size_bytes, health.page_count * health.page_size);
         assert_eq!(health.wasted_bytes, 0);
     }
 

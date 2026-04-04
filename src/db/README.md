@@ -262,7 +262,7 @@ println!("free pages: {}%", health.free_percent);
 let result = vacuum_if_needed(db.conn(), 20.0).await?;
 if result.vacuumed {
     let after = result.health_after.unwrap();
-    println!("reclaimed {} bytes", result.health_before.wasted_bytes - after.wasted_bytes);
+    println!("reclaimed {} bytes", result.health_before.wasted_bytes.saturating_sub(after.wasted_bytes));
 }
 
 // Full options: dry_run mode, custom threshold
