@@ -17,6 +17,7 @@
 //! - Scheduled execution via [`EnqueueOptions::run_at`]
 //! - Idempotent enqueueing via [`Enqueuer::enqueue_unique`]
 //! - Stale job reaping (jobs stuck in `running` beyond a configurable threshold)
+//! - Job cancellation via [`Enqueuer::cancel`]
 //! - Periodic cleanup of terminal jobs
 //! - Optional separate SQLite database for job-queue isolation
 //!
@@ -34,7 +35,7 @@
 //!
 //! | Type | Purpose |
 //! |------|---------|
-//! | [`Enqueuer`] | Inserts jobs into the `jobs` table |
+//! | [`Enqueuer`] | Inserts and cancels jobs in the `jobs` table |
 //! | [`EnqueueOptions`] | Queue name and optional scheduled `run_at` timestamp |
 //! | [`EnqueueResult`] | `Created(id)` or `Duplicate(id)` from idempotent enqueue |
 //!
