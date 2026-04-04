@@ -7,7 +7,7 @@ Requires feature `"db"` (enabled by default).
 
 ```toml
 [dependencies]
-modo-rs = { version = "0.6.2", features = ["db"] }
+modo-rs = { version = "0.6.3", features = ["db"] }
 ```
 
 ## Key types
