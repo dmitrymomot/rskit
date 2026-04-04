@@ -203,7 +203,7 @@ impl CronHandler<(Service<Database>,)> for VacuumHandler {
             tracing::info!(
                 before_free_pct = result.health_before.free_percent,
                 after_free_pct = after.free_percent,
-                reclaimed_bytes = result.health_before.wasted_bytes - after.wasted_bytes,
+                reclaimed_bytes = result.health_before.wasted_bytes.saturating_sub(after.wasted_bytes),
                 duration_ms = result.duration.as_millis(),
                 "vacuum completed"
             );
