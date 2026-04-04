@@ -122,5 +122,8 @@ pub use filter::{FieldType, Filter, FilterSchema, ValidatedFilter};
 mod select;
 pub use select::SelectBuilder;
 
+mod maintenance;
+pub use maintenance::DbHealth;
+
 // Re-export libsql for direct access
 pub use libsql;
