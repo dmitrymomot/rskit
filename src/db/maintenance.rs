@@ -109,10 +109,7 @@ pub struct VacuumResult {
 /// 4. Collects health metrics again.
 ///
 /// Logs before/after metrics at `debug` level.
-pub async fn run_vacuum(
-    conn: &libsql::Connection,
-    opts: VacuumOptions,
-) -> Result<VacuumResult> {
+pub async fn run_vacuum(conn: &libsql::Connection, opts: VacuumOptions) -> Result<VacuumResult> {
     let start = std::time::Instant::now();
     let health_before = DbHealth::collect(conn).await?;
 
@@ -203,7 +200,10 @@ impl CronHandler<(Service<Database>,)> for VacuumHandler {
             tracing::info!(
                 before_free_pct = result.health_before.free_percent,
                 after_free_pct = after.free_percent,
-                reclaimed_bytes = result.health_before.wasted_bytes.saturating_sub(after.wasted_bytes),
+                reclaimed_bytes = result
+                    .health_before
+                    .wasted_bytes
+                    .saturating_sub(after.wasted_bytes),
                 duration_ms = result.duration.as_millis(),
                 "vacuum completed"
             );
@@ -334,12 +334,9 @@ mod tests {
         let conn = test_conn().await;
 
         // Create a table, insert rows, delete them to produce freelist pages
-        conn.execute(
-            "CREATE TABLE bloat (id INTEGER PRIMARY KEY, data TEXT)",
-            (),
-        )
-        .await
-        .unwrap();
+        conn.execute("CREATE TABLE bloat (id INTEGER PRIMARY KEY, data TEXT)", ())
+            .await
+            .unwrap();
 
         // Insert enough data to create multiple pages
         for i in 0..500 {
@@ -355,7 +352,10 @@ mod tests {
         conn.execute("DELETE FROM bloat", ()).await.unwrap();
 
         let health = DbHealth::collect(&conn).await.unwrap();
-        assert!(health.freelist_count > 0, "expected freelist pages after bulk delete");
+        assert!(
+            health.freelist_count > 0,
+            "expected freelist pages after bulk delete"
+        );
 
         // Run vacuum with a very low threshold so it triggers
         let result = run_vacuum(

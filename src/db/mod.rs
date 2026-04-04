@@ -58,6 +58,17 @@
 //! | [`SynchronousMode`] | SQLite synchronous mode (Off, Normal, Full, Extra) |
 //! | [`TempStore`] | SQLite temp store location (Default, File, Memory) |
 //!
+//! ## Maintenance
+//!
+//! | Item | Purpose |
+//! |------|---------|
+//! | [`DbHealth`] | Page-level health metrics from PRAGMA introspection |
+//! | [`VacuumOptions`] | Configuration for [`run_vacuum`] (threshold, dry_run) |
+//! | [`VacuumResult`] | Before/after health snapshots with timing |
+//! | [`run_vacuum`] | VACUUM with threshold guard and health snapshots |
+//! | [`vacuum_if_needed`] | Shorthand for `run_vacuum` with threshold only |
+//! | [`vacuum_handler`] | Cron handler factory for scheduled maintenance |
+//!
 //! ## Re-exports
 //!
 //! The [`libsql`] crate is re-exported for direct access to low-level types
@@ -124,7 +135,7 @@ pub use select::SelectBuilder;
 
 mod maintenance;
 pub use maintenance::{
-    DbHealth, VacuumOptions, VacuumResult, VacuumHandler, run_vacuum, vacuum_handler,
+    DbHealth, VacuumHandler, VacuumOptions, VacuumResult, run_vacuum, vacuum_handler,
     vacuum_if_needed,
 };
 
