@@ -284,7 +284,10 @@ mod tests {
         assert_eq!(health.freelist_count, 0);
         assert!(health.page_size > 0);
         assert_eq!(health.free_percent, 0.0);
-        assert_eq!(health.total_size_bytes, health.page_count * health.page_size);
+        assert_eq!(
+            health.total_size_bytes,
+            health.page_count * health.page_size
+        );
         assert_eq!(health.wasted_bytes, 0);
     }
 
