@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Pre-commit hook: detect formatting and lint errors before commit.
+# Does NOT auto-format — just fails fast so CI won't reject the commit.
+#
+# Install: git config core.hooksPath .githooks
+
+set -e
+
+echo "pre-commit: checking formatting..."
+if ! cargo fmt --check 2>&1; then
+    echo ""
+    echo "ERROR: cargo fmt --check failed. Run 'cargo fmt' to fix."
+    exit 1
+fi
+
+echo "pre-commit: running clippy..."
+if ! cargo clippy --all-features --tests -- -D warnings 2>&1; then
+    echo ""
+    echo "ERROR: cargo clippy found warnings. Fix them before committing."
+    exit 1
+fi
+
+echo "pre-commit: all checks passed."

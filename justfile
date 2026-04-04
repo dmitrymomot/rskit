@@ -24,3 +24,7 @@ test-all:
 
 # Run all checks (fmt + lint + test-all) — use in CI or pre-push
 check: fmt-check lint test-all
+
+# Install git hooks (run once after clone)
+setup:
+    git config core.hooksPath .githooks
