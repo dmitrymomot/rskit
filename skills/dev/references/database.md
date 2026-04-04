@@ -519,6 +519,76 @@ impl FromRow for User {
 }
 ```
 
+## Maintenance (Health Check & VACUUM)
+
+### `DbHealth`
+
+Page-level health metrics from PRAGMA introspection. Derives `Debug, Clone`. Does **not** derive `Serialize` — internal metrics that must not be exposed on unauthenticated endpoints.
+
+```rust
+pub struct DbHealth {
+    pub page_count: u64,
+    pub freelist_count: u64,
+    pub page_size: u64,
+    pub free_percent: f64,       // 0.0–100.0
+    pub total_size_bytes: u64,   // page_count * page_size
+    pub wasted_bytes: u64,       // freelist_count * page_size
+}
+
+impl DbHealth {
+    pub async fn collect(conn: &libsql::Connection) -> Result<Self>;
+    pub fn needs_vacuum(&self, threshold_percent: f64) -> bool;
+}
+```
+
+`collect` runs `PRAGMA page_count`, `PRAGMA freelist_count`, `PRAGMA page_size` and computes derived fields. `needs_vacuum` returns `true` if `free_percent >= threshold_percent`.
+
+### `VacuumOptions`
+
+Derives `Debug, Clone`. Implements `Default` (threshold: `20.0`, dry_run: `false`).
+
+```rust
+pub struct VacuumOptions {
+    pub threshold_percent: f64,  // default: 20.0
+    pub dry_run: bool,           // default: false
+}
+```
+
+### `VacuumResult`
+
+Derives `Debug, Clone`.
+
+```rust
+pub struct VacuumResult {
+    pub health_before: DbHealth,
+    pub health_after: Option<DbHealth>,  // None if skipped or dry_run
+    pub vacuumed: bool,
+    pub duration: std::time::Duration,
+}
+```
+
+### `async run_vacuum(conn: &libsql::Connection, opts: VacuumOptions) -> Result<VacuumResult>`
+
+Run VACUUM with safety checks: collects health, checks threshold, executes `VACUUM` if needed, collects health again. Logs before/after metrics at `debug` level. Skips if `dry_run` or below threshold (returns `vacuumed: false`, `health_after: None`).
+
+### `async vacuum_if_needed(conn: &libsql::Connection, threshold_percent: f64) -> Result<VacuumResult>`
+
+Shorthand for `run_vacuum` with the given threshold and default options.
+
+### `vacuum_handler(threshold_percent: f64) -> VacuumHandler`
+
+Returns a cron handler implementing `CronHandler<(Service<Database>,)>`. Extracts `Service<Database>` from the cron context, calls `run_vacuum`, logs results at `info` level. `VacuumHandler` is public (as return type) but has private fields — construct via `vacuum_handler()` only.
+
+```rust
+use modo::cron::Scheduler;
+use modo::db;
+
+let scheduler = Scheduler::builder(&registry)
+    .job("0 3 * * 0", db::vacuum_handler(20.0))?
+    .start()
+    .await;
+```
+
 ## Gotchas
 
 - **Single connection per handle**: `Database` wraps one `libsql::Connection` in `Arc`. All clones share the same connection. `DatabasePool` manages multiple `Database` handles (one per shard).
