@@ -66,6 +66,110 @@ impl DbHealth {
     }
 }
 
+/// Options for [`run_vacuum`].
+pub struct VacuumOptions {
+    /// Only vacuum if freelist exceeds this percentage. Default: `20.0`.
+    pub threshold_percent: f64,
+    /// Log-only mode — report health without running VACUUM. Default: `false`.
+    pub dry_run: bool,
+}
+
+impl Default for VacuumOptions {
+    fn default() -> Self {
+        Self {
+            threshold_percent: 20.0,
+            dry_run: false,
+        }
+    }
+}
+
+/// Result of a [`run_vacuum`] call.
+pub struct VacuumResult {
+    /// Health snapshot taken before the vacuum decision.
+    pub health_before: DbHealth,
+    /// Health snapshot taken after VACUUM. `None` if skipped or dry_run.
+    pub health_after: Option<DbHealth>,
+    /// Whether VACUUM actually executed.
+    pub vacuumed: bool,
+    /// Wall-clock duration of the full operation.
+    pub duration: std::time::Duration,
+}
+
+/// Run VACUUM with safety checks.
+///
+/// 1. Collects health metrics.
+/// 2. If `free_percent < threshold` or `dry_run`, returns early.
+/// 3. Executes `VACUUM`.
+/// 4. Collects health metrics again.
+///
+/// Logs before/after metrics at `debug` level.
+pub async fn run_vacuum(
+    conn: &libsql::Connection,
+    opts: VacuumOptions,
+) -> Result<VacuumResult> {
+    let start = std::time::Instant::now();
+    let health_before = DbHealth::collect(conn).await?;
+
+    tracing::debug!(
+        page_count = health_before.page_count,
+        freelist_count = health_before.freelist_count,
+        free_pct = health_before.free_percent,
+        wasted_bytes = health_before.wasted_bytes,
+        "vacuum: health before"
+    );
+
+    if opts.dry_run || !health_before.needs_vacuum(opts.threshold_percent) {
+        tracing::debug!(
+            free_pct = health_before.free_percent,
+            threshold = opts.threshold_percent,
+            dry_run = opts.dry_run,
+            "vacuum: skipped"
+        );
+        return Ok(VacuumResult {
+            health_before,
+            health_after: None,
+            vacuumed: false,
+            duration: start.elapsed(),
+        });
+    }
+
+    conn.execute("VACUUM", ())
+        .await
+        .map_err(|e| Error::internal("VACUUM failed").chain(e))?;
+
+    let health_after = DbHealth::collect(conn).await?;
+
+    tracing::debug!(
+        page_count = health_after.page_count,
+        freelist_count = health_after.freelist_count,
+        free_pct = health_after.free_percent,
+        wasted_bytes = health_after.wasted_bytes,
+        "vacuum: health after"
+    );
+
+    Ok(VacuumResult {
+        health_before,
+        health_after: Some(health_after),
+        vacuumed: true,
+        duration: start.elapsed(),
+    })
+}
+
+/// Shorthand: run [`run_vacuum`] with the given threshold and default options.
+pub async fn vacuum_if_needed(
+    conn: &libsql::Connection,
+    threshold_percent: f64,
+) -> Result<VacuumResult> {
+    run_vacuum(
+        conn,
+        VacuumOptions {
+            threshold_percent,
+            ..Default::default()
+        },
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,5 +213,98 @@ mod tests {
         assert!(health.needs_vacuum(20.0));
         assert!(health.needs_vacuum(25.0));
         assert!(!health.needs_vacuum(30.0));
+    }
+
+    #[tokio::test]
+    async fn run_vacuum_skips_when_below_threshold() {
+        let conn = test_conn().await;
+
+        let result = run_vacuum(
+            &conn,
+            VacuumOptions {
+                threshold_percent: 20.0,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(!result.vacuumed);
+        assert!(result.health_after.is_none());
+        assert_eq!(result.health_before.freelist_count, 0);
+    }
+
+    #[tokio::test]
+    async fn run_vacuum_skips_in_dry_run() {
+        let conn = test_conn().await;
+
+        let result = run_vacuum(
+            &conn,
+            VacuumOptions {
+                threshold_percent: 0.0, // would trigger on any freelist
+                dry_run: true,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(!result.vacuumed);
+        assert!(result.health_after.is_none());
+    }
+
+    #[tokio::test]
+    async fn run_vacuum_executes_when_threshold_met() {
+        let conn = test_conn().await;
+
+        // Create a table, insert rows, delete them to produce freelist pages
+        conn.execute(
+            "CREATE TABLE bloat (id INTEGER PRIMARY KEY, data TEXT)",
+            (),
+        )
+        .await
+        .unwrap();
+
+        // Insert enough data to create multiple pages
+        for i in 0..500 {
+            conn.execute(
+                "INSERT INTO bloat (id, data) VALUES (?1, ?2)",
+                libsql::params![i, "x".repeat(200)],
+            )
+            .await
+            .unwrap();
+        }
+
+        // Delete all rows — pages go to freelist
+        conn.execute("DELETE FROM bloat", ()).await.unwrap();
+
+        let health = DbHealth::collect(&conn).await.unwrap();
+        assert!(health.freelist_count > 0, "expected freelist pages after bulk delete");
+
+        // Run vacuum with a very low threshold so it triggers
+        let result = run_vacuum(
+            &conn,
+            VacuumOptions {
+                threshold_percent: 0.0,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(result.vacuumed);
+        let after = result.health_after.unwrap();
+        assert!(
+            after.freelist_count < health.freelist_count,
+            "freelist should shrink after vacuum"
+        );
+    }
+
+    #[tokio::test]
+    async fn vacuum_if_needed_delegates_correctly() {
+        let conn = test_conn().await;
+
+        // Fresh DB, 0% free — should skip with threshold 20
+        let result = vacuum_if_needed(&conn, 20.0).await.unwrap();
+        assert!(!result.vacuumed);
     }
 }
