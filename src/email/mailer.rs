@@ -41,16 +41,9 @@ struct Inner {
 /// - [`Mailer::with_source`] — accepts any custom [`TemplateSource`].
 /// - `Mailer::with_stub_transport` — in-memory stub for tests
 ///   (requires feature `"test-helpers"` or `#[cfg(test)]`).
+#[derive(Clone)]
 pub struct Mailer {
     inner: Arc<Inner>,
-}
-
-impl Clone for Mailer {
-    fn clone(&self) -> Self {
-        Self {
-            inner: Arc::clone(&self.inner),
-        }
-    }
 }
 
 impl Mailer {
