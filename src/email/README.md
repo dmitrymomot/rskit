@@ -15,7 +15,7 @@ modo = { version = "0.6", features = ["email"] }
 
 | Type | Description |
 | -------------------------------- | -------------------------------------------------- |
-| `Mailer` | Renders templates and delivers email over SMTP |
+| `Mailer` | Renders templates and delivers email over SMTP (cheap `Clone` via `Arc`) |
 | `EmailConfig` | Top-level configuration (deserializes from YAML) |
 | `SmtpConfig` / `SmtpSecurity` | SMTP connection settings and TLS mode |
 | `SendEmail` | Builder for composing an outgoing email |

@@ -140,7 +140,7 @@ LRU-cached wrapper around any `TemplateSource`. Implements `TemplateSource`. Cac
 
 ## Mailer
 
-`Mailer` is the primary entry point. It holds the template source, SMTP transport, config, and preloaded layouts.
+`Mailer` is the primary entry point. It holds the template source, SMTP transport, config, and preloaded layouts. Cloning is cheap (`Arc`-based) and shares the SMTP connection, template source, and preloaded layouts.
 
 ### Construction
 
@@ -206,7 +206,7 @@ Errors: empty recipient list, malformed addresses, SMTP delivery failures.
 
 | Type                              | Description                                                                                            |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `Mailer`                          | Renders templates and sends email over SMTP                                                            |
+| `Mailer`                          | Renders templates and sends email over SMTP. Cheap `Clone` via `Arc`.                                  |
 | `SendEmail`                       | Builder for composing an email to send                                                                 |
 | `RenderedEmail`                   | Result of rendering: `subject`, `html`, `text`                                                         |
 | `SenderProfile`                   | Per-email From/Reply-To override                                                                       |
