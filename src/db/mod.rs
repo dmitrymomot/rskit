@@ -135,8 +135,7 @@ pub use select::SelectBuilder;
 
 mod maintenance;
 pub use maintenance::{
-    DbHealth, VacuumHandler, VacuumOptions, VacuumResult, run_vacuum, vacuum_handler,
-    vacuum_if_needed,
+    DbHealth, VacuumOptions, VacuumResult, run_vacuum, vacuum_handler, vacuum_if_needed,
 };
 
 // Re-export libsql for direct access

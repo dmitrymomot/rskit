@@ -66,7 +66,8 @@ impl DbHealth {
             .map_err(Error::from)?
             .ok_or_else(|| Error::internal(format!("PRAGMA {name} returned no rows")))?;
         let val: i64 = row.get(0).map_err(Error::from)?;
-        Ok(val as u64)
+        u64::try_from(val)
+            .map_err(|_| Error::internal(format!("PRAGMA {name} returned negative value: {val}")))
     }
 }
 
@@ -229,7 +230,7 @@ impl CronHandler<(Service<Database>,)> for VacuumHandler {
 ///
 /// ```rust,no_run
 /// use modo::cron::Scheduler;
-/// use modo::db::maintenance;
+/// use modo::db;
 /// use modo::service::Registry;
 ///
 /// # async fn example() -> modo::Result<()> {
@@ -237,7 +238,7 @@ impl CronHandler<(Service<Database>,)> for VacuumHandler {
 /// // registry.add(db.clone());
 ///
 /// let scheduler = Scheduler::builder(&registry)
-///     .job("0 3 * * 0", maintenance::vacuum_handler(20.0))?
+///     .job("0 3 * * 0", db::vacuum_handler(20.0))?
 ///     .start()
 ///     .await;
 /// # Ok(())
