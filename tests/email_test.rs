@@ -250,3 +250,42 @@ async fn send_with_custom_sender_profile() {
     let (_envelope, raw) = &msgs[0];
     assert!(raw.contains("custom@example.com"));
 }
+
+#[tokio::test]
+async fn mailer_is_clone() {
+    let dir = tempfile::tempdir().unwrap();
+    write_template(
+        dir.path(),
+        "en",
+        "hello",
+        "---\nsubject: Hello!\n---\nHi there",
+    );
+
+    let config = test_config(dir.path());
+    let stub = lettre::transport::stub::AsyncStubTransport::new_ok();
+    let mailer = Mailer::with_stub_transport(&config, stub.clone()).unwrap();
+    let mailer2 = mailer.clone();
+
+    // Both clones can render
+    let r1 = mailer
+        .render(&SendEmail::new("hello", "a@example.com"))
+        .unwrap();
+    let r2 = mailer2
+        .render(&SendEmail::new("hello", "b@example.com"))
+        .unwrap();
+    assert_eq!(r1.subject, r2.subject);
+    assert_eq!(r1.html, r2.html);
+
+    // Both clones can send (shared transport)
+    mailer
+        .send(SendEmail::new("hello", "a@example.com"))
+        .await
+        .unwrap();
+    mailer2
+        .send(SendEmail::new("hello", "b@example.com"))
+        .await
+        .unwrap();
+
+    let msgs = stub.messages().await;
+    assert_eq!(msgs.len(), 2);
+}
