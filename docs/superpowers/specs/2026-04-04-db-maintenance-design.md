@@ -160,16 +160,11 @@ let scheduler = Scheduler::builder(&registry)
     .await;
 ```
 
-### Health check endpoint
+## Security
 
-```rust
-use modo::db::maintenance::DbHealth;
+`DbHealth` exposes internal infrastructure metrics (page counts, file sizes, freelist ratios). **Do not serialize `DbHealth` on unauthenticated endpoints** like `/_ready` or `/_live`. The existing `/_ready` returns only a status code — keep it that way. If an app needs a health dashboard with vacuum metrics, gate it behind authentication.
 
-async fn health_handler(Service(db): Service<Database>) -> Result<Json<DbHealth>> {
-    let health = DbHealth::collect(db.conn()).await?;
-    Ok(Json(health))
-}
-```
+`DbHealth` intentionally does **not** derive `Serialize` to prevent accidental exposure. Callers who need JSON output can map the fields explicitly into their own response type.
 
 ## Testing Strategy
 
