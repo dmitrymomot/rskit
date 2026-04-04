@@ -1,4 +1,8 @@
+use crate::cron::{CronContext, CronHandler, FromCronContext};
 use crate::error::{Error, Result};
+use crate::extractor::Service;
+
+use super::Database;
 
 /// Database health metrics from PRAGMA introspection.
 ///
@@ -170,6 +174,77 @@ pub async fn vacuum_if_needed(
         },
     )
     .await
+}
+
+/// Cron handler that checks database health and vacuums if the freelist
+/// ratio exceeds the configured threshold. Logs results at `info` level.
+///
+/// Created by [`vacuum_handler`].
+#[derive(Clone)]
+pub struct VacuumHandler {
+    threshold_percent: f64,
+}
+
+impl CronHandler<(Service<Database>,)> for VacuumHandler {
+    async fn call(self, ctx: CronContext) -> Result<()> {
+        let Service(db) = Service::<Database>::from_cron_context(&ctx)?;
+
+        let result = run_vacuum(
+            db.conn(),
+            VacuumOptions {
+                threshold_percent: self.threshold_percent,
+                ..Default::default()
+            },
+        )
+        .await?;
+
+        if result.vacuumed {
+            let after = result.health_after.as_ref().unwrap();
+            tracing::info!(
+                before_free_pct = result.health_before.free_percent,
+                after_free_pct = after.free_percent,
+                reclaimed_bytes = result.health_before.wasted_bytes - after.wasted_bytes,
+                duration_ms = result.duration.as_millis(),
+                "vacuum completed"
+            );
+        } else {
+            tracing::info!(
+                free_pct = result.health_before.free_percent,
+                threshold = self.threshold_percent,
+                "vacuum skipped, below threshold"
+            );
+        }
+
+        Ok(())
+    }
+}
+
+/// Returns a cron handler that checks DB health and vacuums if needed.
+///
+/// The handler extracts [`Service<Database>`] from the cron context.
+/// Register the `Database` in the service registry before building the
+/// scheduler.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use modo::cron::Scheduler;
+/// use modo::db::maintenance;
+/// use modo::service::Registry;
+///
+/// # async fn example() -> modo::Result<()> {
+/// let mut registry = Registry::new();
+/// // registry.add(db.clone());
+///
+/// let scheduler = Scheduler::builder(&registry)
+///     .job("0 3 * * 0", maintenance::vacuum_handler(20.0))?
+///     .start()
+///     .await;
+/// # Ok(())
+/// # }
+/// ```
+pub fn vacuum_handler(threshold_percent: f64) -> VacuumHandler {
+    VacuumHandler { threshold_percent }
 }
 
 #[cfg(test)]
