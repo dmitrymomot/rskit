@@ -29,6 +29,10 @@ pub struct DbHealth {
 impl DbHealth {
     /// Collect health metrics via `PRAGMA page_count`, `freelist_count`,
     /// `page_size`. Computes derived fields from those three values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any PRAGMA query fails or returns an unexpected value.
     pub async fn collect(conn: &libsql::Connection) -> Result<Self> {
         let page_count = Self::pragma_u64(conn, "page_count").await?;
         let freelist_count = Self::pragma_u64(conn, "freelist_count").await?;
@@ -110,6 +114,10 @@ pub struct VacuumResult {
 /// 4. Collects health metrics again.
 ///
 /// Logs before/after metrics at `debug` level.
+///
+/// # Errors
+///
+/// Returns an error if health collection or the `VACUUM` statement fails.
 pub async fn run_vacuum(conn: &libsql::Connection, opts: VacuumOptions) -> Result<VacuumResult> {
     let start = std::time::Instant::now();
     let health_before = DbHealth::collect(conn).await?;
@@ -160,6 +168,10 @@ pub async fn run_vacuum(conn: &libsql::Connection, opts: VacuumOptions) -> Resul
 }
 
 /// Shorthand: run [`run_vacuum`] with the given threshold and default options.
+///
+/// # Errors
+///
+/// Returns an error if health collection or the `VACUUM` statement fails.
 pub async fn vacuum_if_needed(
     conn: &libsql::Connection,
     threshold_percent: f64,

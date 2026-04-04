@@ -7,7 +7,7 @@ Requires feature `"db"` (enabled by default).
 
 ```toml
 [dependencies]
-modo = { version = "0.6", features = ["db"] }
+modo-rs = { version = "0.6.2", features = ["db"] }
 ```
 
 ## Key types
@@ -42,6 +42,12 @@ modo = { version = "0.6", features = ["db"] }
 | `JournalMode`      | SQLite journal mode enum (WAL, Delete, Truncate, Memory, Off)            |
 | `SynchronousMode`  | SQLite synchronous mode enum (Off, Normal, Full, Extra)                  |
 | `TempStore`        | SQLite temp store location enum (Default, File, Memory)                  |
+| `DbHealth`         | Page-level health metrics from PRAGMA introspection                      |
+| `VacuumOptions`    | Configuration for `run_vacuum` (threshold, dry_run)                      |
+| `VacuumResult`     | Before/after health snapshots with timing                                |
+| `run_vacuum`       | VACUUM with threshold guard and health snapshots                         |
+| `vacuum_if_needed` | Shorthand for `run_vacuum` with threshold only                           |
+| `vacuum_handler`   | Cron handler factory for scheduled maintenance                           |
 
 The `libsql` crate is also re-exported for direct access to low-level types
 like `libsql::params!`, `libsql::Value`, `libsql::Connection`, and
@@ -242,6 +248,45 @@ db::migrate(db.conn(), "migrations").await?;
 Migration files are `*.sql` files in the directory, sorted by filename.
 Each migration is tracked in a `_migrations` table with a checksum.
 Modified files after application produce an error.
+
+### Database maintenance (VACUUM)
+
+```rust,no_run
+use modo::db::{self, DbHealth, VacuumOptions, run_vacuum, vacuum_if_needed};
+
+// Check database health
+let health = DbHealth::collect(db.conn()).await?;
+println!("free pages: {}%", health.free_percent);
+
+// Run vacuum only if freelist exceeds 20%
+let result = vacuum_if_needed(db.conn(), 20.0).await?;
+if result.vacuumed {
+    let after = result.health_after.unwrap();
+    println!("reclaimed {} bytes", result.health_before.wasted_bytes - after.wasted_bytes);
+}
+
+// Full options: dry_run mode, custom threshold
+let result = run_vacuum(db.conn(), VacuumOptions {
+    threshold_percent: 10.0,
+    dry_run: true,
+}).await?;
+```
+
+Schedule automatic maintenance with the cron handler:
+
+```rust,no_run
+use modo::cron::Scheduler;
+use modo::db;
+use modo::service::Registry;
+
+let mut registry = Registry::new();
+// registry.add(db.clone());
+
+let scheduler = Scheduler::builder(&registry)
+    .job("0 3 * * 0", db::vacuum_handler(20.0))? // weekly at 3am Sunday
+    .start()
+    .await;
+```
 
 ## Configuration
 
