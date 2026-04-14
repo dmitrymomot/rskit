@@ -15,8 +15,6 @@ use super::locator::GeoLocator;
 /// Apply this layer after [`ClientIpLayer`](crate::ip::ClientIpLayer) so that
 /// [`ClientIp`] is already present in extensions when `GeoLayer` runs.
 /// If `ClientIp` is absent the request passes through without modification.
-///
-/// Requires the `geolocation` feature.
 pub struct GeoLayer {
     locator: GeoLocator,
 }

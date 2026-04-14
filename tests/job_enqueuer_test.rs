@@ -1,5 +1,3 @@
-#![cfg(feature = "job")]
-
 use chrono::{Duration, Utc};
 use modo::db::{self, ConnExt, ConnQueryExt, FromValue};
 use modo::job::{EnqueueOptions, EnqueueResult, Enqueuer};

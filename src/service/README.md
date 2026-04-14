@@ -2,8 +2,6 @@
 
 Type-map service registry and axum application state for the modo web framework.
 
-Always available — no feature flag required.
-
 ## Overview
 
 The module provides two complementary public types:
@@ -41,11 +39,11 @@ let app = axum::Router::new()
 
 ### Retrieving a service inside a handler
 
-Use the `Service<T>` extractor (re-exported as `modo::Service`). It resolves the
-service from `AppState` automatically when the router was built with `with_state(state)`.
+Use the `Service<T>` extractor. It resolves the service from `AppState`
+automatically when the router was built with `with_state(state)`.
 
 ```rust,ignore
-use modo::Service;
+use modo::service::Service;
 
 async fn index(Service(pool): Service<MyPool>) -> String {
     // pool is Arc<MyPool>

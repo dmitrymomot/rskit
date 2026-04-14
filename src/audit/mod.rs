@@ -2,8 +2,6 @@
 //!
 //! Explicit audit logging for business-significant actions.
 //!
-//! Requires feature `"db"`.
-//!
 //! Records structured events with actor, action, resource, and optional
 //! metadata/client context. No automatic middleware capture — callers
 //! build an [`AuditEntry`] and pass it to [`AuditLog`]. A built-in

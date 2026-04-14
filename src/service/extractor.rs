@@ -13,7 +13,7 @@ use crate::service::AppState;
 /// # Example
 ///
 /// ```
-/// use modo::Service;
+/// use modo::service::Service;
 ///
 /// struct MyService;
 ///

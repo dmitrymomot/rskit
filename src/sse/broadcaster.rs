@@ -40,7 +40,14 @@ pub struct BroadcastStream<T> {
 }
 
 impl<T: Clone + Send + 'static> BroadcastStream<T> {
-    /// Create a new broadcast stream (no cleanup).
+    /// Wrap a raw [`broadcast::Receiver`] in a [`BroadcastStream`].
+    ///
+    /// Use this for ad-hoc broadcast channels not owned by a
+    /// [`Broadcaster`]. No auto-cleanup runs on drop — the channel is
+    /// managed by whoever owns the sender.
+    ///
+    /// Prefer [`Broadcaster::subscribe()`] for keyed channels, which
+    /// also cleans up empty channels when the last subscriber drops.
     pub fn new(rx: broadcast::Receiver<T>) -> Self {
         Self {
             inner: Box::pin(unfold_default(rx)),

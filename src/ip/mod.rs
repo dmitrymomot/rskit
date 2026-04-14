@@ -2,12 +2,12 @@
 //!
 //! Client IP extraction with trusted proxy support.
 //!
-//! Always available (no feature flag required).
-//!
 //! Provides:
 //! - [`ClientIp`] — axum extractor wrapping `std::net::IpAddr`
+//! - [`ClientInfo`] — structured client metadata (IP, user-agent, etc.) inserted
+//!   into request extensions by [`ClientIpLayer`]
 //! - [`ClientIpLayer`] — Tower layer that resolves the client IP and inserts
-//!   [`ClientIp`] into request extensions
+//!   [`ClientIp`] / [`ClientInfo`] into request extensions
 //! - [`extract_client_ip`] — low-level resolution function (headers + trusted
 //!   proxies + fallback)
 //!
@@ -15,7 +15,7 @@
 //!
 //! ```rust,no_run
 //! use axum::{Router, routing::get};
-//! use modo::{ClientIp, ClientIpLayer};
+//! use modo::ip::{ClientIp, ClientIpLayer};
 //!
 //! let app: Router = Router::new()
 //!     .route("/", get(handler))
@@ -26,10 +26,12 @@
 //! }
 //! ```
 
+mod client_info;
 mod client_ip;
 mod extract;
 mod middleware;
 
+pub use client_info::ClientInfo;
 pub use client_ip::ClientIp;
 pub use extract::extract_client_ip;
 pub use middleware::ClientIpLayer;

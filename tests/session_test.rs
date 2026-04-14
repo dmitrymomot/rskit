@@ -1,14 +1,12 @@
-#![cfg(feature = "session")]
-
 use axum::Router;
 use axum::body::Body;
 use axum::http::Request;
 use axum::routing::{get, post};
 use http::StatusCode;
+use modo::auth::session::{Session, SessionConfig, Store};
 use modo::cookie::{CookieConfig, key_from_config};
 use modo::db::{self, ConnExt};
 use modo::service::Registry;
-use modo::session::{Session, SessionConfig, Store};
 use tower::ServiceExt;
 
 fn test_cookie_config() -> CookieConfig {
@@ -75,7 +73,7 @@ async fn test_session_middleware_no_cookie_passes_through() {
 
     let app = Router::new()
         .route("/", get(handler_no_auth))
-        .layer(modo::session::layer(store, &cookie_config, &key))
+        .layer(modo::auth::session::layer(store, &cookie_config, &key))
         .with_state(Registry::new().into_state());
 
     let response = app
@@ -94,7 +92,7 @@ async fn test_session_authenticate_sets_cookie() {
 
     let app = Router::new()
         .route("/login", post(handler_authenticate))
-        .layer(modo::session::layer(store, &cookie_config, &key))
+        .layer(modo::auth::session::layer(store, &cookie_config, &key))
         .with_state(Registry::new().into_state());
 
     let response = app
@@ -121,7 +119,7 @@ async fn test_session_logout_removes_cookie() {
 
     let app = Router::new()
         .route("/", post(handler_logout))
-        .layer(modo::session::layer(store, &cookie_config, &key))
+        .layer(modo::auth::session::layer(store, &cookie_config, &key))
         .with_state(Registry::new().into_state());
 
     let response = app
@@ -146,7 +144,7 @@ async fn test_session_set_and_get_data() {
 
     let app = Router::new()
         .route("/", post(handler_set_get))
-        .layer(modo::session::layer(store, &cookie_config, &key))
+        .layer(modo::auth::session::layer(store, &cookie_config, &key))
         .with_state(Registry::new().into_state());
 
     let response = app
@@ -175,8 +173,8 @@ fn test_session_config_in_modo_config() {
 // ---------------------------------------------------------------------------
 
 use axum::Extension;
+use modo::auth::session::meta::SessionMeta;
 use modo::service::AppState;
-use modo::session::meta::SessionMeta;
 
 /// Build a Router with the session layer, optionally adding an Extension layer.
 /// This helper exists because `oneshot` consumes the service, so each request
@@ -190,7 +188,11 @@ fn build_app(
 ) -> Router {
     Router::new()
         .route(route, method)
-        .layer(modo::session::layer(store.clone(), cookie_config, key))
+        .layer(modo::auth::session::layer(
+            store.clone(),
+            cookie_config,
+            key,
+        ))
         .with_state(Registry::new().into_state())
 }
 
@@ -205,7 +207,11 @@ fn build_app_with_ext<T: Clone + Send + Sync + 'static>(
     Router::new()
         .route(route, method)
         .layer(Extension(ext))
-        .layer(modo::session::layer(store.clone(), cookie_config, key))
+        .layer(modo::auth::session::layer(
+            store.clone(),
+            cookie_config,
+            key,
+        ))
         .with_state(Registry::new().into_state())
 }
 

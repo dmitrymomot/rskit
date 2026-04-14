@@ -1,20 +1,14 @@
 # Storage
 
-S3-compatible object storage with ACL support and upload-from-URL. Feature-gated under `storage`.
+S3-compatible object storage with ACL support and upload-from-URL. Always available.
 
-## Feature Flag
-
-```toml
-modo = { version = "0.6", features = ["storage"] }
-```
-
-Re-exports from `modo` crate root:
+## Module path
 
 ```rust
-pub use storage::{Acl, BucketConfig, Buckets, PutFromUrlInput, PutInput, PutOptions, Storage};
+use modo::storage::{Acl, BucketConfig, Buckets, PutFromUrlInput, PutInput, PutOptions, Storage};
 ```
 
-Size helpers `gb`, `kb`, `mb` are available at `modo::storage::{gb, kb, mb}` (not re-exported at crate root).
+Size helpers are available at `modo::storage::{gb, kb, mb}`.
 
 ## Storage
 

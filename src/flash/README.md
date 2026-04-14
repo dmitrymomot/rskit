@@ -2,8 +2,6 @@
 
 Cookie-based flash messages for one-time cross-request notifications.
 
-This module is always available; no feature flag is required.
-
 Flash messages survive exactly one redirect: the sending request queues a message
 and the receiving request reads and consumes it. Once consumed the signed cookie is
 cleared from the response automatically. No session dependency is required.
@@ -42,7 +40,7 @@ Use the `Flash` extractor in a handler. Queued messages are written to a signed
 cookie on the response and are available on the next request:
 
 ```rust,ignore
-use modo::Flash;
+use modo::flash::Flash;
 use axum::response::Redirect;
 
 async fn submit_handler(flash: Flash) -> Redirect {

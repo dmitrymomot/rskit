@@ -2,19 +2,6 @@
 
 IP-to-location lookup using a MaxMind GeoLite2/GeoIP2 `.mmdb` database.
 
-Requires the `geolocation` feature flag.
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["geolocation"] }
-```
-
-## Features
-
-| Feature flag  | What it enables                                           |
-| ------------- | --------------------------------------------------------- |
-| `geolocation` | `GeoLocator`, `GeoLayer`, `GeoMiddleware`, `Location`, `GeolocationConfig` |
-
 ## Key Types
 
 | Type                | Description                                                                 |
@@ -24,6 +11,21 @@ modo = { version = "0.6", features = ["geolocation"] }
 | `GeoLayer`          | Tower layer; runs lookup per request and inserts `Location` in extensions   |
 | `GeoMiddleware<S>`  | Tower service produced by `GeoLayer`                                        |
 | `Location`          | Resolved geolocation data; also an axum extractor                           |
+
+## MaxMind database setup
+
+This module reads a MaxMind `.mmdb` database (GeoLite2-City or GeoIP2-City).
+The framework does not ship a database — obtain one from MaxMind:
+
+1. Sign up for a free [MaxMind](https://www.maxmind.com) account and generate
+   a license key to download the GeoLite2-City database, or purchase a
+   commercial GeoIP2-City database.
+2. Place the `.mmdb` file somewhere the process can read at startup, e.g.
+   `data/GeoLite2-City.mmdb`.
+3. Keep the file current — MaxMind publishes weekly updates.
+
+For tests, the repository ships `tests/fixtures/GeoIP2-City-Test.mmdb`, the
+MaxMind-provided sample database used by the in-crate test suite.
 
 ## Configuration
 
@@ -100,6 +102,18 @@ fn build_router(locator: GeoLocator) -> Router {
 Axum applies `.layer()` calls in bottom-up order, so `ClientIpLayer` is listed
 last to ensure it runs first. If `ClientIp` is absent from extensions, `GeoLayer`
 passes the request through unchanged.
+
+`GeoLayer` is also re-exported from the flat middleware index as
+`modo::middlewares::Geo`:
+
+```rust,ignore
+use modo::middlewares as mw;
+
+let app = Router::new()
+    // routes ...
+    .layer(mw::Geo::new(locator))
+    .layer(mw::ClientIp::new());
+```
 
 ### Extracting Location in a handler
 

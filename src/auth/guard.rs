@@ -1,4 +1,12 @@
-use std::future::Future;
+//! Route-level gating layers — `require_authenticated`, `require_role`,
+//! `require_scope`.
+//!
+//! Provides guard layers that reject requests based on authentication state,
+//! role membership, or API key scope. All guards run after route matching
+//! (`.route_layer()`) and expect upstream middleware (role extractor,
+//! [`ApiKeyLayer`](crate::auth::apikey::ApiKeyLayer)) to have populated
+//! extensions before the guard executes.
+
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -9,18 +17,42 @@ use http::Request;
 use tower::{Layer, Service};
 
 use crate::Error;
-
-use super::extractor::Role;
+use crate::auth::apikey::ApiKeyMeta;
+use crate::auth::role::Role;
 
 // --- require_role ---
 
-/// Creates a guard layer that rejects requests unless the resolved role
-/// matches ANY of the allowed roles. Returns 403 Forbidden if role is
-/// present but not allowed, 401 Unauthorized if no role is present.
+/// Creates a guard layer that rejects requests unless the resolved
+/// [`Role`] matches ANY of the allowed roles. Exact string match only;
+/// there is no hierarchy.
+///
+/// # Status codes
+///
+/// - **401 Unauthorized** — no [`Role`] in request extensions (upstream
+///   middleware never populated one).
+/// - **403 Forbidden** — a role is present but not in the allowed list.
+///   An empty `roles` iterator always returns 403.
+///
+/// # Wiring
 ///
 /// Apply with `.route_layer()` so the guard runs after route matching.
-/// The RBAC middleware must be applied with `.layer()` on the outer router
-/// so that [`Role`] is already in extensions when this guard runs.
+/// A role-resolving middleware (e.g. from [`crate::auth::role`]) must run
+/// earlier via `.layer()` so that [`Role`] is in extensions when this
+/// guard runs.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # fn example() {
+/// use axum::Router;
+/// use axum::routing::get;
+/// use modo::auth::guard::require_role;
+///
+/// let app: Router = Router::new()
+///     .route("/admin", get(|| async { "admin area" }))
+///     .route_layer(require_role(["admin", "owner"]));
+/// # }
+/// ```
 pub fn require_role(roles: impl IntoIterator<Item = impl Into<String>>) -> RequireRoleLayer {
     RequireRoleLayer {
         roles: Arc::new(roles.into_iter().map(Into::into).collect()),
@@ -104,10 +136,34 @@ where
 
 // --- require_authenticated ---
 
-/// Creates a guard layer that rejects requests unless a [`Role`] is present
-/// in extensions. Returns 401 Unauthorized if no role is present.
+/// Creates a guard layer that rejects requests unless a [`Role`] is
+/// present in extensions. The role's value is not inspected — any
+/// resolved role is accepted.
+///
+/// # Status codes
+///
+/// - **401 Unauthorized** — no [`Role`] in request extensions.
+///
+/// # Wiring
 ///
 /// Apply with `.route_layer()` so the guard runs after route matching.
+/// A role-resolving middleware (e.g. from [`crate::auth::role`]) must run
+/// earlier via `.layer()` so that [`Role`] is in extensions when this
+/// guard runs.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # fn example() {
+/// use axum::Router;
+/// use axum::routing::get;
+/// use modo::auth::guard::require_authenticated;
+///
+/// let app: Router = Router::new()
+///     .route("/me", get(|| async { "profile" }))
+///     .route_layer(require_authenticated());
+/// # }
+/// ```
 pub fn require_authenticated() -> RequireAuthenticatedLayer {
     RequireAuthenticatedLayer
 }
@@ -163,6 +219,121 @@ where
         Box::pin(async move {
             if request.extensions().get::<Role>().is_none() {
                 return Ok(Error::unauthorized("authentication required").into_response());
+            }
+
+            inner.call(request).await
+        })
+    }
+}
+
+// --- require_scope ---
+
+/// Creates a guard layer that rejects requests unless the verified API
+/// key's scope list contains the required scope. Uses exact string
+/// matching; there is no wildcard or hierarchy.
+///
+/// # Status codes
+///
+/// - **500 Internal Server Error** — no [`ApiKeyMeta`] in request
+///   extensions. The guard is fail-closed and logs an error; this state
+///   indicates the wiring is wrong (missing
+///   [`ApiKeyLayer`](crate::auth::apikey::ApiKeyLayer) upstream).
+/// - **403 Forbidden** — the API key is present but does not carry the
+///   required scope.
+///
+/// # Wiring
+///
+/// Apply with `.route_layer()` so the guard runs after route matching.
+/// [`ApiKeyLayer`](crate::auth::apikey::ApiKeyLayer) must run earlier
+/// (via `.layer()`) so that [`ApiKeyMeta`] is in extensions when this
+/// guard runs.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # fn example() {
+/// use axum::Router;
+/// use axum::routing::get;
+/// use modo::auth::guard::require_scope;
+///
+/// let app: Router = Router::new()
+///     .route("/orders", get(|| async { "orders" }))
+///     .route_layer(require_scope("read:orders"));
+/// # }
+/// ```
+pub fn require_scope(scope: &str) -> ScopeLayer {
+    ScopeLayer {
+        scope: scope.to_owned(),
+    }
+}
+
+/// Tower [`Layer`] that checks for a required scope on the verified API key.
+///
+/// Created by [`require_scope`]. Apply as a `.route_layer()` after
+/// [`ApiKeyLayer`](crate::auth::apikey::ApiKeyLayer).
+#[derive(Clone)]
+pub struct ScopeLayer {
+    scope: String,
+}
+
+impl<S> Layer<S> for ScopeLayer {
+    type Service = ScopeMiddleware<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        ScopeMiddleware {
+            inner,
+            scope: self.scope.clone(),
+        }
+    }
+}
+
+/// Tower [`Service`] that checks for a required scope.
+pub struct ScopeMiddleware<S> {
+    inner: S,
+    scope: String,
+}
+
+impl<S: Clone> Clone for ScopeMiddleware<S> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            scope: self.scope.clone(),
+        }
+    }
+}
+
+impl<S> Service<Request<Body>> for ScopeMiddleware<S>
+where
+    S: Service<Request<Body>, Response = http::Response<Body>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send + 'static,
+{
+    type Response = http::Response<Body>;
+    type Error = S::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: Request<Body>) -> Self::Future {
+        let scope = self.scope.clone();
+        let mut inner = self.inner.clone();
+        std::mem::swap(&mut self.inner, &mut inner);
+
+        Box::pin(async move {
+            let Some(meta) = request.extensions().get::<ApiKeyMeta>() else {
+                tracing::error!(
+                    "require_scope guard reached without an API key in extensions; \
+                     ApiKeyLayer must run before this guard"
+                );
+                return Ok(Error::internal("server misconfigured").into_response());
+            };
+
+            if !meta.scopes.iter().any(|s| s == &scope) {
+                return Ok(
+                    Error::forbidden(format!("missing required scope: {scope}")).into_response()
+                );
             }
 
             inner.call(request).await
@@ -303,5 +474,53 @@ mod tests {
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         assert!(!called.load(Ordering::SeqCst));
+    }
+
+    // --- require_scope tests ---
+
+    fn meta_with_scopes(scopes: &[&str]) -> ApiKeyMeta {
+        ApiKeyMeta {
+            id: "01HX".into(),
+            tenant_id: "t".into(),
+            name: "test key".into(),
+            scopes: scopes.iter().map(|s| (*s).into()).collect(),
+            expires_at: None,
+            last_used_at: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn require_scope_passes_when_scope_present() {
+        let layer = require_scope("read:orders");
+        let svc = layer.layer(tower::service_fn(ok_handler));
+
+        let mut req = Request::builder().body(Body::empty()).unwrap();
+        req.extensions_mut()
+            .insert(meta_with_scopes(&["read:orders", "write:orders"]));
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn require_scope_403_when_scope_absent() {
+        let layer = require_scope("admin:all");
+        let svc = layer.layer(tower::service_fn(ok_handler));
+
+        let mut req = Request::builder().body(Body::empty()).unwrap();
+        req.extensions_mut()
+            .insert(meta_with_scopes(&["read:orders"]));
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn require_scope_500_when_apikey_meta_missing() {
+        let layer = require_scope("read:orders");
+        let svc = layer.layer(tower::service_fn(ok_handler));
+
+        let req = Request::builder().body(Body::empty()).unwrap();
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }

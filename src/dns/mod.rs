@@ -6,8 +6,6 @@
 //! Intended for custom-domain flows where a user must prove they control a
 //! domain before activating it.
 //!
-//! Requires feature `"dns"`.
-//!
 //! # Provides
 //!
 //! - [`DnsConfig`] — nameserver address, TXT prefix, and timeout.
@@ -32,15 +30,6 @@
 //! let txt_ok = verifier.check_txt("example.com", &token).await?;
 //! # Ok(())
 //! # }
-//! ```
-//!
-//! # Feature flag
-//!
-//! This module is only compiled when the `dns` feature is enabled.
-//!
-//! ```toml
-//! [dependencies]
-//! modo = { version = "0.6", features = ["dns"] }
 //! ```
 
 mod config;

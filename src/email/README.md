@@ -2,13 +2,6 @@
 
 Transactional email with Markdown templates, SMTP delivery, and optional LRU caching.
 
-Requires feature `"email"`.
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["email"] }
-```
-
 `Mailer::with_stub_transport` is available with the `test-helpers` feature or in `#[cfg(test)]` blocks.
 
 ## Key types
@@ -34,11 +27,12 @@ use modo::email::{EmailConfig, Mailer, SendEmail};
 
 #[tokio::main]
 async fn main() -> modo::Result<()> {
-    let mailer = Mailer::new(&EmailConfig {
-        templates_path: "emails".into(),
-        default_from_email: "noreply@example.com".into(),
-        ..Default::default()
-    })?;
+    let mut config = EmailConfig::default();
+    config.templates_path = "emails".into();
+    config.default_from_email = "noreply@example.com".into();
+    config.smtp.host = "smtp.example.com".into();
+
+    let mailer = Mailer::new(&config)?;
 
     mailer.send(
         SendEmail::new("welcome", "user@example.com")
@@ -47,6 +41,10 @@ async fn main() -> modo::Result<()> {
     Ok(())
 }
 ```
+
+`EmailConfig` and `SmtpConfig` are both `#[non_exhaustive]` — mutate
+`EmailConfig::default()` instead of struct-literal construction outside
+this crate.
 
 ### Template format
 

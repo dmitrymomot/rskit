@@ -1,8 +1,8 @@
 use cookie::{Cookie, CookieJar};
 
+use crate::auth::session::meta::SessionMeta;
+use crate::auth::session::{SessionConfig, Store};
 use crate::cookie::{CookieConfig, Key, key_from_config};
-use crate::session::meta::SessionMeta;
-use crate::session::{SessionConfig, Store};
 
 use super::db::TestDb;
 
@@ -25,7 +25,7 @@ const SESSIONS_TABLE_SQL: &str = "CREATE TABLE sessions (
 ///
 /// `TestSession` sets up an in-memory `sessions` table on the provided
 /// [`TestDb`], derives a signing key, and exposes helpers for authenticating
-/// test users and building the [`SessionLayer`](crate::session::SessionLayer)
+/// test users and building the [`SessionLayer`](crate::auth::session::SessionLayer)
 /// needed by [`super::TestApp`].
 ///
 /// # Example
@@ -34,7 +34,7 @@ const SESSIONS_TABLE_SQL: &str = "CREATE TABLE sessions (
 /// # #[cfg(feature = "test-helpers")]
 /// # async fn example() {
 /// use axum::routing::get;
-/// use modo::session::Session;
+/// use modo::auth::session::Session;
 /// use modo::testing::{TestApp, TestDb, TestSession};
 ///
 /// async fn whoami(session: Session) -> String {
@@ -154,12 +154,12 @@ impl TestSession {
         format!("{cookie_name}={signed_value}")
     }
 
-    /// Build a [`SessionLayer`](crate::session::SessionLayer) configured with
+    /// Build a [`SessionLayer`](crate::auth::session::SessionLayer) configured with
     /// the same store and cookie settings as this `TestSession`.
     ///
     /// Apply this layer to a [`super::TestAppBuilder`] so that handlers can
-    /// use the [`Session`](crate::session::Session) extractor.
-    pub fn layer(&self) -> crate::session::SessionLayer {
-        crate::session::layer(self.store.clone(), &self.cookie_config, &self.key)
+    /// use the [`Session`](crate::auth::session::Session) extractor.
+    pub fn layer(&self) -> crate::auth::session::SessionLayer {
+        crate::auth::session::layer(self.store.clone(), &self.cookie_config, &self.key)
     }
 }

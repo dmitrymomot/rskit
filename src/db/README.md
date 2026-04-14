@@ -1,14 +1,7 @@
-# db
+# modo::db
 
 Lightweight libsql (SQLite) database layer with typed row mapping,
 composable query building, filtering, and pagination.
-
-Requires feature `"db"` (enabled by default).
-
-```toml
-[dependencies]
-modo-rs = { version = "0.6.3", features = ["db"] }
-```
 
 ## Key types
 

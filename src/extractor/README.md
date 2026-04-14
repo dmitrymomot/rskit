@@ -15,11 +15,9 @@ happen automatically.
 | `Query<T>`            | URL query string                     | `DeserializeOwned + Sanitize` |
 | `MultipartRequest<T>` | `multipart/form-data` body           | `DeserializeOwned + Sanitize` |
 | `Path<T>`             | URL path parameters (axum re-export) | `DeserializeOwned`            |
-| `Service<T>`          | Application service registry         | `Send + Sync + 'static`       |
 | `UploadedFile`        | Single file from a multipart upload  | —                             |
 | `Files`               | Map of field names to uploaded files | —                             |
 | `UploadValidator<'_>` | Fluent file validator                | —                             |
-| `ClientInfo`          | Client IP, user-agent, fingerprint   | —                             |
 
 ## Usage
 
@@ -27,7 +25,7 @@ happen automatically.
 
 ```rust
 use modo::extractor::JsonRequest;
-use modo::Sanitize;
+use modo::sanitize::Sanitize;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -50,7 +48,7 @@ async fn create(JsonRequest(body): JsonRequest<CreateItem>) {
 
 ```rust
 use modo::extractor::FormRequest;
-use modo::Sanitize;
+use modo::sanitize::Sanitize;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -74,7 +72,7 @@ async fn login(FormRequest(form): FormRequest<LoginForm>) {
 
 ```rust
 use modo::extractor::Query;
-use modo::Sanitize;
+use modo::sanitize::Sanitize;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -94,6 +92,18 @@ async fn search(Query(params): Query<SearchParams>) {
 }
 ```
 
+### Path parameters
+
+`Path<T>` is re-exported from axum unchanged; it does not sanitize.
+
+```rust
+use modo::extractor::Path;
+
+async fn show_item(Path(id): Path<String>) {
+    // id is the matched path segment
+}
+```
+
 ### Multipart file upload
 
 `MultipartRequest<T>` deconstructs into `(T, Files)`. Text fields are deserialized and
@@ -101,7 +111,7 @@ sanitized into `T`; file fields are accessible through the [`Files`] map.
 
 ```rust
 use modo::extractor::{MultipartRequest, Files};
-use modo::Sanitize;
+use modo::sanitize::Sanitize;
 use modo::Result;
 use serde::Deserialize;
 
@@ -130,51 +140,11 @@ async fn update_profile(
 }
 ```
 
-### Service registry
+`Files` exposes three accessors for a given field name:
 
-`Service<T>` retrieves a service registered via `Registry::add` during startup.
-The inner value is `Arc<T>`. Returns 500 if `T` was not registered.
-
-```rust
-use modo::Service;
-use std::sync::Arc;
-
-struct EmailService { /* ... */ }
-
-async fn handler(Service(email): Service<EmailService>) {
-    // email is Arc<EmailService>
-}
-```
-
-### Client info
-
-`ClientInfo` extracts the client IP address, `User-Agent` header, and
-`X-Fingerprint` header from the request. Requires `ClientIpLayer` for the IP
-field; without it, `ip_value()` returns `None`.
-
-For non-HTTP contexts (background jobs, CLI tools), use the builder:
-
-```rust
-use modo::extractor::ClientInfo;
-
-let info = ClientInfo::new()
-    .ip("1.2.3.4")
-    .user_agent("my-script/1.0");
-
-assert_eq!(info.ip_value(), Some("1.2.3.4"));
-```
-
-In a handler:
-
-```rust,ignore
-use modo::ClientInfo;
-
-async fn handler(client: ClientInfo) {
-    if let Some(ip) = client.ip_value() {
-        // ...
-    }
-}
-```
+- `files.get("field")` — shared `Option<&UploadedFile>` reference to the first file.
+- `files.file("field")` — takes ownership of the first `UploadedFile`.
+- `files.files("field")` — takes ownership of all `UploadedFile` values.
 
 ### File validation
 
@@ -195,3 +165,6 @@ fn check_avatar(file: &UploadedFile) -> modo::Result<()> {
         .check()
 }
 ```
+
+`UploadedFile::extension()` returns the lowercased extension without the leading dot
+(e.g. `Some("jpg")` for `"photo.JPG"`), or `None` if the filename has no extension.

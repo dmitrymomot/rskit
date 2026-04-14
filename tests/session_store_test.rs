@@ -1,8 +1,6 @@
-#![cfg(feature = "session")]
-
+use modo::auth::session::meta::SessionMeta;
+use modo::auth::session::{SessionConfig, Store};
 use modo::db::{self, ConnExt};
-use modo::session::meta::SessionMeta;
-use modo::session::{SessionConfig, Store};
 
 const CREATE_TABLE_SQL: &str = "CREATE TABLE sessions (
     id TEXT PRIMARY KEY,

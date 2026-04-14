@@ -1,5 +1,3 @@
-#![cfg(feature = "db")]
-
 use modo::db::{self, ConnExt};
 
 #[test]

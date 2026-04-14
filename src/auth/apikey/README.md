@@ -1,13 +1,6 @@
-# apikey
+# modo::auth::apikey
 
 Prefixed API key issuance, verification, scoping, and lifecycle management.
-
-Requires the `apikey` feature flag (depends on `db`):
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["apikey"] }
-```
 
 ## Key types
 
@@ -24,7 +17,9 @@ modo = { version = "0.6", features = ["apikey"] }
 | Type | Purpose |
 |------|---------|
 | `ApiKeyLayer` | Tower layer that verifies API keys on incoming requests |
-| `require_scope` | Tower layer factory that enforces a required scope on verified keys |
+
+Route-level scope gating (`require_scope`) lives in [`modo::auth::guard`](../guard) —
+apply it as a `route_layer` after `ApiKeyLayer`.
 
 ### Data types
 
@@ -46,7 +41,7 @@ modo = { version = "0.6", features = ["apikey"] }
 ### Creating a store
 
 ```rust,ignore
-use modo::apikey::{ApiKeyConfig, ApiKeyStore};
+use modo::auth::apikey::{ApiKeyConfig, ApiKeyStore};
 
 let store = ApiKeyStore::new(db, ApiKeyConfig::default())?;
 ```
@@ -56,7 +51,7 @@ instead of the built-in SQLite backend:
 
 ```rust,ignore
 use std::sync::Arc;
-use modo::apikey::{ApiKeyConfig, ApiKeyStore, ApiKeyBackend};
+use modo::auth::apikey::{ApiKeyConfig, ApiKeyStore, ApiKeyBackend};
 
 let backend: Arc<dyn ApiKeyBackend> = /* your backend */;
 let store = ApiKeyStore::from_backend(backend, ApiKeyConfig::default())?;
@@ -65,7 +60,7 @@ let store = ApiKeyStore::from_backend(backend, ApiKeyConfig::default())?;
 ### Issuing a key
 
 ```rust,ignore
-use modo::apikey::CreateKeyRequest;
+use modo::auth::apikey::CreateKeyRequest;
 
 let created = store.create(&CreateKeyRequest {
     tenant_id: "tenant_abc".into(),
@@ -96,7 +91,7 @@ Apply `ApiKeyLayer` to verify the `Authorization: Bearer <token>` header:
 
 ```rust,ignore
 use axum::{Router, routing::get};
-use modo::apikey::{ApiKeyLayer, ApiKeyStore};
+use modo::auth::apikey::{ApiKeyLayer, ApiKeyStore};
 
 let app: Router = Router::new()
     .route("/api/resource", get(handler))
@@ -115,7 +110,7 @@ Apply `require_scope` as a route layer **after** `ApiKeyLayer`:
 
 ```rust,ignore
 use axum::{Router, routing::get};
-use modo::apikey::require_scope;
+use modo::auth::guard::require_scope;
 
 let app: Router = Router::new()
     .route("/orders", get(list_orders))
@@ -127,7 +122,7 @@ let app: Router = Router::new()
 `ApiKeyMeta` implements `FromRequestParts` and `OptionalFromRequestParts`:
 
 ```rust,ignore
-use modo::apikey::ApiKeyMeta;
+use modo::auth::apikey::ApiKeyMeta;
 
 async fn handler(meta: ApiKeyMeta) -> String {
     format!("Hello tenant {}", meta.tenant_id)
@@ -184,8 +179,10 @@ All errors are returned as `modo::Error` with appropriate HTTP status codes:
 | `ApiKeyStore::refresh` | 400 Bad Request | `expires_at` is not valid RFC 3339 |
 | `ApiKeyStore::refresh` | 404 Not Found | No key with the given ID exists |
 | `ApiKeyLayer` | 401 Unauthorized | Missing or invalid `Authorization` header |
-| `require_scope` | 403 Forbidden | Verified key lacks the required scope |
-| `require_scope` | 500 Internal | `require_scope` applied without `ApiKeyLayer` |
+
+Route-level scope gating errors are documented in the `modo::auth::guard`
+module (`require_scope` returns 403 Forbidden when the verified key lacks the
+required scope, and 500 Internal if applied without `ApiKeyLayer`).
 
 Verification deliberately returns the same generic "invalid API key" message
 for all failure cases to prevent enumeration attacks.

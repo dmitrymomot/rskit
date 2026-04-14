@@ -3,8 +3,7 @@ use std::sync::Arc;
 use serde::de::DeserializeOwned;
 
 use crate::error::{Error, Result};
-use crate::extractor::Service;
-use crate::service::RegistrySnapshot;
+use crate::service::{RegistrySnapshot, Service};
 
 use super::meta::Meta;
 use super::payload::Payload;

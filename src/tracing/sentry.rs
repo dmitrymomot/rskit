@@ -1,13 +1,11 @@
 use crate::error::Result;
 use crate::runtime::Task;
 
-#[cfg(feature = "sentry")]
 use serde::Deserialize;
 
 /// Sentry error and performance reporting settings.
 ///
-/// Requires the `sentry` feature. Embed in `Config::sentry` and supply
-/// a valid DSN to enable Sentry.
+/// Embed in `Config::sentry` and supply a valid DSN to enable Sentry.
 ///
 /// ```yaml
 /// tracing:
@@ -17,7 +15,6 @@ use serde::Deserialize;
 ///     sample_rate: 1.0
 ///     traces_sample_rate: 0.1
 /// ```
-#[cfg(feature = "sentry")]
 #[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -38,7 +35,6 @@ pub struct SentryConfig {
     pub traces_sample_rate: f32,
 }
 
-#[cfg(feature = "sentry")]
 impl Default for SentryConfig {
     fn default() -> Self {
         Self {
@@ -59,7 +55,6 @@ impl Default for SentryConfig {
 /// Dropping the guard without calling `shutdown` is safe but may not flush
 /// all buffered Sentry events.
 pub struct TracingGuard {
-    #[cfg(feature = "sentry")]
     _sentry: Option<sentry::ClientInitGuard>,
 }
 
@@ -72,16 +67,10 @@ impl Default for TracingGuard {
 impl TracingGuard {
     /// Create a guard with no active Sentry client.
     pub fn new() -> Self {
-        Self {
-            #[cfg(feature = "sentry")]
-            _sentry: None,
-        }
+        Self { _sentry: None }
     }
 
     /// Create a guard that owns an active Sentry client.
-    ///
-    /// Requires the `sentry` feature.
-    #[cfg(feature = "sentry")]
     pub fn with_sentry(guard: sentry::ClientInitGuard) -> Self {
         Self {
             _sentry: Some(guard),
@@ -92,7 +81,6 @@ impl TracingGuard {
 impl Task for TracingGuard {
     /// Flush pending Sentry events (up to 5 seconds) and release the client.
     async fn shutdown(self) -> Result<()> {
-        #[cfg(feature = "sentry")]
         if let Some(guard) = self._sentry {
             guard.close(Some(std::time::Duration::from_secs(5)));
         }

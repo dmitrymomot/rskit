@@ -2,10 +2,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
-use modo::Service;
 use modo::cron::{CronOptions, Scheduler};
 use modo::error::Result;
 use modo::service::Registry;
+use modo::service::Service;
 
 async fn counting_job(Service(counter): Service<Arc<AtomicU32>>) -> Result<()> {
     counter.fetch_add(1, Ordering::SeqCst);

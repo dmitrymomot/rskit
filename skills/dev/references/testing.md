@@ -1,10 +1,12 @@
 # Test Helpers
 
-Feature-gated under `test-helpers`. Enable in dev-dependencies:
+**Requires the `test-helpers` feature.** This is the only feature flag modo
+ships — it gates `modo::testing` and every in-memory/stub backend used by
+tests. Enable it in your crate's dev-dependencies:
 
 ```toml
 [dev-dependencies]
-modo = { path = ".", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
 ```
 
 Source: `src/testing/` module. Re-exported as `modo::testing`.
@@ -12,13 +14,29 @@ Source: `src/testing/` module. Re-exported as `modo::testing`.
 ## Public API
 
 ```
-modo::testing::TestDb
 modo::testing::TestApp
 modo::testing::TestAppBuilder
+modo::testing::TestDb
+modo::testing::TestPool
 modo::testing::TestRequestBuilder
 modo::testing::TestResponse
 modo::testing::TestSession
 ```
+
+## Additional in-memory / stub backends
+
+The `test-helpers` feature also unlocks these helpers outside `modo::testing`:
+
+| Item                                     | Purpose                                                          |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| `modo::auth::apikey::test::InMemoryBackend` | `ApiKeyBackend` backed by a `Mutex<Vec<ApiKeyRecord>>`.        |
+| `modo::tier::test::StaticTierBackend`    | `TierBackend` that always returns a fixed `TierInfo`.            |
+| `modo::tier::test::FailingTierBackend`   | `TierBackend` that always returns an error (for error paths).   |
+| `modo::embed::test::InMemoryBackend`     | `EmbeddingBackend` that returns a deterministic f32 blob and tracks call count. |
+| `modo::audit::MemoryAuditBackend`        | `AuditLogBackend` capturing entries in memory; pair with `AuditLog::memory()`. |
+| `modo::storage::Storage::memory()`       | `Storage` facade backed by an in-process `MemoryBackend`.        |
+| `modo::storage::Buckets::memory(&["name", ...])` | Named in-memory buckets.                                |
+| `modo::email::Mailer::with_stub_transport(...)` | Mailer using `lettre`'s `AsyncStubTransport`.            |
 
 ---
 
@@ -70,9 +88,46 @@ let db = TestDb::new()
 let db = TestDb::new().await.exec("CREATE TABLE ...").await;
 
 let app = TestApp::builder()
-    .service(db.db())          // handlers extract via Service<Database>
+    .service(db.db())          // handlers extract via modo::service::Service<Database>
     .route("/items", get(list_items))
     .build();
+```
+
+---
+
+## TestPool
+
+In-memory `DatabasePool` for tests that exercise multi-database / shard
+wiring. Both the default database and all shards resolve to `:memory:` — no
+file I/O.
+
+### Construction
+
+```rust
+let pool = TestPool::new().await;
+```
+
+Panics if the pool cannot be created.
+
+### Methods
+
+| Method | Signature                                                       | Description                                                                 |
+| ------ | --------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `new`  | `async fn new() -> Self`                                        | Build a pool whose default and shard databases are all `:memory:`.          |
+| `exec` | `async fn exec(self, shard: Option<&str>, sql: &str) -> Self`   | Run raw SQL against `shard` (or the default when `None`). Chainable.        |
+| `conn` | `async fn conn(&self, shard: Option<&str>) -> Result<Database>` | Get a `Database` handle for the given shard. See `DatabasePool::conn`.      |
+| `pool` | `fn pool(&self) -> DatabasePool`                                | Clone the underlying `DatabasePool` for wiring into app state.              |
+
+### Chaining pattern
+
+```rust
+let pool = TestPool::new()
+    .await
+    .exec(None, "CREATE TABLE items (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+    .await;
+
+let db = pool.conn(None).await.unwrap(); // use as any `Database`
+let _ = pool.pool();                     // clone out for wiring
 ```
 
 ---
@@ -106,7 +161,7 @@ let app = TestApp::from_router(router);
 
 | Method                       | Description                                                     |
 | ---------------------------- | --------------------------------------------------------------- |
-| `service<T>(val: T)`         | Register a value extractable via `modo::extractor::Service<T>`. |
+| `service<T>(val: T)`         | Register a value extractable via `modo::service::Service<T>` (requires `T: Send + Sync + 'static`). |
 | `route(path, method_router)` | Add a route. The `method_router` uses `AppState`.               |
 | `layer(layer)`               | Apply a Tower middleware layer.                                 |
 | `merge(router)`              | Merge a `Router<AppState>` into the test router.                |
@@ -221,19 +276,22 @@ Creates the `sessions` table automatically.
 
 **Custom config:**
 
+Both `SessionConfig` and `CookieConfig` are `#[non_exhaustive]`, so construct
+them via `Default::default()` / `CookieConfig::new()` and then assign the
+fields you want to override.
+
 ```rust
-let session_config = SessionConfig {
-    cookie_name: "my_sess".to_string(),
-    session_ttl_secs: 60,
-    validate_fingerprint: false,
-    ..Default::default()
-};
-let cookie_config = CookieConfig {
-    secret: "a".repeat(64),
-    secure: false,
-    http_only: true,
-    same_site: "lax".to_string(),
-};
+use modo::auth::session::SessionConfig;
+use modo::cookie::CookieConfig;
+
+let mut session_config = SessionConfig::default();
+session_config.cookie_name = "my_sess".to_string();
+session_config.session_ttl_secs = 60;
+session_config.validate_fingerprint = false;
+
+let mut cookie_config = CookieConfig::new("a".repeat(64));
+cookie_config.secure = false; // local HTTP
+
 let session = TestSession::with_config(&db, session_config, cookie_config).await;
 ```
 
@@ -299,7 +357,7 @@ Combines `TestDb`, `TestSession`, and `TestApp` with database-backed handlers:
 use axum::Json;
 use axum::routing::{get, post};
 use modo::db::{ConnExt, ConnQueryExt, Database, FromRow};
-use modo::session::Session;
+use modo::auth::session::Session;
 use modo::testing::{TestApp, TestDb, TestSession};
 use serde::{Deserialize, Serialize};
 
@@ -309,7 +367,7 @@ struct User {
     name: String,
 }
 
-impl modo::Sanitize for User {
+impl modo::sanitize::Sanitize for User {
     fn sanitize(&mut self) {
         modo::sanitize::trim(&mut self.name);
     }
@@ -326,7 +384,7 @@ impl FromRow for User {
 }
 
 async fn list_users(
-    modo::extractor::Service(db): modo::extractor::Service<Database>,
+    modo::service::Service(db): modo::service::Service<Database>,
 ) -> modo::Result<Json<Vec<User>>> {
     let users: Vec<User> = db.conn().query_all(
         "SELECT id, name FROM users",
@@ -337,7 +395,7 @@ async fn list_users(
 
 async fn create_user(
     _session: Session,
-    modo::extractor::Service(db): modo::extractor::Service<Database>,
+    modo::service::Service(db): modo::service::Service<Database>,
     modo::extractor::JsonRequest(input): modo::extractor::JsonRequest<User>,
 ) -> modo::Result<Json<User>> {
     db.conn().execute_raw(
@@ -373,29 +431,23 @@ async fn test_full_app_with_db_and_session() {
 
 ---
 
-## Testing feature-gated modules
+## Running tests
 
-Feature-gated modules (auth, storage, webhooks, dns, geolocation, etc.) require
-specific patterns.
-
-### Running tests
+modo 0.7 ships every module unconditionally. The only feature flag is
+`test-helpers`, which gates the in-memory/stub backends used by tests:
 
 ```bash
-cargo test --features test-helpers       # test-helpers module
-cargo test --features auth               # auth module
-cargo test --features storage,test-helpers       # storage module
-cargo test --features webhooks           # webhooks module
-cargo test --features dns                # dns module
-cargo test --features geolocation        # geolocation module
+cargo test                         # run all tests without test helpers
+cargo test --features test-helpers # include TestDb, TestApp, in-memory backends
 ```
 
 ### Integration test file guard
 
-Every integration test file for a feature-gated module must start with a
-`#![cfg(feature = "X")]` inner attribute:
+Integration tests that rely on `test-helpers` (in-memory backends,
+`TestDb`, `TestApp`, `TestSession`) must be guarded:
 
 ```rust
-#![cfg(feature = "auth")]
+#![cfg(feature = "test-helpers")]
 
 use modo::auth::jwt::{JwtEncoder, HmacSigner};
 // ...
@@ -404,10 +456,10 @@ use modo::auth::jwt::{JwtEncoder, HmacSigner};
 This is required because integration tests in `tests/*.rs` are external crate
 consumers -- there is no `#[cfg(test)]` for them.
 
-### Clippy for feature-gated test code
+### Clippy with test code
 
 ```bash
-cargo clippy --features auth --tests -- -D warnings
+cargo clippy --features test-helpers --tests -- -D warnings
 ```
 
 The `--tests` flag is needed or clippy skips test code entirely.
@@ -489,9 +541,10 @@ let err = result.err().unwrap(); // not .unwrap_err()
 
 ### No self-referencing dev-dependencies
 
-Feature-gated tests use `#![cfg(feature = "X")]` guards and run via
-`cargo test --features X`. Do not add the crate as its own dev-dependency for
-feature-gated tests.
+Integration tests that need in-memory backends guard with
+`#![cfg(feature = "test-helpers")]` and run via
+`cargo test --features test-helpers`. Do not add the crate as its own
+dev-dependency just to enable `test-helpers`.
 
 ### `Cargo.lock` is gitignored
 

@@ -3,7 +3,7 @@ use axum::body::Body;
 use axum::http::Request;
 use axum::routing::get;
 use http::StatusCode;
-use modo::extractor::ClientInfo;
+use modo::ip::ClientInfo;
 use modo::sanitize::Sanitize;
 use modo::service::Registry;
 use serde::Deserialize;
@@ -14,7 +14,7 @@ async fn test_service_extractor_success() {
     #[derive(Debug)]
     struct Greeter(String);
 
-    async fn handler(modo::Service(greeter): modo::Service<Greeter>) -> String {
+    async fn handler(modo::service::Service(greeter): modo::service::Service<Greeter>) -> String {
         greeter.0.clone()
     }
 
@@ -41,7 +41,7 @@ async fn test_service_extractor_missing_returns_500() {
     #[derive(Debug)]
     struct Missing;
 
-    async fn handler(_: modo::Service<Missing>) -> String {
+    async fn handler(_: modo::service::Service<Missing>) -> String {
         "unreachable".to_string()
     }
 

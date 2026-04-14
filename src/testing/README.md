@@ -1,12 +1,12 @@
-# testing
+# modo::testing
 
 Test helpers for building and exercising modo applications in-process.
 
-Requires feature `"test-helpers"`.
+Requires the `test-helpers` feature.
 
 ```toml
 [dev-dependencies]
-modo = { path = ".", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
 ```
 
 ## Key types
@@ -16,6 +16,7 @@ modo = { path = ".", features = ["test-helpers"] }
 | `TestApp` | Assembled test application; send requests via HTTP-method helpers |
 | `TestAppBuilder` | Builder for `TestApp`; register services, routes, and layers |
 | `TestDb` | In-memory SQLite database with chainable `exec` / `migrate` setup |
+| `TestPool` | In-memory `DatabasePool` (default database and shards both `:memory:`) |
 | `TestRequestBuilder` | Fluent builder for a single in-process HTTP request |
 | `TestResponse` | Captured response with status, header, and body accessors |
 | `TestSession` | Session infrastructure: creates the `sessions` table and signs cookies |
@@ -50,7 +51,7 @@ Register services with `.service()` and add middleware with `.layer()`:
 use axum::routing::get;
 use modo::testing::TestApp;
 
-async fn greet(modo::extractor::Service(name): modo::extractor::Service<String>) -> String {
+async fn greet(modo::service::Service(name): modo::service::Service<String>) -> String {
     format!("hello {}", *name)
 }
 
@@ -156,11 +157,33 @@ async fn test_with_migrations() {
 }
 ```
 
+### In-memory database pool
+
+`TestPool` exposes a `DatabasePool` whose default database and all shard
+databases are `:memory:` — useful when exercising multi-database wiring
+without touching the filesystem:
+
+```rust,ignore
+use modo::testing::TestPool;
+
+#[tokio::test]
+async fn test_pool() {
+    let pool = TestPool::new()
+        .await
+        .exec(None, "CREATE TABLE items (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+        .await;
+
+    let db = pool.conn(None).await.unwrap();
+    // use `db` as any `Database` handle
+    let _ = pool.pool(); // clone out the underlying `DatabasePool` for wiring
+}
+```
+
 ### Sessions
 
 ```rust,ignore
 use axum::routing::get;
-use modo::session::Session;
+use modo::auth::session::Session;
 use modo::testing::{TestApp, TestDb, TestSession};
 
 async fn whoami(session: Session) -> String {
@@ -205,7 +228,7 @@ Use `TestSession::with_config()` to supply explicit `SessionConfig` and
 
 ```rust,ignore
 use modo::cookie::CookieConfig;
-use modo::session::SessionConfig;
+use modo::auth::session::SessionConfig;
 use modo::testing::{TestDb, TestSession};
 
 let db = TestDb::new().await;

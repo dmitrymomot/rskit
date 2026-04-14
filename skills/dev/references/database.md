@@ -403,7 +403,7 @@ Opens the default database immediately. Shard databases are opened lazily on fir
 - `None` — returns the default database (instant, no lock).
 - `Some("name")` — returns the cached shard database, opening it on first access at `{base_path}/{name}.db`.
 
-Rejects empty shard names and names containing `/` or `\` (path traversal prevention). Concurrent first-access to the same shard may open duplicate connections; last writer wins (benign — `connect` is idempotent).
+Rejects invalid shard names (empty, starts with `.`, contains `/`, `\`, or `\0`) as 400 errors — path-traversal prevention. Concurrent first-access to the same shard may open duplicate connections; last writer wins (benign — `connect` is idempotent).
 
 ### `ManagedDatabasePool`
 
@@ -577,7 +577,7 @@ Shorthand for `run_vacuum` with the given threshold and default options.
 
 ### `vacuum_handler(threshold_percent: f64) -> VacuumHandler`
 
-Returns a cron handler implementing `CronHandler<(Service<Database>,)>`. Extracts `Service<Database>` from the cron context, calls `run_vacuum`, logs results at `info` level. `VacuumHandler` is public (as return type) but has private fields — construct via `vacuum_handler()` only.
+Returns a cron handler implementing `CronHandler<(Service<Database>,)>`. Extracts `Service<Database>` from the cron context, calls `run_vacuum`, logs results at `info` level. `VacuumHandler` derives `Clone`, is public (as return type) but has private fields — construct via `vacuum_handler()` only.
 
 ```rust
 use modo::cron::Scheduler;

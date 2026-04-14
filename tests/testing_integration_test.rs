@@ -2,8 +2,8 @@
 
 use axum::Json;
 use axum::routing::get;
+use modo::auth::session::Session;
 use modo::db::{ColumnMap, ConnExt, ConnQueryExt, Database, FromRow};
-use modo::session::Session;
 use modo::testing::{TestApp, TestDb, TestSession};
 use serde::{Deserialize, Serialize};
 
@@ -29,7 +29,7 @@ impl modo::sanitize::Sanitize for User {
 
 async fn create_user(
     _session: Session,
-    modo::extractor::Service(db): modo::extractor::Service<Database>,
+    modo::service::Service(db): modo::service::Service<Database>,
     modo::extractor::JsonRequest(input): modo::extractor::JsonRequest<User>,
 ) -> modo::Result<Json<User>> {
     db.conn()
@@ -44,7 +44,7 @@ async fn create_user(
 
 async fn list_users(
     _session: Session,
-    modo::extractor::Service(db): modo::extractor::Service<Database>,
+    modo::service::Service(db): modo::service::Service<Database>,
 ) -> modo::Result<Json<Vec<User>>> {
     let users: Vec<User> = db
         .conn()

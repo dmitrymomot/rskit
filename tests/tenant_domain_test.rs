@@ -1,5 +1,3 @@
-#![cfg(all(feature = "db", feature = "dns"))]
-
 use chrono::Utc;
 use modo::db::{self, ConnExt};
 use modo::dns::DnsConfig;

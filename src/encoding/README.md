@@ -14,8 +14,6 @@ The `base32` and `base64url` submodules each expose an `encode` / `decode` pair.
 The `hex` submodule exposes `encode` (no `decode`) plus a convenience `sha256`
 function.
 
-This module is always available and requires no feature flag.
-
 ## Usage
 
 ### base32

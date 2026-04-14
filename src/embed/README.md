@@ -2,13 +2,7 @@
 
 Text-to-vector embeddings via LLM provider APIs.
 
-## Feature flag
-
-```toml
-modo = { version = "0.6", features = ["text-embedding"] }
-```
-
-Uses `reqwest` for HTTP calls. No new crate dependencies beyond what other consumer features already pull in.
+Uses `reqwest` for HTTP calls.
 
 ## Key types
 

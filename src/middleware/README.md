@@ -1,32 +1,51 @@
 # modo::middleware
 
-HTTP middleware for the modo web framework.
+Universal HTTP middleware for the modo web framework.
 
-A collection of Tower-compatible middleware layers covering common cross-cutting concerns. All items are re-exported from `modo::middleware`.
+A collection of Tower-compatible middleware layers covering common cross-cutting concerns. Always available — no feature flag required. All items are re-exported from `modo::middleware`.
+
+See also the virtual [`modo::middlewares`](../middlewares.rs) flat index, which re-exports both these universal layers and per-domain layers (`session`, `tenant`, `auth`, `flash`, `ip`, `tier`, `geolocation`, `template`) under one namespace for `.layer(...)` call sites.
 
 ## Key Types
+
+### Security
+
+| Item                    | Kind   | Purpose                                     |
+| ----------------------- | ------ | ------------------------------------------- |
+| `cors` / `cors_with`    | fn     | CORS headers — static or dynamic origins    |
+| `subdomains` / `urls`   | fn     | CORS origin predicates                      |
+| `CorsConfig`            | struct | CORS configuration                          |
+| `csrf`                  | fn     | Double-submit signed-cookie CSRF protection |
+| `CsrfConfig`            | struct | CSRF configuration                          |
+| `CsrfToken`             | struct | CSRF token in request/response extensions   |
+| `security_headers`      | fn     | Add security headers to every response      |
+| `SecurityHeadersConfig` | struct | Security headers configuration              |
+
+### Performance & resource control
 
 | Item                             | Kind   | Purpose                                                  |
 | -------------------------------- | ------ | -------------------------------------------------------- |
 | `compression`                    | fn     | Response compression (gzip, deflate, brotli, zstd)       |
-| `request_id`                     | fn     | Set / propagate `x-request-id` (ULID-based)              |
-| `catch_panic`                    | fn     | Convert handler panics into 500 responses                |
-| `tracing`                        | fn     | HTTP request/response lifecycle tracing spans            |
-| `cors` / `cors_with`             | fn     | CORS headers — static or dynamic origins                 |
-| `subdomains` / `urls`            | fn     | CORS origin predicates                                   |
-| `CorsConfig`                     | struct | CORS configuration                                       |
-| `csrf`                           | fn     | Double-submit signed-cookie CSRF protection              |
-| `CsrfConfig`                     | struct | CSRF configuration                                       |
-| `CsrfToken`                      | struct | CSRF token in request/response extensions                |
-| `error_handler`                  | fn     | Centralised error-response rendering                     |
-| `security_headers`               | fn     | Add security headers to every response                   |
-| `SecurityHeadersConfig`          | struct | Security headers configuration                           |
 | `rate_limit` / `rate_limit_with` | fn     | Token-bucket rate limiting                               |
 | `RateLimitConfig`                | struct | Rate-limit configuration                                 |
 | `RateLimitLayer`                 | struct | Tower layer produced by `rate_limit` / `rate_limit_with` |
 | `KeyExtractor`                   | trait  | Custom rate-limit key extraction                         |
 | `PeerIpKeyExtractor`             | struct | Rate-limit key from peer IP                              |
 | `GlobalKeyExtractor`             | struct | Single shared rate-limit bucket                          |
+
+### Observability
+
+| Item         | Kind | Purpose                                       |
+| ------------ | ---- | --------------------------------------------- |
+| `request_id` | fn   | Set / propagate `x-request-id` (ULID-based)   |
+| `tracing`    | fn   | HTTP request/response lifecycle tracing spans |
+
+### Control flow
+
+| Item            | Kind | Purpose                                   |
+| --------------- | ---- | ----------------------------------------- |
+| `catch_panic`   | fn   | Convert handler panics into 500 responses |
+| `error_handler` | fn   | Centralised error-response rendering      |
 
 ## Usage
 

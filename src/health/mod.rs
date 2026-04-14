@@ -19,7 +19,7 @@
 //! # Example
 //!
 //! ```
-//! use modo::HealthChecks;
+//! use modo::health::HealthChecks;
 //! use modo::service::Registry;
 //!
 //! let checks = HealthChecks::new()

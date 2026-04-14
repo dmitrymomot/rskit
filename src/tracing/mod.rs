@@ -13,7 +13,7 @@
 //! | [`Config`] | Log level, output format, and optional Sentry settings |
 //! | [`init`] | Initialises the global tracing subscriber; returns [`TracingGuard`] |
 //! | [`TracingGuard`] | RAII guard that keeps the subscriber (and Sentry client) alive |
-//! | [`SentryConfig`] | Sentry DSN, environment, and sampling rates (requires `sentry` feature) |
+//! | [`SentryConfig`] | Sentry DSN, environment, and sampling rates |
 //! | `info!`, `debug!`, `warn!`, `error!`, `trace!` | Re-exported tracing macros |
 //!
 //! ## Log format
@@ -31,10 +31,20 @@
 //!
 //! ## Sentry integration
 //!
-//! When compiled with the `sentry` feature, populate [`SentryConfig`]
-//! inside [`Config::sentry`] to enable error and performance reporting.
-//! The Sentry SDK is initialised inside [`init`] and flushed when the
-//! [`TracingGuard`] is shut down.
+//! Sentry support is always compiled in. Populate [`SentryConfig`] inside
+//! [`Config::sentry`] with a non-empty DSN to enable error and performance
+//! reporting at runtime. The Sentry SDK is initialised inside [`init`] and
+//! flushed when the [`TracingGuard`] is shut down. When the DSN is empty
+//! or the `sentry` section is omitted, Sentry is silently skipped.
+//!
+//! ## HTTP request spans
+//!
+//! This module only handles *subscriber* setup. HTTP request/response
+//! spans are produced by [`crate::middleware::tracing`], which wires a
+//! `tower_http::trace::TraceLayer` with a `ModoMakeSpan` that pre-declares
+//! a `tenant_id` field (initially empty) so the tenant middleware can
+//! later record it via `span.record("tenant_id", ...)`. Keep all tracing
+//! field names in snake_case.
 //!
 //! ## Quick start
 //!
@@ -57,7 +67,6 @@ mod init;
 mod sentry;
 
 pub use init::{Config, init};
-#[cfg(feature = "sentry")]
 pub use sentry::SentryConfig;
 pub use sentry::TracingGuard;
 

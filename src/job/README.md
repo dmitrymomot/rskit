@@ -1,13 +1,6 @@
-# job
+# modo::job
 
 Durable background job processing backed by SQLite.
-
-Requires feature `"job"` (implies `"db"`):
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["job"] }
-```
 
 ## Overview
 
@@ -151,7 +144,7 @@ registry. The inner value is `Arc<T>`.
 
 ```rust,ignore
 use modo::job::Payload;
-use modo::Service;
+use modo::service::Service;
 use std::sync::Arc;
 use serde::Deserialize;
 

@@ -1,5 +1,3 @@
-#![cfg(feature = "auth")]
-
 use modo::auth::oauth::{CallbackParams, OAuthConfig, OAuthProviderConfig};
 
 #[test]

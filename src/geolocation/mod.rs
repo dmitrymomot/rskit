@@ -2,14 +2,12 @@
 //!
 //! IP-to-location lookup using a MaxMind GeoLite2/GeoIP2 `.mmdb` database.
 //!
-//! Requires feature `"geolocation"`.
-//!
 //! ## Provides
 //!
 //! - [`GeolocationConfig`] — YAML-deserializable config with `mmdb_path`
 //! - [`GeoLocator`] — MaxMind database reader; cheaply cloneable via `Arc`
-//! - [`GeoLayer`] — Tower layer that resolves location per request
-//! - [`GeoMiddleware`](middleware::GeoMiddleware) — Tower service produced by `GeoLayer`
+//! - [`GeoLayer`] — Tower layer that resolves location per request; also
+//!   re-exported as [`modo::middlewares::Geo`](crate::middlewares::Geo)
 //! - [`Location`] — resolved geolocation data; doubles as an axum extractor
 //!
 //! ## Quick start

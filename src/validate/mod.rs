@@ -2,8 +2,6 @@
 //!
 //! Input validation for request data.
 //!
-//! Always available (no feature flag required).
-//!
 //! Provides:
 //! - [`Validator`] — fluent builder that collects per-field validation errors
 //! - [`ValidationError`] — per-field error collection; converts into [`crate::Error`] (HTTP 422)
@@ -17,8 +15,8 @@
 //! `From` impl, producing an HTTP 422 Unprocessable Entity response whose
 //! `details` field contains the per-field error map.
 //!
-//! All three types are re-exported at the crate root as [`crate::Validate`],
-//! [`crate::ValidationError`], and [`crate::Validator`].
+//! All three public items ([`Validate`], [`ValidationError`], [`Validator`])
+//! are re-exported from [`crate::prelude`].
 //!
 //! ## Quick start
 //!

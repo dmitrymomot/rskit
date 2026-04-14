@@ -2,7 +2,7 @@
 
 ## Overview
 
-modo provides database-backed HTTP sessions (libsql/SQLite via `sessions` table), signed cookie utilities, and cookie-based flash messages. Flash and cookie are always available -- no feature flag required. Session requires the `session` feature flag (transitively enables `db`).
+modo provides database-backed HTTP sessions (libsql/SQLite via `sessions` table), signed cookie utilities, and cookie-based flash messages. All three are always available in modo 0.7 — no feature flags required.
 
 ---
 
@@ -57,9 +57,9 @@ None. Use `modo::cookie::CookieConfig`, `modo::cookie::key_from_config`, etc.
 
 ---
 
-## Session (`modo::session`)
+## Session (`modo::auth::session`)
 
-Requires the **`session`** feature flag (transitively enables `db`).
+Always available.
 
 ### SessionConfig
 
@@ -94,7 +94,7 @@ session:
 Low-level libsql/SQLite-backed session store. Wraps a `Database` handle.
 
 ```rust
-use modo::session::{Store, SessionConfig};
+use modo::auth::session::{Store, SessionConfig};
 use modo::db::Database;
 
 let store = Store::new(db, SessionConfig::default());
@@ -153,12 +153,12 @@ pub struct SessionData {
 
 Derives: `Debug`, `Clone`, `Serialize`, `Deserialize`.
 
-### SessionLayer and `session::layer()`
+### SessionLayer and `auth::session::layer()`
 
-Construct the layer with the `session::layer()` function:
+Construct the layer with the `auth::session::layer()` function:
 
 ```rust
-use modo::session::{self, SessionConfig, Store};
+use modo::auth::session::{self, SessionConfig, Store};
 use modo::cookie::{CookieConfig, key_from_config};
 use modo::db::Database;
 
@@ -192,7 +192,7 @@ The middleware lifecycle per request:
 Axum extractor providing access to the current session. Returns `Error::internal` (500) if `SessionLayer` is not applied.
 
 ```rust
-use modo::Session;
+use modo::auth::session::Session; // also: use modo::prelude::*;
 
 async fn handler(session: Session) -> modo::Result<impl IntoResponse> {
     // ...
@@ -311,7 +311,7 @@ Cookie details:
 ### Flash extractor
 
 ```rust
-use modo::Flash;
+use modo::flash::Flash; // also: use modo::prelude::*;
 
 async fn save_handler(flash: Flash) -> Redirect {
     flash.success("Item saved");
@@ -355,17 +355,17 @@ Derives: `Debug`, `Clone`, `PartialEq`, `Serialize`, `Deserialize`.
 
 ### Template integration
 
-When the `templates` feature is enabled, `TemplateContextLayer` injects a `flash_messages()` callable into every MiniJinja template context. Calling it is equivalent to `Flash::messages()` -- it marks messages as consumed and clears the cookie.
+`TemplateContextLayer` injects a `flash_messages()` callable into every MiniJinja template context. Calling it is equivalent to `Flash::messages()` -- it marks messages as consumed and clears the cookie.
 
-### Top-level re-exports
+### Public paths
 
 ```rust
-pub use flash::{Flash, FlashEntry, FlashLayer};
-#[cfg(feature = "session")]
-pub use session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};
+use modo::flash::{Flash, FlashEntry, FlashLayer};
+use modo::auth::session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};
 ```
 
-So `modo::Flash`, `modo::FlashEntry`, `modo::FlashLayer` work directly. `modo::Session`, `modo::SessionLayer`, etc. require the `session` feature flag.
+`Session` and `Flash` are also available via `modo::prelude::*`. The wiring-site
+shortcuts `modo::middlewares::{session, Flash}` are also available.
 
 ---
 
@@ -373,28 +373,26 @@ So `modo::Flash`, `modo::FlashEntry`, `modo::FlashLayer` work directly. `modo::S
 
 1. **Raw `cookie::CookieJar`, not `axum_extra`**: The session and flash middleware use the raw `cookie` crate's `CookieJar` and `SignedJar` internally for cookie signing -- not `axum_extra::extract::cookie::SignedCookieJar`. The `axum_extra` types are re-exported from `modo::cookie` for use in handlers, but the middleware does its own signing.
 
-2. **Session requires `session` feature flag**: The session module is gated behind `#[cfg(feature = "session")]` which transitively enables `db`. Flash and cookie are always available.
+2. **Session, Flash, and cookie are always compiled**: no feature flags in modo 0.7.
 
-3. **Flash is always available**: No feature gate. It is part of the default build.
+3. **`sessions` table schema not shipped**: The `sessions` table schema is not shipped as a migration -- end-apps own their DB schema.
 
-4. **`sessions` table schema not shipped**: The `sessions` table schema is not shipped as a migration -- end-apps own their DB schema.
+4. **`CookieConfig.secret` minimum 64 characters**: `key_from_config()` returns `Error::internal` if shorter.
 
-5. **`CookieConfig.secret` minimum 64 characters**: `key_from_config()` returns `Error::internal` if shorter.
+5. **Session fingerprint validation**: Enabled by default. On mismatch the session is destroyed (possible hijack). Set `validate_fingerprint: false` to disable.
 
-6. **Session fingerprint validation**: Enabled by default. On mismatch the session is destroyed (possible hijack). Set `validate_fingerprint: false` to disable.
+6. **Touch interval**: Sessions are only touched in the DB when `touch_interval_secs` has elapsed since last touch, reducing write load.
 
-7. **Touch interval**: Sessions are only touched in the DB when `touch_interval_secs` has elapsed since last touch, reducing write load.
+7. **Max sessions per user**: When exceeded on `authenticate`/`authenticate_with`, the least-recently-used session is evicted.
 
-8. **Max sessions per user**: When exceeded on `authenticate`/`authenticate_with`, the least-recently-used session is evicted.
+8. **`SessionToken` redacted**: `Debug` prints `"SessionToken(****)"`, `Display` prints `"****"`. Only the SHA-256 hash is stored in the DB -- a database leak cannot forge cookies.
 
-9. **`SessionToken` redacted**: `Debug` prints `"SessionToken(****)"`, `Display` prints `"****"`. Only the SHA-256 hash is stored in the DB -- a database leak cannot forge cookies.
+9. **Flash cookie name is hard-coded**: Always `"flash"`, not configurable. Max-Age is always 300 seconds.
 
-10. **Flash cookie name is hard-coded**: Always `"flash"`, not configurable. Max-Age is always 300 seconds.
+10. **Flash outgoing wins over read**: If a handler both reads incoming messages and writes new ones, only the new outgoing messages are written to the cookie (the old ones are not preserved).
 
-11. **Flash outgoing wins over read**: If a handler both reads incoming messages and writes new ones, only the new outgoing messages are written to the cookie (the old ones are not preserved).
+11. **`SessionState` and `FlashState` are `pub(crate)`**: Not accessible outside the crate. Handlers use the `Session` and `Flash` extractors respectively.
 
-12. **`SessionState` and `FlashState` are `pub(crate)`**: Not accessible outside the crate. Handlers use the `Session` and `Flash` extractors respectively.
+12. **Handler-level `async fn` for axum bounds**: Handler functions inside `#[tokio::test]` closures do not satisfy axum's `Handler` bounds. Define test handlers as module-level `async fn`.
 
-13. **Handler-level `async fn` for axum bounds**: Handler functions inside `#[tokio::test]` closures do not satisfy axum's `Handler` bounds. Define test handlers as module-level `async fn`.
-
-14. **Store takes `Database`, not pools**: `Store::new(db, config)` takes a `Database` handle (which wraps `Arc<Connection>`), not separate read/write pools.
+13. **Store takes `Database`, not pools**: `Store::new(db, config)` takes a `Database` handle (which wraps `Arc<Connection>`), not separate read/write pools.

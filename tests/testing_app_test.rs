@@ -48,7 +48,7 @@ async fn read_header(headers: http::HeaderMap) -> String {
         .to_string()
 }
 
-async fn greet_user(modo::extractor::Service(user): modo::extractor::Service<String>) -> String {
+async fn greet_user(modo::service::Service(user): modo::service::Service<String>) -> String {
     format!("hello {}", *user)
 }
 

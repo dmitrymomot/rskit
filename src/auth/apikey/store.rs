@@ -31,9 +31,8 @@ struct Inner {
 /// # Example
 ///
 /// ```rust,no_run
-/// # #[cfg(feature = "apikey")]
 /// # fn example(db: modo::db::Database) {
-/// use modo::apikey::{ApiKeyConfig, ApiKeyStore};
+/// use modo::auth::apikey::{ApiKeyConfig, ApiKeyStore};
 ///
 /// let store = ApiKeyStore::new(db, ApiKeyConfig::default()).unwrap();
 /// # }

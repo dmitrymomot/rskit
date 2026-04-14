@@ -5,8 +5,10 @@
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Acl {
+    /// Object is private; requires authentication (or a presigned URL) to read.
     #[default]
     Private,
+    /// Object is publicly readable via its public URL.
     PublicRead,
 }
 

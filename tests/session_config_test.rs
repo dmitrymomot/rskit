@@ -1,6 +1,4 @@
-#![cfg(feature = "session")]
-
-use modo::session::SessionConfig;
+use modo::auth::session::SessionConfig;
 
 #[test]
 fn test_default_values() {

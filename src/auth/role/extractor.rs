@@ -5,17 +5,24 @@ use http::request::Parts;
 
 use crate::Error;
 
-/// Extractor that provides access to the resolved role.
+/// Axum extractor that surfaces the resolved role to handlers.
 ///
-/// Pulls the resolved role from request extensions (inserted by RBAC middleware).
-/// Returns 500 if RBAC middleware is not applied — this is a developer misconfiguration.
+/// Pulls the role previously stored in request extensions by the role
+/// [`middleware`](super::middleware()). Extracting as `Role` returns `500` if
+/// the middleware is not applied — this is a developer misconfiguration, not a
+/// user-facing error.
 ///
-/// Use `Option<Role>` for routes that work with or without a role.
+/// Use `Option<Role>` on routes that serve both authenticated and anonymous
+/// callers; `None` is returned when the middleware is absent or the extractor
+/// returned no role.
+///
+/// `Role` is a transparent newtype over `String` and also re-exported from
+/// [`modo::prelude`](crate::prelude) and [`modo::extractors`](crate::extractors).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Role(pub(crate) String);
 
 impl Role {
-    /// Returns the role as a string slice.
+    /// Borrows the role as a string slice.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -36,7 +43,7 @@ impl<S: Send + Sync> FromRequestParts<S> for Role {
             .extensions
             .get::<Role>()
             .cloned()
-            .ok_or_else(|| Error::internal("RBAC middleware not applied"))
+            .ok_or_else(|| Error::internal("role middleware not applied"))
     }
 }
 

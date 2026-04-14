@@ -81,7 +81,7 @@ impl TestAppBuilder {
     /// Register a service value of type `T` in the service registry.
     ///
     /// The value is stored by its concrete type and can be extracted in
-    /// handlers via `modo::extractor::Service<T>`.
+    /// handlers via `modo::service::Service<T>`.
     pub fn service<T: Send + Sync + 'static>(mut self, val: T) -> Self {
         self.registry.add(val);
         self

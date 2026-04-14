@@ -1,4 +1,4 @@
-use crate::extractor::ClientInfo;
+use crate::ip::ClientInfo;
 
 /// An audit event to be recorded.
 ///
@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn client_info_attached() {
-        use crate::extractor::ClientInfo;
+        use crate::ip::ClientInfo;
 
         let info = ClientInfo::new().ip("1.2.3.4").user_agent("Bot/1.0");
         let entry = AuditEntry::new("system", "job.ran", "job", "job_1").client_info(info);
