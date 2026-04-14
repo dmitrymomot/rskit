@@ -353,6 +353,8 @@ Router::new()
 - Update every module-level `//!` doc comment, every `src/**/README.md`, and the root `README.md` to reflect new paths.
 - Update `skills/dev/references/*.md` in the modo-dev skill plugin to use new paths.
 - Bump version to `0.7.0` in `Cargo.toml`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`.
+- Migrate existing tests mechanically alongside the reorg (update `use` paths, drop feature-gate attributes). Do **not** rewrite or delete tests in this release — they are the only safety net proving the reorg preserves behaviour. A dedicated test audit and coverage rewrite is out of scope for 0.7 and lands as a follow-up release.
+- Skills overhaul (the `modo:dev` / `modo:init` / `modo:deploy` plugin skills) is explicitly out of scope for 0.7 and deferred to a separate brainstorming session after 0.7 ships. Any reference to modo paths in those skills will be updated mechanically as part of this release but no structural skill redesign.
 
 ## Rejected alternatives
 
