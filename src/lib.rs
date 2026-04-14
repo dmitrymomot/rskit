@@ -73,6 +73,10 @@ pub mod qrcode;
 
 pub mod prelude;
 
+pub mod extractors;
+pub mod guards;
+pub mod middlewares;
+
 #[cfg(feature = "test-helpers")]
 pub mod testing;
 
