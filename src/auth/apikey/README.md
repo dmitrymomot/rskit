@@ -115,7 +115,7 @@ Apply `require_scope` as a route layer **after** `ApiKeyLayer`:
 
 ```rust,ignore
 use axum::{Router, routing::get};
-use modo::apikey::require_scope;
+use modo::auth::guard::require_scope;
 
 let app: Router = Router::new()
     .route("/orders", get(list_orders))

@@ -37,7 +37,7 @@ impl RoleExtractor for MyExtractor {
 
 ```rust
 use axum::{Router, routing::get};
-use modo::rbac::{self, Role};
+use modo::auth::{guard, role::{self, Role}};
 
 async fn admin_handler(role: Role) -> String {
     format!("hello, {}", role.as_str())
@@ -45,8 +45,8 @@ async fn admin_handler(role: Role) -> String {
 
 let app: Router = Router::new()
     .route("/admin", get(admin_handler))
-    .route_layer(rbac::require_role(["admin", "owner"]))
-    .layer(rbac::middleware(MyExtractor));
+    .route_layer(guard::require_role(["admin", "owner"]))
+    .layer(role::middleware(MyExtractor));
 ```
 
 The RBAC middleware must be applied with `.layer()` on the outer router so it runs
@@ -58,19 +58,19 @@ extensions.
 
 ```rust
 use axum::{Router, routing::get};
-use modo::rbac;
+use modo::auth::{guard, role};
 
 let settings = Router::new()
     .route("/general", get(|| async { "ok" }))
     .route(
         "/danger-zone",
-        get(|| async { "ok" }).route_layer(rbac::require_role(["owner"])),
+        get(|| async { "ok" }).route_layer(guard::require_role(["owner"])),
     )
-    .route_layer(rbac::require_role(["owner", "admin"]));
+    .route_layer(guard::require_role(["owner", "admin"]));
 
 let app: Router = Router::new()
     .nest("/settings", settings)
-    .layer(rbac::middleware(MyExtractor));
+    .layer(role::middleware(MyExtractor));
 ```
 
 ### Optional role in handlers

@@ -123,8 +123,7 @@ pub use auth::apikey::{
     ApiKeyBackend, ApiKeyConfig, ApiKeyCreated, ApiKeyLayer, ApiKeyMeta, ApiKeyRecord, ApiKeyStore,
     CreateKeyRequest,
 };
-// NOTE: require_scope will move to auth::guard in Task 7
-pub use auth::apikey::require_scope;
+pub use auth::guard::{require_authenticated, require_role, require_scope};
 
 pub use tier::{
     FeatureAccess, TierBackend, TierInfo, TierLayer, TierResolver, require_feature, require_limit,

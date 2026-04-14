@@ -24,7 +24,8 @@
 //! | Type | Purpose |
 //! |------|---------|
 //! | [`ApiKeyLayer`] | Tower layer that verifies API keys on incoming requests |
-//! | [`require_scope`] | Tower layer factory that enforces a required scope on verified keys |
+//!
+//! Route-level scope gating (`require_scope`) lives in [`crate::auth::guard`].
 //!
 //! ### Data types
 //!
@@ -44,7 +45,8 @@
 //! ## Quick start
 //!
 //! ```rust,no_run
-//! use modo::auth::apikey::{ApiKeyConfig, ApiKeyStore, ApiKeyLayer, CreateKeyRequest, require_scope};
+//! use modo::auth::apikey::{ApiKeyConfig, ApiKeyStore, ApiKeyLayer, CreateKeyRequest};
+//! use modo::auth::guard::require_scope;
 //! use axum::{Router, routing::get};
 //! # fn example(db: modo::db::Database) {
 //!
@@ -63,7 +65,6 @@ mod backend;
 mod config;
 mod extractor;
 mod middleware;
-mod scope;
 pub(crate) mod sqlite;
 mod store;
 mod token;
@@ -72,7 +73,6 @@ mod types;
 pub use backend::ApiKeyBackend;
 pub use config::ApiKeyConfig;
 pub use middleware::ApiKeyLayer;
-pub use scope::require_scope;
 pub use store::ApiKeyStore;
 pub use types::{ApiKeyCreated, ApiKeyMeta, ApiKeyRecord, CreateKeyRequest};
 

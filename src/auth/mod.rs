@@ -36,6 +36,7 @@
 
 pub mod apikey;
 pub mod backup;
+pub mod guard;
 pub mod jwt;
 pub mod otp;
 pub mod password;

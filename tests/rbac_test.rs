@@ -2,6 +2,7 @@ use axum::Router;
 use axum::body::Body;
 use axum::routing::get;
 use http::{Request, StatusCode};
+use modo::auth::guard;
 use modo::auth::role::{self, Role, RoleExtractor};
 use modo::service::Registry;
 use tower::ServiceExt;
@@ -48,7 +49,7 @@ async fn optional_role_handler(role: Option<Role>) -> String {
 async fn rbac_middleware_with_require_role_passes() {
     let app = Router::new()
         .route("/admin", get(ok_handler))
-        .route_layer(role::require_role(["admin"]))
+        .route_layer(guard::require_role(["admin"]))
         .layer(role::middleware(StaticRoleExtractor {
             role: "admin".into(),
         }))
@@ -65,7 +66,7 @@ async fn rbac_middleware_with_require_role_passes() {
 async fn rbac_middleware_with_require_role_rejects_wrong_role() {
     let app = Router::new()
         .route("/admin", get(ok_handler))
-        .route_layer(role::require_role(["admin"]))
+        .route_layer(guard::require_role(["admin"]))
         .layer(role::middleware(StaticRoleExtractor {
             role: "viewer".into(),
         }))
@@ -82,7 +83,7 @@ async fn rbac_middleware_with_require_role_rejects_wrong_role() {
 async fn rbac_middleware_unauthenticated_returns_401() {
     let app = Router::new()
         .route("/admin", get(ok_handler))
-        .route_layer(role::require_authenticated())
+        .route_layer(guard::require_authenticated())
         .layer(role::middleware(FailExtractor))
         .with_state(Registry::new().into_state());
 
@@ -103,9 +104,9 @@ async fn nested_guards_owner_accesses_all() {
         .route("/general", get(ok_handler))
         .route(
             "/danger-zone",
-            get(ok_handler).route_layer(role::require_role(["owner"])),
+            get(ok_handler).route_layer(guard::require_role(["owner"])),
         )
-        .route_layer(role::require_role(["owner", "admin"]));
+        .route_layer(guard::require_role(["owner", "admin"]));
 
     let app = Router::new()
         .nest("/settings", settings)
@@ -144,9 +145,9 @@ async fn nested_guards_admin_blocked_from_owner_only() {
         .route("/general", get(ok_handler))
         .route(
             "/danger-zone",
-            get(ok_handler).route_layer(role::require_role(["owner"])),
+            get(ok_handler).route_layer(guard::require_role(["owner"])),
         )
-        .route_layer(role::require_role(["owner", "admin"]));
+        .route_layer(guard::require_role(["owner", "admin"]));
 
     let app = Router::new()
         .nest("/settings", settings)
