@@ -413,4 +413,52 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         assert!(!called.load(Ordering::SeqCst));
     }
+
+    // --- require_scope tests ---
+
+    fn meta_with_scopes(scopes: &[&str]) -> ApiKeyMeta {
+        ApiKeyMeta {
+            id: "01HX".into(),
+            tenant_id: "t".into(),
+            name: "test key".into(),
+            scopes: scopes.iter().map(|s| (*s).into()).collect(),
+            expires_at: None,
+            last_used_at: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn require_scope_passes_when_scope_present() {
+        let layer = require_scope("read:orders");
+        let svc = layer.layer(tower::service_fn(ok_handler));
+
+        let mut req = Request::builder().body(Body::empty()).unwrap();
+        req.extensions_mut()
+            .insert(meta_with_scopes(&["read:orders", "write:orders"]));
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn require_scope_403_when_scope_absent() {
+        let layer = require_scope("admin:all");
+        let svc = layer.layer(tower::service_fn(ok_handler));
+
+        let mut req = Request::builder().body(Body::empty()).unwrap();
+        req.extensions_mut()
+            .insert(meta_with_scopes(&["read:orders"]));
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn require_scope_500_when_apikey_meta_missing() {
+        let layer = require_scope("read:orders");
+        let svc = layer.layer(tower::service_fn(ok_handler));
+
+        let req = Request::builder().body(Body::empty()).unwrap();
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
 }
