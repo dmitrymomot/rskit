@@ -2,7 +2,7 @@
 
 use modo::audit::{AuditEntry, AuditLog, AuditRepo};
 use modo::db::CursorRequest;
-use modo::extractor::ClientInfo;
+use modo::ip::ClientInfo;
 use modo::testing::TestDb;
 
 const SCHEMA: &str = "\

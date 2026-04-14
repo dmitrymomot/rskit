@@ -87,10 +87,9 @@ pub use embed::{
     MistralEmbedding, OpenAIConfig, OpenAIEmbedding, VoyageConfig, VoyageEmbedding, from_f32_blob,
     to_f32_blob,
 };
-pub use extractor::ClientInfo;
 pub use flash::{Flash, FlashEntry, FlashLayer};
 pub use health::{HealthCheck, HealthChecks};
-pub use ip::{ClientIp, ClientIpLayer};
+pub use ip::{ClientInfo, ClientIp, ClientIpLayer};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
 pub use service::Service;

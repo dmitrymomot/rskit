@@ -13,7 +13,7 @@ use crate::ip::ClientIp;
 /// For non-HTTP contexts (background jobs, CLI tools), use the builder:
 ///
 /// ```
-/// use modo::extractor::ClientInfo;
+/// use modo::ip::ClientInfo;
 ///
 /// let info = ClientInfo::new()
 ///     .ip("1.2.3.4")

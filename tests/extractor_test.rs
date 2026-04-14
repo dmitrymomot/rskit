@@ -3,7 +3,7 @@ use axum::body::Body;
 use axum::http::Request;
 use axum::routing::get;
 use http::StatusCode;
-use modo::extractor::ClientInfo;
+use modo::ip::ClientInfo;
 use modo::sanitize::Sanitize;
 use modo::service::Registry;
 use serde::Deserialize;

@@ -17,7 +17,6 @@
 //! | [`Query<T>`] | URL query string | `T: DeserializeOwned + Sanitize` |
 //! | [`MultipartRequest<T>`] | `multipart/form-data` body | `T: DeserializeOwned + Sanitize` |
 //! | [`Path`] | URL path parameters | `T: DeserializeOwned` |
-//! | [`ClientInfo`] | Client IP, user-agent, fingerprint | — |
 //!
 //! ## Multipart helpers
 //!
@@ -27,7 +26,6 @@
 //! | [`Files`] | Map of field names to uploaded files |
 //! | [`UploadValidator`] | Fluent size/content-type validator for [`UploadedFile`] |
 
-mod client_info;
 mod form;
 mod json;
 mod multipart;
@@ -35,7 +33,6 @@ mod query;
 mod upload_validator;
 
 pub use axum::extract::Path;
-pub use client_info::ClientInfo;
 pub use form::FormRequest;
 pub use json::JsonRequest;
 pub use multipart::{Files, MultipartRequest, UploadedFile};
