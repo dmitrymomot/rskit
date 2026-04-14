@@ -2,8 +2,6 @@
 //!
 //! MiniJinja-based template rendering for modo.
 //!
-//! Requires the **`templates`** feature flag.
-//!
 //! This module provides an opinionated template layer built on top of
 //! [MiniJinja](https://docs.rs/minijinja). It covers:
 //!
@@ -22,7 +20,7 @@
 //! | [`QueryParamResolver`]      | Resolves the active locale from a URL query parameter. |
 //! | [`CookieResolver`]          | Resolves the active locale from a cookie. |
 //! | [`AcceptLanguageResolver`]  | Resolves the active locale from the `Accept-Language` header. |
-//! | `SessionResolver`           | Resolves the active locale from session data (requires the **`session`** feature). |
+//! | `SessionResolver`           | Resolves the active locale from session data. |
 //!
 //! # Quick start
 //!

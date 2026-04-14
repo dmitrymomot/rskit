@@ -1,7 +1,5 @@
 //! QR code generation with customizable SVG output.
 //!
-//! Requires feature `"qrcode"`.
-//!
 //! Generates QR codes from any string and renders them as SVG with
 //! configurable module shapes, finder shapes, and colors. Primary use
 //! case is TOTP authenticator enrollment, but the module is

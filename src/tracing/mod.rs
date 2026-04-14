@@ -13,7 +13,7 @@
 //! | [`Config`] | Log level, output format, and optional Sentry settings |
 //! | [`init`] | Initialises the global tracing subscriber; returns [`TracingGuard`] |
 //! | [`TracingGuard`] | RAII guard that keeps the subscriber (and Sentry client) alive |
-//! | [`SentryConfig`] | Sentry DSN, environment, and sampling rates (requires `sentry` feature) |
+//! | [`SentryConfig`] | Sentry DSN, environment, and sampling rates |
 //! | `info!`, `debug!`, `warn!`, `error!`, `trace!` | Re-exported tracing macros |
 //!
 //! ## Log format

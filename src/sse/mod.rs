@@ -5,13 +5,6 @@
 //!
 //! # Quick start
 //!
-//! Enable the `sse` feature in your `Cargo.toml`:
-//!
-//! ```toml
-//! [dependencies]
-//! modo = { version = "0.6", features = ["sse"] }
-//! ```
-//!
 //! ## Stream from a broadcast channel
 //!
 //! ```

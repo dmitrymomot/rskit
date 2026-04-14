@@ -2,13 +2,6 @@
 //!
 //! Prefixed API key issuance, verification, scoping, and lifecycle management.
 //!
-//! Requires feature `"apikey"` (depends on `"db"`).
-//!
-//! ```toml
-//! [dependencies]
-//! modo = { version = "0.6", features = ["apikey"] }
-//! ```
-//!
 //! ## Provides
 //!
 //! ### Core

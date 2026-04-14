@@ -2,8 +2,6 @@
 //!
 //! JWT authentication — token encoding, decoding, middleware, and revocation.
 //!
-//! Requires feature `"auth"`.
-//!
 //! ## Provides
 //!
 //! | Type | Purpose |

@@ -2,13 +2,6 @@
 //!
 //! Text-to-vector embeddings via LLM provider APIs.
 //!
-//! Requires feature `"text-embedding"`.
-//!
-//! ```toml
-//! [dependencies]
-//! modo = { version = "0.6", features = ["text-embedding"] }
-//! ```
-//!
 //! Provides:
 //!
 //! - [`EmbeddingProvider`] — concrete wrapper for any embedding backend

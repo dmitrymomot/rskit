@@ -1,4 +1,4 @@
-//! # Session
+//! # modo::auth::session
 //!
 //! Database-backed HTTP session management.
 //!
@@ -8,8 +8,6 @@
 //! loading and fingerprint-validating the session, running the handler, and
 //! then flushing dirty data or touching the expiry timestamp before writing the
 //! `Set-Cookie` header on the response path.
-//!
-//! Requires the **`session`** feature flag (transitively enables `db`).
 //!
 //! # Provides
 //!

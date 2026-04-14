@@ -2,13 +2,6 @@
 //!
 //! Tier-based feature gating for SaaS applications.
 //!
-//! Requires feature `"tier"`.
-//!
-//! ```toml
-//! [dependencies]
-//! modo = { version = "0.6", features = ["tier"] }
-//! ```
-//!
 //! ## Provides
 //!
 //! - [`TierBackend`] — trait for pluggable tier resolution (app implements)
@@ -31,7 +24,7 @@
 //!     .route("/settings/domain", get(|| async { "ok" }))
 //!     .route_layer(require_feature("custom_domain"))
 //!     .layer(TierLayer::new(resolver, |parts| {
-//!         parts.extensions.get::<modo::TenantId>().map(|id| id.as_str().to_owned())
+//!         parts.extensions.get::<modo::tenant::TenantId>().map(|id| id.as_str().to_owned())
 //!     }));
 //! # }
 //! ```

@@ -2,8 +2,6 @@
 //!
 //! Type-map service registry and axum application state.
 //!
-//! Always available — no feature flag required.
-//!
 //! Provides:
 //! - [`Registry`] — mutable builder used at startup to register services by type.
 //!   Implements `Default`.

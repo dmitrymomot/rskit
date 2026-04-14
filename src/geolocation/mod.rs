@@ -2,8 +2,6 @@
 //!
 //! IP-to-location lookup using a MaxMind GeoLite2/GeoIP2 `.mmdb` database.
 //!
-//! Requires feature `"geolocation"`.
-//!
 //! ## Provides
 //!
 //! - [`GeolocationConfig`] — YAML-deserializable config with `mmdb_path`

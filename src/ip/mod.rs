@@ -2,12 +2,12 @@
 //!
 //! Client IP extraction with trusted proxy support.
 //!
-//! Always available (no feature flag required).
-//!
 //! Provides:
 //! - [`ClientIp`] — axum extractor wrapping `std::net::IpAddr`
+//! - [`ClientInfo`] — structured client metadata (IP, user-agent, etc.) inserted
+//!   into request extensions by [`ClientIpLayer`]
 //! - [`ClientIpLayer`] — Tower layer that resolves the client IP and inserts
-//!   [`ClientIp`] into request extensions
+//!   [`ClientIp`] / [`ClientInfo`] into request extensions
 //! - [`extract_client_ip`] — low-level resolution function (headers + trusted
 //!   proxies + fallback)
 //!
