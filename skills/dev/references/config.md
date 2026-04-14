@@ -158,9 +158,9 @@ Single-connection libsql config. No connection pool -- `connect()` opens one con
 | -------- | ---------------------- | ---------- | -------------------------------------------------- |
 | `level`  | `String`               | `"info"`   | Min log level (overridden by `RUST_LOG` env var)   |
 | `format` | `String`               | `"pretty"` | `"pretty"`, `"json"`, or compact (any other value) |
-| `sentry` | `Option<SentryConfig>` | `None`     | Sentry settings (requires `sentry` feature)        |
+| `sentry` | `Option<SentryConfig>` | `None`     | Sentry settings (Sentry tracing is always compiled) |
 
-**`SentryConfig`** (`#[non_exhaustive]`, feature-gated under `sentry`): `dsn: String` (default `""`), `environment: String` (default `config::env()`), `sample_rate: f32` (default `1.0`), `traces_sample_rate: f32` (default `0.1`).
+**`SentryConfig`** (`#[non_exhaustive]`): `dsn: String` (default `""`), `environment: String` (default `config::env()`), `sample_rate: f32` (default `1.0`), `traces_sample_rate: f32` (default `0.1`).
 
 ### `tracing::init()` and `TracingGuard`
 
@@ -383,7 +383,7 @@ These activate the parent feature for integration tests:
 
 6. **`load()` is not async** -- it reads the file synchronously with `std::fs::read_to_string`. Call it at startup before entering the async runtime's hot path.
 
-7. **`database`, `session`, `job` are feature-gated** -- these fields only exist on `Config` when their respective features (`db`, `session`, `job`) are enabled. `db` is a default feature. Unknown YAML keys are silently ignored by serde, so the YAML can contain sections for disabled features without error.
+7. **All config sections are always present on `Config`** — modo 0.7 compiles every module unconditionally, so `database`, `session`, `job`, etc. are available on every build. Unknown YAML keys are silently ignored by serde.
 
 8. **`max_sessions_per_user` must be > 0** -- deserialization fails if set to `0` (custom deserializer rejects it to prevent locking out all users).
 

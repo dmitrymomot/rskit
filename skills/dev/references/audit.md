@@ -1,26 +1,19 @@
 # Audit
 
-Explicit audit logging for business-significant actions. Feature-gated under `db` (default).
+Explicit audit logging for business-significant actions. Always available.
 
-```toml
-# Cargo.toml — db is a default feature, no extra config needed
-modo = { path = ".." }
-```
-
-All types are re-exported from the crate root under `#[cfg(feature = "db")]`:
+Import types from `modo::audit`:
 
 ```rust
-use modo::{
+use modo::audit::{
     AuditEntry, AuditLog, AuditLogBackend, AuditRecord, AuditRepo,
 };
 ```
 
-`ClientInfo` is always available (no feature gate):
+`ClientInfo` lives in `modo::ip`:
 
 ```rust
-use modo::ClientInfo;
-// or
-use modo::extractor::ClientInfo;
+use modo::ip::ClientInfo;
 ```
 
 `MemoryAuditBackend` is only available under `#[cfg(test)]` or `feature = "test-helpers"`:

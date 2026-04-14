@@ -1,12 +1,13 @@
-# Auth Reference (OAuth2, JWT, Password, TOTP, RBAC)
+# Auth Reference (OAuth2, JWT, Password, TOTP, Role-Based Gating)
 
-OAuth2, JWT, password hashing, OTP, TOTP, and backup codes are feature-gated under `auth`. RBAC is always available (no feature gate).
+All identity and access features live under `modo::auth` and are always
+available — there are no per-module feature flags in modo 0.7.
 
 ---
 
 ## OAuth2
 
-**Module:** `modo::auth::oauth` (re-exported at crate root under `#[cfg(feature = "auth")]`)
+**Module:** `modo::auth::oauth`
 
 ### OAuthProvider trait
 
@@ -110,10 +111,10 @@ oauth:
     }
     ```
 
-### Crate root re-exports (under `#[cfg(feature = "auth")]`)
+### Imports
 
 ```rust
-pub use auth::oauth::{
+use modo::auth::oauth::{
     AuthorizationRequest, CallbackParams, GitHub, Google, OAuthConfig,
     OAuthProvider, OAuthProviderConfig, OAuthState, UserProfile,
 };
@@ -123,7 +124,7 @@ pub use auth::oauth::{
 
 ## Password Hashing
 
-**Module:** `modo::auth::password` (feature-gated under `auth`)
+**Module:** `modo::auth::password`
 
 Argon2id password hashing and verification. Runs on a blocking thread via `tokio::task::spawn_blocking` to avoid starving the async runtime.
 
@@ -155,13 +156,13 @@ pub async fn hash(password: &str, config: &PasswordConfig) -> Result<String>
 pub async fn verify(password: &str, hash: &str) -> Result<bool>
 ```
 
-Re-exported at `modo::auth::PasswordConfig` (via `pub use password::PasswordConfig` in `auth/mod.rs`). Not re-exported at the crate root.
+`PasswordConfig` is also re-exported as `modo::auth::PasswordConfig`.
 
 ---
 
 ## OTP (One-Time Passwords)
 
-**Module:** `modo::auth::otp` (feature-gated under `auth`)
+**Module:** `modo::auth::otp`
 
 Numeric one-time password generation and constant-time verification.
 
@@ -180,7 +181,7 @@ pub fn verify(code: &str, hash: &str) -> bool
 
 ## TOTP (Time-Based OTP)
 
-**Module:** `modo::auth::totp` (feature-gated under `auth`)
+**Module:** `modo::auth::totp`
 
 RFC 6238 TOTP authenticator compatible with Google Authenticator, Authy, etc.
 
@@ -220,13 +221,13 @@ pub fn otpauth_uri(&self, issuer: &str, account: &str) -> String // otpauth://to
 
 Verification uses constant-time comparison.
 
-Re-exported at `modo::auth::Totp`, `modo::auth::TotpConfig` (via `pub use totp::{Totp, TotpConfig}` in `auth/mod.rs`). Not re-exported at the crate root.
+Also re-exported as `modo::auth::Totp` and `modo::auth::TotpConfig`.
 
 ---
 
 ## Backup Recovery Codes
 
-**Module:** `modo::auth::backup` (feature-gated under `auth`)
+**Module:** `modo::auth::backup`
 
 One-time backup recovery codes formatted as `xxxx-xxxx` (8 lowercase alphanumeric characters).
 
@@ -246,7 +247,7 @@ pub fn verify(code: &str, hash: &str) -> bool
 
 ## JWT
 
-**Module:** `modo::auth::jwt` (re-exported at crate root under `#[cfg(feature = "auth")]`)
+**Module:** `modo::auth::jwt`
 
 ### JwtConfig
 
@@ -475,10 +476,10 @@ Variants and codes:
 | `SigningFailed`         | `jwt:signing_failed`          | 500         |
 | `SerializationFailed`   | `jwt:serialization_failed`    | 500         |
 
-### Crate root re-exports (under `#[cfg(feature = "auth")]`)
+### Imports
 
 ```rust
-pub use auth::jwt::{
+use modo::auth::jwt::{
     Bearer, Claims, HmacSigner, JwtConfig, JwtDecoder, JwtEncoder, JwtError,
     JwtLayer, Revocation, TokenSigner, TokenSource, TokenVerifier, ValidationConfig,
 };
@@ -505,11 +506,14 @@ Available at `modo::auth::jwt::{BearerSource, QuerySource, CookieSource, HeaderS
 
 ---
 
-## RBAC
+## Role-Based Gating
 
-**Module:** `modo::rbac` (always available, no feature gate)
+**Modules:** `modo::auth::role` (extractor + role middleware) and
+`modo::auth::guard` (route-level guard layers).
 
-Re-exported at crate root: `modo::Role`, `modo::RoleExtractor`.
+Also available via the flat aggregators: `modo::middlewares::role`,
+`modo::guards::{require_role, require_authenticated, require_scope}`.
+`Role` is preluded as `modo::prelude::Role`.
 
 ### RoleExtractor trait
 
@@ -533,14 +537,14 @@ Takes `&mut Parts` so it can call axum extractors (e.g., `Session`) internally. 
 pub struct Role(pub(crate) String);
 ```
 
-Axum `FromRequestParts` extractor. Reads from request extensions (inserted by RBAC middleware). Returns 500 if RBAC middleware not applied. Implements `OptionalFromRequestParts` for `Option<Role>`.
+Axum `FromRequestParts` extractor. Reads from request extensions (inserted by the role middleware). Returns 500 if `auth::role::middleware()` is not applied. Implements `OptionalFromRequestParts` for `Option<Role>`.
 
 Methods: `.as_str() -> &str`, `Deref<Target = str>`.
 
-### RBAC middleware
+### Role middleware
 
 ```rust
-rbac::middleware(extractor: impl RoleExtractor) -> RbacLayer<R>
+auth::role::middleware(extractor: impl RoleExtractor) -> RoleLayer<R>
 ```
 
 Tower layer. Calls `extractor.extract()` on every request, inserts `Role` into extensions, forwards to inner service. Errors from the extractor are converted to HTTP responses immediately.
@@ -550,8 +554,8 @@ Apply with `.layer()` on the outer router.
 ### Guard layers
 
 ```rust
-rbac::require_role(roles: impl IntoIterator<Item = impl Into<String>>) -> RequireRoleLayer
-rbac::require_authenticated() -> RequireAuthenticatedLayer
+auth::guard::require_role(roles: impl IntoIterator<Item = impl Into<String>>) -> RequireRoleLayer
+auth::guard::require_authenticated() -> RequireAuthenticatedLayer
 ```
 
 Apply with `.route_layer()` (after route matching).
@@ -570,12 +574,14 @@ Apply with `.route_layer()` (after route matching).
 ### Wiring order
 
 ```rust
+use modo::auth::{guard, role};
+
 let app: Router = Router::new()
     .route("/admin", get(admin_handler))
-    .route_layer(rbac::require_role(["admin", "owner"]))  // guard runs after route match
+    .route_layer(guard::require_role(["admin", "owner"]))   // guard runs after route match
     .route("/dashboard", get(dashboard_handler))
-    .route_layer(rbac::require_authenticated())            // any role suffices
-    .layer(rbac::middleware(MyExtractor));                  // runs first, extracts role
+    .route_layer(guard::require_authenticated())             // any role suffices
+    .layer(role::middleware(MyExtractor));                    // runs first, extracts role
 ```
 
 ---
@@ -609,8 +615,8 @@ The JWT module follows this pattern consistently -- all `JwtError` variants prod
 - `RoleExtractor` is RPITIT (not object-safe). Never use `dyn RoleExtractor`.
 - `Revocation` and `TokenSource` are object-safe -- use `Arc<dyn Revocation>` and `Arc<dyn TokenSource>`.
 - `TokenVerifier` and `TokenSigner` are object-safe -- use `Arc<dyn TokenVerifier>` and `Arc<dyn TokenSigner>`.
-- OAuth and JWT require feature `auth` in `Cargo.toml`. RBAC has no feature gate.
-- RBAC middleware must apply via `.layer()` on the outer router. Guards must apply via `.route_layer()` after route matching.
+- All auth modules are always compiled in modo 0.7 — no feature flags in `Cargo.toml`.
+- The role middleware must apply via `.layer()` on the outer router. Guards must apply via `.route_layer()` after route matching.
 - `JwtDecoder::decode()` always requires `exp` -- tokens without `exp` are rejected as expired.
 - `OAuthState` extractor requires `Key` (from `axum_extra::extract::cookie`) registered in the `Registry`.
 - `Claims<T>` requires `JwtLayer<T>` to be applied to the route -- the middleware inserts claims into extensions. `T` must be `Clone + Send + Sync + 'static`.

@@ -1,35 +1,21 @@
 # QR Code Generation (`modo::qrcode`)
 
-Feature gate: `qrcode`. Add `templates` alongside it for the MiniJinja template function.
+Always available.
 
 Source: `src/qrcode/`.
 
-## Feature flag
-
-```toml
-[features]
-qrcode = ["dep:fast_qr"]
-```
-
-With template support (requires both features):
-
-```toml
-qrcode = ["dep:fast_qr"]
-templates = ["dep:minijinja", ...]
-```
-
 ## Public API
 
-Re-exported at crate root when the `qrcode` feature is enabled:
+Import from `modo::qrcode`:
 
 ```rust
-pub use qrcode::{Color, Ecl, FinderShape, ModuleShape, QrCode, QrError, QrStyle};
+use modo::qrcode::{Color, Ecl, FinderShape, ModuleShape, QrCode, QrError, QrStyle};
 ```
 
-With both `qrcode` and `templates` features:
+The MiniJinja template helper is also exposed:
 
 ```rust
-pub use qrcode::qr_svg_function;
+use modo::qrcode::qr_svg_function;
 ```
 
 ---

@@ -1,19 +1,18 @@
 # Tier
 
-Plan-based feature gating for SaaS applications. Feature-gated under `tier` (no dependencies).
+Plan-based feature gating for SaaS applications. Always available.
 
-```toml
-modo = { version = "0.6", features = ["tier"] }
-```
-
-All types are re-exported from the crate root under `#[cfg(feature = "tier")]`:
+Import directly from `modo::tier`:
 
 ```rust
-use modo::{
+use modo::tier::{
     FeatureAccess, TierBackend, TierInfo, TierLayer, TierResolver,
     require_feature, require_limit,
 };
 ```
+
+Wiring-site shortcuts are also available: `modo::middlewares::Tier`,
+`modo::guards::require_feature`, `modo::guards::require_limit`.
 
 Test backends are available under `#[cfg(test)]` or `feature = "test-helpers"`:
 

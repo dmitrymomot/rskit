@@ -299,7 +299,7 @@ Combines `TestDb`, `TestSession`, and `TestApp` with database-backed handlers:
 use axum::Json;
 use axum::routing::{get, post};
 use modo::db::{ConnExt, ConnQueryExt, Database, FromRow};
-use modo::session::Session;
+use modo::auth::session::Session;
 use modo::testing::{TestApp, TestDb, TestSession};
 use serde::{Deserialize, Serialize};
 
@@ -309,7 +309,7 @@ struct User {
     name: String,
 }
 
-impl modo::Sanitize for User {
+impl modo::sanitize::Sanitize for User {
     fn sanitize(&mut self) {
         modo::sanitize::trim(&mut self.name);
     }
@@ -373,29 +373,23 @@ async fn test_full_app_with_db_and_session() {
 
 ---
 
-## Testing feature-gated modules
+## Running tests
 
-Feature-gated modules (auth, storage, webhooks, dns, geolocation, etc.) require
-specific patterns.
-
-### Running tests
+modo 0.7 ships every module unconditionally. The only feature flag is
+`test-helpers`, which gates the in-memory/stub backends used by tests:
 
 ```bash
-cargo test --features test-helpers       # test-helpers module
-cargo test --features auth               # auth module
-cargo test --features storage,test-helpers       # storage module
-cargo test --features webhooks           # webhooks module
-cargo test --features dns                # dns module
-cargo test --features geolocation        # geolocation module
+cargo test                         # run all tests without test helpers
+cargo test --features test-helpers # include TestDb, TestApp, in-memory backends
 ```
 
 ### Integration test file guard
 
-Every integration test file for a feature-gated module must start with a
-`#![cfg(feature = "X")]` inner attribute:
+Integration tests that rely on `test-helpers` (in-memory backends,
+`TestDb`, `TestApp`, `TestSession`) must be guarded:
 
 ```rust
-#![cfg(feature = "auth")]
+#![cfg(feature = "test-helpers")]
 
 use modo::auth::jwt::{JwtEncoder, HmacSigner};
 // ...
@@ -404,10 +398,10 @@ use modo::auth::jwt::{JwtEncoder, HmacSigner};
 This is required because integration tests in `tests/*.rs` are external crate
 consumers -- there is no `#[cfg(test)]` for them.
 
-### Clippy for feature-gated test code
+### Clippy with test code
 
 ```bash
-cargo clippy --features auth --tests -- -D warnings
+cargo clippy --features test-helpers --tests -- -D warnings
 ```
 
 The `--tests` flag is needed or clippy skips test code entirely.
@@ -489,9 +483,10 @@ let err = result.err().unwrap(); // not .unwrap_err()
 
 ### No self-referencing dev-dependencies
 
-Feature-gated tests use `#![cfg(feature = "X")]` guards and run via
-`cargo test --features X`. Do not add the crate as its own dev-dependency for
-feature-gated tests.
+Integration tests that need in-memory backends guard with
+`#![cfg(feature = "test-helpers")]` and run via
+`cargo test --features test-helpers`. Do not add the crate as its own
+dev-dependency just to enable `test-helpers`.
 
 ### `Cargo.lock` is gitignored
 

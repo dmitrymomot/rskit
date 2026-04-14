@@ -1,22 +1,21 @@
 # Templates (MiniJinja, i18n, HTMX)
 
-Feature flag: `templates`
-
-Re-exports from `modo::template` (also available at crate root under `#[cfg(feature = "templates")]`):
+Always available — import directly from `modo::template`:
 
 ```rust
-pub use template::{
+use modo::template::{
     Engine, EngineBuilder, HxRequest, Renderer, TemplateConfig, TemplateContext,
     TemplateContextLayer,
 };
 ```
 
-Locale resolvers are re-exported from the `template` module only:
+Locale resolvers are re-exported from `modo::template`:
 
 ```rust
-pub use locale::{AcceptLanguageResolver, CookieResolver, LocaleResolver, QueryParamResolver};
-#[cfg(feature = "session")]
-pub use locale::SessionResolver;
+use modo::template::locale::{
+    AcceptLanguageResolver, CookieResolver, LocaleResolver, QueryParamResolver,
+    SessionResolver,
+};
 ```
 
 The `context!` macro from MiniJinja is also re-exported: `modo::template::context`.

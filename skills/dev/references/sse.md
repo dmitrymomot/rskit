@@ -1,10 +1,10 @@
 # Server-Sent Events (SSE)
 
-Feature-gated under `sse`. Module: `src/sse/`.
+Always available. Module: `src/sse/`.
 
 ## Public API
 
-All types re-exported from `modo::sse::*`:
+All types live under `modo::sse::*`:
 
 | Type                 | Purpose                                                                                                  |
 | -------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -18,7 +18,7 @@ All types re-exported from `modo::sse::*`:
 | `SseConfig`          | Keep-alive configuration (deserializable from YAML)                                                      |
 | `replay()`           | Convert a `Vec<T>` into a stream for reconnection replay                                                 |
 
-Note: `modo::sse` is not re-exported at the crate root. Import as `modo::sse::{Broadcaster, Event, ...}`.
+Import as `modo::sse::{Broadcaster, Event, ...}`. `LastEventId` is also exposed via `modo::extractors::LastEventId`.
 
 ## Broadcaster
 

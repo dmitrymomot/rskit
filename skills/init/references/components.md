@@ -62,7 +62,7 @@ async fn main() -> Result<()> {
 
     // 5. Session store
     let session_store =
-        modo::session::Store::new(db.clone(), config.modo.session.clone());
+        modo::auth::session::Store::new(db.clone(), config.modo.session.clone());
 
     // === COMPONENT INIT BLOCKS GO HERE ===
 
@@ -86,9 +86,9 @@ async fn main() -> Result<()> {
         .layer(modo::middleware::cors(&config.modo.cors))
         .layer(modo::middleware::csrf(&config.modo.csrf, &cookie_key))
         // === COMPONENT MIDDLEWARE LAYERS GO HERE ===
-        .layer(modo::session::layer(session_store, cookie_config, &cookie_key))
-        .layer(modo::FlashLayer::new(cookie_config, &cookie_key))
-        .layer(modo::ClientIpLayer::new())
+        .layer(modo::auth::session::layer(session_store, cookie_config, &cookie_key))
+        .layer(modo::flash::FlashLayer::new(cookie_config, &cookie_key))
+        .layer(modo::ip::ClientIpLayer::new())
         .layer(rate_limit_layer);
 
     // === BACKGROUND WORKERS GO HERE ===
@@ -307,7 +307,7 @@ Insert these at the correct position in the middleware chain:
 .merge(engine.static_service())
 
 // After CSRF, before session layer
-.layer(modo::TemplateContextLayer::new(engine))
+.layer(modo::template::TemplateContextLayer::new(engine))
 ```
 
 ### Config YAML (development)
@@ -739,7 +739,7 @@ dns:
 
 ```rust
 // Geolocation
-let geo_locator = modo::GeoLocator::from_config(&config.modo.geolocation)?;
+let geo_locator = modo::geolocation::GeoLocator::from_config(&config.modo.geolocation)?;
 registry.add(geo_locator.clone());
 ```
 
@@ -748,7 +748,7 @@ registry.add(geo_locator.clone());
 Insert after FlashLayer, before ClientIpLayer:
 
 ```rust
-.layer(modo::GeoLayer::new(geo_locator))
+.layer(modo::geolocation::GeoLayer::new(geo_locator))
 ```
 
 ClientIpLayer MUST be applied after (below) GeoLayer because GeoLayer depends on `ClientIp` being in the request extensions.
@@ -1053,30 +1053,30 @@ mod tenant;
 
 ---
 
-## RBAC
+## Role-Based Gating
 
-**No feature flag** — always available.
+Always available — no feature flag.
 
 ### Notes
 
-RBAC requires the user to implement the `RoleExtractor` trait. Generate a placeholder:
+Role-based gating requires the user to implement the `RoleExtractor` trait. Generate a placeholder:
 
 **src/rbac.rs:**
 ```rust
 #![allow(unused)]
 
-use modo::rbac::RoleExtractor;
+use modo::auth::role::RoleExtractor;
 use modo::Result;
 
 /// Extracts the current user's role from the request.
 /// Typically reads from the session or a JWT claim.
 ///
 /// After implementing, apply the middleware globally:
-///   .layer(modo::rbac::middleware(AppRoleExtractor))
+///   .layer(modo::auth::role::middleware(AppRoleExtractor))
 ///
 /// Then protect routes with guards:
-///   .route_layer(modo::rbac::require_authenticated())
-///   .route_layer(modo::rbac::require_role(["admin"]))
+///   .route_layer(modo::auth::guard::require_authenticated())
+///   .route_layer(modo::auth::guard::require_role(["admin"]))
 pub struct AppRoleExtractor;
 
 // Uncomment and implement:

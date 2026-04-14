@@ -2,10 +2,10 @@
 
 ## Modules
 
-- `modo::job` -- durable SQLite-backed job queue (feature-gated: `#[cfg(feature = "job")]`, depends on `db`)
-- `modo::cron` -- in-process cron scheduler (always available, no feature gate)
+- `modo::job` -- durable SQLite-backed job queue
+- `modo::cron` -- in-process cron scheduler
 
-Both modules are re-exported at the crate root as `pub mod job` and `pub mod cron`.
+Both modules are always available (no feature flags).
 
 ---
 
@@ -27,7 +27,7 @@ Built-in extractors:
 
 ```rust
 use modo::job::{Payload, Meta};
-use modo::Service;
+use modo::extractor::Service;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -211,7 +211,7 @@ Built-in extractors (via `FromCronContext`):
 
 ```rust
 use modo::cron::Meta;
-use modo::Service;
+use modo::extractor::Service;
 
 async fn cleanup_expired(
     meta: Meta,

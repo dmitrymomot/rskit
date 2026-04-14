@@ -27,43 +27,21 @@ edition = "2024"
 rust-version = "1.92"
 
 [dependencies]
-modo = { package = "modo-rs", version = "0.6", features = [{{features}}] }
+modo = { package = "modo-rs", version = "0.7" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.6", features = [{{features_with_test_helpers}}] }
+modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
 ```
 
-### Feature mapping
+### Feature flags
 
-Build the `features` list from selected components:
-
-| Component        | Feature string      |
-|------------------|---------------------|
-| Database         | `"db"` (default)    |
-| Session          | `"session"`         |
-| Jobs             | `"job"`             |
-| Templates        | `"templates"`       |
-| Auth             | `"auth"`            |
-| Email            | `"email"`           |
-| Storage          | `"storage"`         |
-| SSE              | `"sse"`             |
-| Webhooks         | `"webhooks"`        |
-| DNS              | `"dns"`             |
-| Geolocation      | `"geolocation"`     |
-| QR Codes         | `"qrcode"`          |
-| Sentry           | `"sentry"`          |
-| API Keys         | `"apikey"`          |
-| Text Embeddings  | `"text-embedding"`  |
-| Tier / Feature Gates | `"tier"`        |
-
-If ALL of these are selected, use `"full"` instead of listing them individually.
-
-For dev-dependencies, append `"test-helpers"`, `"session"`, and `"job"` to the features list.
-
-Cron, Multi-tenancy, and RBAC do NOT require feature flags. Database (`"db"`) is a default feature. Session (used by core) requires `"session"` — always include it.
+modo 0.7 ships every module unconditionally — there are no per-module feature
+flags. The only feature is `test-helpers`, enabled in `[dev-dependencies]` to
+expose in-memory backends (`TestDb`, `TestApp`, `TestSession`, …) for
+integration tests.
 
 ---
 

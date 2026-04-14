@@ -1,23 +1,18 @@
 # Geolocation
 
-MaxMind GeoIP2/GeoLite2 location lookup with Tower middleware. Feature-gated under `geolocation`.
-
-## Feature flag
-
-```toml
-# Cargo.toml
-geolocation = ["dep:maxminddb"]
-```
+MaxMind GeoIP2/GeoLite2 location lookup with Tower middleware. Always available.
 
 Depends on `maxminddb` 0.27.
 
-## Re-exports
+## Imports
 
-All public types are re-exported at the crate root when the feature is enabled:
+All public types live in `modo::geolocation`:
 
 ```rust
-use modo::{GeoLocator, GeoLayer, GeolocationConfig, Location};
+use modo::geolocation::{GeoLocator, GeoLayer, GeolocationConfig, Location};
 ```
+
+`modo::middlewares::Geo` is the wiring-site shortcut for `GeoLayer`.
 
 ## GeolocationConfig
 

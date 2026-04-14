@@ -73,12 +73,13 @@ cargo clippy -- -D warnings
 cargo test
 ```
 
-If working with feature-gated modules, include the feature flag:
+When writing tests that use in-memory backends (`TestDb`, `TestApp`,
+`TestSession`, stub senders, etc.), enable the `test-helpers` feature:
 
 ```bash
-cargo check --features <feature>
-cargo clippy --features <feature> --tests -- -D warnings
-cargo test --features <feature>
+cargo check --features test-helpers
+cargo clippy --features test-helpers --tests -- -D warnings
+cargo test --features test-helpers
 ```
 
 Fix any errors or warnings before marking the work complete.
@@ -94,10 +95,9 @@ modo is a single Rust crate with zero proc macros. Everything is explicit:
 - **Middleware** is standard Tower layers applied via `.layer()` on the router.
 - **Config** loads from YAML files with `${VAR}` / `${VAR:default}` env var substitution.
 
-Optional modules are behind feature flags (`db` [default], `session`, `job`,
-`auth`, `templates`, `sse`, `email`, `storage`, `webhooks`,
-`dns`, `geolocation`, `qrcode`, `sentry`, `apikey`, `tier`, `test-helpers`). Core modules
-(flash, RBAC, cron, cache, encoding, tenant, IP) are always available.
+Every module is always compiled — modo 0.7 has a single feature flag,
+`test-helpers`, enabled in `[dev-dependencies]` to expose in-memory backends
+(`TestDb`, `TestApp`, `TestSession`, …) to integration tests.
 
 ## Minimal App Wiring Pattern
 
@@ -113,9 +113,10 @@ Every modo app follows this structure in `main()`:
 
 Middleware layer order (innermost to outermost, matching `.layer()` call order):
 `error_handler` -> `catch_panic` -> `tracing` -> `request_id` -> `compression` ->
-`security_headers` -> `cors` -> `csrf` -> session -> `FlashLayer` ->
-`ClientIpLayer` -> `rate_limit`. Optional layers (`TemplateContextLayer`,
-`GeoLayer`) slot in at their documented positions.
+`security_headers` -> `cors` -> `csrf` -> `auth::session::layer` -> `flash::FlashLayer` ->
+`ip::ClientIpLayer` -> `rate_limit`. Optional layers
+(`template::TemplateContextLayer`, `geolocation::GeoLayer`) slot in at their
+documented positions.
 
 ## Error Handling Patterns
 
@@ -128,15 +129,17 @@ modo uses a single `modo::Error` type everywhere. Key patterns:
 
 For middleware/guard errors, always use `Error::into_response()` — never construct raw HTTP responses.
 
-## Working with Feature-Gated Modules
+## Working with `test-helpers`
 
-When the task involves a feature-gated module:
+The `test-helpers` feature gates every in-memory/stub backend modo ships
+(`TestDb`, `TestApp`, `TestSession`, `InMemoryBackend`, stub senders, …).
 
-1. Verify the feature is enabled in `Cargo.toml`
-2. Read the module's reference file for exact API and gotchas
-3. Use `#[cfg(feature = "X")]` guards on any code that depends on the feature
-4. Integration test files need `#![cfg(feature = "X")]` as the first line
-5. Run tests with `cargo test --features X` and lint with `cargo clippy --features X --tests`
+1. Read the module's reference file for the exact API and gotchas.
+2. Enable `test-helpers` in `[dev-dependencies]`.
+3. Integration test files that use those backends guard with
+   `#![cfg(feature = "test-helpers")]` on the first line.
+4. Run tests with `cargo test --features test-helpers` and lint with
+   `cargo clippy --features test-helpers --tests`.
 
 ## Key Conventions
 
@@ -157,11 +160,11 @@ All paths are relative to the `references/` directory inside this skill folder.
 | Task                                                                                                | Read                        |
 | --------------------------------------------------------------------------------------------------- | --------------------------- |
 | File organization, error handling, extractors, response types, service registry, IDs, health checks | `references/conventions.md` |
-| YAML config, env var substitution, feature flags                                                    | `references/config.md`      |
+| YAML config, env var substitution                                                                   | `references/config.md`      |
 | Database: libsql (SQLite), Database handle, ConnExt/ConnQueryExt traits                             | `references/database.md`    |
 | Handlers, routing, axum Router, middleware (rate limit, CORS, tracing)                              | `references/handlers.md`    |
 | Sessions, cookies, flash messages                                                                   | `references/sessions.md`    |
-| OAuth2, JWT, password hashing, OTP, TOTP, backup codes, RBAC                                        | `references/auth.md`        |
+| OAuth2, JWT, password hashing, OTP, TOTP, backup codes, role-based gating                           | `references/auth.md`        |
 | Background jobs, cron scheduling                                                                    | `references/jobs.md`        |
 | Multi-tenancy (subdomain, header, path, custom)                                                     | `references/tenant.md`      |
 | MiniJinja templates, i18n, HTMX support                                                             | `references/templates.md`   |
@@ -195,7 +198,7 @@ then domain-specific files add the module details.
 | SSE real-time updates                       | `conventions.md` -> `handlers.md` -> `sse.md`                             |
 | Full-stack feature (DB -> API -> job -> email) | `conventions.md` -> `database.md` -> `handlers.md` -> `jobs.md` -> `email.md` |
 | API key protected endpoints                    | `conventions.md` -> `handlers.md` -> `apikey.md`                               |
-| Feature-gated SaaS routes                      | `conventions.md` -> `handlers.md` -> `tier.md`                                 |
+| Tier-gated SaaS routes                         | `conventions.md` -> `handlers.md` -> `tier.md`                                 |
 
 ## Relationship to CLAUDE.md
 

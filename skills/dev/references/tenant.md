@@ -2,9 +2,9 @@
 
 Module: `src/tenant/` | Always available (no feature gate)
 
-Re-exported from `modo`: `HasTenantId`, `Tenant`, `TenantId`, `TenantLayer`, `TenantResolver`, `TenantStrategy`, `tenant_middleware`.
+Import types from `modo::tenant`: `HasTenantId`, `Tenant`, `TenantId`, `TenantLayer`, `TenantResolver`, `TenantStrategy`, `middleware` (the free function — also available as `modo::middlewares::tenant`).
 
-Domain submodule re-exports (requires `#[cfg(all(feature = "db", feature = "dns"))]`): `ClaimStatus`, `DomainClaim`, `DomainService`, `TenantMatch`.
+Domain submodule exports: `modo::tenant::domain::{ClaimStatus, DomainClaim, DomainService, TenantMatch}`.
 
 ## Overview
 
@@ -124,7 +124,7 @@ Implements `FromRequestParts`, `OptionalFromRequestParts`, `Deref<Target = T>`, 
 
 ## Domain submodule (`tenant::domain`)
 
-Feature gate: `#[cfg(all(feature = "db", feature = "dns"))]`
+Always available.
 
 Provides domain claim registration, DNS-based verification, and domain-to-tenant lookups.
 

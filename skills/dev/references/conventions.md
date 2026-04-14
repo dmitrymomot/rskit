@@ -54,16 +54,21 @@ src/
     router.rs           # router() -> Router<AppState>
 ```
 
-`lib.rs` re-exports key types at crate root for convenience:
+`lib.rs` re-exports only a minimal set of identity types at the crate root:
 
 ```rust
+pub use config::Config;
 pub use error::{Error, Result};
-pub use extractor::ClientInfo;
-pub use extractor::Service;
-pub use health::{HealthCheck, HealthChecks};
-pub use sanitize::Sanitize;
-pub use validate::{Validate, ValidationError, Validator};
 ```
+
+All other types live under their module path. `modo::prelude::*` brings in the
+ambient extractors reached for in almost every handler
+(`Error`, `Result`, `AppState`, `Role`, `Session`, `Flash`, `ClientIp`,
+`Tenant`, `TenantId`, `Validate`, `ValidationError`, `Validator`).
+
+Flat aggregators: `modo::extractors`, `modo::middlewares`, `modo::guards`
+re-export every extractor / Tower Layer / route guard modo ships for ergonomic
+wiring.
 
 External crates re-exported for user convenience:
 
@@ -375,7 +380,7 @@ file.validate()
 ## Sanitize
 
 **Module:** `src/sanitize/`
-**Re-export:** `modo::Sanitize`
+**Import:** `modo::sanitize::Sanitize`
 
 ### `Sanitize` trait
 
@@ -424,7 +429,7 @@ fn normalize_email(s: &mut String)             // trim + lowercase + strip +tag
 ## Validate
 
 **Module:** `src/validate/`
-**Re-exports:** `modo::Validate`, `modo::ValidationError`, `modo::Validator`
+**Imports:** `modo::validate::{Validate, ValidationError, Validator}` (also `modo::prelude::*`)
 
 ### `Validate` trait
 
@@ -683,7 +688,7 @@ if let Some(data) = cache.get(&"session_abc") {
 
 **Module:** `src/health/`
 Always available, no feature flag.
-**Re-exports:** `modo::HealthCheck`, `modo::HealthChecks`
+**Imports:** `modo::health::{HealthCheck, HealthChecks}`
 
 Provides liveness and readiness probe endpoints for Kubernetes-style health checks.
 
@@ -700,9 +705,9 @@ pub trait HealthCheck: Send + Sync + 'static {
 }
 ```
 
-Built-in implementations (behind feature flags):
+Built-in implementations:
 
-- `db::Database` (feature `db`) -- executes `SELECT 1` to verify database connectivity
+- `db::Database` -- executes `SELECT 1` to verify database connectivity
 
 ### `HealthChecks`
 

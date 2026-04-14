@@ -1,23 +1,18 @@
 # Webhooks
 
-Outbound webhook delivery with Standard Webhooks signing. Feature-gated under `webhooks`.
+Outbound webhook delivery with Standard Webhooks signing. Always available.
 
-```toml
-# Cargo.toml
-modo = { path = "..", features = ["webhooks"] }
-```
-
-All types are re-exported from the crate root under `#[cfg(feature = "webhooks")]`:
+Import types from `modo::webhook`:
 
 ```rust
-use modo::{
+use modo::webhook::{
     SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender,
 };
 ```
 
 Source: `src/webhook/` (mod.rs, client.rs, sender.rs, secret.rs, signature.rs).
 
-Free functions `sign`, `verify`, `sign_headers`, `verify_headers` are exported from the `webhook` module but **not** re-exported at the crate root. Access them via:
+Free functions `sign`, `verify`, `sign_headers`, `verify_headers` are available at:
 
 ```rust
 use modo::webhook::{sign, verify, sign_headers, verify_headers};

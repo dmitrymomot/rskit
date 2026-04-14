@@ -1,20 +1,15 @@
 # DNS Verification
 
-Feature flag: `dns`
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["dns"] }
-```
+Always available — no feature flag.
 
 DNS-based domain ownership verification via raw UDP queries. Used in custom-domain flows where a user must prove they control a domain before activation.
 
 ## Public API
 
-Re-exported at crate root when the `dns` feature is enabled:
+Import from `modo::dns`:
 
 ```rust
-pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};
+use modo::dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};
 ```
 
 ---

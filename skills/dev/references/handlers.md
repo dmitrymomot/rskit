@@ -6,7 +6,7 @@ Handlers in modo are plain `async fn` -- no macros, no attribute annotations, no
 
 ```rust
 use axum::Json;
-use modo::Service;
+use modo::extractor::Service;
 
 // A handler is just an async function.
 async fn list_items(Service(db): Service<DbPool>) -> Json<Vec<Item>> {
@@ -286,7 +286,7 @@ Note: `field_name` is retained for configuration compatibility but is **not curr
 `ClientIp` is an axum extractor that reads the resolved IP from request extensions (inserted by `ClientIpLayer`):
 
 ```rust
-use modo::ClientIp;
+use modo::ip::ClientIp; // also: use modo::prelude::*;
 
 async fn handler(ClientIp(ip): ClientIp) -> String {
     ip.to_string()
@@ -308,7 +308,7 @@ Resolution order:
 5. `127.0.0.1` if nothing is available.
 
 ```rust
-use modo::ClientIpLayer;
+use modo::ip::ClientIpLayer;
 
 // No trusted proxies -- headers trusted unconditionally
 let layer = ClientIpLayer::new();
