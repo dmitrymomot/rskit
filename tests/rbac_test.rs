@@ -2,7 +2,7 @@ use axum::Router;
 use axum::body::Body;
 use axum::routing::get;
 use http::{Request, StatusCode};
-use modo::rbac::{self, Role, RoleExtractor};
+use modo::auth::role::{self, Role, RoleExtractor};
 use modo::service::Registry;
 use tower::ServiceExt;
 
@@ -48,8 +48,8 @@ async fn optional_role_handler(role: Option<Role>) -> String {
 async fn rbac_middleware_with_require_role_passes() {
     let app = Router::new()
         .route("/admin", get(ok_handler))
-        .route_layer(rbac::require_role(["admin"]))
-        .layer(rbac::middleware(StaticRoleExtractor {
+        .route_layer(role::require_role(["admin"]))
+        .layer(role::middleware(StaticRoleExtractor {
             role: "admin".into(),
         }))
         .with_state(Registry::new().into_state());
@@ -65,8 +65,8 @@ async fn rbac_middleware_with_require_role_passes() {
 async fn rbac_middleware_with_require_role_rejects_wrong_role() {
     let app = Router::new()
         .route("/admin", get(ok_handler))
-        .route_layer(rbac::require_role(["admin"]))
-        .layer(rbac::middleware(StaticRoleExtractor {
+        .route_layer(role::require_role(["admin"]))
+        .layer(role::middleware(StaticRoleExtractor {
             role: "viewer".into(),
         }))
         .with_state(Registry::new().into_state());
@@ -82,8 +82,8 @@ async fn rbac_middleware_with_require_role_rejects_wrong_role() {
 async fn rbac_middleware_unauthenticated_returns_401() {
     let app = Router::new()
         .route("/admin", get(ok_handler))
-        .route_layer(rbac::require_authenticated())
-        .layer(rbac::middleware(FailExtractor))
+        .route_layer(role::require_authenticated())
+        .layer(role::middleware(FailExtractor))
         .with_state(Registry::new().into_state());
 
     let resp = app
@@ -103,13 +103,13 @@ async fn nested_guards_owner_accesses_all() {
         .route("/general", get(ok_handler))
         .route(
             "/danger-zone",
-            get(ok_handler).route_layer(rbac::require_role(["owner"])),
+            get(ok_handler).route_layer(role::require_role(["owner"])),
         )
-        .route_layer(rbac::require_role(["owner", "admin"]));
+        .route_layer(role::require_role(["owner", "admin"]));
 
     let app = Router::new()
         .nest("/settings", settings)
-        .layer(rbac::middleware(StaticRoleExtractor {
+        .layer(role::middleware(StaticRoleExtractor {
             role: "owner".into(),
         }))
         .with_state(Registry::new().into_state());
@@ -144,13 +144,13 @@ async fn nested_guards_admin_blocked_from_owner_only() {
         .route("/general", get(ok_handler))
         .route(
             "/danger-zone",
-            get(ok_handler).route_layer(rbac::require_role(["owner"])),
+            get(ok_handler).route_layer(role::require_role(["owner"])),
         )
-        .route_layer(rbac::require_role(["owner", "admin"]));
+        .route_layer(role::require_role(["owner", "admin"]));
 
     let app = Router::new()
         .nest("/settings", settings)
-        .layer(rbac::middleware(StaticRoleExtractor {
+        .layer(role::middleware(StaticRoleExtractor {
             role: "admin".into(),
         }))
         .with_state(Registry::new().into_state());
@@ -187,7 +187,7 @@ async fn nested_guards_admin_blocked_from_owner_only() {
 async fn handler_reads_role() {
     let app = Router::new()
         .route("/whoami", get(role_handler))
-        .layer(rbac::middleware(StaticRoleExtractor {
+        .layer(role::middleware(StaticRoleExtractor {
             role: "editor".into(),
         }))
         .with_state(Registry::new().into_state());
@@ -212,7 +212,7 @@ async fn handler_reads_role() {
 async fn optional_role_some_when_middleware_applied() {
     let app = Router::new()
         .route("/check", get(optional_role_handler))
-        .layer(rbac::middleware(StaticRoleExtractor {
+        .layer(role::middleware(StaticRoleExtractor {
             role: "admin".into(),
         }))
         .with_state(Registry::new().into_state());

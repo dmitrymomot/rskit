@@ -47,7 +47,6 @@ pub mod validate;
 
 pub mod cron;
 pub mod job;
-pub mod rbac;
 pub mod tenant;
 
 pub mod embed;
@@ -79,6 +78,7 @@ pub use config::Config;
 pub use error::{Error, Result};
 
 pub use audit::{AuditEntry, AuditLog, AuditLogBackend, AuditRecord, AuditRepo};
+pub use auth::role::{Role, RoleExtractor};
 pub use auth::session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};
 pub use embed::{
     EmbeddingBackend, EmbeddingProvider, GeminiConfig, GeminiEmbedding, MistralConfig,
@@ -88,7 +88,6 @@ pub use embed::{
 pub use flash::{Flash, FlashEntry, FlashLayer};
 pub use health::{HealthCheck, HealthChecks};
 pub use ip::{ClientInfo, ClientIp, ClientIpLayer};
-pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
 pub use service::Service;
 pub use tenant::{

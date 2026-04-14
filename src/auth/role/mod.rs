@@ -1,8 +1,8 @@
-//! # modo::rbac
+//! # modo::auth::role
 //!
-//! Role-based access control (RBAC) for axum applications.
+//! Role-based access control for axum applications.
 //!
-//! RBAC is roles-only — permission checks beyond "does this role match?" belong
+//! Roles-only — permission checks beyond "does this role match?" belong
 //! in handler logic.
 //!
 //! Provides:
@@ -15,13 +15,13 @@
 //!
 //! # Wiring order
 //!
-//! The RBAC middleware must be applied with `.layer()` on the outer router so it runs
+//! The role middleware must be applied with `.layer()` on the outer router so it runs
 //! before any guard. Guards must be applied with `.route_layer()` so they execute after
 //! route matching and can find the `Role` already in extensions.
 //!
 //! ```rust,no_run
 //! use axum::{Router, routing::get};
-//! use modo::rbac::{self, RoleExtractor};
+//! use modo::auth::role::{self, RoleExtractor};
 //! use modo::Result;
 //!
 //! struct MyExtractor;
@@ -34,8 +34,8 @@
 //!
 //! let app: Router = Router::new()
 //!     .route("/admin", get(|| async { "ok" }))
-//!     .route_layer(rbac::require_role(["admin", "owner"]))
-//!     .layer(rbac::middleware(MyExtractor));
+//!     .route_layer(role::require_role(["admin", "owner"]))
+//!     .layer(role::middleware(MyExtractor));
 //! ```
 
 mod extractor;

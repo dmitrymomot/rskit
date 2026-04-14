@@ -39,6 +39,7 @@ pub mod backup;
 pub mod jwt;
 pub mod otp;
 pub mod password;
+pub mod role;
 pub mod session;
 pub mod totp;
 
