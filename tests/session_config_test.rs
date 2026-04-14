@@ -1,5 +1,3 @@
-#![cfg(feature = "session")]
-
 use modo::session::SessionConfig;
 
 #[test]

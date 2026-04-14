@@ -157,7 +157,6 @@ where
                 }
 
                 // tier info (if tier feature enabled and TierInfo in extensions)
-                #[cfg(feature = "tier")]
                 if let Some(tier_info) = parts.extensions.get::<crate::tier::TierInfo>() {
                     ctx.set("tier_name", minijinja::Value::from(tier_info.name.clone()));
 
@@ -413,7 +412,6 @@ mod tests {
         assert!(flash_state.was_read());
     }
 
-    #[cfg(feature = "tier")]
     mod tier_tests {
         use super::*;
         use std::collections::HashMap;

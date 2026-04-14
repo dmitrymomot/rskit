@@ -1,5 +1,3 @@
-#![cfg(feature = "session")]
-
 use modo::db::{self, ConnExt};
 use modo::session::meta::SessionMeta;
 use modo::session::{SessionConfig, Store};

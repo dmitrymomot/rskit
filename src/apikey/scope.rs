@@ -19,7 +19,6 @@ use super::types::ApiKeyMeta;
 /// # Example
 ///
 /// ```rust,no_run
-/// # #[cfg(feature = "apikey")]
 /// # fn example() {
 /// use axum::Router;
 /// use axum::routing::get;

@@ -47,7 +47,7 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --features full,test-helpers --tests -- -D warnings
+      - run: cargo clippy --features test-helpers --tests -- -D warnings
 
   test:
     name: Test
@@ -58,39 +58,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --features full,test-helpers
-
-  test-minimal:
-    name: Test (default features)
-    needs: changes
-    if: needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo check
-      - run: cargo test
-
-  test-features:
-    name: Test (${{ matrix.feature }})
-    needs: changes
-    if: needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        feature: [auth, templates, sse, email, storage, webhooks, dns, geolocation, sentry, test-helpers, session, job, apikey, qrcode, text-embedding]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Test
-        run: cargo test --features ${{ matrix.feature }}
+      - run: cargo test --features test-helpers
 
   publish:
     name: Publish to crates.io
-    needs: [changes, fmt, lint, test, test-minimal, test-features]
+    needs: [changes, fmt, lint, test]
     if: >-
       always()
       && github.ref == 'refs/heads/main'

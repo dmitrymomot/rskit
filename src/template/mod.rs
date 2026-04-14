@@ -55,7 +55,6 @@ pub use config::TemplateConfig;
 pub use context::TemplateContext;
 pub use engine::{Engine, EngineBuilder};
 pub use htmx::HxRequest;
-#[cfg(feature = "session")]
 pub use locale::SessionResolver;
 pub use locale::{AcceptLanguageResolver, CookieResolver, LocaleResolver, QueryParamResolver};
 pub use middleware::TemplateContextLayer;

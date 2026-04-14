@@ -31,7 +31,6 @@ struct Inner {
 /// # Example
 ///
 /// ```rust,no_run
-/// # #[cfg(feature = "apikey")]
 /// # fn example(db: modo::db::Database) {
 /// use modo::apikey::{ApiKeyConfig, ApiKeyStore};
 ///

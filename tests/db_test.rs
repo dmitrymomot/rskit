@@ -1,5 +1,3 @@
-#![cfg(feature = "db")]
-
 use std::collections::HashMap;
 
 use http::StatusCode;

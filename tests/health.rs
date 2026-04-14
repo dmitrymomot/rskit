@@ -1,5 +1,3 @@
-#![cfg(feature = "db")]
-
 use axum::Router;
 use axum::body::Body;
 use http::{Request, StatusCode};

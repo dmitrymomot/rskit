@@ -1,5 +1,3 @@
-#![cfg(feature = "job")]
-
 use modo::Service;
 use modo::error::Result;
 use modo::job::{JobHandler, Meta, Payload};

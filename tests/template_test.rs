@@ -1,5 +1,3 @@
-#![cfg(feature = "templates")]
-
 use axum::{Router, body::Body, routing::get};
 use http::{Request, StatusCode};
 use modo::service::Registry;

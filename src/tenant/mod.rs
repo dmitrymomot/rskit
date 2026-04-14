@@ -69,7 +69,6 @@
 //!     .layer(middleware(subdomain("example.com"), MyResolver));
 //! ```
 
-#[cfg(all(feature = "db", feature = "dns"))]
 pub mod domain;
 
 mod extractor;

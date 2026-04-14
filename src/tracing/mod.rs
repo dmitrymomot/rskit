@@ -57,7 +57,6 @@ mod init;
 mod sentry;
 
 pub use init::{Config, init};
-#[cfg(feature = "sentry")]
 pub use sentry::SentryConfig;
 pub use sentry::TracingGuard;
 

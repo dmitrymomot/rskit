@@ -1,5 +1,3 @@
-#![cfg(feature = "session")]
-
 use axum::Router;
 use axum::body::Body;
 use axum::http::Request;

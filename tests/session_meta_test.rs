@@ -1,5 +1,3 @@
-#![cfg(feature = "session")]
-
 use http::HeaderMap;
 use modo::ip::extract_client_ip;
 use modo::session::meta::{SessionMeta, header_str};

@@ -1,5 +1,3 @@
-#![cfg(feature = "qrcode")]
-
 use modo::qrcode::{Color, Ecl, FinderShape, ModuleShape, QrCode, QrError, QrStyle};
 
 #[test]

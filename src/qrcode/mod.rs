@@ -38,8 +38,6 @@ pub use code::{Ecl, QrCode};
 pub use error::QrError;
 pub use style::{Color, FinderShape, ModuleShape, QrStyle};
 
-#[cfg(feature = "templates")]
 mod template;
 
-#[cfg(feature = "templates")]
 pub use template::qr_svg_function;

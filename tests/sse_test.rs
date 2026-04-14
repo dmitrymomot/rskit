@@ -1,5 +1,3 @@
-#![cfg(feature = "sse")]
-
 use axum::Router;
 use axum::body::Body;
 use axum::http::Request;

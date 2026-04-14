@@ -10,7 +10,6 @@
 /// # Example
 ///
 /// ```rust
-/// # #[cfg(feature = "dns")]
 /// # {
 /// use modo::dns::generate_verification_token;
 ///

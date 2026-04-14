@@ -15,7 +15,6 @@ pub struct Config {
     /// HTTP server bind address and shutdown behaviour.
     pub server: crate::server::Config,
     /// libsql database settings. Requires the `db` feature.
-    #[cfg(feature = "db")]
     #[serde(default)]
     pub database: crate::db::Config,
     /// Log level, format, and optional Sentry integration.
@@ -33,11 +32,9 @@ pub struct Config {
     pub rate_limit: crate::middleware::RateLimitConfig,
     /// Session TTL, cookie name, fingerprint validation, touch interval, and
     /// per-user session limit. Requires the `session` feature.
-    #[cfg(feature = "session")]
     #[serde(default)]
     pub session: crate::session::SessionConfig,
     /// Background job queue settings. Requires the `job` feature.
-    #[cfg(feature = "job")]
     #[serde(default)]
     pub job: crate::job::JobConfig,
     /// CIDR ranges of trusted reverse proxies used by [`crate::ip::ClientIpLayer`].
@@ -46,36 +43,28 @@ pub struct Config {
     #[serde(default)]
     pub trusted_proxies: Vec<String>,
     /// OAuth provider settings. Requires the `auth` feature.
-    #[cfg(feature = "auth")]
     #[serde(default)]
     pub oauth: crate::auth::oauth::OAuthConfig,
     /// SMTP / email delivery settings. Requires the `email` feature.
-    #[cfg(feature = "email")]
     #[serde(default)]
     pub email: crate::email::EmailConfig,
     /// MiniJinja template engine settings. Requires the `templates` feature.
-    #[cfg(feature = "templates")]
     #[serde(default)]
     pub template: crate::template::TemplateConfig,
     /// MaxMind GeoIP database path and settings. Requires the `geolocation`
     /// feature.
-    #[cfg(feature = "geolocation")]
     #[serde(default)]
     pub geolocation: crate::geolocation::GeolocationConfig,
     /// S3-compatible storage bucket settings. Requires the `storage` feature.
-    #[cfg(feature = "storage")]
     #[serde(default)]
     pub storage: crate::storage::BucketConfig,
     /// DNS verification settings. Requires the `dns` feature.
-    #[cfg(feature = "dns")]
     #[serde(default)]
     pub dns: crate::dns::DnsConfig,
     /// API key module settings. Requires the `apikey` feature.
-    #[cfg(feature = "apikey")]
     #[serde(default)]
     pub apikey: crate::apikey::ApiKeyConfig,
     /// JWT signing and validation settings. Requires the `auth` feature.
-    #[cfg(feature = "auth")]
     #[serde(default)]
     pub jwt: crate::auth::jwt::JwtConfig,
 }

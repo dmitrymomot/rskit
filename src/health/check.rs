@@ -90,7 +90,6 @@ impl Default for HealthChecks {
     }
 }
 
-#[cfg(feature = "db")]
 impl HealthCheck for crate::db::Database {
     fn check(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async {
@@ -103,7 +102,7 @@ impl HealthCheck for crate::db::Database {
     }
 }
 
-#[cfg(all(test, feature = "db"))]
+#[cfg(test)]
 mod tests {
     use super::*;
 

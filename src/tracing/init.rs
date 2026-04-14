@@ -33,7 +33,6 @@ pub struct Config {
     ///
     /// Requires the `sentry` feature. When absent or when the DSN
     /// is empty, Sentry is not initialised.
-    #[cfg(feature = "sentry")]
     pub sentry: Option<super::sentry::SentryConfig>,
 }
 
@@ -42,7 +41,6 @@ impl Default for Config {
         Self {
             level: "info".to_string(),
             format: "pretty".to_string(),
-            #[cfg(feature = "sentry")]
             sentry: None,
         }
     }
@@ -75,7 +73,6 @@ pub fn init(config: &Config) -> crate::error::Result<super::sentry::TracingGuard
     let filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.level));
 
-    #[cfg(feature = "sentry")]
     let sentry_guard = init_sentry(config);
 
     match config.format.as_str() {
@@ -83,63 +80,34 @@ pub fn init(config: &Config) -> crate::error::Result<super::sentry::TracingGuard
             let base = tracing_subscriber::registry()
                 .with(filter)
                 .with(fmt::layer().json());
-            #[cfg(feature = "sentry")]
-            {
-                base.with(sentry_guard.as_ref().map(|_| sentry_tracing::layer()))
-                    .try_init()
-                    .ok();
-            }
-            #[cfg(not(feature = "sentry"))]
-            {
-                base.try_init().ok();
-            }
+            base.with(sentry_guard.as_ref().map(|_| sentry_tracing::layer()))
+                .try_init()
+                .ok();
         }
         "pretty" => {
             let base = tracing_subscriber::registry()
                 .with(filter)
                 .with(fmt::layer().pretty());
-            #[cfg(feature = "sentry")]
-            {
-                base.with(sentry_guard.as_ref().map(|_| sentry_tracing::layer()))
-                    .try_init()
-                    .ok();
-            }
-            #[cfg(not(feature = "sentry"))]
-            {
-                base.try_init().ok();
-            }
+            base.with(sentry_guard.as_ref().map(|_| sentry_tracing::layer()))
+                .try_init()
+                .ok();
         }
         _ => {
             let base = tracing_subscriber::registry()
                 .with(filter)
                 .with(fmt::layer());
-            #[cfg(feature = "sentry")]
-            {
-                base.with(sentry_guard.as_ref().map(|_| sentry_tracing::layer()))
-                    .try_init()
-                    .ok();
-            }
-            #[cfg(not(feature = "sentry"))]
-            {
-                base.try_init().ok();
-            }
+            base.with(sentry_guard.as_ref().map(|_| sentry_tracing::layer()))
+                .try_init()
+                .ok();
         }
     }
 
-    #[cfg(feature = "sentry")]
-    {
-        Ok(match sentry_guard {
-            Some(g) => super::sentry::TracingGuard::with_sentry(g),
-            None => super::sentry::TracingGuard::new(),
-        })
-    }
-    #[cfg(not(feature = "sentry"))]
-    {
-        Ok(super::sentry::TracingGuard::new())
-    }
+    Ok(match sentry_guard {
+        Some(g) => super::sentry::TracingGuard::with_sentry(g),
+        None => super::sentry::TracingGuard::new(),
+    })
 }
 
-#[cfg(feature = "sentry")]
 fn init_sentry(config: &Config) -> Option<sentry::ClientInitGuard> {
     config
         .sentry

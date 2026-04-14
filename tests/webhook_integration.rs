@@ -1,5 +1,3 @@
-#![cfg(feature = "webhooks")]
-
 use std::time::Duration;
 
 use http::StatusCode;
