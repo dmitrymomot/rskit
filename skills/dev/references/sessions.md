@@ -375,24 +375,24 @@ shortcuts `modo::middlewares::{session, Flash}` are also available.
 
 2. **Session, Flash, and cookie are always compiled**: no feature flags in modo 0.7.
 
-4. **`sessions` table schema not shipped**: The `sessions` table schema is not shipped as a migration -- end-apps own their DB schema.
+3. **`sessions` table schema not shipped**: The `sessions` table schema is not shipped as a migration -- end-apps own their DB schema.
 
-5. **`CookieConfig.secret` minimum 64 characters**: `key_from_config()` returns `Error::internal` if shorter.
+4. **`CookieConfig.secret` minimum 64 characters**: `key_from_config()` returns `Error::internal` if shorter.
 
-6. **Session fingerprint validation**: Enabled by default. On mismatch the session is destroyed (possible hijack). Set `validate_fingerprint: false` to disable.
+5. **Session fingerprint validation**: Enabled by default. On mismatch the session is destroyed (possible hijack). Set `validate_fingerprint: false` to disable.
 
-7. **Touch interval**: Sessions are only touched in the DB when `touch_interval_secs` has elapsed since last touch, reducing write load.
+6. **Touch interval**: Sessions are only touched in the DB when `touch_interval_secs` has elapsed since last touch, reducing write load.
 
-8. **Max sessions per user**: When exceeded on `authenticate`/`authenticate_with`, the least-recently-used session is evicted.
+7. **Max sessions per user**: When exceeded on `authenticate`/`authenticate_with`, the least-recently-used session is evicted.
 
-9. **`SessionToken` redacted**: `Debug` prints `"SessionToken(****)"`, `Display` prints `"****"`. Only the SHA-256 hash is stored in the DB -- a database leak cannot forge cookies.
+8. **`SessionToken` redacted**: `Debug` prints `"SessionToken(****)"`, `Display` prints `"****"`. Only the SHA-256 hash is stored in the DB -- a database leak cannot forge cookies.
 
-10. **Flash cookie name is hard-coded**: Always `"flash"`, not configurable. Max-Age is always 300 seconds.
+9. **Flash cookie name is hard-coded**: Always `"flash"`, not configurable. Max-Age is always 300 seconds.
 
-11. **Flash outgoing wins over read**: If a handler both reads incoming messages and writes new ones, only the new outgoing messages are written to the cookie (the old ones are not preserved).
+10. **Flash outgoing wins over read**: If a handler both reads incoming messages and writes new ones, only the new outgoing messages are written to the cookie (the old ones are not preserved).
 
-12. **`SessionState` and `FlashState` are `pub(crate)`**: Not accessible outside the crate. Handlers use the `Session` and `Flash` extractors respectively.
+11. **`SessionState` and `FlashState` are `pub(crate)`**: Not accessible outside the crate. Handlers use the `Session` and `Flash` extractors respectively.
 
-13. **Handler-level `async fn` for axum bounds**: Handler functions inside `#[tokio::test]` closures do not satisfy axum's `Handler` bounds. Define test handlers as module-level `async fn`.
+12. **Handler-level `async fn` for axum bounds**: Handler functions inside `#[tokio::test]` closures do not satisfy axum's `Handler` bounds. Define test handlers as module-level `async fn`.
 
-14. **Store takes `Database`, not pools**: `Store::new(db, config)` takes a `Database` handle (which wraps `Arc<Connection>`), not separate read/write pools.
+13. **Store takes `Database`, not pools**: `Store::new(db, config)` takes a `Database` handle (which wraps `Arc<Connection>`), not separate read/write pools.

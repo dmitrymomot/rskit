@@ -187,8 +187,8 @@ For verifying incoming webhooks:
 
 - Reads `webhook-id`, `webhook-timestamp`, `webhook-signature` from headers.
 - Checks timestamp is within `tolerance` of current time (replay-attack protection).
-- Tries every `v1,` signature entry against every secret. Returns `Ok(())` on first match.
-- Returns `Error::bad_request` if no signature matches, headers are missing, or timestamp is outside tolerance.
+- Tries every `v1,` signature entry against every secret. Returns `Ok(())` on first match. Non-`v1,` entries are skipped.
+- Returns `Error::bad_request` if any required header is missing, header value is not valid UTF-8, `webhook-timestamp` is not a valid integer, the timestamp is outside `tolerance`, or no signature entry matches any secret.
 
 ---
 

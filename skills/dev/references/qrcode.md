@@ -201,7 +201,7 @@ let style = QrStyle {
 
 ---
 
-## qr_svg_function (requires `templates` feature)
+## qr_svg_function
 
 ```rust
 pub fn qr_svg_function() -> impl Fn(&[Value]) -> Result<Value, minijinja::Error> + Send + Sync + 'static

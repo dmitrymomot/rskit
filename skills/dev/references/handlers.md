@@ -6,7 +6,7 @@ Handlers in modo are plain `async fn` -- no macros, no attribute annotations, no
 
 ```rust
 use axum::Json;
-use modo::extractor::Service;
+use modo::service::Service;
 
 // A handler is just an async function.
 async fn list_items(Service(db): Service<DbPool>) -> Json<Vec<Item>> {
@@ -23,19 +23,59 @@ async fn get_item(
 }
 ```
 
-Extractors are function parameters. modo provides:
+Extractors are function parameters. The usual ones are preluded (see `modo::prelude` below); the full flat index lives at `modo::extractors`. Commonly used:
 
-- `Service<T>` -- retrieves `Arc<T>` from the service registry
-- `modo::extractor::JsonRequest<T>` / `modo::extractor::FormRequest<T>` -- deserialize + sanitize request bodies (`T: Sanitize`)
-- `axum::extract::Path<T>` / `axum::extract::Query<T>` -- path and query parameters
+- `Service<T>` (from `modo::service`) -- retrieves `Arc<T>` from the service registry
+- `JsonRequest<T>` / `FormRequest<T>` / `MultipartRequest<T>` (from `modo::extractor`, re-exported via `modo::extractors`) -- deserialize + sanitize request bodies (`T: Sanitize`)
+- `UploadedFile`, `Query<T>` (from `modo::extractor`)
+- `axum::extract::Path<T>` -- path parameters
 - `ClientIp` -- resolved client IP (requires `ClientIpLayer`)
+- `ClientInfo` -- structured client metadata (IP, user-agent, fingerprint)
 - `Session` -- session data
 - `Flash` -- flash messages
 - `Role` -- RBAC role (requires RBAC middleware)
+- `Tenant`, `TenantId` -- multi-tenant identity
+- `Bearer`, `Claims` -- JWT bearer token / claims
+- `ApiKeyMeta` -- API key metadata
+- `LastEventId` -- SSE reconnection cursor
+- `HxRequest` -- HTMX request marker
+- `TierInfo` -- resolved tier information
+- `AppState` -- shared application state handle
+- `MatchedHost` -- subdomain matched by a `HostRouter` wildcard pattern
 
 Return types: `Json<T>`, `Html<String>`, `axum::response::Redirect`, `axum::response::Response`, or `modo::Result<T>` for fallible handlers.
 
 Error constructors (all take `msg: impl Into<String>`): `Error::not_found(msg)`, `Error::bad_request(msg)`, `Error::internal(msg)`, `Error::unauthorized(msg)`, `Error::forbidden(msg)`, `Error::too_many_requests(msg)`, `Error::conflict(msg)`, `Error::unprocessable_entity(msg)`.
+
+### `modo::prelude`
+
+Handler-time prelude: `use modo::prelude::*;` brings in the ambient types reached for on nearly every request. Contents:
+
+- `Error`, `Result` -- framework error type and alias
+- `AppState` -- shared application state handle
+- `Role`, `Session` -- RBAC and session extractors (from `auth`)
+- `Flash` -- per-request flash messages
+- `ClientIp` -- resolved client IP extractor
+- `Tenant`, `TenantId` -- multi-tenant extractor and identifier
+- `Validate`, `ValidationError`, `Validator` -- request-body validation trait, error, fluent helper
+
+Less-universal extractors (JWT claims, OAuth providers, API keys, mailer, templates, jobs, storage, SSE, etc.) are intentionally NOT preluded -- import explicitly from `modo::extractors::*` or the feature module where used.
+
+### `modo::extractors`
+
+Flat index of every axum extractor modo ships. Re-exports (for `use modo::extractors::*;` or `modo::extractors::JsonRequest`):
+
+- `FormRequest`, `JsonRequest`, `MultipartRequest`, `Query`, `UploadedFile` (from `extractor`)
+- `ApiKeyMeta` (from `auth::apikey`)
+- `Bearer`, `Claims` (from `auth::jwt`)
+- `Role`, `Session` (from `auth::role`, `auth::session`)
+- `Flash` (from `flash`)
+- `ClientInfo`, `ClientIp` (from `ip`)
+- `AppState` (from `service`)
+- `LastEventId` (from `sse`)
+- `HxRequest` (from `template`)
+- `Tenant` (from `tenant`)
+- `TierInfo` (from `tier`)
 
 ## Routing with axum::Router
 
@@ -56,11 +96,33 @@ let app = Router::new()
     .with_state(state);
 ```
 
-The service registry (`Registry`) is a `HashMap<TypeId, Arc<dyn Any + Send + Sync>>`. Call `.add(value)` to insert, then `.into_state()` to freeze into `AppState`. Inside handlers, `Service<T>` extracts the registered value.
+The service registry (`Registry`) is a `HashMap<TypeId, Arc<dyn Any + Send + Sync>>`. Call `.add(value)` to insert, then `.into_state()` to freeze into `AppState`. Inside handlers, `modo::service::Service<T>` extracts the registered value.
 
 ## Middleware
 
 All middleware functions return Tower-compatible layers. Apply them with `.layer()` on the router.
+
+### `modo::middlewares` (flat index)
+
+`modo::middlewares` is the virtual wiring-site index. Typical use: `use modo::middlewares as mw;` then `.layer(mw::cors(...))`, `.layer(mw::Jwt::new(cfg))`, etc.
+
+**Two calling conventions** -- this reflects upstream constructor design in each domain module:
+
+- **lower_case names are free functions** -- call directly:
+    - `mw::role(extractor)` (from `auth::role::middleware`)
+    - `mw::session(store, cookie_cfg, key)` (from `auth::session::layer`)
+    - `mw::tenant(strategy, resolver)` (from `tenant::middleware`)
+    - Always-available universals: `mw::catch_panic()`, `mw::compression()`, `mw::cors(&cfg)`, `mw::csrf(&cfg, &key)`, `mw::error_handler(f)`, `mw::rate_limit(&cfg, cancel)`, `mw::request_id()`, `mw::security_headers(&cfg)?`, `mw::tracing()`
+- **PascalCase names are `Layer` structs** -- call `::new(...)`:
+    - `mw::Jwt::new(cfg)` (aliases `auth::jwt::JwtLayer`)
+    - `mw::ApiKey::new(store)` (aliases `auth::apikey::ApiKeyLayer`)
+    - `mw::Flash::new(cookie_cfg)` (aliases `flash::FlashLayer`)
+    - `mw::Geo::new(...)` (aliases `geolocation::GeoLayer`)
+    - `mw::ClientIp::new(trusted_proxies)` (aliases `ip::ClientIpLayer`)
+    - `mw::TemplateContext::new(...)` (aliases `template::TemplateContextLayer`)
+    - `mw::Tier::new(...)` (aliases `tier::TierLayer`)
+
+The underlying `modo::middleware` module (singular) ships only the universal always-available layers (CORS, CSRF, compression, request-id, tracing, catch-panic, error-handler, security-headers, rate-limit) along with their configs and supporting types (`CorsConfig`, `CsrfConfig`, `CsrfToken`, `RateLimitConfig`, `RateLimitLayer`, `SecurityHeadersConfig`, `KeyExtractor`, `PeerIpKeyExtractor`, `GlobalKeyExtractor`, predicates `subdomains`/`urls`).
 
 ### Recommended Layer Order
 
@@ -68,6 +130,7 @@ Outermost (applied first to request, last to response) to innermost:
 
 ```rust
 use modo::middleware;
+use modo::ip::ClientIpLayer;
 use tokio_util::sync::CancellationToken;
 
 let cancel = CancellationToken::new();
@@ -85,6 +148,8 @@ let app = Router::new()
     .layer(middleware::rate_limit(&rl_config, cancel.clone()))
     .layer(ClientIpLayer::new());
 ```
+
+(The same layers are reachable from `modo::middlewares` as `mw::cors`, `mw::tracing`, ..., and `mw::ClientIp::new()`.)
 
 ### Rate Limiting
 
@@ -294,6 +359,34 @@ async fn handler(ClientIp(ip): ClientIp) -> String {
 ```
 
 Returns `Error::internal` if `ClientIpLayer` is not applied.
+
+### ClientInfo Extractor
+
+`ClientInfo` aggregates `ip`, `user_agent`, and `fingerprint` (from the `x-fingerprint` header) in one extractor. Implements `FromRequestParts`. The `ip` field falls through to `None` if `ClientIpLayer` is not applied -- `ClientInfo` does not itself fail.
+
+```rust
+use modo::ip::ClientInfo;
+
+async fn handler(info: ClientInfo) -> String {
+    format!(
+        "ip={:?} ua={:?} fp={:?}",
+        info.ip_value(),
+        info.user_agent_value(),
+        info.fingerprint_value(),
+    )
+}
+```
+
+Outside an HTTP request (background jobs, CLI tools), build manually with the chainable setters:
+
+```rust
+let info = ClientInfo::new()
+    .ip("1.2.3.4")
+    .user_agent("my-script/1.0")
+    .fingerprint("abc123");
+```
+
+Fields are private; read with `ip_value()` / `user_agent_value()` / `fingerprint_value()` (each returns `Option<&str>`).
 
 ### ClientIpLayer
 

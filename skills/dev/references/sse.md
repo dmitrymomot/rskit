@@ -299,12 +299,12 @@ The closure runs as a spawned tokio task. It ends when:
 async fn chat(
     Path(room_id): Path<String>,
     Service(bc): Service<Broadcaster<String, ChatMessage>>,
-    Service(renderer): Service<Renderer>,
+    Service(engine): Service<modo::template::Engine>,
 ) -> Response {
     let stream = bc.subscribe(&room_id)
         .on_lag(LagPolicy::End)
         .cast_events(move |msg| {
-            let html = renderer.string("chat/message.html", modo::template::context! { message => msg })?;
+            let html = engine.render("chat/message.html", minijinja::context! { message => msg })?;
             Ok(Event::new(modo::id::short(), "message")?.html(html))
         });
     bc.response(stream)

@@ -12,6 +12,11 @@ use modo::auth::apikey::{
 use modo::auth::guard::require_scope;
 ```
 
+Convenience re-exports at the crate root:
+
+- `modo::middlewares::ApiKey` — alias for `modo::auth::apikey::ApiKeyLayer`
+- `modo::extractors::ApiKeyMeta` — alias for `modo::auth::apikey::ApiKeyMeta`
+
 `InMemoryBackend` is only available under `#[cfg(test)]` or `feature = "test-helpers"`:
 
 ```rust
@@ -54,6 +59,19 @@ apikey:
   prefix: "modo"
   secret_length: 32
   touch_threshold_secs: 60
+```
+
+### Construction (non_exhaustive)
+
+`ApiKeyConfig` is `#[non_exhaustive]` — construct via `Default::default()` and field assignment, never with a struct literal:
+
+```rust
+use modo::auth::apikey::ApiKeyConfig;
+
+let mut config = ApiKeyConfig::default();
+config.prefix = "sk".into();
+config.secret_length = 48;
+config.touch_threshold_secs = 120;
 ```
 
 ---
@@ -256,6 +274,13 @@ let app = Router::new()
 let app = Router::new()
     .route("/api/v1/orders", get(list_orders))
     .layer(ApiKeyLayer::from_header(store, "x-api-key").unwrap());
+```
+
+Or via the `mw` re-export:
+
+```rust
+use modo::middlewares as mw;
+let app = Router::new().layer(mw::ApiKey::new(store));
 ```
 
 ---

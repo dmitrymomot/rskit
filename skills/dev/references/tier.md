@@ -242,4 +242,4 @@ pub struct FailingTierBackend;
 - **Guards are fail-closed.** Missing `TierInfo` → 500, not 403. This is deliberate — it signals a wiring bug, not a permissions issue.
 - **`has_feature` treats `Limit(0)` as disabled.** A feature with `Limit(0)` returns `false` from `has_feature()` and will be rejected by `require_feature()`. This is intentional — zero-limit means the feature is not available on the plan.
 - **`require_limit` short-circuits at ceiling 0.** When the limit ceiling is `0`, the guard returns 403 immediately without calling the `usage` closure. This avoids a wasted database query.
-- **Template functions** (`tier_name`, `tier_has`, `tier_enabled`, `tier_limit`) are injected by `TemplateContextMiddleware` when both `tier` and `templates` features are enabled and `TierInfo` is in extensions. No extra setup needed beyond applying `TierLayer`.
+- **Template functions** (`tier_name`, `tier_has`, `tier_enabled`, `tier_limit`) are injected by `TemplateContextLayer` (feature `templates`) when `TierInfo` is in request extensions. No extra setup needed beyond applying `TierLayer`.

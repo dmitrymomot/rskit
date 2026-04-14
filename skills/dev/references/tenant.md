@@ -1,10 +1,12 @@
-# Multi-Tenancy
+# Multi-Tenancy and Tier Gating
 
-Module: `src/tenant/` | Always available (no feature gate)
+Modules: `src/tenant/`, `src/tier/` | Always available
 
-Import types from `modo::tenant`: `HasTenantId`, `Tenant`, `TenantId`, `TenantLayer`, `TenantResolver`, `TenantStrategy`, `middleware` (the free function — also available as `modo::middlewares::tenant`).
+Tenant exports (`modo::tenant`): `HasTenantId`, `Tenant`, `TenantId`, `TenantLayer`, `TenantMiddleware`, `TenantResolver`, `TenantStrategy`, `middleware` (free function — also `modo::middlewares::tenant`), plus the strategy structs and constructors below.
 
-Domain submodule exports: `modo::tenant::domain::{ClaimStatus, DomainClaim, DomainService, TenantMatch}`.
+Domain submodule (`modo::tenant::domain`): `ClaimStatus`, `DomainClaim`, `DomainService`, `TenantMatch`, `validate_domain`, `extract_email_domain`.
+
+Tier exports (`modo::tier`): `FeatureAccess`, `TierBackend`, `TierInfo`, `TierLayer` (also `modo::middlewares::Tier`), `TierResolver`, `require_feature`, `require_limit` (also `modo::guards::require_feature`, `modo::guards::require_limit`). Test-only helpers under `modo::tier::test`: `StaticTierBackend`, `FailingTierBackend` (gated on `test-helpers`).
 
 ## Overview
 
@@ -122,9 +124,7 @@ Implements `FromRequestParts`, `OptionalFromRequestParts`, `Deref<Target = T>`, 
 - `.get() -> &T` for an explicit reference.
 - Dereferences to `T` so fields are accessible directly via `Deref`.
 
-## Domain submodule (`tenant::domain`)
-
-Always available.
+## Domain submodule (`modo::tenant::domain`)
 
 Provides domain claim registration, DNS-based verification, and domain-to-tenant lookups.
 
@@ -276,6 +276,154 @@ let app = axum::Router::new()
     .route_layer(tenant_layer);
 ```
 
+## Tier (`modo::tier`)
+
+Tier-based feature gating for SaaS apps. The framework provides the trait, wrapper, middleware, and guards; the app implements its own backend.
+
+### `modo::tier::FeatureAccess`
+
+```rust
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeatureAccess {
+    Toggle(bool),
+    Limit(u64),
+}
+```
+
+### `modo::tier::TierInfo`
+
+```rust
+pub struct TierInfo {
+    pub name: String,
+    pub features: HashMap<String, FeatureAccess>,
+}
+```
+
+Methods:
+
+- `has_feature(&self, name: &str) -> bool` -- `Toggle(true)` or `Limit(>0)`.
+- `is_enabled(&self, name: &str) -> bool` -- `Toggle(true)` only.
+- `limit(&self, name: &str) -> Option<u64>` -- ceiling for `Limit` features.
+- `limit_ceiling(&self, name: &str) -> modo::Result<u64>` -- 403 if missing, 500 if `Toggle`.
+- `check_limit(&self, name: &str, current: u64) -> modo::Result<()>` -- 403 if `current >= ceiling` or feature missing, 500 if `Toggle`.
+
+Implements `FromRequestParts` (500 if `TierLayer` not applied) and `OptionalFromRequestParts` (`Ok(None)` if absent). Use as a handler argument: `tier: modo::tier::TierInfo` or `tier: Option<modo::tier::TierInfo>`.
+
+### `modo::tier::TierBackend`
+
+```rust
+pub trait TierBackend: Send + Sync {
+    fn resolve(
+        &self,
+        owner_id: &str,
+    ) -> Pin<Box<dyn Future<Output = modo::Result<TierInfo>> + Send + '_>>;
+}
+```
+
+Object-safe (uses `Pin<Box<dyn Future>>`, not RPITIT). The app implements this with its own DB/cache/HTTP logic.
+
+### `modo::tier::TierResolver`
+
+```rust
+#[derive(Clone)]
+pub struct TierResolver(/* Arc<dyn TierBackend> */);
+```
+
+Cheap to clone. Constructor and method:
+
+- `TierResolver::from_backend(backend: Arc<dyn TierBackend>) -> Self`
+- `async fn resolve(&self, owner_id: &str) -> modo::Result<TierInfo>`
+
+### `modo::tier::TierLayer`
+
+Tower middleware that resolves `TierInfo` and inserts it into request extensions. Re-exported as `modo::middlewares::Tier`.
+
+```rust
+impl TierLayer {
+    pub fn new<F>(resolver: TierResolver, extractor: F) -> Self
+    where
+        F: Fn(&http::request::Parts) -> Option<String> + Send + Sync + 'static;
+
+    pub fn with_default(self, default: TierInfo) -> Self;
+}
+```
+
+Behavior:
+
+- Extractor returns `Some(owner_id)` -- calls `resolver.resolve(owner_id)`; backend errors short-circuit with `Error::into_response()`.
+- Extractor returns `None` and a default is set -- inserts the default `TierInfo`.
+- Extractor returns `None` and no default -- no `TierInfo` inserted; downstream guards/extractors handle the absence (500 for required `TierInfo`, `Ok(None)` for `Option<TierInfo>`).
+
+Apply with `.layer()` on the router so it runs before route matching. Guards apply with `.route_layer()`.
+
+### `modo::guards::require_feature`
+
+```rust
+pub fn require_feature(name: &str) -> RequireFeatureLayer;
+```
+
+Tower layer that rejects requests when the resolved tier lacks the named feature.
+
+- `TierInfo` missing in extensions -> 500 `Error::internal` (developer error: `TierLayer` not applied).
+- Feature missing or `Toggle(false)` or `Limit(0)` -> 403 `Error::forbidden`.
+
+Apply with `.route_layer()`.
+
+### `modo::guards::require_limit`
+
+```rust
+pub fn require_limit<F, Fut>(name: &str, usage: F) -> RequireLimitLayer<F>
+where
+    F: Fn(&http::request::Parts) -> Fut + Clone + Send + Sync + 'static,
+    Fut: Future<Output = modo::Result<u64>> + Send;
+```
+
+Tower layer that calls `usage(&parts)` to get the current count, then rejects when `current >= ceiling`.
+
+- `TierInfo` missing -> 500 `Error::internal`.
+- Feature is `Toggle` (not a limit) -> 500 `Error::internal`.
+- Feature missing -> 403 `Error::forbidden`.
+- Ceiling is 0 -> 403 `Error::forbidden` ("not available on your current plan").
+- `usage` closure returns `Err` -> error response via `Error::into_response()`.
+- `current >= ceiling` -> 403 `Error::forbidden` ("Limit exceeded for '...': N/M").
+
+Apply with `.route_layer()`. There is no 402 status -- all gating uses 403.
+
+### Tier wiring example
+
+```rust
+use std::sync::Arc;
+use axum::{Router, routing::get};
+use modo::middlewares as mw;
+use modo::tier::{TierBackend, TierResolver, TierInfo};
+use modo::guards;
+
+struct MyBackend { /* db pool */ }
+impl TierBackend for MyBackend {
+    fn resolve(
+        &self,
+        owner_id: &str,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = modo::Result<TierInfo>> + Send + '_>> {
+        Box::pin(async move { todo!() })
+    }
+}
+
+let resolver = TierResolver::from_backend(Arc::new(MyBackend { /* ... */ }));
+
+let app: Router<()> = Router::new()
+    .route("/api/export", get(|| async { "ok" }))
+    .route_layer(guards::require_feature("export"))
+    .route("/api/calls", get(|| async { "ok" }))
+    .route_layer(guards::require_limit("api_calls", |_parts| async { Ok(123u64) }))
+    .layer(mw::Tier::new(resolver, |parts| {
+        parts
+            .extensions
+            .get::<modo::tenant::TenantId>()
+            .map(|id| id.as_str().to_owned())
+    }));
+```
+
 ## Gotchas
 
 - **ApiKey redaction**: `TenantId::ApiKey` is redacted in both `Display` and `Debug`. Never log the raw key. Use `as_str()` only when you need the actual value (e.g., for DB lookup).
@@ -286,3 +434,9 @@ let app = axum::Router::new()
 - **Subdomain strategies reject multi-level subdomains**: `a.b.acme.com` against base `acme.com` is an error, not a valid tenant.
 - **Domain enable requires verified**: `enable_email` and `enable_routing` return an error if the domain claim is not in `verified` status.
 - **48-hour verification window**: Pending claims expire after 48 hours. `verify()` persists the `failed` status; `list()` computes it in-memory without persisting.
+- **TierLayer placement**: Apply `TierLayer` with `.layer()` so `TierInfo` is in extensions before guards run. `require_feature` / `require_limit` use `.route_layer()` and rely on it being set upstream.
+- **Tier extractor needs the layer**: Handlers taking `TierInfo` directly return 500 if `TierLayer` is missing; use `Option<TierInfo>` to tolerate absence.
+- **Guards return 403, not 402**: Both `require_feature` and `require_limit` reject with `Error::forbidden` (HTTP 403). Missing `TierInfo` is a 500 (developer misconfiguration).
+- **`require_limit` ceiling=0**: A `Limit(0)` feature is treated as "not available on your current plan" (403) -- not "limit exceeded".
+- **TierBackend is object-safe; TierResolver is concrete**: `TierBackend` uses `Pin<Box<dyn Future>>` so it works behind `Arc<dyn TierBackend>`. Wrap it in `TierResolver::from_backend(Arc::new(...))` for `TierLayer::new`.
+- **Owner extractor reads sync `&Parts`**: The `TierLayer` extractor closure is sync. Use upstream middleware (e.g. `tenant`, session) to populate the source data into extensions, then read from `parts.extensions`.

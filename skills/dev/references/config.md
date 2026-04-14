@@ -2,7 +2,7 @@
 
 ## Overview
 
-modo loads YAML config files with environment-variable substitution. The config system lives in `src/config/` and is always available (no feature gate).
+modo loads YAML config files with environment-variable substitution. The config system lives in `src/config/` and is always available.
 
 Key types: `modo::Config` (top-level struct), `modo::config::load()` (loader function), `modo::tracing::init()` (tracing initializer), `modo::tracing::TracingGuard` (RAII guard).
 
@@ -89,38 +89,42 @@ cookie:
 
 ## Config Struct
 
-`modo::Config` — top-level framework config (`#[non_exhaustive]`). All fields use `#[serde(default)]`, so any section can be omitted.
+`modo::Config` — top-level framework config (`#[non_exhaustive]`). All fields use `#[serde(default)]`, so any section can be omitted. Every sub-config is present on every build (modo 0.7 compiles every module unconditionally).
 
 Source: `src/config/modo.rs`
 
-### Always-Available Fields
+Because `Config` is `#[non_exhaustive]`, construct it via `Default::default()` plus field assignment rather than a struct literal:
 
-| Field              | Type                                | YAML key           | Description                                                                 |
-| ------------------ | ----------------------------------- | ------------------ | --------------------------------------------------------------------------- |
-| `server`           | `server::Config`                    | `server`           | HTTP bind address and shutdown                                              |
-| `tracing`          | `tracing::Config`                   | `tracing`          | Log level, format, optional Sentry                                          |
-| `cookie`           | `Option<cookie::CookieConfig>`      | `cookie`           | Signed cookie secret and attributes. `None` disables signed/private cookies |
-| `security_headers` | `middleware::SecurityHeadersConfig` | `security_headers` | HTTP security response headers                                              |
-| `cors`             | `middleware::CorsConfig`            | `cors`             | CORS policy                                                                 |
-| `csrf`             | `middleware::CsrfConfig`            | `csrf`             | CSRF protection                                                             |
-| `rate_limit`       | `middleware::RateLimitConfig`       | `rate_limit`       | Token-bucket rate limiting                                                  |
-| `trusted_proxies`  | `Vec<String>`                       | `trusted_proxies`  | CIDR ranges for `ClientIpLayer`                                             |
+```rust
+use modo::Config;
 
-### Feature-Gated Fields
+let mut cfg = Config::default();
+cfg.server.port = 3000;
+```
 
-| Field         | Type                             | YAML key      | Feature       |
-| ------------- | -------------------------------- | ------------- | ------------- |
-| `database`    | `db::Config`                     | `database`    | `db`          |
-| `session`     | `session::SessionConfig`         | `session`     | `session`     |
-| `job`         | `job::JobConfig`                 | `job`         | `job`         |
-| `oauth`       | `auth::oauth::OAuthConfig`       | `oauth`       | `auth`        |
-| `jwt`         | `auth::jwt::JwtConfig`           | `jwt`         | `auth`        |
-| `email`       | `email::EmailConfig`             | `email`       | `email`       |
-| `template`    | `template::TemplateConfig`       | `template`    | `templates`   |
-| `storage`     | `storage::BucketConfig`          | `storage`     | `storage`     |
-| `dns`         | `dns::DnsConfig`                 | `dns`         | `dns`         |
-| `geolocation` | `geolocation::GeolocationConfig` | `geolocation` | `geolocation` |
-| `apikey`      | `apikey::ApiKeyConfig`           | `apikey`      | `apikey`      |
+### Fields
+
+| Field              | Type                                      | YAML key           | Description                                                                 |
+| ------------------ | ----------------------------------------- | ------------------ | --------------------------------------------------------------------------- |
+| `server`           | `server::Config`                          | `server`           | HTTP bind address and shutdown                                              |
+| `database`         | `db::Config`                              | `database`         | libsql database settings                                                    |
+| `tracing`          | `tracing::Config`                         | `tracing`          | Log level, format, optional Sentry                                          |
+| `cookie`           | `Option<cookie::CookieConfig>`            | `cookie`           | Signed cookie secret and attributes. `None` disables signed/private cookies |
+| `security_headers` | `middleware::SecurityHeadersConfig`       | `security_headers` | HTTP security response headers                                              |
+| `cors`             | `middleware::CorsConfig`                  | `cors`             | CORS policy                                                                 |
+| `csrf`             | `middleware::CsrfConfig`                  | `csrf`             | CSRF protection                                                             |
+| `rate_limit`       | `middleware::RateLimitConfig`             | `rate_limit`       | Token-bucket rate limiting                                                  |
+| `session`          | `auth::session::SessionConfig`            | `session`          | Session TTL, cookie name, fingerprint, touch, per-user limit                |
+| `job`              | `job::JobConfig`                          | `job`              | Background job queue settings                                               |
+| `trusted_proxies`  | `Vec<String>`                             | `trusted_proxies`  | CIDR ranges for `ClientIpLayer`                                             |
+| `oauth`            | `auth::oauth::OAuthConfig`                | `oauth`            | OAuth provider settings                                                     |
+| `email`            | `email::EmailConfig`                      | `email`            | SMTP / email delivery                                                       |
+| `template`         | `template::TemplateConfig`                | `template`         | MiniJinja template engine                                                   |
+| `geolocation`      | `geolocation::GeolocationConfig`          | `geolocation`      | MaxMind GeoIP database                                                      |
+| `storage`          | `storage::BucketConfig`                   | `storage`          | S3-compatible storage bucket                                                |
+| `dns`              | `dns::DnsConfig`                          | `dns`              | DNS verification                                                            |
+| `apikey`           | `auth::apikey::ApiKeyConfig`              | `apikey`           | API key module                                                              |
+| `jwt`              | `auth::jwt::JwtConfig`                    | `jwt`              | JWT signing and validation                                                  |
 
 ## Sub-Config Details
 
@@ -132,14 +136,14 @@ Source: `src/config/modo.rs`
 | `port`                  | `u16`    | `8080`        | TCP port                  |
 | `shutdown_timeout_secs` | `u64`    | `30`          | Graceful shutdown timeout |
 
-### `db::Config` (feature: `db`)
+### `db::Config`
 
-Single-connection libsql config. No connection pool -- `connect()` opens one connection with PRAGMA defaults.
+Single-connection libsql config. No connection pool — `connect()` opens one connection with PRAGMA defaults.
 
 | Field          | Type              | Default         | Description                                                     |
 | -------------- | ----------------- | --------------- | --------------------------------------------------------------- |
 | `path`         | `String`          | `"data/app.db"` | Database file path. `":memory:"` for in-memory                  |
-| `migrations`   | `Option<String>`  | `None`          | Migration directory. If set, migrations run on connect           |
+| `migrations`   | `Option<String>`  | `None`          | Migration directory. If set, migrations run on connect          |
 | `busy_timeout` | `u64`             | `5000`          | PRAGMA busy_timeout (ms)                                        |
 | `cache_size`   | `i64`             | `16384`         | PRAGMA cache_size in KB (applied as `cache_size = -N`)          |
 | `mmap_size`    | `u64`             | `268435456`     | PRAGMA mmap_size (bytes, default 256 MB)                        |
@@ -158,7 +162,7 @@ Single-connection libsql config. No connection pool -- `connect()` opens one con
 | -------- | ---------------------- | ---------- | -------------------------------------------------- |
 | `level`  | `String`               | `"info"`   | Min log level (overridden by `RUST_LOG` env var)   |
 | `format` | `String`               | `"pretty"` | `"pretty"`, `"json"`, or compact (any other value) |
-| `sentry` | `Option<SentryConfig>` | `None`     | Sentry settings (Sentry tracing is always compiled) |
+| `sentry` | `Option<SentryConfig>` | `None`     | Sentry settings (Sentry is always compiled)        |
 
 **`SentryConfig`** (`#[non_exhaustive]`): `dsn: String` (default `""`), `environment: String` (default `config::env()`), `sample_rate: f32` (default `1.0`), `traces_sample_rate: f32` (default `0.1`).
 
@@ -171,9 +175,9 @@ let guard: TracingGuard = modo::tracing::init(&config.tracing)?;
 // Hold `guard` for the process lifetime; pass to `run!` or call `guard.shutdown().await`
 ```
 
-`tracing::init(config: &Config) -> Result<TracingGuard>` — initializes the global tracing subscriber. Reads `RUST_LOG` env var for level filter, falls back to `Config::level`. When `sentry` feature is enabled and DSN is non-empty, also initializes Sentry SDK. Calling more than once is harmless (subsequent calls silently no-op).
+`tracing::init(config: &Config) -> Result<TracingGuard>` — initializes the global tracing subscriber. Reads `RUST_LOG` env var for level filter, falls back to `Config::level`. When `sentry.dsn` is non-empty, also initializes the Sentry SDK (Sentry is always compiled in). Calling more than once is harmless (subsequent calls silently no-op).
 
-**`TracingGuard`** — RAII guard returned by `init()`. Implements `Task` (has `async fn shutdown(self) -> Result<()>`). Methods: `new()`, `with_sentry(guard)` (requires `sentry` feature). Implements `Default`. Dropping without calling `shutdown` is safe but may not flush all buffered Sentry events.
+**`TracingGuard`** — RAII guard returned by `init()`. Implements `Task` (has `async fn shutdown(self) -> Result<()>`). Methods: `new()` (no Sentry client), `with_sentry(guard: sentry::ClientInitGuard)`. Implements `Default`. Dropping without calling `shutdown` is safe but may not flush all buffered Sentry events (`shutdown` flushes up to 5 seconds).
 
 ### Tracing Re-exports
 
@@ -229,7 +233,7 @@ The `modo::tracing` module re-exports the following macros from the `tracing` cr
 | `cleanup_interval_secs` | `u64`   | `60`    | Purge interval for expired entries |
 | `max_keys`              | `usize` | `10000` | Max tracked keys. `0` = unlimited  |
 
-### `session::SessionConfig` (feature: `session`)
+### `auth::session::SessionConfig`
 
 | Field                   | Type     | Default      | Description                                           |
 | ----------------------- | -------- | ------------ | ----------------------------------------------------- |
@@ -239,7 +243,7 @@ The `modo::tracing` module re-exports the following macros from the `tracing` cr
 | `touch_interval_secs`   | `u64`    | `300`        | Min interval between `last_active_at` updates (5 min) |
 | `max_sessions_per_user` | `usize`  | `10`         | Max concurrent sessions per user. Must be > 0         |
 
-### `job::JobConfig` (feature: `job`)
+### `job::JobConfig`
 
 | Field                        | Type                    | Default                             | Description                         |
 | ---------------------------- | ----------------------- | ----------------------------------- | ----------------------------------- |
@@ -253,7 +257,7 @@ The `modo::tracing` module re-exports the following macros from the `tracing` cr
 **`QueueConfig`:** `name: String`, `concurrency: u32` (default `4`).
 **`CleanupConfig`:** `interval_secs: u64` (default `3600`), `retention_secs: u64` (default `259200` / 72h).
 
-### `auth::oauth::OAuthConfig` (feature: `auth`)
+### `auth::oauth::OAuthConfig`
 
 | Field    | Type                          | Description           |
 | -------- | ----------------------------- | --------------------- |
@@ -262,7 +266,7 @@ The `modo::tracing` module re-exports the following macros from the `tracing` cr
 
 **`OAuthProviderConfig`:** `client_id: String`, `client_secret: String`, `redirect_uri: String`, `scopes: Vec<String>` (default empty, uses provider defaults).
 
-### `email::EmailConfig` (feature: `email`)
+### `email::EmailConfig`
 
 | Field                 | Type             | Default            | Description                 |
 | --------------------- | ---------------- | ------------------ | --------------------------- |
@@ -278,7 +282,7 @@ The `modo::tracing` module re-exports the following macros from the `tracing` cr
 
 **`SmtpConfig`:** `host: String` (`"localhost"`), `port: u16` (`587`), `username: Option<String>`, `password: Option<String>`, `security: SmtpSecurity` (`starttls`). Security values: `starttls`, `tls`, `none` (lowercase in YAML).
 
-### `template::TemplateConfig` (feature: `templates`)
+### `template::TemplateConfig`
 
 | Field                | Type     | Default       | Description                       |
 | -------------------- | -------- | ------------- | --------------------------------- |
@@ -290,13 +294,13 @@ The `modo::tracing` module re-exports the following macros from the `tracing` cr
 | `locale_cookie`      | `String` | `"lang"`      | Cookie for locale resolution      |
 | `locale_query_param` | `String` | `"lang"`      | Query param for locale resolution |
 
-### `geolocation::GeolocationConfig` (feature: `geolocation`)
+### `geolocation::GeolocationConfig`
 
 | Field       | Type     | Default | Description                                 |
 | ----------- | -------- | ------- | ------------------------------------------- |
 | `mmdb_path` | `String` | `""`    | Path to MaxMind `.mmdb` file. Empty = error |
 
-### `storage::BucketConfig` (feature: `storage`)
+### `storage::BucketConfig`
 
 | Field           | Type             | Default | Description                                                          |
 | --------------- | ---------------- | ------- | -------------------------------------------------------------------- |
@@ -312,7 +316,7 @@ The `modo::tracing` module re-exports the following macros from the `tracing` cr
 
 Size format for `max_file_size`: `<number><unit>` where unit is `b`, `kb`, `mb`, `gb` (case-insensitive). Bare numbers treated as bytes.
 
-### `dns::DnsConfig` (feature: `dns`)
+### `dns::DnsConfig`
 
 | Field        | Type     | Default          | Description                                                             |
 | ------------ | -------- | ---------------- | ----------------------------------------------------------------------- |
@@ -320,7 +324,7 @@ Size format for `max_file_size`: `<number><unit>` where unit is `b`, `kb`, `mb`,
 | `txt_prefix` | `String` | `"_modo-verify"` | Prefix for TXT record lookups (`{txt_prefix}.{domain}`)                 |
 | `timeout_ms` | `u64`    | `5000`           | UDP receive timeout in milliseconds                                     |
 
-### `auth::jwt::JwtConfig` (feature: `auth`)
+### `auth::jwt::JwtConfig`
 
 | Field            | Type             | Default | Description                                                                                      |
 | ---------------- | ---------------- | ------- | ------------------------------------------------------------------------------------------------ |
@@ -330,61 +334,47 @@ Size format for `max_file_size`: `<number><unit>` where unit is `b`, `kb`, `mb`,
 | `issuer`         | `Option<String>` | `None`  | Required `iss` claim. Decoder rejects non-matching tokens                                        |
 | `audience`       | `Option<String>` | `None`  | Required `aud` claim. Decoder rejects non-matching tokens                                        |
 
-### `apikey::ApiKeyConfig` (feature: `apikey`)
+### `auth::apikey::ApiKeyConfig`
 
-| Field                  | Type    | Default  | Description                                          |
-| ---------------------- | ------- | -------- | ---------------------------------------------------- |
-| `prefix`               | `String`| `"modo"` | Key prefix before the underscore. `[a-zA-Z0-9]`, 1-20 chars |
+| Field                  | Type    | Default  | Description                                                      |
+| ---------------------- | ------- | -------- | ---------------------------------------------------------------- |
+| `prefix`               | `String`| `"modo"` | Key prefix before the underscore. `[a-zA-Z0-9]`, 1-20 chars      |
 | `secret_length`        | `usize` | `32`     | Length of the random secret portion in base62 characters. Min 16 |
-| `touch_threshold_secs` | `u64`   | `60`     | Min interval between `last_used_at` updates (1 min)  |
+| `touch_threshold_secs` | `u64`   | `60`     | Min interval between `last_used_at` updates (1 min)              |
 
 ## Feature Flags
 
-Defined in `Cargo.toml`. Default feature: `db`.
+modo 0.7 has exactly one cargo feature: `test-helpers`. Enable it only under `[dev-dependencies]` to gate the `modo::testing` module and all in-memory/stub backends:
 
-| Feature          | What it enables                                            | Dependencies                                                        |
-| ---------------- | ---------------------------------------------------------- | ------------------------------------------------------------------- |
-| `full`           | All optional features below                                | (meta)                                                              |
-| `db`             | libsql (SQLite) database connection and queries            | `libsql`, `urlencoding`                                             |
-| `session`        | Session management (requires `db`)                         | (implies `db`)                                                      |
-| `job`            | Background job queue (requires `db`)                       | (implies `db`)                                                      |
-| `auth`           | OAuth 2.0 (Google, GitHub), JWT, Argon2 password hashing   | `argon2`, `hmac`, `sha1`, `ring`, `dep:reqwest`                     |
-| `templates`      | MiniJinja template engine with i18n                        | `minijinja`, `minijinja-contrib`, `intl_pluralrules`, `unic-langid` |
-| `sse`            | Server-Sent Events broadcaster                             | `futures-util`                                                      |
-| `email`          | SMTP email delivery with Markdown-to-HTML                  | `lettre`, `pulldown-cmark`                                          |
-| `storage`        | S3-compatible object storage                               | `hmac`, `ring`, `dep:reqwest`                                       |
-| `webhooks`       | Webhook delivery with Standard Webhooks signing            | `hmac`, `ring`, `base64`, `dep:reqwest`                             |
-| `dns`            | DNS domain verification (TXT, CNAME)                       | `simple-dns`                                                        |
-| `geolocation`    | MaxMind GeoIP2 geolocation                                 | `maxminddb`                                                         |
-| `qrcode`         | QR code generation                                         | `fast_qr`                                                           |
-| `sentry`         | Sentry error reporting via tracing                         | `sentry`, `sentry-tracing`, `ring`                                  |
-| `apikey`         | API key generation, hashing, and verification              | (implies `db`)                                                      |
-| `text-embedding` | Text embedding providers (OpenAI, Gemini, Mistral, Voyage) | `ring`, `dep:reqwest`                                               |
-| `tier`           | Feature-tier access control                                | (no extra deps)                                                     |
-| `test-helpers`   | `modo::testing` module for test utilities                  | (implies `db`, `session`)                                           |
+```toml
+[dev-dependencies]
+modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
+```
 
-### Test Feature Flags
-
-These activate the parent feature for integration tests:
-
-(All test-specific code now uses the `test-helpers` feature.)
+Every framework module (`db`, `session`, `job`, `auth`, `email`, `template`, `storage`, `dns`, `geolocation`, `apikey`, `jwt`, `sentry`, `tier`, etc.) is compiled unconditionally. To disable a module, simply leave its YAML config section at defaults and skip wiring it into `main`.
 
 ## Gotchas
 
-1. **`trusted_proxies` is top-level** -- it is a field on `Config` directly, not nested under `session` or any other section. It holds `Vec<String>` of CIDR ranges parsed into `Vec<IpNet>` at startup for `ClientIpLayer`.
+1. **`trusted_proxies` is top-level** — it is a field on `Config` directly, not nested under `session` or any other section. It holds `Vec<String>` of CIDR ranges parsed into `Vec<IpNet>` at startup for `ClientIpLayer`.
 
-2. **YAML crate is `serde_yaml_ng`** -- modo uses `serde_yaml_ng` (not the deprecated `serde_yaml`). These are different crates with different APIs.
+2. **YAML crate is `serde_yaml_ng`** — modo uses `serde_yaml_ng` (not the deprecated `serde_yaml`). These are different crates with different APIs.
 
-3. **`cookie` section is `Option`** -- unlike other sections, `cookie` is `Option<CookieConfig>`. Omitting it entirely disables signed/private cookies. The `secret` field inside has no default and is required when the section is present.
+3. **`cookie` section is `Option`** — unlike other sections, `cookie` is `Option<CookieConfig>`. Omitting it entirely disables signed/private cookies. The `secret` field inside has no default and is required when the section is present.
 
-4. **All other sections default** -- every field on `Config` (except `cookie`) uses `#[serde(default)]`, so an empty YAML file produces a valid config with all defaults.
+4. **All other sections default** — every field on `Config` (except `cookie`) uses `#[serde(default)]`, so an empty YAML file produces a valid config with all defaults.
 
-5. **`.env` loading is the app's responsibility** -- modo only does YAML config with `${VAR}` substitution. Loading `.env` files (via `dotenvy` or similar) must happen before calling `config::load()`.
+5. **`.env` loading is the app's responsibility** — modo only does YAML config with `${VAR}` substitution. Loading `.env` files (via `dotenvy` or similar) must happen before calling `config::load()`.
 
-6. **`load()` is not async** -- it reads the file synchronously with `std::fs::read_to_string`. Call it at startup before entering the async runtime's hot path.
+6. **`load()` is not async** — it reads the file synchronously with `std::fs::read_to_string`. Call it at startup before entering the async runtime's hot path.
 
 7. **All config sections are always present on `Config`** — modo 0.7 compiles every module unconditionally, so `database`, `session`, `job`, etc. are available on every build. Unknown YAML keys are silently ignored by serde.
 
-8. **`max_sessions_per_user` must be > 0** -- deserialization fails if set to `0` (custom deserializer rejects it to prevent locking out all users).
+8. **`max_sessions_per_user` must be > 0** — deserialization fails if set to `0` (custom deserializer rejects it to prevent locking out all users).
 
-9. **Single connection, no pool** -- `db::connect()` opens one libsql connection with PRAGMA defaults. There is no connection pool or reader/writer split.
+9. **Single connection, no pool** — `db::connect()` opens one libsql connection with PRAGMA defaults. There is no connection pool or reader/writer split.
+
+10. **Sentry is always compiled in** — there is no `sentry` cargo feature. Set a non-empty `tracing.sentry.dsn` to enable it at runtime; leave it empty (or omit the `sentry` section) to disable.
+
+11. **Session config path** — `SessionConfig` lives under `modo::auth::session`, not a top-level `modo::session`. Similarly `OAuthConfig`, `JwtConfig`, and `ApiKeyConfig` live under `modo::auth`.
+
+12. **`#[non_exhaustive]` constructors** — `Config`, `tracing::Config`, and `SentryConfig` are `#[non_exhaustive]`. Build them with `Default::default()` plus field assignment rather than struct literals from outside the crate.

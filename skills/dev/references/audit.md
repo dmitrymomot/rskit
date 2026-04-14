@@ -22,7 +22,7 @@ use modo::ip::ClientInfo;
 use modo::audit::MemoryAuditBackend;
 ```
 
-Source: `src/audit/` (mod.rs, entry.rs, record.rs, backend.rs, log.rs, repo.rs), `src/extractor/client_info.rs`.
+Source: `src/audit/` (mod.rs, entry.rs, record.rs, backend.rs, log.rs, repo.rs), `src/ip/client_info.rs`.
 
 ---
 

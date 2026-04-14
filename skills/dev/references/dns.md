@@ -16,10 +16,12 @@ use modo::dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_veri
 
 ## DnsConfig
 
-`#[non_exhaustive]` — use `..Default::default()` for forward compatibility. Deserializes from YAML via serde (`serde_yaml_ng`, not `serde_yaml`).
+`#[non_exhaustive]` — construct via `DnsConfig::new(..)`, `DnsConfig::default()`, or field-assignment on a `Default::default()` base. Deserializes from YAML via serde (`serde_yaml_ng`, not `serde_yaml`); `#[serde(default)]` applies at the struct level so all fields are optional in YAML.
 
 ```rust
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 pub struct DnsConfig {
     pub nameserver: String,    // e.g. "8.8.8.8:53" or "1.1.1.1"
     pub txt_prefix: String,    // default: "_modo-verify"
@@ -28,6 +30,14 @@ pub struct DnsConfig {
 ```
 
 Implements `Default` (`nameserver: "8.8.8.8"`, `txt_prefix: "_modo-verify"`, `timeout_ms: 5000`).
+
+Field-assignment construction (required because of `#[non_exhaustive]`):
+
+```rust
+let mut config = DnsConfig::default();
+config.nameserver = "1.1.1.1:53".into();
+config.timeout_ms = 3000;
+```
 
 YAML example:
 
@@ -52,11 +62,7 @@ dns:
 Wraps an `Arc<Inner>` -- cheap to clone. Construct via `DomainVerifier::from_config(&DnsConfig)`.
 
 ```rust
-let config = DnsConfig {
-    nameserver: "8.8.8.8:53".into(),
-    txt_prefix: "_modo-verify".into(),
-    timeout_ms: 5000,
-};
+let config = DnsConfig::new("8.8.8.8:53");
 let verifier = DomainVerifier::from_config(&config)?;
 ```
 

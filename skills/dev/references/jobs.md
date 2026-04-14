@@ -27,7 +27,7 @@ Built-in extractors:
 
 ```rust
 use modo::job::{Payload, Meta};
-use modo::extractor::Service;
+use modo::service::Service;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -211,7 +211,7 @@ Built-in extractors (via `FromCronContext`):
 
 ```rust
 use modo::cron::Meta;
-use modo::extractor::Service;
+use modo::service::Service;
 
 async fn cleanup_expired(
     meta: Meta,
