@@ -8,7 +8,7 @@
 
 The current module layout (v0.6.3) has accumulated three categories of placement smells:
 
-1. **Identity logic is scattered across five top-level modules.** `auth` holds credentials/JWT/OAuth, `session` holds HTTP sessions, `apikey` holds API-key auth, `rbac` holds role checks, and `rbac` also owns `require_authenticated` — a gate about identity *presence*, not roles. No single module owns the concept of "authenticated user", so the gate lives in the closest neighbour.
+1. **Identity logic is scattered across five top-level modules.** `auth` holds credentials/JWT/OAuth, `session` holds HTTP sessions, `apikey` holds API-key auth, `rbac` holds role checks, and `rbac` also owns `require_authenticated` — a gate about identity _presence_, not roles. No single module owns the concept of "authenticated user", so the gate lives in the closest neighbour.
 
 2. **Two top-level modules are grab-bags.** `middleware/` mixes CORS, CSRF, compression, rate limiting, security headers, request IDs, tracing, panic handling, and error handling into a single flat file tree. `extractor/` mixes deserialization extractors (`JsonRequest`, `FormRequest`, `Query`, `MultipartRequest`) with service-registry access (`Service`) and client-context extraction (`ClientInfo`).
 
@@ -323,21 +323,21 @@ Router::new()
 
 ### Relocation cheat sheet
 
-| Before | After |
-|--------|-------|
-| `modo::Session` | `modo::prelude::Session` (or `modo::auth::session::Session`) |
-| `modo::SessionLayer`, `modo::session::layer` | `modo::middlewares::session` (or `modo::auth::session::layer`) |
-| `modo::session::Store` | `modo::auth::session::Store` |
-| `modo::apikey::*` | `modo::auth::apikey::*` |
-| `modo::rbac::Role` | `modo::auth::role::Role` |
-| `modo::rbac::require_role` | `modo::auth::guard::require_role` (or `modo::guards::require_role`) |
-| `modo::rbac::require_authenticated` | `modo::auth::guard::require_authenticated` |
-| `modo::apikey::require_scope` | `modo::auth::guard::require_scope` |
-| `modo::extractor::Service` | `modo::service::Registry` |
-| `modo::ClientInfo`, `modo::extractor::ClientInfo` | `modo::ip::ClientInfo` |
-| `modo::middleware::cors` | unchanged (or `modo::middlewares::cors`) |
-| `modo::JwtLayer`, `modo::Claims`, etc. | `modo::auth::jwt::*` (no crate-root re-export) |
-| `modo::GitHub`, `modo::Google`, etc. | `modo::auth::oauth::*` (no crate-root re-export) |
+| Before                                            | After                                                               |
+| ------------------------------------------------- | ------------------------------------------------------------------- |
+| `modo::Session`                                   | `modo::prelude::Session` (or `modo::auth::session::Session`)        |
+| `modo::SessionLayer`, `modo::session::layer`      | `modo::middlewares::session` (or `modo::auth::session::layer`)      |
+| `modo::session::Store`                            | `modo::auth::session::Store`                                        |
+| `modo::apikey::*`                                 | `modo::auth::apikey::*`                                             |
+| `modo::rbac::Role`                                | `modo::auth::role::Role`                                            |
+| `modo::rbac::require_role`                        | `modo::auth::guard::require_role` (or `modo::guards::require_role`) |
+| `modo::rbac::require_authenticated`               | `modo::auth::guard::require_authenticated`                          |
+| `modo::apikey::require_scope`                     | `modo::auth::guard::require_scope`                                  |
+| `modo::extractor::Service`                        | `modo::service::Registry`                                           |
+| `modo::ClientInfo`, `modo::extractor::ClientInfo` | `modo::ip::ClientInfo`                                              |
+| `modo::middleware::cors`                          | unchanged (or `modo::middlewares::cors`)                            |
+| `modo::JwtLayer`, `modo::Claims`, etc.            | `modo::auth::jwt::*` (no crate-root re-export)                      |
+| `modo::GitHub`, `modo::Google`, etc.              | `modo::auth::oauth::*` (no crate-root re-export)                    |
 
 ## Internal impact on modo source
 
@@ -368,7 +368,7 @@ Router::new()
 
 ## Open questions
 
-None blocking. Naming of `require_*` guard functions vs `allow_for_*` is deferred as a small, late, non-structural decision.
+None. Guard functions keep the `require_*` prefix (`require_authenticated`, `require_role`, `require_scope`, `require_feature`, `require_limit`) — shorter than `allow_for_*` and matches axum convention.
 
 ## Rollout
 
