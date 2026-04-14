@@ -92,11 +92,13 @@ src/auth/session/   → sessions.md
 src/flash/          → sessions.md
 src/cookie/         → sessions.md
 src/auth/           → auth.md
-src/auth/apikey/    → auth.md
+src/auth/apikey/    → apikey.md
 src/auth/role/      → auth.md
 src/auth/jwt/       → auth.md
 src/auth/oauth/     → auth.md
 src/auth/guard.rs   → auth.md
+src/embed/          → embed.md
+src/tier/           → tier.md
 src/job/            → jobs.md
 src/cron/           → jobs.md
 src/tenant/         → tenant.md
