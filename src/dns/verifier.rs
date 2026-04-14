@@ -37,7 +37,6 @@ pub(crate) struct Inner {
 /// # Example
 ///
 /// ```rust,no_run
-/// # #[cfg(feature = "dns")]
 /// # {
 /// use modo::dns::{DnsConfig, DomainVerifier, generate_verification_token};
 ///

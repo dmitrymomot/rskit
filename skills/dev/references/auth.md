@@ -1,12 +1,25 @@
-# Auth Reference (OAuth2, JWT, Password, TOTP, RBAC)
+# Auth Reference (OAuth2, JWT, Password, TOTP, Role-Based Gating, Guards)
 
-OAuth2, JWT, password hashing, OTP, TOTP, and backup codes are feature-gated under `auth`. RBAC is always available (no feature gate).
+All identity and access features live under `modo::auth` and are always
+available — there are no per-module feature flags in modo 0.7. The only
+cargo feature is `test-helpers` (dev-only test scaffolding), which does
+not gate any of the modules below.
+
+Companion references:
+
+- Sessions: see [`sessions.md`](sessions.md) — `modo::auth::session`.
+- API keys: see [`apikey.md`](apikey.md) — `modo::auth::apikey`.
+
+The route-level guards (`require_authenticated`, `require_role`,
+`require_scope`) are also re-exported from the flat
+[`modo::guards`](../../../src/guards.rs) index alongside tier guards
+(`require_feature`, `require_limit`).
 
 ---
 
 ## OAuth2
 
-**Module:** `modo::auth::oauth` (re-exported at crate root under `#[cfg(feature = "auth")]`)
+**Module:** `modo::auth::oauth`
 
 ### OAuthProvider trait
 
@@ -40,7 +53,7 @@ GitHub::new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Ke
 Google::new(config: &OAuthProviderConfig, cookie_config: &CookieConfig, key: &Key, http_client: reqwest::Client) -> Self
 ```
 
-`Key` is `axum_extra::extract::cookie::Key`. Must be registered in the `Registry` for `OAuthState` extraction. `http_client` is a `reqwest::Client` used for token exchange and profile fetching.
+`Key` is `axum_extra::extract::cookie::Key`. Must be registered in [`AppState`](../../../src/service/state.rs) (via `AppState::register::<Key>(...)`) so the [`OAuthState`] extractor can verify the signed cookie. `http_client` is a `reqwest::Client` used for token exchange and profile fetching.
 
 ### OAuthConfig
 
@@ -88,7 +101,7 @@ oauth:
 ### Key types
 
 - `AuthorizationRequest` -- returned by `authorize_url()`, implements `IntoResponse` (303 redirect + `Set-Cookie`).
-- `OAuthState` -- axum `FromRequestParts` extractor. Reads signed `_oauth_state` cookie. Requires `Key` in `Registry`.
+- `OAuthState` -- axum `FromRequestParts` extractor. Reads and verifies the signed `_oauth_state` cookie. Requires `Key` to be registered in `AppState`. Returns `Error::bad_request` for missing/tampered cookies and `Error::internal` if the `Key` is not registered.
 - `CallbackParams` -- `#[non_exhaustive]` `Deserialize` struct with `code: String` and `state: String`. Extract with `Query<CallbackParams>`. Must be constructed via deserialization (no public constructor).
 - `UserProfile` -- `#[non_exhaustive]` normalized profile returned by `exchange()`. Use `UserProfile::new()` constructor:
 
@@ -110,10 +123,10 @@ oauth:
     }
     ```
 
-### Crate root re-exports (under `#[cfg(feature = "auth")]`)
+### Imports
 
 ```rust
-pub use auth::oauth::{
+use modo::auth::oauth::{
     AuthorizationRequest, CallbackParams, GitHub, Google, OAuthConfig,
     OAuthProvider, OAuthProviderConfig, OAuthState, UserProfile,
 };
@@ -123,7 +136,7 @@ pub use auth::oauth::{
 
 ## Password Hashing
 
-**Module:** `modo::auth::password` (feature-gated under `auth`)
+**Module:** `modo::auth::password`
 
 Argon2id password hashing and verification. Runs on a blocking thread via `tokio::task::spawn_blocking` to avoid starving the async runtime.
 
@@ -155,13 +168,13 @@ pub async fn hash(password: &str, config: &PasswordConfig) -> Result<String>
 pub async fn verify(password: &str, hash: &str) -> Result<bool>
 ```
 
-Re-exported at `modo::auth::PasswordConfig` (via `pub use password::PasswordConfig` in `auth/mod.rs`). Not re-exported at the crate root.
+`PasswordConfig` is also re-exported as `modo::auth::PasswordConfig`.
 
 ---
 
 ## OTP (One-Time Passwords)
 
-**Module:** `modo::auth::otp` (feature-gated under `auth`)
+**Module:** `modo::auth::otp`
 
 Numeric one-time password generation and constant-time verification.
 
@@ -180,7 +193,7 @@ pub fn verify(code: &str, hash: &str) -> bool
 
 ## TOTP (Time-Based OTP)
 
-**Module:** `modo::auth::totp` (feature-gated under `auth`)
+**Module:** `modo::auth::totp`
 
 RFC 6238 TOTP authenticator compatible with Google Authenticator, Authy, etc.
 
@@ -220,13 +233,13 @@ pub fn otpauth_uri(&self, issuer: &str, account: &str) -> String // otpauth://to
 
 Verification uses constant-time comparison.
 
-Re-exported at `modo::auth::Totp`, `modo::auth::TotpConfig` (via `pub use totp::{Totp, TotpConfig}` in `auth/mod.rs`). Not re-exported at the crate root.
+Also re-exported as `modo::auth::Totp` and `modo::auth::TotpConfig`.
 
 ---
 
 ## Backup Recovery Codes
 
-**Module:** `modo::auth::backup` (feature-gated under `auth`)
+**Module:** `modo::auth::backup`
 
 One-time backup recovery codes formatted as `xxxx-xxxx` (8 lowercase alphanumeric characters).
 
@@ -246,7 +259,7 @@ pub fn verify(code: &str, hash: &str) -> bool
 
 ## JWT
 
-**Module:** `modo::auth::jwt` (re-exported at crate root under `#[cfg(feature = "auth")]`)
+**Module:** `modo::auth::jwt`
 
 ### JwtConfig
 
@@ -379,7 +392,9 @@ HmacSigner::new(secret: impl AsRef<[u8]>) -> Self
 
 ### JwtLayer\<T\>
 
-Tower middleware layer. Decodes JWT, validates claims, optionally checks revocation, inserts `Claims<T>` into request extensions.
+Tower middleware layer. Decodes JWT, validates claims, optionally checks revocation, inserts `Claims<T>` into request extensions. Also re-exported as `modo::middlewares::Jwt`.
+
+`T: DeserializeOwned + Clone + Send + Sync + 'static`.
 
 ```rust
 JwtLayer::<MyClaims>::new(decoder: JwtDecoder) -> Self
@@ -438,7 +453,7 @@ Behavior:
 pub struct Bearer(pub String);
 ```
 
-Axum `FromRequestParts` extractor. Reads raw token string from `Authorization: Bearer <token>`. Does **not** decode or validate -- independent of `JwtLayer`. Returns 401 with `jwt:missing_token` if absent.
+Axum `FromRequestParts` extractor. Reads the raw token string from `Authorization: Bearer <token>` (accepts the exact prefixes `Bearer ` or `bearer `; other capitalizations and other schemes are rejected). Does **not** decode or validate -- independent of `JwtLayer`. Returns 401 with `jwt:missing_token` if the header is absent, uses a different scheme, or carries an empty token. Also available via `modo::extractors::Bearer`; `Claims<T>` is at `modo::extractors::Claims`.
 
 ### JwtError
 
@@ -475,10 +490,10 @@ Variants and codes:
 | `SigningFailed`         | `jwt:signing_failed`          | 500         |
 | `SerializationFailed`   | `jwt:serialization_failed`    | 500         |
 
-### Crate root re-exports (under `#[cfg(feature = "auth")]`)
+### Imports
 
 ```rust
-pub use auth::jwt::{
+use modo::auth::jwt::{
     Bearer, Claims, HmacSigner, JwtConfig, JwtDecoder, JwtEncoder, JwtError,
     JwtLayer, Revocation, TokenSigner, TokenSource, TokenVerifier, ValidationConfig,
 };
@@ -505,11 +520,20 @@ Available at `modo::auth::jwt::{BearerSource, QuerySource, CookieSource, HeaderS
 
 ---
 
-## RBAC
+## Role-Based Gating
 
-**Module:** `modo::rbac` (always available, no feature gate)
+**Modules:** `modo::auth::role` (extractor + role middleware) and
+`modo::auth::guard` (route-level guard layers).
 
-Re-exported at crate root: `modo::Role`, `modo::RoleExtractor`.
+Also available via the flat aggregators:
+
+- `modo::middlewares::role` — alias for `modo::auth::role::middleware`.
+- `modo::middlewares::ApiKey` — alias for `modo::auth::apikey::ApiKeyLayer`.
+- `modo::guards::{require_role, require_authenticated, require_scope}` —
+  flat re-exports of the route-level guards in `modo::auth::guard`.
+
+`Role` is preluded as `modo::prelude::Role` and also available via
+`modo::extractors::Role`.
 
 ### RoleExtractor trait
 
@@ -518,13 +542,18 @@ pub trait RoleExtractor: Send + Sync + 'static {
     fn extract(
         &self,
         parts: &mut http::request::Parts,
-    ) -> impl Future<Output = Result<String>> + Send;
+    ) -> impl Future<Output = modo::Result<String>> + Send;
 }
 ```
 
-RPITIT -- **not object-safe**. Use as concrete type parameter.
+RPITIT -- **not object-safe**. Use as a concrete type parameter on
+`modo::auth::role::middleware(...)`; never `dyn RoleExtractor`.
 
-Takes `&mut Parts` so it can call axum extractors (e.g., `Session`) internally. Return `Error::unauthorized(...)` to short-circuit the request.
+Takes `&mut Parts` so it can call axum extractors (e.g.,
+`modo::auth::session::Session`, `modo::auth::Bearer`) internally. Return
+`modo::Error::unauthorized(...)` (or any `modo::Error`) to short-circuit
+the request — the middleware converts the error into the corresponding
+HTTP response and skips the inner service.
 
 ### Role extractor
 
@@ -533,50 +562,91 @@ Takes `&mut Parts` so it can call axum extractors (e.g., `Session`) internally. 
 pub struct Role(pub(crate) String);
 ```
 
-Axum `FromRequestParts` extractor. Reads from request extensions (inserted by RBAC middleware). Returns 500 if RBAC middleware not applied. Implements `OptionalFromRequestParts` for `Option<Role>`.
+Axum `FromRequestParts` extractor. Reads from request extensions
+(inserted by the role middleware). Returns **500 Internal Server Error**
+if `modo::auth::role::middleware()` is not applied — missing middleware
+is a server wiring bug, not a client auth failure. Implements
+`OptionalFromRequestParts` for `Option<Role>` (`None` when absent).
 
 Methods: `.as_str() -> &str`, `Deref<Target = str>`.
 
-### RBAC middleware
+### Role middleware
 
 ```rust
-rbac::middleware(extractor: impl RoleExtractor) -> RbacLayer<R>
+modo::auth::role::middleware(extractor: impl RoleExtractor) -> RoleLayer<R>
 ```
 
-Tower layer. Calls `extractor.extract()` on every request, inserts `Role` into extensions, forwards to inner service. Errors from the extractor are converted to HTTP responses immediately.
+Tower layer. Calls `extractor.extract(&mut parts)` on every request,
+inserts `Role` into extensions, forwards to the inner service. Errors
+from the extractor are converted to HTTP responses immediately.
 
-Apply with `.layer()` on the outer router.
+Apply with `.layer()` on the outer router. Also re-exported as
+`modo::middlewares::role`.
 
 ### Guard layers
 
 ```rust
-rbac::require_role(roles: impl IntoIterator<Item = impl Into<String>>) -> RequireRoleLayer
-rbac::require_authenticated() -> RequireAuthenticatedLayer
+// in modo::auth::guard, also re-exported from modo::guards
+pub fn require_role(roles: impl IntoIterator<Item = impl Into<String>>) -> RequireRoleLayer
+pub fn require_authenticated() -> RequireAuthenticatedLayer
+pub fn require_scope(scope: &str) -> ScopeLayer
 ```
 
-Apply with `.route_layer()` (after route matching).
+Apply with `.route_layer()` (after route matching) so the guard only
+runs for the routes it protects.
 
-**`require_role`:**
+**`require_role(roles)`** — checks the resolved [`Role`] against an
+allow-list. Exact string match; no hierarchy.
 
-- Role matches any in list: passes through.
-- Role present but not in list: 403 Forbidden.
-- No role in extensions: 401 Unauthorized.
+| Status | Condition |
+|--------|-----------|
+| 200    | `Role` matches any entry in `roles` |
+| 401 Unauthorized | No `Role` in request extensions (role middleware never ran) |
+| 403 Forbidden    | `Role` present but not in the allow-list (an empty `roles` iterator always 403s) |
 
-**`require_authenticated`:**
+**`require_authenticated()`** — passes through whenever any [`Role`] is
+present. The role's value is not inspected.
 
-- Role present in extensions: passes through.
-- No role: 401 Unauthorized.
+| Status | Condition |
+|--------|-----------|
+| 200    | Any `Role` in extensions |
+| 401 Unauthorized | No `Role` in extensions |
+
+**`require_scope(scope)`** — checks the verified API key's scope list
+for the required scope (exact string match; no wildcards). Reads
+[`ApiKeyMeta`](apikey.md) from request extensions.
+
+| Status | Condition |
+|--------|-----------|
+| 200    | `meta.scopes` contains `scope` |
+| 403 Forbidden | API key present but `scope` not in `meta.scopes` |
+| 500 Internal Server Error | No `ApiKeyMeta` in extensions — `ApiKeyLayer` is missing upstream. The guard logs `tracing::error!` and responds with a generic "server misconfigured" message. Missing-layer is treated as a server wiring bug, not a client auth failure (do **not** expect 401). |
+
+The opaque return types (`RequireRoleLayer`, `RequireAuthenticatedLayer`,
+`ScopeLayer`) are not re-exported — name them as `impl Layer<S>` or
+just chain them directly into `.route_layer(...)`.
 
 ### Wiring order
 
 ```rust
+use axum::{Router, routing::get};
+use modo::auth::{apikey::ApiKeyLayer, role};
+use modo::guards::{require_authenticated, require_role, require_scope};
+
 let app: Router = Router::new()
     .route("/admin", get(admin_handler))
-    .route_layer(rbac::require_role(["admin", "owner"]))  // guard runs after route match
+    .route_layer(require_role(["admin", "owner"]))   // 401 if no Role, 403 if not allowed
     .route("/dashboard", get(dashboard_handler))
-    .route_layer(rbac::require_authenticated())            // any role suffices
-    .layer(rbac::middleware(MyExtractor));                  // runs first, extracts role
+    .route_layer(require_authenticated())             // 401 if no Role
+    .route("/orders", get(orders_handler))
+    .route_layer(require_scope("read:orders"))         // 500 if no ApiKeyLayer, 403 if scope absent
+    .layer(role::middleware(MyExtractor))              // populates Role
+    .layer(ApiKeyLayer::new(api_key_store));           // populates ApiKeyMeta
 ```
+
+Apply role/apikey middleware with `.layer()` on the outer router so
+they run before the per-route `.route_layer()` guards. See
+[`apikey.md`](apikey.md) for `ApiKeyLayer` and `ApiKeyMeta` details.
 
 ---
 
@@ -606,17 +676,19 @@ The JWT module follows this pattern consistently -- all `JwtError` variants prod
 ## Gotchas
 
 - `OAuthProvider` is RPITIT (not object-safe). Never use `dyn OAuthProvider` or `Arc<dyn OAuthProvider>`.
-- `RoleExtractor` is RPITIT (not object-safe). Never use `dyn RoleExtractor`.
-- `Revocation` and `TokenSource` are object-safe -- use `Arc<dyn Revocation>` and `Arc<dyn TokenSource>`.
+- `RoleExtractor` is RPITIT (not object-safe). Never use `dyn RoleExtractor`; pass concrete types into `modo::auth::role::middleware(...)`.
+- `Revocation` and `TokenSource` are object-safe -- use `Arc<dyn Revocation>` and `Arc<dyn TokenSource>`. `Revocation::is_revoked` returns `Pin<Box<dyn Future>>` (not RPITIT) so it stays object-safe.
 - `TokenVerifier` and `TokenSigner` are object-safe -- use `Arc<dyn TokenVerifier>` and `Arc<dyn TokenSigner>`.
-- OAuth and JWT require feature `auth` in `Cargo.toml`. RBAC has no feature gate.
-- RBAC middleware must apply via `.layer()` on the outer router. Guards must apply via `.route_layer()` after route matching.
-- `JwtDecoder::decode()` always requires `exp` -- tokens without `exp` are rejected as expired.
-- `OAuthState` extractor requires `Key` (from `axum_extra::extract::cookie`) registered in the `Registry`.
-- `Claims<T>` requires `JwtLayer<T>` to be applied to the route -- the middleware inserts claims into extensions. `T` must be `Clone + Send + Sync + 'static`.
+- All auth modules are always compiled in modo 0.7 — only `test-helpers` exists as a cargo feature, and it gates none of these modules.
+- The role middleware must apply via `.layer()` on the outer router. `ApiKeyLayer` likewise applies via `.layer()`. Guards (`require_authenticated`, `require_role`, `require_scope`) must apply via `.route_layer()` after route matching.
+- `require_scope` returns **500** (not 401) when `ApiKeyLayer` is missing — missing middleware is a server wiring bug, not a client auth failure. The guard logs the misconfiguration via `tracing::error!`.
+- `Role` extractor returns **500** when `auth::role::middleware()` is not applied — same rationale (server wiring bug, not a client failure).
+- `JwtDecoder::decode()` always requires `exp` -- tokens without `exp` are rejected as expired (`jwt:expired`).
+- `OAuthState` extractor requires `Key` (from `axum_extra::extract::cookie`) registered in `AppState`. Missing-key returns `Error::internal`; missing/tampered cookie returns `Error::bad_request`.
+- `Claims<T>` requires `JwtLayer<T>` to be applied to the route -- the middleware inserts claims into extensions. `T` must be `Clone + Send + Sync + 'static` for the extractor; encoding additionally requires `Serialize`, decoding `DeserializeOwned`.
 - `Bearer` extractor is independent of `JwtLayer` -- it only reads the raw token string, no decode/validate.
 - `JwtEncoder`/`JwtDecoder` are cheap to clone (state behind `Arc`).
-- `JwtDecoder::from(&encoder)` shares the signing key -- use when encoder and decoder come from same config.
-- `PasswordConfig`, `TotpConfig`, `JwtConfig`, `ValidationConfig`, `OAuthConfig`, `OAuthProviderConfig`, `CallbackParams`, and `UserProfile` are all `#[non_exhaustive]` -- never construct with struct literals. Use the provided constructors (`::new(...)`, `Default::default()`) and override fields.
-- `PasswordConfig`, `TotpConfig`, `JwtConfig`, and `OAuthConfig` have `#[serde(default)]` at struct level -- all fields are optional in YAML (fall back to defaults).
-- `RequireRoleLayer` and `RequireAuthenticatedLayer` are return types of `require_role()` and `require_authenticated()` but are not re-exported -- they are opaque types that users cannot name directly.
+- `JwtDecoder::from(&encoder)` shares the signing key and validation policy -- use when encoder and decoder come from the same `JwtConfig`.
+- `PasswordConfig`, `TotpConfig`, `JwtConfig`, `ValidationConfig`, `OAuthConfig`, `OAuthProviderConfig`, `CallbackParams`, and `UserProfile` are all `#[non_exhaustive]` -- never construct with struct literals (no `..Default::default()` either). Use the provided constructors (`::new(...)`, `Default::default()`) and override fields by direct assignment.
+- `JwtConfig` and `OAuthConfig` have `#[serde(default)]` at struct level -- all fields are optional in YAML (fall back to defaults).
+- `RequireRoleLayer`, `RequireAuthenticatedLayer`, and `ScopeLayer` are the return types of `require_role()`, `require_authenticated()`, and `require_scope()`. They are not re-exported -- chain them directly into `.route_layer(...)` rather than naming them.

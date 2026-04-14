@@ -1,22 +1,21 @@
 # Templates (MiniJinja, i18n, HTMX)
 
-Feature flag: `templates`
-
-Re-exports from `modo::template` (also available at crate root under `#[cfg(feature = "templates")]`):
+Always available — import directly from `modo::template`:
 
 ```rust
-pub use template::{
+use modo::template::{
     Engine, EngineBuilder, HxRequest, Renderer, TemplateConfig, TemplateContext,
     TemplateContextLayer,
 };
 ```
 
-Locale resolvers are re-exported from the `template` module only:
+Locale resolvers are re-exported from `modo::template`:
 
 ```rust
-pub use locale::{AcceptLanguageResolver, CookieResolver, LocaleResolver, QueryParamResolver};
-#[cfg(feature = "session")]
-pub use locale::SessionResolver;
+use modo::template::locale::{
+    AcceptLanguageResolver, CookieResolver, LocaleResolver, QueryParamResolver,
+    SessionResolver,
+};
 ```
 
 The `context!` macro from MiniJinja is also re-exported: `modo::template::context`.
@@ -66,7 +65,7 @@ let engine = Engine::builder()
 - `function(name, f)` -- registers a MiniJinja global function. `f` must implement `minijinja::functions::Function`.
 - `filter(name, f)` -- registers a MiniJinja filter. Same trait bounds as `function`.
 - `locale_resolvers(Vec<Arc<dyn LocaleResolver>>)` -- overrides the default locale resolver chain.
-- `build() -> modo::Result<Engine>` -- constructs the engine. Fails if templates directory is inaccessible or locale files cannot be parsed.
+- `build() -> modo::Result<Engine>` -- constructs the engine. Fails if the locales directory exists but cannot be read, a locale YAML file fails to parse, or static-file hashing hits an I/O error. Templates directory is not validated up front (errors surface on render).
 
 ### What `build()` registers automatically
 
@@ -131,7 +130,7 @@ Handlers do not manipulate `TemplateContext` directly. The `Renderer` extractor 
 
 ## TemplateContextLayer (middleware)
 
-Derives `Clone`. Tower middleware that populates `TemplateContext` and inserts it into request extensions.
+Derives `Clone`. Tower middleware that populates `TemplateContext` and inserts it into request extensions. Also re-exported as `modo::middlewares::TemplateContext` for wiring sites that prefer the `mw::` prefix style.
 
 ```rust
 let router = axum::Router::new()
@@ -161,7 +160,7 @@ let router = axum::Router::new()
 Derives `Debug`, `Clone`, `Copy`. Infallible axum extractor (`Rejection = Infallible`). Checks for `HX-Request: true` header (case-insensitive on header name, exact `"true"` match on value).
 
 ```rust
-use modo::template::HxRequest;
+use modo::template::HxRequest; // also available as modo::extractors::HxRequest
 
 async fn handler(hx: HxRequest) {
     if hx.is_htmx() {

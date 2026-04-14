@@ -6,8 +6,6 @@
 //! [`OAuthProvider`] trait for custom providers, and the axum types needed to wire
 //! the login and callback routes.
 //!
-//! Requires feature `"auth"`.
-//!
 //! ## Provides
 //!
 //! | Export | Kind | Description |

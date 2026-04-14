@@ -1,23 +1,18 @@
 # Webhooks
 
-Outbound webhook delivery with Standard Webhooks signing. Feature-gated under `webhooks`.
+Outbound webhook delivery with Standard Webhooks signing. Always available.
 
-```toml
-# Cargo.toml
-modo = { path = "..", features = ["webhooks"] }
-```
-
-All types are re-exported from the crate root under `#[cfg(feature = "webhooks")]`:
+Import types from `modo::webhook`:
 
 ```rust
-use modo::{
+use modo::webhook::{
     SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender,
 };
 ```
 
 Source: `src/webhook/` (mod.rs, client.rs, sender.rs, secret.rs, signature.rs).
 
-Free functions `sign`, `verify`, `sign_headers`, `verify_headers` are exported from the `webhook` module but **not** re-exported at the crate root. Access them via:
+Free functions `sign`, `verify`, `sign_headers`, `verify_headers` are available at:
 
 ```rust
 use modo::webhook::{sign, verify, sign_headers, verify_headers};
@@ -192,8 +187,8 @@ For verifying incoming webhooks:
 
 - Reads `webhook-id`, `webhook-timestamp`, `webhook-signature` from headers.
 - Checks timestamp is within `tolerance` of current time (replay-attack protection).
-- Tries every `v1,` signature entry against every secret. Returns `Ok(())` on first match.
-- Returns `Error::bad_request` if no signature matches, headers are missing, or timestamp is outside tolerance.
+- Tries every `v1,` signature entry against every secret. Returns `Ok(())` on first match. Non-`v1,` entries are skipped.
+- Returns `Error::bad_request` if any required header is missing, header value is not valid UTF-8, `webhook-timestamp` is not a valid integer, the timestamp is outside `tolerance`, or no signature entry matches any secret.
 
 ---
 

@@ -1,5 +1,3 @@
-#![cfg(feature = "text-embedding")]
-
 use std::pin::Pin;
 use std::sync::Arc;
 

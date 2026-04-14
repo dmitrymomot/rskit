@@ -1,3 +1,6 @@
+//! Internal DNS wire-protocol helpers: building queries, validating responses,
+//! and extracting TXT / CNAME record data from parsed packets.
+
 use simple_dns::{CLASS, Name, Packet, QCLASS, QTYPE, Question, RCODE, TYPE, rdata::RData};
 
 use crate::error::{Error, Result};

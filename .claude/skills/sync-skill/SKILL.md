@@ -56,8 +56,17 @@ All paths in this document are relative to the project root unless stated otherw
 7. **Re-export lists must be exhaustive.** Verify every item against `src/lib.rs` and the
    module's `mod.rs`. Missing re-exports cause confusion downstream.
 
+7a. **Every `modo::X` path in a reference must resolve.** When you write `modo::Foo` in
+   code examples or prose, verify `Foo` is re-exported at `src/lib.rs` (grep `pub use`).
+   If it's only reachable via a module path, write `modo::module::Foo` explicitly.
+   Hallucinated crate-root paths are the most common drift after refactors that prune
+   flat re-exports.
+
 8. **Check feature gates.** Modules behind `#[cfg(feature = "X")]` must document which feature
    flag enables them. Always-available modules must NOT claim a feature gate.
+   After a feature is deleted from `Cargo.toml`, sweep every reference for
+   "Requires the `X` feature" prose and Cargo.toml `features = [...]` snippets — these
+   become silently wrong, not failing-loud.
 
 ## Module → Reference Mapping
 
@@ -79,11 +88,17 @@ src/db/             → database.md
 src/server/         → handlers.md
 src/middleware/      → handlers.md
 src/ip/             → handlers.md
-src/session/        → sessions.md
+src/auth/session/   → sessions.md
 src/flash/          → sessions.md
 src/cookie/         → sessions.md
 src/auth/           → auth.md
-src/rbac/           → auth.md
+src/auth/apikey/    → apikey.md
+src/auth/role/      → auth.md
+src/auth/jwt/       → auth.md
+src/auth/oauth/     → auth.md
+src/auth/guard.rs   → auth.md
+src/embed/          → embed.md
+src/tier/           → tier.md
 src/job/            → jobs.md
 src/cron/           → jobs.md
 src/tenant/         → tenant.md
@@ -99,6 +114,10 @@ src/runtime/        → handlers.md
 src/tracing/        → config.md
 src/testing/        → testing.md
 src/qrcode/         → qrcode.md
+src/prelude.rs      → handlers.md
+src/extractors.rs   → handlers.md
+src/middlewares.rs  → handlers.md
+src/guards.rs       → auth.md
 ```
 
 ## Process
@@ -111,8 +130,11 @@ Before inventorying, confirm the Module → Reference Mapping table is complete:
 2. Compare against the mapping table above.
 3. If any source module is missing from the table, determine which reference file it
    belongs to (based on topic affinity with existing mappings) and add it before proceeding.
+4. **Also flag stale entries** — for every row in the table, confirm the source path
+   still exists on disk (`ls src/<path>`). If a directory was moved (e.g. `src/session/` →
+   `src/auth/session/`), update the row before inventorying. Stale rows silently sync nothing.
 
-This catches modules added since the last sync-skill update.
+This catches modules added since the last sync-skill update — and modules relocated since.
 
 ### Phase 1: Inventory the Public API
 
@@ -252,6 +274,11 @@ When dispatching subagents to write files, use the absolute path
     - Prose explaining behavior, error cases, edge cases under each method
 - `## Gotchas` section at the bottom for non-obvious behavior
 - Code examples use realistic patterns, not toy examples
+- **For `#[non_exhaustive]` structs/enums**: examples MUST construct via
+  `Type::default()` then field-assign (`let mut cfg = EmailConfig::default(); cfg.from = ...;`).
+  Struct-literal `Type { field: x, ..Default::default() }` syntax does NOT compile in
+  external crates against a `#[non_exhaustive]` type. For enums, match arms must include
+  a `_ => ...` fallback.
 
 **For full syncs:** Writing agents may be dispatched in parallel for different reference files.
 Each agent prompt MUST include the full output path (`skills/dev/references/<name>.md` relative

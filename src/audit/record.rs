@@ -5,7 +5,7 @@ use crate::error::Result;
 
 /// Stored audit event returned by [`AuditRepo`](super::AuditRepo) queries.
 ///
-/// All fields are flat — [`ClientInfo`](crate::extractor::ClientInfo) is
+/// All fields are flat — [`ClientInfo`](crate::ip::ClientInfo) is
 /// expanded into `ip`, `user_agent`, `fingerprint` columns.
 #[derive(Debug, Clone, Serialize)]
 pub struct AuditRecord {

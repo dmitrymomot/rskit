@@ -13,7 +13,7 @@ use crate::sanitize::Sanitize;
 ///
 /// ```
 /// use modo::extractor::Query;
-/// use modo::Sanitize;
+/// use modo::sanitize::Sanitize;
 /// use serde::Deserialize;
 ///
 /// #[derive(Deserialize)]

@@ -16,14 +16,13 @@ src/
     json.rs             # JsonRequest<T>
     form.rs             # FormRequest<T>
     query.rs            # Query<T>
-    service.rs          # Service<T>
-    client_info.rs      # ClientInfo
     multipart.rs        # MultipartRequest<T>, UploadedFile, Files
     upload_validator.rs # UploadValidator
   service/
-    mod.rs              # mod registry; mod state; mod snapshot; pub use ...
+    mod.rs              # mod registry; mod state; mod snapshot; mod extractor; pub use ...
     registry.rs         # Registry
     state.rs            # AppState
+    extractor.rs        # Service<T> extractor
     snapshot.rs         # RegistrySnapshot (pub(crate))
   sanitize/
     mod.rs              # mod functions; mod html; mod traits; pub use ...
@@ -54,16 +53,21 @@ src/
     router.rs           # router() -> Router<AppState>
 ```
 
-`lib.rs` re-exports key types at crate root for convenience:
+`lib.rs` re-exports only a minimal set of identity types at the crate root:
 
 ```rust
+pub use config::Config;
 pub use error::{Error, Result};
-pub use extractor::ClientInfo;
-pub use extractor::Service;
-pub use health::{HealthCheck, HealthChecks};
-pub use sanitize::Sanitize;
-pub use validate::{Validate, ValidationError, Validator};
 ```
+
+All other types live under their module path. `modo::prelude::*` brings in the
+ambient extractors reached for in almost every handler
+(`Error`, `Result`, `AppState`, `Role`, `Session`, `Flash`, `ClientIp`,
+`Tenant`, `TenantId`, `Validate`, `ValidationError`, `Validator`).
+
+Flat aggregators: `modo::extractors`, `modo::middlewares`, `modo::guards`
+re-export every extractor / Tower Layer / route guard modo ships for ergonomic
+wiring.
 
 External crates re-exported for user convenience:
 
@@ -210,54 +214,7 @@ Methods:
 
 **Module:** `src/extractor/`
 
-All extractors except `Path`, `Service<T>`, and `ClientInfo` require `T: Sanitize`. They call `sanitize()` automatically after deserialization.
-
-### `Service<T>`
-
-Retrieves a service from the `Registry`. Inner value is `Arc<T>`. Returns 500 if not registered.
-
-```rust
-pub struct Service<T>(pub Arc<T>);
-// Bounds: T: Send + Sync + 'static
-```
-
-```rust
-async fn handler(Service(db): Service<Pool>) {
-    // db is Arc<Pool>
-}
-```
-
-### `ClientInfo`
-
-Client request context: IP address, user-agent, and fingerprint. Implements `FromRequestParts`. Requires `ClientIpLayer` for the `ip` field; if absent, `ip` will be `None`.
-
-```rust
-#[derive(Debug, Clone, Default)]
-pub struct ClientInfo {
-    ip: Option<String>,
-    user_agent: Option<String>,
-    fingerprint: Option<String>,
-}
-
-// Builder (for non-HTTP contexts like background jobs)
-fn new() -> Self                                          // all fields None
-fn ip(self, ip: impl Into<String>) -> Self
-fn user_agent(self, ua: impl Into<String>) -> Self
-fn fingerprint(self, fp: impl Into<String>) -> Self
-
-// Accessors
-fn ip_value(&self) -> Option<&str>
-fn user_agent_value(&self) -> Option<&str>
-fn fingerprint_value(&self) -> Option<&str>
-```
-
-Fingerprint is read from the `x-fingerprint` request header.
-
-```rust
-async fn handler(info: ClientInfo) {
-    if let Some(ip) = info.ip_value() { /* ... */ }
-}
-```
+All extractors except [`Path`] require `T: Sanitize`. They call `sanitize()` automatically after deserialization. The [`Service<T>`](modo::service::Service) service-registry extractor lives in `modo::service`, not here.
 
 ### `JsonRequest<T>`
 
@@ -375,7 +332,7 @@ file.validate()
 ## Sanitize
 
 **Module:** `src/sanitize/`
-**Re-export:** `modo::Sanitize`
+**Import:** `modo::sanitize::Sanitize`
 
 ### `Sanitize` trait
 
@@ -424,7 +381,7 @@ fn normalize_email(s: &mut String)             // trim + lowercase + strip +tag
 ## Validate
 
 **Module:** `src/validate/`
-**Re-exports:** `modo::Validate`, `modo::ValidationError`, `modo::Validator`
+**Imports:** `modo::validate::{Validate, ValidationError, Validator}` (also `modo::prelude::*`)
 
 ### `Validate` trait
 
@@ -517,6 +474,24 @@ Immutable, cheaply cloneable (wraps `Arc<HashMap<...>>`). Passed to `Router::wit
 ```rust
 fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>>
 ```
+
+### `Service<T>`
+
+Axum extractor that retrieves a registered service from `AppState`. Inner value is `Arc<T>`. Returns 500 Internal Server Error if `T` was not registered.
+
+```rust
+pub struct Service<T>(pub Arc<T>);
+// Bounds on FromRequestParts impl:
+//   S: Send + Sync
+//   T: Send + Sync + 'static
+//   AppState: FromRef<S>
+```
+
+`Service<T>` requires `AppState: FromRef<S>` on the router state type. This is automatic when using `Router::with_state(state)` where `state` is `AppState`; custom composite state types must implement `FromRef<S>` themselves.
+
+### `RegistrySnapshot`
+
+Internal (`pub(crate)`) point-in-time copy of the service map used by crate-internal middleware that needs registry access before `AppState` is constructed. Not part of the public API.
 
 ### Startup flow
 
@@ -683,7 +658,7 @@ if let Some(data) = cache.get(&"session_abc") {
 
 **Module:** `src/health/`
 Always available, no feature flag.
-**Re-exports:** `modo::HealthCheck`, `modo::HealthChecks`
+**Imports:** `modo::health::{HealthCheck, HealthChecks}`
 
 Provides liveness and readiness probe endpoints for Kubernetes-style health checks.
 
@@ -700,9 +675,9 @@ pub trait HealthCheck: Send + Sync + 'static {
 }
 ```
 
-Built-in implementations (behind feature flags):
+Built-in implementations:
 
-- `db::Database` (feature `db`) -- executes `SELECT 1` to verify database connectivity
+- `db::Database` -- executes `SELECT 1` to verify database connectivity
 
 ### `HealthChecks`
 

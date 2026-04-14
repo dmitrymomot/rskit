@@ -5,13 +5,6 @@ OAuth 2.0 Authorization Code flow with PKCE for modo applications.
 Provides built-in provider implementations for Google and GitHub, a shared `OAuthProvider`
 trait for custom providers, and the axum types needed to wire login and callback routes.
 
-Requires the `auth` feature flag.
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["auth"] }
-```
-
 ## Key Types
 
 | Type                   | Role                                                                              |
@@ -87,7 +80,7 @@ fn build_router(oauth_cfg: &OAuthConfig, cookie_cfg: &CookieConfig, http_client:
 ```rust
 use axum::response::{IntoResponse, Response};
 use modo::auth::oauth::Google;
-use modo::extractor::Service;
+use modo::service::Service;
 
 async fn google_login(Service(google): Service<Google>) -> modo::Result<Response> {
     Ok(google.authorize_url()?.into_response())
@@ -100,7 +93,7 @@ async fn google_login(Service(google): Service<Google>) -> modo::Result<Response
 use axum::extract::Query;
 use axum::response::Redirect;
 use modo::auth::oauth::{CallbackParams, Google, OAuthState, UserProfile};
-use modo::extractor::Service;
+use modo::service::Service;
 
 async fn google_callback(
     oauth_state: OAuthState,

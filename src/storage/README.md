@@ -1,4 +1,4 @@
-# storage
+# modo::storage
 
 S3-compatible object storage for the modo framework. Supports AWS S3, RustFS,
 MinIO, and any provider that implements the S3 API.
@@ -6,15 +6,6 @@ MinIO, and any provider that implements the S3 API.
 Request signing uses AWS Signature Version 4. Both path-style
 (`https://endpoint/bucket/key`) and virtual-hosted-style
 (`https://bucket.endpoint/key`) URLs are supported.
-
-## Feature gate
-
-Requires the `storage` feature flag:
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["storage"] }
-```
 
 The memory backend is available inside `#[cfg(test)]` unit-test blocks and
 when the `test-helpers` feature is enabled (for integration tests).
@@ -27,16 +18,15 @@ when the `test-helpers` feature is enabled (for integration tests).
 use modo::storage::{BucketConfig, Storage, PutInput};
 use bytes::Bytes;
 
-let config = BucketConfig {
-    bucket: "my-bucket".into(),
-    endpoint: "https://s3.amazonaws.com".into(),
-    access_key: "AKIAIOSFODNN7EXAMPLE".into(),
-    secret_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into(),
-    region: Some("us-east-1".into()),
-    public_url: Some("https://cdn.example.com".into()),
-    max_file_size: Some("10mb".into()),
-    ..Default::default()
-};
+// `BucketConfig` is `#[non_exhaustive]` — build it from `default()` and assign fields.
+let mut config = BucketConfig::default();
+config.bucket = "my-bucket".into();
+config.endpoint = "https://s3.amazonaws.com".into();
+config.access_key = "AKIAIOSFODNN7EXAMPLE".into();
+config.secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into();
+config.region = Some("us-east-1".into());
+config.public_url = Some("https://cdn.example.com".into());
+config.max_file_size = Some("10mb".into());
 
 let storage = Storage::new(&config)?;
 
@@ -98,11 +88,27 @@ let key = storage.put_from_url(&PutFromUrlInput {
 Redirects are not followed. A hard-coded 30-second timeout applies.
 The memory backend returns an error for this operation.
 
+### Retrieving files
+
+`Storage` does not stream bytes back — consumers fetch objects through a URL.
+Use `url()` for public objects and `presigned_url()` for private ones.
+
+```rust,ignore
+// Public URL (requires `public_url` in BucketConfig). String concatenation only.
+let public = storage.url("avatars/01ABC.jpg")?;
+
+// Check existence without downloading (S3 HEAD request).
+if storage.exists("avatars/01ABC.jpg").await? {
+    // ...
+}
+```
+
 ### Presigned URL
 
 ```rust,ignore
 use std::time::Duration;
 
+// Signed GET URL, valid for `expires_in`. Works on any backend (including memory).
 let url = storage.presigned_url("avatars/01ABC.jpg", Duration::from_secs(3600)).await?;
 ```
 
@@ -131,12 +137,18 @@ let key = storage.put(&input).await?;
 ```rust,ignore
 use modo::storage::{BucketConfig, Buckets};
 
-let configs = vec![
-    BucketConfig { name: "avatars".into(), bucket: "avatars-bucket".into(), /* ... */ ..Default::default() },
-    BucketConfig { name: "docs".into(),    bucket: "docs-bucket".into(),    /* ... */ ..Default::default() },
-];
-let buckets = Buckets::new(&configs)?;
+let mut avatars_cfg = BucketConfig::default();
+avatars_cfg.name = "avatars".into();
+avatars_cfg.bucket = "avatars-bucket".into();
+avatars_cfg.endpoint = "https://s3.amazonaws.com".into();
+// ... access_key, secret_key, etc.
 
+let mut docs_cfg = BucketConfig::default();
+docs_cfg.name = "docs".into();
+docs_cfg.bucket = "docs-bucket".into();
+docs_cfg.endpoint = "https://s3.amazonaws.com".into();
+
+let buckets = Buckets::new(&[avatars_cfg, docs_cfg])?;
 let avatars = buckets.get("avatars")?;
 ```
 

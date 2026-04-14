@@ -1,27 +1,29 @@
 # API Keys
 
-Prefixed API key issuance, verification, scoping, and lifecycle management. Feature-gated under `apikey` (depends on `db`).
+Prefixed API key issuance, verification, scoping, and lifecycle management. Always available.
 
-```toml
-modo = { version = "0.6", features = ["apikey"] }
-```
-
-All types are re-exported from the crate root under `#[cfg(feature = "apikey")]`:
+Import types from `modo::auth::apikey`:
 
 ```rust
-use modo::{
+use modo::auth::apikey::{
     ApiKeyBackend, ApiKeyConfig, ApiKeyCreated, ApiKeyLayer, ApiKeyMeta,
-    ApiKeyRecord, ApiKeyStore, CreateKeyRequest, require_scope,
+    ApiKeyRecord, ApiKeyStore, CreateKeyRequest,
 };
+use modo::auth::guard::require_scope;
 ```
+
+Convenience re-exports at the crate root:
+
+- `modo::middlewares::ApiKey` — alias for `modo::auth::apikey::ApiKeyLayer`
+- `modo::extractors::ApiKeyMeta` — alias for `modo::auth::apikey::ApiKeyMeta`
 
 `InMemoryBackend` is only available under `#[cfg(test)]` or `feature = "test-helpers"`:
 
 ```rust
-use modo::apikey::test::InMemoryBackend;
+use modo::auth::apikey::test::InMemoryBackend;
 ```
 
-Source: `src/apikey/` (mod.rs, config.rs, types.rs, token.rs, backend.rs, sqlite.rs, store.rs, middleware.rs, extractor.rs, scope.rs).
+Source: `src/auth/apikey/` (mod.rs, config.rs, types.rs, token.rs, backend.rs, sqlite.rs, store.rs, middleware.rs, extractor.rs). Scope gating lives in `src/auth/guard.rs`.
 
 ---
 
@@ -57,6 +59,19 @@ apikey:
   prefix: "modo"
   secret_length: 32
   touch_threshold_secs: 60
+```
+
+### Construction (non_exhaustive)
+
+`ApiKeyConfig` is `#[non_exhaustive]` — construct via `Default::default()` and field assignment, never with a struct literal:
+
+```rust
+use modo::auth::apikey::ApiKeyConfig;
+
+let mut config = ApiKeyConfig::default();
+config.prefix = "sk".into();
+config.secret_length = 48;
+config.touch_threshold_secs = 120;
 ```
 
 ---
@@ -245,7 +260,7 @@ Returns `bad_request` if the header name is invalid.
 ### Usage
 
 ```rust
-use modo::apikey::{ApiKeyStore, ApiKeyConfig, ApiKeyLayer};
+use modo::auth::apikey::{ApiKeyStore, ApiKeyConfig, ApiKeyLayer};
 use axum::Router;
 
 let store = ApiKeyStore::new(db, ApiKeyConfig::default()).unwrap();
@@ -259,6 +274,13 @@ let app = Router::new()
 let app = Router::new()
     .route("/api/v1/orders", get(list_orders))
     .layer(ApiKeyLayer::from_header(store, "x-api-key").unwrap());
+```
+
+Or via the `mw` re-export:
+
+```rust
+use modo::middlewares as mw;
+let app = Router::new().layer(mw::ApiKey::new(store));
 ```
 
 ---
@@ -276,7 +298,8 @@ Uses exact string matching. Returns `403 Forbidden` if the key lacks the scope. 
 ### Usage
 
 ```rust
-use modo::apikey::{ApiKeyLayer, require_scope};
+use modo::auth::apikey::ApiKeyLayer;
+use modo::auth::guard::require_scope;
 use axum::{Router, routing::get};
 
 let app: Router = Router::new()
@@ -294,8 +317,8 @@ let app: Router = Router::new()
 In-memory `ApiKeyBackend` for unit tests. Available under `#[cfg(test)]` or `feature = "test-helpers"`.
 
 ```rust
-use modo::apikey::test::InMemoryBackend;
-use modo::apikey::{ApiKeyStore, ApiKeyConfig};
+use modo::auth::apikey::test::InMemoryBackend;
+use modo::auth::apikey::{ApiKeyStore, ApiKeyConfig};
 use std::sync::Arc;
 
 let backend = Arc::new(InMemoryBackend::new());

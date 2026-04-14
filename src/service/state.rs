@@ -11,7 +11,7 @@ use super::Registry;
 /// [`Arc`] and never copied.
 ///
 /// Retrieve individual services inside handlers through the
-/// [`Service<T>`](crate::extractor::Service) extractor, which calls
+/// [`Service<T>`](super::Service) extractor, which calls
 /// [`AppState::get`] internally.
 #[derive(Clone)]
 pub struct AppState {

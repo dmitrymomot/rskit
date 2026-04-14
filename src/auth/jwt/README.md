@@ -2,13 +2,6 @@
 
 JWT authentication for the `modo` framework: token encoding, decoding, Tower middleware, pluggable token sources, and optional revocation.
 
-Requires the `auth` feature flag.
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["auth"] }
-```
-
 ## Key Types
 
 | Type               | Role                                                             |

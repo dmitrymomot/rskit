@@ -2,8 +2,6 @@
 //!
 //! Cookie-based flash messages for one-time cross-request notifications.
 //!
-//! This module is always available; no feature flag is required.
-//!
 //! Provides:
 //!
 //! - [`FlashLayer`] — Tower [`Layer`](tower::Layer) that enables flash cookie support on a router.
@@ -26,8 +24,7 @@
 //!
 //! ```rust,ignore
 //! use modo::cookie::{CookieConfig, key_from_config};
-//! use modo::flash::FlashLayer;
-//! use modo::Flash;
+//! use modo::flash::{Flash, FlashLayer};
 //! use axum::{Router, routing::{get, post}, response::Redirect};
 //!
 //! // Build the layer from your cookie config

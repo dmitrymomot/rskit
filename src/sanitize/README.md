@@ -1,4 +1,4 @@
-# sanitize
+# modo::sanitize
 
 Input sanitization utilities for normalizing string fields before validation
 or storage.
@@ -78,10 +78,8 @@ assert_eq!(email, "user@example.com");
 
 ## Integration with modo
 
-`Sanitize` is re-exported at the crate root as `modo::Sanitize`. The functions
-are available under `modo::sanitize::*`:
+`Sanitize` and the helper functions all live under `modo::sanitize`:
 
 ```rust,ignore
-use modo::Sanitize;
-use modo::sanitize::{trim, normalize_email, strip_html};
+use modo::sanitize::{Sanitize, trim, normalize_email, strip_html};
 ```

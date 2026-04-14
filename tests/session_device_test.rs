@@ -1,6 +1,4 @@
-#![cfg(feature = "session")]
-
-use modo::session::device::{parse_device_name, parse_device_type};
+use modo::auth::session::device::{parse_device_name, parse_device_type};
 
 #[test]
 fn chrome_on_macos() {

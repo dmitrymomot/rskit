@@ -1,10 +1,24 @@
 //! # modo::middleware
 //!
-//! HTTP middleware for the modo web framework.
+//! Universal HTTP middleware for the modo web framework.
 //!
 //! Provides a collection of Tower-compatible middleware layers covering
-//! the most common cross-cutting concerns for HTTP applications.
-//! Always available (no feature flag required).
+//! the most common cross-cutting concerns — compression, request IDs,
+//! panic recovery, CORS, CSRF, centralised error rendering, security
+//! headers, request tracing, and rate limiting. Always available (no
+//! feature flag required).
+//!
+//! ## Relationship to `modo::middlewares`
+//!
+//! This module ships the framework-universal layers. The virtual
+//! [`modo::middlewares`](crate::middlewares) module is a flat
+//! wiring-site index that re-exports **both** these universal
+//! middlewares **and** domain-specific layers from feature-gated
+//! modules (e.g. `session`, `tenant`, `auth`, `flash`, `ip`, `tier`,
+//! `geolocation`, `template`). Reach for `modo::middlewares` when you
+//! want a single namespace at your `.layer(...)` call sites; reach for
+//! `modo::middleware` when you only need the universal layers or the
+//! supporting configuration and extractor types.
 //!
 //! ## Provided items
 //!

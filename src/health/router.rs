@@ -2,8 +2,7 @@ use axum::Router;
 use axum::routing::get;
 use http::StatusCode;
 
-use crate::extractor::Service;
-use crate::service::AppState;
+use crate::service::{AppState, Service};
 
 use super::HealthChecks;
 

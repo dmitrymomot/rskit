@@ -7,13 +7,13 @@ use crate::ip::ClientIp;
 /// Client request context: IP address, user-agent, and fingerprint.
 ///
 /// Implements [`FromRequestParts`] for automatic extraction in handlers.
-/// Requires [`ClientIpLayer`](crate::ClientIpLayer) for the `ip` field;
+/// Requires [`ClientIpLayer`](crate::ip::ClientIpLayer) for the `ip` field;
 /// if the layer is absent, `ip` will be `None`.
 ///
 /// For non-HTTP contexts (background jobs, CLI tools), use the builder:
 ///
 /// ```
-/// use modo::extractor::ClientInfo;
+/// use modo::ip::ClientInfo;
 ///
 /// let info = ClientInfo::new()
 ///     .ip("1.2.3.4")

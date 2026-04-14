@@ -25,8 +25,6 @@ const DEFAULT_SCOPES: &[&str] = &["user:email", "read:user"];
 /// The primary verified email is fetched from the GitHub `/user/emails` endpoint and used to
 /// populate [`UserProfile::email`](super::UserProfile::email) and
 /// [`UserProfile::email_verified`](super::UserProfile::email_verified).
-///
-/// Requires the `auth` feature.
 pub struct GitHub {
     config: OAuthProviderConfig,
     cookie_config: CookieConfig,

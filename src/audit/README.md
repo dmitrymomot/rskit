@@ -7,13 +7,6 @@ ID. Optional metadata (arbitrary JSON), client context (IP, user-agent,
 fingerprint), and tenant ID round out each entry. No automatic middleware
 capture -- callers build an `AuditEntry` and pass it to `AuditLog`.
 
-Requires the **`db`** feature flag (enabled by default).
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["db"] }
-```
-
 ## Schema
 
 The application must create the `audit_log` table before recording events.
@@ -80,7 +73,7 @@ async fn delete_document(db: Database, audit: AuditLog) -> modo::Result<()> {
 
 ```rust,no_run
 use modo::audit::AuditEntry;
-use modo::extractor::ClientInfo;
+use modo::ip::ClientInfo;
 
 let info = ClientInfo::new()
     .ip("203.0.113.42")

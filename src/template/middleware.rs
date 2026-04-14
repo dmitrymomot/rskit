@@ -16,26 +16,31 @@ use crate::flash::state::FlashState;
 
 /// Tower middleware layer that populates [`TemplateContext`] for every request.
 ///
-/// Install this layer on your router **before** any handler that uses [`Renderer`](super::Renderer).
-/// The layer injects the following keys into the request's [`TemplateContext`]:
+/// Install this layer on your router **before** any handler that uses
+/// [`Renderer`](super::Renderer). The layer injects the following keys into
+/// the request's [`TemplateContext`]:
 ///
-/// | Key               | Source                                        |
-/// |-------------------|-----------------------------------------------|
-/// | `current_url`     | `request.uri().to_string()`                  |
-/// | `is_htmx`         | `HX-Request: true` header                    |
-/// | `request_id`      | `X-Request-Id` header (if present)           |
-/// | `locale`          | Locale resolver chain (falls back to default) |
-/// | `csrf_token`      | [`CsrfToken`](crate::middleware::CsrfToken) extension (if present) |
-/// | `flash_messages`  | `FlashState` extension (if present)          |
-/// | `tier_name`       | `TierInfo` name (requires **`tier`** feature, if present) |
-/// | `tier_has`        | Template function: `tier_has(name)` returns `bool` (requires **`tier`** feature, if present) |
-/// | `tier_enabled`    | Template function: `tier_enabled(name)` returns `bool` (requires **`tier`** feature, if present) |
-/// | `tier_limit`      | Template function: `tier_limit(name)` returns `Option<u64>` (requires **`tier`** feature, if present) |
+/// | Key               | Source                                                              |
+/// |-------------------|---------------------------------------------------------------------|
+/// | `current_url`     | `request.uri().to_string()`                                         |
+/// | `is_htmx`         | `HX-Request: true` header                                           |
+/// | `request_id`      | `X-Request-Id` header (if present)                                  |
+/// | `locale`          | Locale resolver chain (falls back to [`TemplateConfig::default_locale`](super::TemplateConfig::default_locale)) |
+/// | `csrf_token`      | [`CsrfToken`](crate::middleware::CsrfToken) extension (if present)  |
+/// | `flash_messages`  | Callable returning flash entries; `FlashState` extension must be set by [`FlashLayer`](crate::flash::FlashLayer) |
+/// | `tier_name`       | `TierInfo::name` (when `TierInfo` extension is present)             |
+/// | `tier_has`        | Template function `tier_has(name) -> bool` (when `TierInfo` is present) |
+/// | `tier_enabled`    | Template function `tier_enabled(name) -> bool` (when `TierInfo` is present) |
+/// | `tier_limit`      | Template function `tier_limit(name) -> Option<u64>` (when `TierInfo` is present) |
+///
+/// This layer is also re-exported as
+/// [`modo::middlewares::TemplateContext`](crate::middlewares::TemplateContext)
+/// for convenience at wiring sites.
 ///
 /// # Example
 ///
 /// ```rust,no_run
-/// use modo::template::{Engine, EngineBuilder, TemplateConfig, TemplateContextLayer};
+/// use modo::template::{Engine, TemplateContextLayer};
 ///
 /// # fn example(engine: Engine) {
 /// let router: axum::Router = axum::Router::new()
@@ -157,7 +162,6 @@ where
                 }
 
                 // tier info (if tier feature enabled and TierInfo in extensions)
-                #[cfg(feature = "tier")]
                 if let Some(tier_info) = parts.extensions.get::<crate::tier::TierInfo>() {
                     ctx.set("tier_name", minijinja::Value::from(tier_info.name.clone()));
 
@@ -413,7 +417,6 @@ mod tests {
         assert!(flash_state.was_read());
     }
 
-    #[cfg(feature = "tier")]
     mod tier_tests {
         use super::*;
         use std::collections::HashMap;

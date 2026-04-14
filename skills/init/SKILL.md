@@ -131,7 +131,7 @@ These files depend on the selected components — generate each with `Write`. Re
 
 **Required dynamic files:**
 
-1. **`Cargo.toml`** — Set features based on selected components. See `references/files.md` for the template and feature mapping. Use `"full"` if all feature-gated components are selected.
+1. **`Cargo.toml`** — modo 0.7 ships every module unconditionally, so no per-module feature list is needed. See `references/files.md` for the template.
 
 2. **`src/main.rs`** — Assemble from component blocks in `references/components.md`:
    - Module declarations and imports
@@ -188,15 +188,15 @@ let app = routes::router(registry)
     .layer(modo::middleware::cors(&config.modo.cors))
     .layer(modo::middleware::csrf(&config.modo.csrf, &cookie_key))
     // Template context (if templates)
-    .layer(modo::TemplateContextLayer::new(engine))
+    .layer(modo::template::TemplateContextLayer::new(engine))
     // Session
-    .layer(modo::session::layer(session_store, cookie_config, &cookie_key))
+    .layer(modo::auth::session::layer(session_store, cookie_config, &cookie_key))
     // Flash
-    .layer(modo::FlashLayer::new(cookie_config, &cookie_key))
+    .layer(modo::flash::FlashLayer::new(cookie_config, &cookie_key))
     // Geolocation (if selected, must be after ClientIp)
-    .layer(modo::GeoLayer::new(geo_locator))
+    .layer(modo::geolocation::GeoLayer::new(geo_locator))
     // Client IP (outermost request-processing layer)
-    .layer(modo::ClientIpLayer::new())
+    .layer(modo::ip::ClientIpLayer::new())
     // Rate limiting
     .layer(rate_limit_layer);
 ```

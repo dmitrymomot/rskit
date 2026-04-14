@@ -62,7 +62,7 @@ async fn main() -> Result<()> {
 
     // 5. Session store
     let session_store =
-        modo::session::Store::new(db.clone(), config.modo.session.clone());
+        modo::auth::session::Store::new(db.clone(), config.modo.session.clone());
 
     // === COMPONENT INIT BLOCKS GO HERE ===
 
@@ -86,9 +86,9 @@ async fn main() -> Result<()> {
         .layer(modo::middleware::cors(&config.modo.cors))
         .layer(modo::middleware::csrf(&config.modo.csrf, &cookie_key))
         // === COMPONENT MIDDLEWARE LAYERS GO HERE ===
-        .layer(modo::session::layer(session_store, cookie_config, &cookie_key))
-        .layer(modo::FlashLayer::new(cookie_config, &cookie_key))
-        .layer(modo::ClientIpLayer::new())
+        .layer(modo::auth::session::layer(session_store, cookie_config, &cookie_key))
+        .layer(modo::flash::FlashLayer::new(cookie_config, &cookie_key))
+        .layer(modo::ip::ClientIpLayer::new())
         .layer(rate_limit_layer);
 
     // === BACKGROUND WORKERS GO HERE ===
@@ -286,13 +286,13 @@ Add to this list as components are included (jobs adds `worker, managed_jobs`, c
 
 ## Templates
 
-**Feature flag:** `"templates"`
+Always available — no feature flag.
 
 ### Registry setup
 
 ```rust
 // Template engine
-let engine = modo::Engine::builder()
+let engine = modo::template::Engine::builder()
     .config(config.modo.template.clone())
     .build()?;
 registry.add(engine.clone());
@@ -307,7 +307,7 @@ Insert these at the correct position in the middleware chain:
 .merge(engine.static_service())
 
 // After CSRF, before session layer
-.layer(modo::TemplateContextLayer::new(engine))
+.layer(modo::template::TemplateContextLayer::new(engine))
 ```
 
 ### Config YAML (development)
@@ -392,13 +392,14 @@ Same as development (paths are relative to the binary).
 
 **src/handlers/home.rs:**
 ```rust
+use modo::Result;
 use modo::axum::response::Html;
-use modo::{Renderer, Result};
+use modo::template::{Renderer, context};
 
 pub async fn get(renderer: Renderer) -> Result<Html<String>> {
     renderer.html(
         "home.html",
-        modo::template::context! { title => "Welcome" },
+        context! { title => "Welcome" },
     )
 }
 ```
@@ -432,14 +433,14 @@ pub fn router() -> Router<modo::service::AppState> {
 
 ## Auth
 
-**Feature flag:** `"auth"`
+Always available — no feature flag.
 
 ### Registry setup
 
 ```rust
 // JWT
-let jwt_encoder = modo::JwtEncoder::from_config(&config.modo.jwt);
-let jwt_decoder = modo::JwtDecoder::from_config(&config.modo.jwt);
+let jwt_encoder = modo::auth::jwt::JwtEncoder::from_config(&config.modo.jwt);
+let jwt_decoder = modo::auth::jwt::JwtDecoder::from_config(&config.modo.jwt);
 registry.add(jwt_encoder);
 registry.add(jwt_decoder);
 ```
@@ -496,7 +497,7 @@ JWT_SECRET=change-me-in-production-at-least-64-bytes-long-jwt-secret-key-here!!!
 
 ## Email
 
-**Feature flag:** `"email"`
+Always available — no feature flag.
 
 ### Registry setup
 
@@ -582,13 +583,13 @@ If you didn't create this account, please ignore this email.
 
 ## Storage
 
-**Feature flag:** `"storage"`
+Always available — no feature flag.
 
 ### Registry setup
 
 ```rust
 // Storage
-let storage = modo::Storage::new(&config.modo.storage)?;
+let storage = modo::storage::Storage::new(&config.modo.storage)?;
 registry.add(storage);
 ```
 
@@ -661,7 +662,7 @@ volumes:
 
 ## SSE
 
-**Feature flag:** `"sse"`
+Always available — no feature flag.
 
 ### Registry setup
 
@@ -685,13 +686,13 @@ registry.add(broadcaster);
 
 ## Webhooks
 
-**Feature flag:** `"webhooks"`
+Always available — no feature flag.
 
 ### Registry setup
 
 ```rust
 // Webhooks
-let webhook_sender = modo::WebhookSender::default_client();
+let webhook_sender = modo::webhook::WebhookSender::default_client();
 registry.add(webhook_sender);
 ```
 
@@ -705,13 +706,13 @@ registry.add(webhook_sender);
 
 ## DNS
 
-**Feature flag:** `"dns"`
+Always available — no feature flag.
 
 ### Registry setup
 
 ```rust
 // DNS verification
-let domain_verifier = modo::DomainVerifier::from_config(&config.modo.dns)?;
+let domain_verifier = modo::dns::DomainVerifier::from_config(&config.modo.dns)?;
 registry.add(domain_verifier);
 ```
 
@@ -733,13 +734,13 @@ dns:
 
 ## Geolocation
 
-**Feature flag:** `"geolocation"`
+Always available — no feature flag.
 
 ### Registry setup
 
 ```rust
 // Geolocation
-let geo_locator = modo::GeoLocator::from_config(&config.modo.geolocation)?;
+let geo_locator = modo::geolocation::GeoLocator::from_config(&config.modo.geolocation)?;
 registry.add(geo_locator.clone());
 ```
 
@@ -748,7 +749,7 @@ registry.add(geo_locator.clone());
 Insert after FlashLayer, before ClientIpLayer:
 
 ```rust
-.layer(modo::GeoLayer::new(geo_locator))
+.layer(modo::geolocation::GeoLayer::new(geo_locator))
 ```
 
 ClientIpLayer MUST be applied after (below) GeoLayer because GeoLayer depends on `ClientIp` being in the request extensions.
@@ -778,7 +779,7 @@ geolocation:
 
 ## Sentry
 
-**Feature flag:** `"sentry"`
+Always available — Sentry integration lives under `tracing.sentry` in the config; when the section is absent, Sentry is disabled.
 
 ### Config YAML (development)
 
@@ -812,7 +813,7 @@ SENTRY_DSN=
 
 ## Jobs
 
-**Feature flag:** `"job"`
+Always available — no feature flag.
 
 ### Database setup (in main.rs)
 
@@ -1053,30 +1054,30 @@ mod tenant;
 
 ---
 
-## RBAC
+## Role-Based Gating
 
-**No feature flag** — always available.
+Always available — no feature flag.
 
 ### Notes
 
-RBAC requires the user to implement the `RoleExtractor` trait. Generate a placeholder:
+Role-based gating requires the user to implement the `RoleExtractor` trait. Generate a placeholder:
 
 **src/rbac.rs:**
 ```rust
 #![allow(unused)]
 
-use modo::rbac::RoleExtractor;
+use modo::auth::role::RoleExtractor;
 use modo::Result;
 
 /// Extracts the current user's role from the request.
 /// Typically reads from the session or a JWT claim.
 ///
 /// After implementing, apply the middleware globally:
-///   .layer(modo::rbac::middleware(AppRoleExtractor))
+///   .layer(modo::auth::role::middleware(AppRoleExtractor))
 ///
 /// Then protect routes with guards:
-///   .route_layer(modo::rbac::require_authenticated())
-///   .route_layer(modo::rbac::require_role(["admin"]))
+///   .route_layer(modo::auth::guard::require_authenticated())
+///   .route_layer(modo::auth::guard::require_role(["admin"]))
 pub struct AppRoleExtractor;
 
 // Uncomment and implement:

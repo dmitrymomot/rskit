@@ -1,5 +1,3 @@
-#![cfg(feature = "dns")]
-
 use modo::dns::{DnsConfig, DomainVerifier, generate_verification_token};
 
 /// Helper to create a verifier pointing at Google's public DNS.

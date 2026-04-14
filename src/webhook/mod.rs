@@ -4,13 +4,6 @@
 //! This module provides signed outbound HTTP POST requests using HMAC-SHA256,
 //! plus verification helpers for incoming webhook requests.
 //!
-//! Requires the `webhooks` feature flag:
-//!
-//! ```toml
-//! [dependencies]
-//! modo = { version = "0.6", features = ["webhooks"] }
-//! ```
-//!
 //! # Provides
 //!
 //! | Type | Purpose |

@@ -1,4 +1,4 @@
-# cron
+# modo::cron
 
 Periodic cron job scheduling with plain `async fn` handlers.
 
@@ -6,8 +6,6 @@ Handlers are plain `async fn` values — no macros, no derives. Services are
 injected via the `Registry` snapshot captured at build time. The scheduler
 integrates with the runtime's `run!` macro through the `Task` trait for
 clean shutdown.
-
-Always available — no feature flag required.
 
 ## Schedule formats
 
@@ -40,9 +38,8 @@ Invalid expressions or durations return an error at builder time.
 
 ```rust,ignore
 use modo::cron::Scheduler;
-use modo::extractor::Service;
 use modo::runtime::Task;
-use modo::service::Registry;
+use modo::service::{Registry, Service};
 use modo::Result;
 
 struct EmailService;

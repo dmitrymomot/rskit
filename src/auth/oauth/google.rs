@@ -20,8 +20,6 @@ const DEFAULT_SCOPES: &[&str] = &["openid", "email", "profile"];
 /// Implements the Authorization Code flow with PKCE (S256). Default scopes are
 /// `openid`, `email`, and `profile`. Override them via
 /// [`OAuthProviderConfig::scopes`](super::OAuthProviderConfig::scopes).
-///
-/// Requires the `auth` feature.
 pub struct Google {
     config: OAuthProviderConfig,
     cookie_config: CookieConfig,

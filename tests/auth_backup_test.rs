@@ -1,5 +1,3 @@
-#![cfg(feature = "auth")]
-
 use modo::auth::backup;
 
 #[test]

@@ -1,13 +1,6 @@
-# tier
+# modo::tier
 
 Tier-based feature gating for SaaS applications.
-
-Requires feature `"tier"`.
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["tier"] }
-```
 
 ## Key types
 
@@ -17,9 +10,9 @@ modo = { version = "0.6", features = ["tier"] }
 | [`TierResolver`] | Concrete wrapper (`Arc<dyn TierBackend>`, cheap to clone) |
 | [`TierInfo`] | Resolved tier with feature-check helpers |
 | [`FeatureAccess`] | Toggle or usage-limit feature model |
-| [`TierLayer`] | Tower middleware that resolves and injects `TierInfo` |
-| [`require_feature()`] | Route guard for boolean feature gates |
-| [`require_limit()`] | Route guard for usage-limit gates |
+| [`TierLayer`] | Tower middleware that resolves and injects `TierInfo` (also `modo::middlewares::Tier`) |
+| [`require_feature()`] | Route guard for boolean feature gates (also `modo::guards::require_feature`) |
+| [`require_limit()`] | Route guard for usage-limit gates (also `modo::guards::require_limit`) |
 
 ## Usage
 
@@ -83,7 +76,7 @@ fn app(resolver: TierResolver) -> Router {
         // Tier middleware — must be outermost so TierInfo is available to guards.
         .layer(TierLayer::new(resolver, |parts| {
             parts.extensions
-                .get::<modo::TenantId>()
+                .get::<modo::tenant::TenantId>()
                 .map(|id| id.as_str().to_owned())
         }))
 }
@@ -158,7 +151,7 @@ let anon_tier = TierInfo {
 };
 
 let layer = TierLayer::new(resolver, |parts| {
-    parts.extensions.get::<modo::TenantId>().map(|id| id.as_str().to_owned())
+    parts.extensions.get::<modo::tenant::TenantId>().map(|id| id.as_str().to_owned())
 }).with_default(anon_tier);
 ```
 

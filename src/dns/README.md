@@ -6,15 +6,6 @@ Provides `DomainVerifier` for checking TXT record ownership and CNAME routing
 via raw UDP DNS queries, without depending on the system resolver or any
 external DNS library beyond `simple-dns`.
 
-## Feature flag
-
-This module is compiled only when the `dns` feature is enabled.
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["dns"] }
-```
-
 ## Key types
 
 | Type                            | Purpose                                                                           |
@@ -141,7 +132,7 @@ let app = axum::Router::new()
 In a handler, extract the verifier with `Service<DomainVerifier>`:
 
 ```rust,ignore
-use modo::Service;
+use modo::service::Service;
 use modo::dns::DomainVerifier;
 
 async fn verify_handler(

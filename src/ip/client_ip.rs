@@ -11,7 +11,7 @@ use crate::error::Error;
 /// Use as an axum extractor in handlers:
 ///
 /// ```
-/// use modo::ClientIp;
+/// use modo::ip::ClientIp;
 ///
 /// async fn handler(ClientIp(ip): ClientIp) -> String {
 ///     ip.to_string()

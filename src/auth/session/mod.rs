@@ -1,4 +1,4 @@
-//! # Session
+//! # modo::auth::session
 //!
 //! Database-backed HTTP session management.
 //!
@@ -8,8 +8,6 @@
 //! loading and fingerprint-validating the session, running the handler, and
 //! then flushing dirty data or touching the expiry timestamp before writing the
 //! `Set-Cookie` header on the response path.
-//!
-//! Requires the **`session`** feature flag (transitively enables `db`).
 //!
 //! # Provides
 //!
@@ -27,7 +25,7 @@
 //! # Quick start
 //!
 //! ```rust,no_run
-//! use modo::session::{self, SessionConfig, Store};
+//! use modo::auth::session::{self, SessionConfig, Store};
 //! use modo::cookie::{CookieConfig, key_from_config};
 //! use modo::db::Database;
 //!
@@ -59,7 +57,6 @@ mod token;
 
 pub use config::SessionConfig;
 pub use extractor::Session;
-#[cfg(feature = "templates")]
 pub(crate) use extractor::SessionState;
 pub use middleware::SessionLayer;
 pub use middleware::layer;

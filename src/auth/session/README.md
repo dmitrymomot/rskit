@@ -1,4 +1,4 @@
-# modo::session
+# modo::auth::session
 
 Database-backed HTTP session management for the modo framework.
 
@@ -7,8 +7,6 @@ signed, opaque cookie. The middleware handles the full request/response
 lifecycle: loading the session on the request path, validating the browser
 fingerprint, flushing dirty data after the handler runs, and setting or
 clearing the session cookie.
-
-Requires the **`session`** feature flag (transitively enables `db`).
 
 ## Schema
 
@@ -63,7 +61,7 @@ reads it.
 ### Wiring the middleware
 
 ```rust,no_run
-use modo::session::{self, SessionConfig, Store};
+use modo::auth::session::{self, SessionConfig, Store};
 use modo::cookie::{CookieConfig, key_from_config};
 use modo::db::Database;
 
@@ -90,7 +88,7 @@ client IP is available when the session is loaded.
 ### Logging in
 
 ```rust,no_run
-use modo::session::Session;
+use modo::auth::session::Session;
 use axum::response::IntoResponse;
 
 async fn login_handler(session: Session) -> impl IntoResponse {
@@ -105,7 +103,7 @@ async fn login_handler(session: Session) -> impl IntoResponse {
 Use `authenticate_with` to store initial data alongside the session:
 
 ```rust,no_run
-use modo::session::Session;
+use modo::auth::session::Session;
 use serde_json::json;
 
 async fn login_with_data(session: Session) {
@@ -119,7 +117,7 @@ async fn login_with_data(session: Session) {
 ### Reading and writing session data
 
 ```rust,no_run
-use modo::session::Session;
+use modo::auth::session::Session;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -148,7 +146,7 @@ async fn handler(session: Session) -> modo::Result<()> {
 ### Logging out
 
 ```rust,no_run
-use modo::session::Session;
+use modo::auth::session::Session;
 
 async fn logout(session: Session) -> modo::Result<()> {
     session.logout().await               // current session only
@@ -166,7 +164,7 @@ async fn logout_other_devices(session: Session) -> modo::Result<()> {
 ### Session management endpoints
 
 ```rust,no_run
-use modo::session::{Session, SessionData};
+use modo::auth::session::{Session, SessionData};
 
 async fn list_sessions(session: Session) -> modo::Result<axum::Json<Vec<SessionData>>> {
     let sessions = session.list_my_sessions().await?;
@@ -187,7 +185,7 @@ Call `rotate` after privilege escalation to issue a fresh token while
 keeping the existing session data:
 
 ```rust,no_run
-use modo::session::Session;
+use modo::auth::session::Session;
 
 async fn elevate(session: Session) -> modo::Result<()> {
     session.rotate().await
@@ -200,7 +198,7 @@ Schedule `Store::cleanup_expired` periodically (e.g. via a cron job) to
 remove expired rows from the database:
 
 ```rust,no_run
-use modo::session::Store;
+use modo::auth::session::Store;
 
 async fn cleanup_job(store: Store) -> modo::Result<u64> {
     let deleted = store.cleanup_expired().await?;

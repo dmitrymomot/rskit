@@ -1,6 +1,6 @@
 # Email Module
 
-Feature gate: `email` (add `test-helpers` for stub transport in tests).
+Enable `test-helpers` for the stub transport in tests.
 
 Source: `src/email/`.
 

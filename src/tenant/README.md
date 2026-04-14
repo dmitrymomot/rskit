@@ -8,16 +8,13 @@ two-step pipeline: a **strategy** extracts a raw identifier, and a
 resolved tenant is stored in request extensions and surfaced to handlers
 via the `Tenant<T>` axum extractor.
 
-Always available — no feature flag required. The `domain` submodule
-(custom domain management) requires both the `db` and `dns` features.
-
 ## Key Types
 
 | Item                             | Kind           | Purpose                                                                      |
 | -------------------------------- | -------------- | ---------------------------------------------------------------------------- |
 | `TenantId`                       | enum           | Raw identifier extracted from the request (`Slug`, `Domain`, `Id`, `ApiKey`) |
 | `TenantStrategy`                 | trait          | Extracts a `TenantId` from `http::request::Parts`                            |
-| `TenantResolver`                 | trait          | Maps a `TenantId` to the app's concrete tenant type                          |
+| `TenantResolver`                 | trait          | Maps a `TenantId` to the app's concrete tenant type (RPITIT; not object-safe) |
 | `HasTenantId`                    | trait          | Required bound on the resolved tenant; provides the tracing field value      |
 | `Tenant<T>`                      | extractor      | Retrieves the resolved tenant from request extensions in handlers            |
 | `TenantLayer<S, R>`              | Tower layer    | Middleware layer produced by `middleware()`                                  |
@@ -162,8 +159,6 @@ Spans that do not declare `tenant_id = tracing::field::Empty` silently
 ignore the `record()` call.
 
 ## Domain management (`domain` submodule)
-
-Requires features: `db` + `dns`.
 
 The `domain` submodule provides `DomainService` for registering, verifying,
 and managing custom domains per tenant. Verification uses DNS TXT records

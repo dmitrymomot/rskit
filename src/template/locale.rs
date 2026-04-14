@@ -107,17 +107,15 @@ impl LocaleResolver for CookieResolver {
 /// Resolves the active locale from the session data.
 ///
 /// Reads the `"locale"` key from the session's JSON data. Requires
-/// [`SessionLayer`](crate::session::SessionLayer) to be installed before this resolver
+/// [`SessionLayer`](crate::auth::session::SessionLayer) to be installed before this resolver
 /// runs in the middleware stack.
-#[cfg(feature = "session")]
 pub struct SessionResolver;
 
-#[cfg(feature = "session")]
 impl LocaleResolver for SessionResolver {
     fn resolve(&self, parts: &Parts) -> Option<String> {
         let state = parts
             .extensions
-            .get::<Arc<crate::session::SessionState>>()?;
+            .get::<Arc<crate::auth::session::SessionState>>()?;
         let guard = state.current.lock().ok()?;
         let session = guard.as_ref()?;
         if let serde_json::Value::Object(ref map) = session.data
@@ -198,7 +196,6 @@ pub(crate) fn default_chain(
             available_locales,
         )),
     ];
-    #[cfg(feature = "session")]
     chain.push(Arc::new(SessionResolver));
     chain.push(Arc::new(AcceptLanguageResolver::new(
         &available_locales
@@ -301,7 +298,6 @@ mod tests {
         assert_eq!(resolver.resolve(&parts), Some("en".into()));
     }
 
-    #[cfg(feature = "session")]
     #[test]
     fn session_resolver_returns_none_without_session() {
         let resolver = SessionResolver;
@@ -375,7 +371,6 @@ mod tests {
         let config = TemplateConfig::default();
         let available = vec!["en".into(), "uk".into()];
         let chain = default_chain(&config, &available);
-        let expected = if cfg!(feature = "session") { 4 } else { 3 };
-        assert_eq!(chain.len(), expected);
+        assert_eq!(chain.len(), 4);
     }
 }

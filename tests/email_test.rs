@@ -1,4 +1,4 @@
-#![cfg(all(feature = "email", feature = "test-helpers"))]
+#![cfg(feature = "test-helpers")]
 
 use modo::email::{EmailConfig, Mailer, SendEmail};
 use std::collections::HashMap;

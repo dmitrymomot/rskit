@@ -1,4 +1,4 @@
-# config
+# modo::config
 
 YAML configuration loader with environment-variable substitution for the modo framework.
 
@@ -13,11 +13,23 @@ Before deserialization, every `${VAR}` placeholder in the YAML is replaced with 
 corresponding process environment variable. Use `${VAR:default}` to supply a fallback value
 when the variable is absent.
 
+## Key Types
+
+| Symbol                            | Description                                                               |
+| --------------------------------- | ------------------------------------------------------------------------- |
+| `Config`                          | Top-level framework config struct; deserializes from YAML                 |
+| `load::<T>(dir)`                  | Reads `{dir}/{APP_ENV}.yaml`, substitutes env vars, deserializes into `T` |
+| `env()`                           | Returns the current `APP_ENV` value (default: `"development"`)            |
+| `is_dev()`                        | `true` when `APP_ENV` is `"development"` or unset                         |
+| `is_prod()`                       | `true` when `APP_ENV` is `"production"`                                   |
+| `is_test()`                       | `true` when `APP_ENV` is `"test"`                                         |
+| `substitute::substitute_env_vars` | Replaces `${VAR}` placeholders in an arbitrary string                     |
+
 ## Usage
 
 ### Loading the built-in framework config
 
-```rust
+```rust,no_run
 use modo::config::load;
 use modo::Config;
 
@@ -26,7 +38,7 @@ let config: Config = load("config/").unwrap();
 
 ### Extending with application-specific fields
 
-```rust
+```rust,no_run
 use modo::config::load;
 use modo::Config;
 use serde::Deserialize;
@@ -44,12 +56,13 @@ println!("Starting {}", config.app_name);
 
 ### Environment helpers
 
-```rust
+```rust,no_run
 use modo::config::{env, is_dev, is_prod, is_test};
 
 if is_dev() {
     println!("Running in development (APP_ENV={})", env());
 }
+let _ = (is_prod, is_test);
 ```
 
 ### Raw substitution
@@ -57,7 +70,7 @@ if is_dev() {
 `substitute_env_vars` is exposed as a public function for use cases that need
 substitution on arbitrary strings before YAML parsing.
 
-```rust
+```rust,no_run
 use modo::config::substitute::substitute_env_vars;
 
 let yaml = "host: ${DB_HOST:localhost}";
@@ -104,43 +117,31 @@ trusted_proxies:
     - 172.16.0.0/12
 ```
 
-## Key Types
-
-| Symbol                            | Description                                                               |
-| --------------------------------- | ------------------------------------------------------------------------- |
-| `Config`                          | Top-level framework config struct; deserializes from YAML                 |
-| `load::<T>(dir)`                  | Reads `{dir}/{APP_ENV}.yaml`, substitutes env vars, deserializes into `T` |
-| `env()`                           | Returns the current `APP_ENV` value (default: `"development"`)            |
-| `is_dev()`                        | `true` when `APP_ENV` is `"development"` or unset                         |
-| `is_prod()`                       | `true` when `APP_ENV` is `"production"`                                   |
-| `is_test()`                       | `true` when `APP_ENV` is `"test"`                                         |
-| `substitute::substitute_env_vars` | Replaces `${VAR}` placeholders in an arbitrary string                     |
-
 ## Config struct fields
 
-`Config` composes the sub-configs of every built-in module. All fields are optional in
-YAML (each falls back to the type's `Default`). Feature-gated fields are only present
-when the corresponding feature is enabled; YAML sections for disabled features are
-silently ignored:
+`Config` composes the sub-configs of every built-in module. All fields use
+`#[serde(default)]`, so any section omitted from the YAML file falls back to
+the type's own `Default` implementation. Every module is always compiled in
+v0.7+, so every field is always present.
 
-| Field              | Type                                | Feature gate   |
-| ------------------ | ----------------------------------- | -------------- |
-| `server`           | `server::Config`                    | always         |
-| `database`         | `db::Config`                        | `db`           |
-| `tracing`          | `tracing::Config`                   | always         |
-| `cookie`           | `Option<cookie::CookieConfig>`      | always         |
-| `security_headers` | `middleware::SecurityHeadersConfig`  | always         |
-| `cors`             | `middleware::CorsConfig`            | always         |
-| `csrf`             | `middleware::CsrfConfig`            | always         |
-| `rate_limit`       | `middleware::RateLimitConfig`       | always         |
-| `session`          | `session::SessionConfig`            | `session`      |
-| `job`              | `job::JobConfig`                    | `job`          |
-| `trusted_proxies`  | `Vec<String>`                       | always         |
-| `oauth`            | `auth::oauth::OAuthConfig`          | `auth`         |
-| `email`            | `email::EmailConfig`                | `email`        |
-| `template`         | `template::TemplateConfig`          | `templates`    |
-| `geolocation`      | `geolocation::GeolocationConfig`    | `geolocation`  |
-| `storage`          | `storage::BucketConfig`             | `storage`      |
-| `dns`              | `dns::DnsConfig`                    | `dns`          |
-| `apikey`           | `apikey::ApiKeyConfig`              | `apikey`       |
-| `jwt`              | `auth::jwt::JwtConfig`              | `auth`         |
+| Field              | Type                                |
+| ------------------ | ----------------------------------- |
+| `server`           | `server::Config`                    |
+| `database`         | `db::Config`                        |
+| `tracing`          | `tracing::Config`                   |
+| `cookie`           | `Option<cookie::CookieConfig>`      |
+| `security_headers` | `middleware::SecurityHeadersConfig` |
+| `cors`             | `middleware::CorsConfig`            |
+| `csrf`             | `middleware::CsrfConfig`            |
+| `rate_limit`       | `middleware::RateLimitConfig`       |
+| `session`          | `auth::session::SessionConfig`      |
+| `job`              | `job::JobConfig`                    |
+| `trusted_proxies`  | `Vec<String>`                       |
+| `oauth`            | `auth::oauth::OAuthConfig`          |
+| `email`            | `email::EmailConfig`                |
+| `template`         | `template::TemplateConfig`          |
+| `geolocation`      | `geolocation::GeolocationConfig`    |
+| `storage`          | `storage::BucketConfig`             |
+| `dns`              | `dns::DnsConfig`                    |
+| `apikey`           | `auth::apikey::ApiKeyConfig`        |
+| `jwt`              | `auth::jwt::JwtConfig`              |

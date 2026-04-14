@@ -2,8 +2,6 @@
 //!
 //! Custom domain management for multi-tenant applications.
 //!
-//! Requires features: `db` + `dns`.
-//!
 //! Provides:
 //! - [`DomainService`] — service for registering, verifying, and managing domain claims
 //! - [`DomainClaim`] — a registered domain claim for a tenant

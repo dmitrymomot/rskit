@@ -2,8 +2,6 @@
 
 Fixed-capacity, in-memory least-recently-used (LRU) cache for the modo web framework.
 
-The module is always available — no feature flag is required.
-
 ## Key Types
 
 | Type             | Description                                                               |

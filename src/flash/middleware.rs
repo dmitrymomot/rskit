@@ -20,9 +20,9 @@ const MAX_AGE_SECS: i64 = 300;
 /// Tower [`Layer`] that enables cookie-based flash messages for a router.
 ///
 /// On each request the layer reads the signed `flash` cookie and populates
-/// the [`Flash`](crate::Flash) extractor. On response it either writes a new
+/// the [`Flash`](crate::flash::Flash) extractor. On response it either writes a new
 /// signed cookie (when messages were queued) or removes the existing one (when
-/// messages were consumed via [`Flash::messages`](crate::Flash::messages)).
+/// messages were consumed via [`Flash::messages`](crate::flash::Flash::messages)).
 ///
 /// # Cookie details
 ///

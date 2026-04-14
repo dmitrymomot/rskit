@@ -1,5 +1,3 @@
-#![cfg(feature = "auth")]
-
 use modo::auth::password::{self, PasswordConfig};
 
 fn fast_config() -> PasswordConfig {

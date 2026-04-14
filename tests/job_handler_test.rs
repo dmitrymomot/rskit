@@ -1,8 +1,6 @@
-#![cfg(feature = "job")]
-
-use modo::Service;
 use modo::error::Result;
 use modo::job::{JobHandler, Meta, Payload};
+use modo::service::Service;
 
 // Zero-arg handler
 async fn noop_handler() -> Result<()> {

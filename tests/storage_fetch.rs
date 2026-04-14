@@ -1,4 +1,4 @@
-#![cfg(all(feature = "storage", feature = "test-helpers"))]
+#![cfg(feature = "test-helpers")]
 
 use http::StatusCode;
 

@@ -6,13 +6,6 @@
 //! (AWS S3, RustFS, MinIO, etc.). Features include upload from bytes or URL,
 //! presigned URLs, configurable ACLs, and file-size limits.
 //!
-//! Requires the `storage` feature flag:
-//!
-//! ```toml
-//! [dependencies]
-//! modo = { version = "0.6", features = ["storage"] }
-//! ```
-//!
 //! # Provides
 //!
 //! | Type | Purpose |

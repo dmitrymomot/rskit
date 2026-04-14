@@ -2,8 +2,6 @@
 //!
 //! Durable background job processing backed by SQLite.
 //!
-//! Requires feature `"job"` (which implies `"db"`).
-//!
 //! The `job` module provides a named-job queue stored in the `jobs` SQLite
 //! table. Handlers are plain `async fn` functions. The worker polls the
 //! database, dispatches jobs to handlers, retries failures with exponential

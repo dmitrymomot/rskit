@@ -1,8 +1,6 @@
-#![cfg(feature = "session")]
-
 use http::HeaderMap;
+use modo::auth::session::meta::{SessionMeta, header_str};
 use modo::ip::extract_client_ip;
-use modo::session::meta::{SessionMeta, header_str};
 use std::net::IpAddr;
 
 #[test]

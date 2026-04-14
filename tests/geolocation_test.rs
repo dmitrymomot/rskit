@@ -1,5 +1,3 @@
-#![cfg(feature = "geolocation")]
-
 use std::net::IpAddr;
 
 use modo::geolocation::{GeoLocator, GeolocationConfig, Location};

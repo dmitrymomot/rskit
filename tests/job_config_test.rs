@@ -1,5 +1,3 @@
-#![cfg(feature = "job")]
-
 use modo::job::JobConfig;
 
 #[test]

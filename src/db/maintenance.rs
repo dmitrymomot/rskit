@@ -1,6 +1,6 @@
 use crate::cron::{CronContext, CronHandler, FromCronContext};
 use crate::error::{Error, Result};
-use crate::extractor::Service;
+use crate::service::Service;
 
 use super::Database;
 
