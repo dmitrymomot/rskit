@@ -71,6 +71,8 @@ pub mod geolocation;
 
 pub mod qrcode;
 
+pub mod prelude;
+
 #[cfg(feature = "test-helpers")]
 pub mod testing;
 
