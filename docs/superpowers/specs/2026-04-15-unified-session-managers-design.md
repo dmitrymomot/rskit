@@ -104,7 +104,7 @@ No `fid`, no `stk`, no custom payload. All app-specific data lives in `row.data`
 3. `h = hash(claims.jti)`.
 4. `SELECT id, user_id, data FROM authenticated_sessions WHERE session_token_hash = ?1 AND expires_at > ?2` with `(h, now)`.
 5. No row → `401 auth:session_not_found` (rotated, revoked, or expired).
-6. Insert the `Claims` and a `SessionRow` view into request extensions. Handlers that need row fields (ip, device, data blob) extract `SessionRow` directly; most handlers just extract `Claims`.
+6. Insert the `Claims` and a `SessionData` view into request extensions. Handlers that need row fields (ip, device, data blob) extract `SessionData` directly; most handlers just extract `Claims`.
 7. Touch `last_active_at` throttled by `touch_interval_secs` (same throttle rule as cookie middleware).
 
 One indexed lookup per request. The `session_token_hash` column is UNIQUE, so this is an index-only B-tree lookup. SQLite cost is negligible on local disk.
@@ -144,7 +144,7 @@ Row `id` unchanged. Used for privilege-boundary defense (post-MFA, post-sudo). N
 src/auth/session/
     mod.rs
     store.rs            // internal SessionStore; private SQL layer over authenticated_sessions
-    row.rs              // pub struct SessionRow (public data type returned by list/etc.)
+    data.rs             // pub struct SessionData (public data type returned by list/etc.)
     device.rs           // shared: UA -> device_name/device_type (moved from cookie-only location)
     fingerprint.rs      // shared: SHA-256 over header set
     meta.rs             // shared: SessionMeta (IP, UA, fingerprint, header_str helper)
@@ -191,7 +191,7 @@ impl CookieSessions {
     pub async fn logout(&self, session: &Session) -> Result<()>;
 
     // cross-transport
-    pub async fn list(&self, user_id: &str) -> Result<Vec<SessionRow>>;
+    pub async fn list(&self, user_id: &str) -> Result<Vec<SessionData>>;
     pub async fn revoke(&self, user_id: &str, id: &str) -> Result<()>;
     pub async fn revoke_all(&self, user_id: &str) -> Result<()>;
     pub async fn revoke_all_except(&self, user_id: &str, keep_id: &str) -> Result<()>;
@@ -235,7 +235,7 @@ impl JwtSessions {
     pub async fn logout(&self, access_token: &str) -> Result<()>;
 
     // cross-transport (identical signatures to CookieSessions)
-    pub async fn list(&self, user_id: &str) -> Result<Vec<SessionRow>>;
+    pub async fn list(&self, user_id: &str) -> Result<Vec<SessionData>>;
     pub async fn revoke(&self, user_id: &str, id: &str) -> Result<()>;
     pub async fn revoke_all(&self, user_id: &str) -> Result<()>;
     pub async fn revoke_all_except(&self, user_id: &str, keep_id: &str) -> Result<()>;
@@ -265,12 +265,12 @@ pub struct TokenPair {
 }
 ```
 
-### Public API — shared `SessionRow`
+### Public API — shared `SessionData`
 
 Returned by both managers' `list` method. No `kind` field.
 
 ```rust
-pub struct SessionRow {
+pub struct SessionData {
     pub id: String,
     pub user_id: String,
     pub ip_address: String,
