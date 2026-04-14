@@ -1,5 +1,3 @@
-use std::future::Future;
-
 use crate::Result;
 
 /// Resolves the caller's role for the current HTTP request.
