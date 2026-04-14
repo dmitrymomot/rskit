@@ -31,8 +31,7 @@ pub struct Config {
 
     /// Sentry error-reporting settings.
     ///
-    /// Requires the `sentry` feature. When absent or when the DSN
-    /// is empty, Sentry is not initialised.
+    /// When absent or when the DSN is empty, Sentry is not initialised.
     pub sentry: Option<super::sentry::SentryConfig>,
 }
 

@@ -17,8 +17,6 @@ struct Inner {
 /// Wraps the mmdb reader in an `Arc` so cloning is cheap. Register a
 /// `GeoLocator` in the service registry and extract it in handlers via
 /// `Service<GeoLocator>`.
-///
-/// Requires the `geolocation` feature.
 pub struct GeoLocator {
     inner: Arc<Inner>,
 }

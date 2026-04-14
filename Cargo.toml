@@ -16,7 +16,7 @@ name = "modo"
 
 [features]
 default = []
-test-helpers = ["dep:serial_test", "dep:tempfile"]
+test-helpers = []
 
 [dependencies]
 # Web
@@ -39,7 +39,7 @@ tower-http = { version = "0.6", features = [
 axum-extra = { version = "0.12", features = ["cookie-signed", "cookie-private", "multipart"] }
 cookie = { version = "0.18", features = ["signed"] }
 
-# Database (libsql, gated by "db" feature)
+# Database (libsql)
 libsql = { version = "0.9", default-features = false, features = ["core"] }
 
 # Serialization
@@ -73,7 +73,7 @@ sentry = { version = "0.47", default-features = false, features = [
 ] }
 sentry-tracing = "0.47"
 
-# Auth (optional, gated by "auth" feature)
+# Auth
 argon2 = "0.5"
 hmac = "0.13"
 sha1 = "0.11"
@@ -82,7 +82,7 @@ ring = "0.17"
 reqwest = { version = "0.13.2", default-features = false, features = ["rustls", "json", "stream", "form"] }
 base64 = "0.22"
 
-# Email (optional, gated by "email" feature)
+# Email
 lettre = { version = "0.11", default-features = false, features = [
   "smtp-transport",
   "tokio1",
@@ -113,10 +113,6 @@ fast_qr = { version = "0.13", default-features = false }
 
 # URL encoding
 urlencoding = "2"
-
-# Test helpers (gated by "test-helpers" feature)
-serial_test = { version = "3", optional = true }
-tempfile = { version = "3", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

@@ -5,8 +5,7 @@ use serde::Deserialize;
 
 /// Sentry error and performance reporting settings.
 ///
-/// Requires the `sentry` feature. Embed in `Config::sentry` and supply
-/// a valid DSN to enable Sentry.
+/// Embed in `Config::sentry` and supply a valid DSN to enable Sentry.
 ///
 /// ```yaml
 /// tracing:
@@ -72,8 +71,6 @@ impl TracingGuard {
     }
 
     /// Create a guard that owns an active Sentry client.
-    ///
-    /// Requires the `sentry` feature.
     pub fn with_sentry(guard: sentry::ClientInitGuard) -> Self {
         Self {
             _sentry: Some(guard),
