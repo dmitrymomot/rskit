@@ -104,7 +104,7 @@ No `fid`, no `stk`, no custom payload. All app-specific data lives in `row.data`
 3. `h = hash(claims.jti)`.
 4. `SELECT id, user_id, data FROM authenticated_sessions WHERE session_token_hash = ?1 AND expires_at > ?2` with `(h, now)`.
 5. No row → `401 auth:session_not_found` (rotated, revoked, or expired).
-6. Insert the `Claims` and a `SessionData` view into request extensions. Handlers that need row fields (ip, device, data blob) extract `SessionData` directly; most handlers just extract `Claims`.
+6. Insert the `Session` (populated from the row) into request extensions — the same type cookie middleware inserts. Also insert `Claims` for handlers that need raw JWT payload access. Most handlers extract only `Session`.
 7. Touch `last_active_at` throttled by `touch_interval_secs` (same throttle rule as cookie middleware).
 
 One indexed lookup per request. The `session_token_hash` column is UNIQUE, so this is an index-only B-tree lookup. SQLite cost is negligible on local disk.
@@ -144,8 +144,8 @@ Row `id` unchanged. Used for privilege-boundary defense (post-MFA, post-sudo). N
 src/auth/session/
     mod.rs
     store.rs            // internal SessionStore; private SQL layer over authenticated_sessions
-    data.rs             // pub struct SessionData (public data type returned by list/etc.)
-    device.rs           // shared: UA -> device_name/device_type (moved from cookie-only location)
+    session.rs          // pub struct Session (data + FromRequestParts extractor)
+    device.rs           // shared: UA -> device_name/device_type
     fingerprint.rs      // shared: SHA-256 over header set
     meta.rs             // shared: SessionMeta (IP, UA, fingerprint, header_str helper)
     token.rs            // shared: SessionToken (32-byte opaque; Display/Debug redact)
@@ -153,22 +153,53 @@ src/auth/session/
     cookie/
         mod.rs
         manager.rs      // pub struct CookieSessions
-        extractor.rs    // pub struct Session (passive carrier; only read methods)
-        middleware.rs   // CookieSessionLayer
+        ctx.rs          // pub struct CookieCtx (mutation-context extractor, cookie-only)
+        middleware.rs   // CookieSessionLayer; inserts Session + CookieCtx into extensions
         config.rs       // CookieSessionsConfig
 
     jwt/
         mod.rs
         manager.rs      // pub struct JwtSessions
-        claims.rs       // pub struct Claims (system fields only)
+        claims.rs       // pub struct Claims (system fields only; for custom auth)
         extractor.rs    // Claims + Bearer extractors
-        middleware.rs   // JwtLayer
+        middleware.rs   // JwtLayer; inserts Session + Claims into extensions
         config.rs       // JwtSessionsConfig
         signer.rs       // HmacSigner, TokenSigner, TokenVerifier
         source.rs       // BearerSource, CookieSource, HeaderSource, QuerySource
 ```
 
 The v0.7 `auth/session/` is reshaped into `auth/session/cookie/` + shared primitives. The v0.7 `auth/jwt/` collapses into `auth/session/jwt/`. Users re-import from the new paths; the umbrella re-exports the common types at `auth::session::*`.
+
+### Public API — `Session` (shared data + extractor)
+
+`Session` is the single data-bearing type handlers use for **read-only** access, regardless of transport. Both `CookieSessionLayer` and `JwtLayer` populate it into request extensions after loading and validating the row; handlers extract it with the standard axum `FromRequestParts` mechanism.
+
+```rust
+pub struct Session {
+    pub id: String,
+    pub user_id: String,
+    pub ip_address: String,
+    pub user_agent: String,
+    pub device_name: String,
+    pub device_type: String,
+    pub fingerprint: String,
+    pub data: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+    pub last_active_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+}
+
+impl FromRequestParts<S> for Session {
+    // From request extensions. Returns 401 auth:session_not_found if no row is loaded.
+}
+
+impl OptionalFromRequestParts<S> for Session {
+    // Returns Ok(None) when no row is loaded — for routes that serve both
+    // authenticated and unauthenticated callers.
+}
+```
+
+`Session` is pure data — it holds no mutation handles, no mutex, no `Arc`. It is also the public type returned by `list(user_id)`.
 
 ### Public API — `CookieSessions`
 
@@ -180,39 +211,42 @@ impl CookieSessions {
 
     pub fn layer(&self) -> CookieSessionLayer;
 
-    // lifecycle (takes &Session; mutation flushed by middleware on response)
+    // lifecycle — takes &CookieCtx, the cookie-only mutation-context extractor;
+    // the middleware flushes cookie writes on response.
     pub async fn authenticate(
         &self,
-        session: &Session,
+        ctx: &CookieCtx,
         user_id: &str,
         meta: &SessionMeta,
     ) -> Result<()>;
-    pub async fn rotate(&self, session: &Session) -> Result<()>;
-    pub async fn logout(&self, session: &Session) -> Result<()>;
+    pub async fn rotate(&self, ctx: &CookieCtx) -> Result<()>;
+    pub async fn logout(&self, ctx: &CookieCtx) -> Result<()>;
 
-    // cross-transport
-    pub async fn list(&self, user_id: &str) -> Result<Vec<SessionData>>;
+    // cross-transport (identical signatures to JwtSessions)
+    pub async fn list(&self, user_id: &str) -> Result<Vec<Session>>;
     pub async fn revoke(&self, user_id: &str, id: &str) -> Result<()>;
     pub async fn revoke_all(&self, user_id: &str) -> Result<()>;
     pub async fn revoke_all_except(&self, user_id: &str, keep_id: &str) -> Result<()>;
     pub async fn cleanup_expired(&self) -> Result<u64>;
 
-    // data blob access
-    pub async fn data<T: DeserializeOwned>(&self, session: &Session, key: &str) -> Result<Option<T>>;
-    pub async fn set_data<T: Serialize>(&self, session: &Session, key: &str, value: &T) -> Result<()>;
-    pub async fn remove_data(&self, session: &Session, key: &str) -> Result<()>;
+    // data blob access — keyed by session id (transport-independent), writes immediately
+    pub async fn data<T: DeserializeOwned>(&self, session_id: &str, key: &str) -> Result<Option<T>>;
+    pub async fn set_data<T: Serialize>(&self, session_id: &str, key: &str, value: &T) -> Result<()>;
+    pub async fn remove_data(&self, session_id: &str, key: &str) -> Result<()>;
 }
 
-pub struct Session { /* Arc<SessionState> */ }
+/// Cookie-only extractor holding the middleware's mutation slot.
+/// Required only by `authenticate` / `rotate` / `logout`; routes that
+/// just read `Session` do not need it.
+pub struct CookieCtx { /* private */ }
 
-impl Session {
-    pub fn id(&self) -> Option<String>;
-    pub fn user_id(&self) -> Option<String>;
-    pub fn is_authenticated(&self) -> bool;
+impl FromRequestParts<S> for CookieCtx {
+    // Always succeeds when CookieSessionLayer is in the stack;
+    // returns 500 auth:middleware_missing otherwise.
 }
 ```
 
-The extractor exposes read-only accessors. No `authenticate`, `rotate`, `logout`, `set`, `get` on it. All mutation goes through the facade.
+All lifecycle logic is on the facade. The only cookie-specific concept handlers see is `CookieCtx` — a narrow context extractor needed exclusively by the three mutation methods.
 
 ### Public API — `JwtSessions`
 
@@ -235,19 +269,22 @@ impl JwtSessions {
     pub async fn logout(&self, access_token: &str) -> Result<()>;
 
     // cross-transport (identical signatures to CookieSessions)
-    pub async fn list(&self, user_id: &str) -> Result<Vec<SessionData>>;
+    pub async fn list(&self, user_id: &str) -> Result<Vec<Session>>;
     pub async fn revoke(&self, user_id: &str, id: &str) -> Result<()>;
     pub async fn revoke_all(&self, user_id: &str) -> Result<()>;
     pub async fn revoke_all_except(&self, user_id: &str, keep_id: &str) -> Result<()>;
     pub async fn cleanup_expired(&self) -> Result<u64>;
 
-    // data blob access (keyed by jti since that is what Claims carry;
-    // each call hashes jti and resolves the row)
-    pub async fn data<T: DeserializeOwned>(&self, jti: &str, key: &str) -> Result<Option<T>>;
-    pub async fn set_data<T: Serialize>(&self, jti: &str, key: &str, value: &T) -> Result<()>;
-    pub async fn remove_data(&self, jti: &str, key: &str) -> Result<()>;
+    // data blob access — identical signatures to CookieSessions, keyed by session id
+    pub async fn data<T: DeserializeOwned>(&self, session_id: &str, key: &str) -> Result<Option<T>>;
+    pub async fn set_data<T: Serialize>(&self, session_id: &str, key: &str, value: &T) -> Result<()>;
+    pub async fn remove_data(&self, session_id: &str, key: &str) -> Result<()>;
 }
 
+/// Decoded JWT payload. Kept for custom auth implementations that
+/// bypass `JwtSessions` (e.g., handlers that inspect `aud` or `iss`
+/// themselves, or tooling that mints/verifies tokens outside the
+/// session flow). Most handlers should prefer `Session`.
 pub struct Claims {
     pub sub: String,
     pub aud: String,      // "access" | "refresh"
@@ -262,26 +299,6 @@ pub struct TokenPair {
     pub refresh_token: String,
     pub access_expires_at: u64,
     pub refresh_expires_at: u64,
-}
-```
-
-### Public API — shared `SessionData`
-
-Returned by both managers' `list` method. No `kind` field.
-
-```rust
-pub struct SessionData {
-    pub id: String,
-    pub user_id: String,
-    pub ip_address: String,
-    pub user_agent: String,
-    pub device_name: String,
-    pub device_type: String,
-    pub fingerprint: String,
-    pub data: serde_json::Value,
-    pub created_at: DateTime<Utc>,
-    pub last_active_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
 }
 ```
 
@@ -333,17 +350,27 @@ Both managers are constructed from the same `Database` handle; they share the `a
 
 ### Handler examples
 
-Cookie login, unchanged request/response shape but with facade-driven mutation:
+Protected route — **identical handler signature across both transports**:
+
+```rust
+async fn me(session: Session) -> Json<Me> {
+    Json(Me { user_id: session.user_id, device: session.device_name })
+}
+```
+
+Mount `me` under either the cookie layer or the JWT layer; the handler is unchanged.
+
+Cookie login (takes `CookieCtx` for mutation; facade writes cookie through middleware):
 
 ```rust
 async fn web_login(
     State(s): State<AppState>,
-    session: Session,
+    ctx: CookieCtx,
     meta: SessionMeta,
     JsonRequest(form): JsonRequest<LoginForm>,
 ) -> Result<StatusCode> {
     let user = verify_credentials(&form).await?;
-    s.cookies.authenticate(&session, &user.id, &meta).await?;
+    s.cookies.authenticate(&ctx, &user.id, &meta).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 ```
@@ -368,25 +395,22 @@ async fn api_refresh(
 }
 ```
 
-Cross-transport revocation works from either side:
+Cross-transport revocation — identical handler bodies, only the manager chosen differs:
 
 ```rust
-// From a cookie handler
 async fn web_logout_all(
     State(s): State<AppState>,
     session: Session,
 ) -> Result<StatusCode> {
-    let uid = session.user_id().ok_or_else(Error::unauthorized_default)?;
-    s.cookies.revoke_all(&uid).await?;   // wipes cookie rows AND JWT rows
+    s.cookies.revoke_all(&session.user_id).await?;   // wipes cookie rows AND JWT rows
     Ok(StatusCode::NO_CONTENT)
 }
 
-// From a JWT handler — same store, same effect
 async fn api_logout_all(
     State(s): State<AppState>,
-    claims: Claims,
+    session: Session,
 ) -> Result<StatusCode> {
-    s.jwts.revoke_all(&claims.sub).await?;
+    s.jwts.revoke_all(&session.user_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 ```
@@ -412,11 +436,14 @@ Either manager's `cleanup_expired()` issues a single `DELETE FROM authenticated_
 
 ### Breaking changes
 
-1. **`Session` extractor loses mutation methods.** `session.authenticate(...)`, `session.rotate()`, `session.logout()`, `session.set()`, `session.get()`, `session.remove_key()` all move to `CookieSessions`. Migration is mechanical per handler: add `State<AppState>` (or equivalent), replace `session.foo(...)` with `s.cookies.foo(&session, ...)`. `session.user_id()`, `session.id()`, `session.is_authenticated()` stay.
+1. **`Session` becomes a pure data struct.** The v0.7 `Session` extractor's mutation methods (`authenticate`, `rotate`, `logout`, `set`, `get`, `remove_key`) move to `CookieSessions`. The v0.7 read methods (`user_id()`, `id()`, `is_authenticated()`) are replaced by direct field access on `Session` (`session.user_id`, `session.id`). Migration is mechanical per handler:
+   - Login/logout: extract `CookieCtx` instead of `Session`, call `s.cookies.authenticate(&ctx, ...)` / `s.cookies.logout(&ctx)`.
+   - Protected reads: `session.user_id()` → `session.user_id`, `session.is_authenticated()` → `Option<Session>` extraction pattern.
+   - Data blob: `session.get("k")` → `s.cookies.data(&session.id, "k").await?`; `session.set("k", v)` → `s.cookies.set_data(&session.id, "k", v).await?`.
 
 2. **`auth::jwt::JwtEncoder` / `JwtDecoder` / `JwtLayer` become internal.** Users of these primitives migrate to `JwtSessions`. Apps that require direct JWT encode/decode (e.g., for non-session tokens) can still reach `HmacSigner`, `TokenSigner`, `TokenVerifier` at `auth::session::jwt::*`.
 
-3. **`Claims<T>` becomes non-generic `Claims`.** Custom payload fields are removed. Apps migrating need to move their custom data to the session `data` blob (`s.jwts.set_data(&claims.jti_row_id, "role", &role).await?`) or look them up from app tables keyed by `claims.sub`.
+3. **`Claims<T>` becomes non-generic `Claims`.** Custom payload fields are removed. `Claims` is kept for custom auth flows; most handlers migrate to extracting `Session` directly. Apps migrating need to move their custom data to the session `data` blob (`s.jwts.set_data(&session.id, "role", &role).await?`) or look it up from app tables keyed by `session.user_id`.
 
 4. **`SessionConfig` and `CookieConfig` merge into `CookieSessionsConfig`.** The nested `cookie:` block holds what `CookieConfig` had.
 
