@@ -1,4 +1,4 @@
-use modo::session::SessionToken;
+use modo::auth::session::SessionToken;
 
 #[test]
 fn test_token_generates_32_random_bytes_as_64_hex() {

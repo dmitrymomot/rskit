@@ -107,7 +107,7 @@ impl LocaleResolver for CookieResolver {
 /// Resolves the active locale from the session data.
 ///
 /// Reads the `"locale"` key from the session's JSON data. Requires
-/// [`SessionLayer`](crate::session::SessionLayer) to be installed before this resolver
+/// [`SessionLayer`](crate::auth::session::SessionLayer) to be installed before this resolver
 /// runs in the middleware stack.
 pub struct SessionResolver;
 
@@ -115,7 +115,7 @@ impl LocaleResolver for SessionResolver {
     fn resolve(&self, parts: &Parts) -> Option<String> {
         let state = parts
             .extensions
-            .get::<Arc<crate::session::SessionState>>()?;
+            .get::<Arc<crate::auth::session::SessionState>>()?;
         let guard = state.current.lock().ok()?;
         let session = guard.as_ref()?;
         if let serde_json::Value::Object(ref map) = session.data

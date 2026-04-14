@@ -33,7 +33,7 @@ pub struct Config {
     /// Session TTL, cookie name, fingerprint validation, touch interval, and
     /// per-user session limit.
     #[serde(default)]
-    pub session: crate::session::SessionConfig,
+    pub session: crate::auth::session::SessionConfig,
     /// Background job queue settings.
     #[serde(default)]
     pub job: crate::job::JobConfig,

@@ -42,7 +42,6 @@ pub mod runtime;
 pub mod sanitize;
 pub mod server;
 pub mod service;
-pub mod session;
 pub mod tracing;
 pub mod validate;
 
@@ -82,6 +81,7 @@ pub use config::Config;
 pub use error::{Error, Result};
 
 pub use audit::{AuditEntry, AuditLog, AuditLogBackend, AuditRecord, AuditRepo};
+pub use auth::session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};
 pub use embed::{
     EmbeddingBackend, EmbeddingProvider, GeminiConfig, GeminiEmbedding, MistralConfig,
     MistralEmbedding, OpenAIConfig, OpenAIEmbedding, VoyageConfig, VoyageEmbedding, from_f32_blob,
@@ -93,7 +93,6 @@ pub use ip::{ClientInfo, ClientIp, ClientIpLayer};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
 pub use service::Service;
-pub use session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};
 pub use tenant::{
     HasTenantId, Tenant, TenantId, TenantLayer, TenantResolver, TenantStrategy,
     middleware as tenant_middleware,

@@ -2,8 +2,8 @@
 
 use axum::Json;
 use axum::routing::get;
+use modo::auth::session::Session;
 use modo::db::{ColumnMap, ConnExt, ConnQueryExt, Database, FromRow};
-use modo::session::Session;
 use modo::testing::{TestApp, TestDb, TestSession};
 use serde::{Deserialize, Serialize};
 

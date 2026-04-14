@@ -1,8 +1,8 @@
 #![cfg(feature = "test-helpers")]
 
 use axum::routing::get;
+use modo::auth::session::{Session, SessionConfig};
 use modo::cookie::CookieConfig;
-use modo::session::{Session, SessionConfig};
 use modo::testing::{TestApp, TestDb, TestSession};
 
 async fn whoami(session: Session) -> String {

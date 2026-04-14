@@ -27,7 +27,7 @@
 //! # Quick start
 //!
 //! ```rust,no_run
-//! use modo::session::{self, SessionConfig, Store};
+//! use modo::auth::session::{self, SessionConfig, Store};
 //! use modo::cookie::{CookieConfig, key_from_config};
 //! use modo::db::Database;
 //!

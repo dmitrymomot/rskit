@@ -16,7 +16,7 @@
 //!   with JSON, form, and raw-body support.
 //! - [`TestResponse`] — captured response with status, header, and body accessors.
 //! - [`TestSession`] — session infrastructure for integration tests: creates the
-//!   `sessions` table, signs cookies, and builds a [`SessionLayer`](crate::session::SessionLayer).
+//!   `sessions` table, signs cookies, and builds a [`SessionLayer`](crate::auth::session::SessionLayer).
 //!
 //! # Requires feature `test-helpers`
 //!
