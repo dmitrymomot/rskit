@@ -63,6 +63,8 @@ impl Registry {
         super::AppState::from(self)
     }
 
+    /// Consumes the registry and yields the underlying service map.
+    /// Used by [`AppState`](super::AppState) to freeze the registry.
     pub(crate) fn into_inner(self) -> HashMap<TypeId, Arc<dyn Any + Send + Sync>> {
         self.services
     }

@@ -15,6 +15,9 @@
 //! `From` impl, producing an HTTP 422 Unprocessable Entity response whose
 //! `details` field contains the per-field error map.
 //!
+//! All three public items ([`Validate`], [`ValidationError`], [`Validator`])
+//! are re-exported from [`crate::prelude`].
+//!
 //! ## Quick start
 //!
 //! ```rust,no_run

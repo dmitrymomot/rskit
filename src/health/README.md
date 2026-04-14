@@ -11,18 +11,18 @@ Registers two routes on an axum `Router`:
 
 | Type | Description |
 |---|---|
-| `HealthCheck` | Trait for types that can verify their own readiness |
-| `HealthChecks` | Fluent builder that collects named checks; registered in the service registry |
-| `router()` | Returns a `Router<AppState>` with `/_live` and `/_ready` mounted |
+| `health::HealthCheck` | Trait for types that can verify their own readiness |
+| `health::HealthChecks` | Fluent builder that collects named checks; registered in the service registry |
+| `health::router()` | Returns a `Router<AppState>` with `/_live` and `/_ready` mounted |
 
-When the `db` feature is enabled, `db::Database` implements `HealthCheck` out of the box — it verifies health by executing a simple query on the connection.
+When the `db` feature is enabled, `db::Database` implements `HealthCheck` out of the box — it verifies health by executing a simple `SELECT 1` on the connection.
 
 ## Usage
 
 ### Register checks and mount the router
 
 ```rust,no_run
-use modo::HealthChecks;
+use modo::health::HealthChecks;
 use modo::service::Registry;
 
 // Build the check collection during startup.
@@ -46,7 +46,7 @@ let app = axum::Router::new()
 
 ```rust,ignore
 use std::pin::Pin;
-use modo::HealthCheck;
+use modo::health::{HealthCheck, HealthChecks};
 use modo::Result;
 
 struct MyCache { /* ... */ }
@@ -60,7 +60,7 @@ impl HealthCheck for MyCache {
     }
 }
 
-let checks = modo::HealthChecks::new()
+let checks = HealthChecks::new()
     .check("cache", MyCache { /* ... */ });
 ```
 

@@ -11,29 +11,34 @@ use tower::{Layer, Service};
 use super::extractor::Role;
 use super::traits::RoleExtractor;
 
-/// Creates an RBAC middleware layer from a role extractor.
+/// Builds a Tower layer that resolves the caller's role on every request.
 ///
-/// Calls `extractor.extract()` on every request, stores the resulting [`Role`] in
-/// request extensions, then forwards to the inner service. Extraction errors are
-/// converted to HTTP responses immediately; the inner service is not called.
+/// On each request the layer calls `extractor.extract(&mut parts)`, stores the
+/// resulting [`Role`] in request extensions, then forwards to the inner
+/// service. If the extractor returns an [`Error`](crate::Error), the layer
+/// converts it into an HTTP response immediately and skips the inner service.
 ///
-/// Apply with `.layer()` on the outer router so the role is available to any
-/// `.route_layer()` guards that run after route matching.
-pub fn middleware<R>(extractor: R) -> RbacLayer<R>
+/// Apply with `.layer()` on the outer router so every request has passed
+/// through it before `.route_layer()` guards from
+/// [`crate::auth::guard`] run after route matching.
+pub fn middleware<R>(extractor: R) -> RoleLayer<R>
 where
     R: RoleExtractor,
 {
-    RbacLayer {
+    RoleLayer {
         extractor: Arc::new(extractor),
     }
 }
 
-/// Tower layer produced by [`middleware()`].
-pub struct RbacLayer<R> {
+/// Tower [`Layer`] produced by [`middleware()`].
+///
+/// Returned by value so it can be passed to `Router::layer(..)`. Wraps an
+/// [`Arc`] around the extractor so the layer is cheaply cloneable per request.
+pub struct RoleLayer<R> {
     extractor: Arc<R>,
 }
 
-impl<R> Clone for RbacLayer<R> {
+impl<R> Clone for RoleLayer<R> {
     fn clone(&self) -> Self {
         Self {
             extractor: self.extractor.clone(),
@@ -41,27 +46,30 @@ impl<R> Clone for RbacLayer<R> {
     }
 }
 
-impl<Svc, R> Layer<Svc> for RbacLayer<R>
+impl<Svc, R> Layer<Svc> for RoleLayer<R>
 where
     R: RoleExtractor,
 {
-    type Service = RbacMiddleware<Svc, R>;
+    type Service = RoleMiddleware<Svc, R>;
 
     fn layer(&self, inner: Svc) -> Self::Service {
-        RbacMiddleware {
+        RoleMiddleware {
             inner,
             extractor: self.extractor.clone(),
         }
     }
 }
 
-/// Tower service produced by [`RbacLayer`].
-pub struct RbacMiddleware<Svc, R> {
+/// Tower [`Service`] wrapping an inner service with role extraction.
+///
+/// Produced by [`RoleLayer::layer`]. You don't construct this directly — it is
+/// created for you when the router applies the layer.
+pub struct RoleMiddleware<Svc, R> {
     inner: Svc,
     extractor: Arc<R>,
 }
 
-impl<Svc: Clone, R> Clone for RbacMiddleware<Svc, R> {
+impl<Svc: Clone, R> Clone for RoleMiddleware<Svc, R> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -70,7 +78,7 @@ impl<Svc: Clone, R> Clone for RbacMiddleware<Svc, R> {
     }
 }
 
-impl<Svc, R> Service<Request<Body>> for RbacMiddleware<Svc, R>
+impl<Svc, R> Service<Request<Body>> for RoleMiddleware<Svc, R>
 where
     Svc: Service<Request<Body>, Response = http::Response<Body>> + Clone + Send + 'static,
     Svc::Future: Send + 'static,

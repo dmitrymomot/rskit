@@ -6,12 +6,18 @@
 //!
 //! - [`TierBackend`] — trait for pluggable tier resolution (app implements)
 //! - [`TierResolver`] — concrete wrapper (`Arc<dyn TierBackend>`, cheap to clone)
-//! - [`TierInfo`] — resolved tier with feature checks
+//! - [`TierInfo`] — resolved tier with feature checks (also implements
+//!   [`FromRequestParts`](axum::extract::FromRequestParts) and
+//!   [`OptionalFromRequestParts`](axum::extract::OptionalFromRequestParts))
 //! - [`FeatureAccess`] — toggle or limit feature model
 //! - [`TierLayer`] — Tower middleware that resolves and injects [`TierInfo`]
+//!   (also re-exported as `modo::middlewares::Tier`)
 //! - [`require_feature()`] — route guard for boolean feature gates
+//!   (also re-exported as `modo::guards::require_feature`)
 //! - [`require_limit()`] — route guard for usage-limit gates
-//! - [`mod@test`] — test helpers (`StaticTierBackend`, `FailingTierBackend`)
+//!   (also re-exported as `modo::guards::require_limit`)
+//! - [`mod@test`] — test helpers ([`StaticTierBackend`](test::StaticTierBackend),
+//!   [`FailingTierBackend`](test::FailingTierBackend))
 //!
 //! ## Quick start
 //!
@@ -20,7 +26,7 @@
 //! use axum::{Router, routing::get};
 //!
 //! # fn example(resolver: TierResolver) {
-//! let app: Router = Router::new()
+//! let app: axum::Router = axum::Router::new()
 //!     .route("/settings/domain", get(|| async { "ok" }))
 //!     .route_layer(require_feature("custom_domain"))
 //!     .layer(TierLayer::new(resolver, |parts| {

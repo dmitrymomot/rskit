@@ -2,24 +2,32 @@
 //!
 //! Multi-tenant request routing.
 //!
-//! Always available (no feature gate).
+//! A two-step pipeline resolves a tenant on every request: a [`TenantStrategy`]
+//! extracts a raw [`TenantId`] from `http::request::Parts`, and a
+//! [`TenantResolver`] maps that identifier to an app-defined tenant type. The
+//! resolved tenant is inserted into request extensions and surfaced to handlers
+//! via the [`Tenant<T>`] axum extractor.
 //!
 //! Provides:
 //! - [`TenantId`] — raw identifier extracted from the request (`Slug`, `Domain`, `Id`, `ApiKey`)
 //! - [`TenantStrategy`] — trait for extracting a [`TenantId`] from request parts
-//! - [`TenantResolver`] — trait for mapping a [`TenantId`] to an app-defined tenant type
+//! - [`TenantResolver`] — trait for mapping a [`TenantId`] to an app-defined tenant type (not object-safe; uses RPITIT)
 //! - [`HasTenantId`] — required bound on the resolved tenant; provides the tracing field value
 //! - [`Tenant<T>`] — axum extractor for the resolved tenant
 //! - [`TenantLayer`] — Tower layer produced by [`middleware()`]
 //! - [`TenantMiddleware`] — Tower service that resolves the tenant on every request
 //! - [`middleware()`] — primary entry point that builds a [`TenantLayer`] from a strategy and resolver
 //!
+//! The [`domain`] submodule provides [`DomainService`](domain::DomainService)
+//! for registering and DNS-verifying custom per-tenant domains.
+//!
 //! # How it works
 //!
 //! 1. A [`TenantStrategy`] extracts a [`TenantId`] from `http::request::Parts`.
 //! 2. A [`TenantResolver`] maps that `TenantId` to the app's concrete tenant type.
 //! 3. [`middleware()`] combines the two into a Tower [`TenantLayer`] that inserts the
-//!    resolved tenant into request extensions.
+//!    resolved tenant into request extensions and records `tenant_id` in the
+//!    current tracing span.
 //! 4. Handler functions use the [`Tenant<T>`] extractor to access the resolved value.
 //!
 //! # Strategies
@@ -30,17 +38,9 @@
 //! | [`domain()`] | [`DomainStrategy`] | `TenantId::Domain` |
 //! | [`subdomain_or_domain()`] | [`SubdomainOrDomainStrategy`] | `TenantId::Slug` or `TenantId::Domain` |
 //! | [`header()`] | [`HeaderStrategy`] | `TenantId::Id` |
-//! | [`api_key_header()`] | [`ApiKeyHeaderStrategy`] | `TenantId::ApiKey` |
+//! | [`api_key_header()`] | [`ApiKeyHeaderStrategy`] | `TenantId::ApiKey` (redacted in `Display`/`Debug`) |
 //! | [`path_prefix()`] | [`PathPrefixStrategy`] | `TenantId::Slug` (rewrites URI) |
-//! | [`path_param()`] | [`PathParamStrategy`] | `TenantId::Slug` (requires `route_layer`) |
-//!
-//! # Domain management (feature-gated)
-//!
-//! When both the `db` and `dns` features are enabled, the [`domain`] submodule
-//! provides [`DomainService`](domain::DomainService) for registering, verifying, and managing
-//! custom domains per tenant. Domains are verified via DNS TXT records and can
-//! be flagged for email routing or HTTP request routing. See the [`domain`]
-//! module documentation for details.
+//! | [`path_param()`] | [`PathParamStrategy`] | `TenantId::Slug` (requires `.route_layer()`) |
 //!
 //! # Quick start
 //!

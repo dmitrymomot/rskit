@@ -38,9 +38,8 @@ Invalid expressions or durations return an error at builder time.
 
 ```rust,ignore
 use modo::cron::Scheduler;
-use modo::extractor::Service;
 use modo::runtime::Task;
-use modo::service::Registry;
+use modo::service::{Registry, Service};
 use modo::Result;
 
 struct EmailService;

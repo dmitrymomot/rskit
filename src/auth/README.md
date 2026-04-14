@@ -17,6 +17,89 @@ Identity and access — session, JWT, OAuth, API keys, roles, and gating guards.
 | `totp`     | RFC 6238 TOTP (Google Authenticator compatible)                      |
 | `backup`   | One-time backup recovery code generation and verification            |
 
+## Quick start
+
+### Session + role gating
+
+Resolve the current user's role via a [`RoleExtractor`](role/README.md), apply
+`role::middleware` on the outer router, and gate specific routes with
+`guard::require_role` (or `guard::require_authenticated` for any-role access).
+
+```rust,no_run
+use axum::{Router, routing::get};
+use modo::auth::{guard, role::{self, RoleExtractor}};
+use modo::Result;
+
+struct MyExtractor;
+
+impl RoleExtractor for MyExtractor {
+    async fn extract(&self, _parts: &mut http::request::Parts) -> Result<String> {
+        // Look up the signed-in user's role — e.g. from a Session extractor.
+        Ok("admin".to_string())
+    }
+}
+
+let app: Router = Router::new()
+    .route("/me", get(|| async { "profile" }))
+    .route_layer(guard::require_authenticated())       // any role
+    .route("/admin", get(|| async { "admin" }))
+    .route_layer(guard::require_role(["admin"]))       // specific roles
+    .layer(role::middleware(MyExtractor));
+```
+
+Sessions themselves are wired via [`session::layer`](session/README.md):
+
+```rust,no_run
+use modo::auth::session;
+# fn example(store: session::Store, cookie_config: &modo::cookie::CookieConfig,
+#            key: &axum_extra::extract::cookie::Key) {
+let session_layer = session::layer(store, cookie_config, key);
+# let _ = session_layer;
+# }
+```
+
+### JWT bearer auth
+
+Issue tokens with `JwtEncoder`; enforce auth on protected routes with
+`JwtLayer`. Handlers receive `Claims<T>` as an extractor.
+
+```rust,no_run
+use axum::{Router, routing::get};
+use modo::auth::jwt::{Claims, JwtConfig, JwtDecoder, JwtLayer};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Serialize, Deserialize)]
+struct MyClaims { role: String }
+
+let config = JwtConfig::new("change-me-in-production");
+let decoder = JwtDecoder::from_config(&config);
+
+async fn me(claims: Claims<MyClaims>) -> String {
+    format!("role={}", claims.custom.role)
+}
+
+let app: Router = Router::new()
+    .route("/me", get(me))
+    .layer(JwtLayer::<MyClaims>::new(decoder));
+```
+
+### API key + scope guard
+
+Apply `ApiKeyLayer` to authenticate requests and
+`guard::require_scope` to enforce a specific scope on a route.
+
+```rust,no_run
+use axum::{Router, routing::get};
+use modo::auth::{apikey::{ApiKeyLayer, ApiKeyStore}, guard};
+
+# fn example(store: ApiKeyStore) {
+let app: Router = Router::new()
+    .route("/orders", get(|| async { "orders" }))
+    .route_layer(guard::require_scope("read:orders"))
+    .layer(ApiKeyLayer::new(store));
+# }
+```
+
 ## Usage
 
 ### Password Hashing

@@ -10,9 +10,9 @@ Tier-based feature gating for SaaS applications.
 | [`TierResolver`] | Concrete wrapper (`Arc<dyn TierBackend>`, cheap to clone) |
 | [`TierInfo`] | Resolved tier with feature-check helpers |
 | [`FeatureAccess`] | Toggle or usage-limit feature model |
-| [`TierLayer`] | Tower middleware that resolves and injects `TierInfo` |
-| [`require_feature()`] | Route guard for boolean feature gates |
-| [`require_limit()`] | Route guard for usage-limit gates |
+| [`TierLayer`] | Tower middleware that resolves and injects `TierInfo` (also `modo::middlewares::Tier`) |
+| [`require_feature()`] | Route guard for boolean feature gates (also `modo::guards::require_feature`) |
+| [`require_limit()`] | Route guard for usage-limit gates (also `modo::guards::require_limit`) |
 
 ## Usage
 

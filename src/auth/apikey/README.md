@@ -17,7 +17,9 @@ Prefixed API key issuance, verification, scoping, and lifecycle management.
 | Type | Purpose |
 |------|---------|
 | `ApiKeyLayer` | Tower layer that verifies API keys on incoming requests |
-| `require_scope` | Tower layer factory that enforces a required scope on verified keys |
+
+Route-level scope gating (`require_scope`) lives in [`modo::auth::guard`](../guard) —
+apply it as a `route_layer` after `ApiKeyLayer`.
 
 ### Data types
 
@@ -177,8 +179,10 @@ All errors are returned as `modo::Error` with appropriate HTTP status codes:
 | `ApiKeyStore::refresh` | 400 Bad Request | `expires_at` is not valid RFC 3339 |
 | `ApiKeyStore::refresh` | 404 Not Found | No key with the given ID exists |
 | `ApiKeyLayer` | 401 Unauthorized | Missing or invalid `Authorization` header |
-| `require_scope` | 403 Forbidden | Verified key lacks the required scope |
-| `require_scope` | 500 Internal | `require_scope` applied without `ApiKeyLayer` |
+
+Route-level scope gating errors are documented in the `modo::auth::guard`
+module (`require_scope` returns 403 Forbidden when the verified key lacks the
+required scope, and 500 Internal if applied without `ApiKeyLayer`).
 
 Verification deliberately returns the same generic "invalid API key" message
 for all failure cases to prevent enumeration attacks.

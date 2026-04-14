@@ -21,24 +21,35 @@ layers (`require_role`, `require_authenticated`) live in [`modo::auth::guard`].
 
 ```rust
 use modo::auth::role::RoleExtractor;
-use modo::{Result, Error};
+use modo::{Error, Result};
 
 struct MyExtractor;
 
 impl RoleExtractor for MyExtractor {
-    async fn extract(&self, parts: &mut http::request::Parts) -> Result<String> {
+    async fn extract(&self, _parts: &mut http::request::Parts) -> Result<String> {
         // Read the session, verify a JWT, check an API key, etc.
-        // Return Error::unauthorized to short-circuit unauthenticated requests.
+        // Return Error::unauthorized to short-circuit unauthenticated callers.
         Ok("admin".to_string())
     }
 }
 ```
 
+Implementations are concrete types; the trait uses RPITIT and is **not**
+object-safe.
+
 ### Wire the middleware and guards
 
 ```rust
 use axum::{Router, routing::get};
-use modo::auth::{guard, role::{self, Role}};
+use modo::auth::{guard, role};
+use modo::extractors::Role;
+# use modo::Result;
+# struct MyExtractor;
+# impl modo::auth::role::RoleExtractor for MyExtractor {
+#     async fn extract(&self, _: &mut http::request::Parts) -> Result<String> {
+#         Ok("admin".into())
+#     }
+# }
 
 async fn admin_handler(role: Role) -> String {
     format!("hello, {}", role.as_str())
@@ -97,10 +108,15 @@ async fn handler(role: Option<Role>) -> String {
   axum `FromRequestParts` (returns 500 if middleware is missing), and
   `OptionalFromRequestParts` (returns `None` if middleware is missing).
 
-The Tower `Layer` / `Service` types (`RoleLayer`, `RequireRoleLayer`,
-`RequireAuthenticatedLayer`, etc.) are internal implementation details. You interact
-with them via `auth::role::middleware()`, `auth::guard::require_role()`, and
-`auth::guard::require_authenticated()`.
+The Tower `Layer` / `Service` types (`RoleLayer`, `RoleMiddleware`) are
+returned by `auth::role::middleware()` but you don't construct them directly.
+The route-level guard layers (`RequireRoleLayer`, `RequireAuthenticatedLayer`)
+live in [`auth::guard`](../guard.rs) and are built via
+`auth::guard::require_role()` and `auth::guard::require_authenticated()`.
+
+Both `Role` and `RoleExtractor` are also reachable as `modo::extractors::Role`
+and `modo::auth::role::RoleExtractor`; `Role` is additionally re-exported from
+`modo::prelude`.
 
 ## Behavior Reference
 

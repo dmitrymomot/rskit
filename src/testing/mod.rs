@@ -1,8 +1,27 @@
 //! Test helpers for building and exercising modo applications in-process.
 //!
-//! This module provides lightweight utilities for integration-testing axum-based
-//! handlers without spinning up a real HTTP server. Everything runs in-process
-//! using Tower's [`oneshot`](tower::ServiceExt::oneshot) transport.
+//! # Requires feature `test-helpers`
+//!
+//! **This module is gated behind the `test-helpers` feature** — the only
+//! feature flag modo ships. Enable it in your `Cargo.toml` dev-dependency:
+//!
+//! ```toml
+//! [dev-dependencies]
+//! modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
+//! ```
+//!
+//! Integration test files that use these helpers should also guard their
+//! entire contents:
+//!
+//! ```rust,ignore
+//! #![cfg(feature = "test-helpers")]
+//! ```
+//!
+//! # Overview
+//!
+//! Lightweight utilities for integration-testing axum-based handlers without
+//! spinning up a real HTTP server. Everything runs in-process using Tower's
+//! [`oneshot`](tower::ServiceExt::oneshot) transport.
 //!
 //! # Provides
 //!
@@ -17,15 +36,6 @@
 //! - [`TestResponse`] — captured response with status, header, and body accessors.
 //! - [`TestSession`] — session infrastructure for integration tests: creates the
 //!   `sessions` table, signs cookies, and builds a [`SessionLayer`](crate::auth::session::SessionLayer).
-//!
-//! # Requires feature `test-helpers`
-//!
-//! Enable the feature in your `Cargo.toml` dev-dependency:
-//!
-//! ```toml
-//! [dev-dependencies]
-//! modo = { path = ".", features = ["test-helpers"] }
-//! ```
 //!
 //! # Quick start
 //!

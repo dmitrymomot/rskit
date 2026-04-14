@@ -1,6 +1,6 @@
 //! # modo::auth::role
 //!
-//! Role-based access control for axum applications.
+//! Role-based gating for axum applications.
 //!
 //! Roles-only — permission checks beyond "does this role match?" belong
 //! in handler logic.
@@ -11,8 +11,9 @@
 //! - [`middleware()`] — Tower layer that calls your extractor and stores [`Role`] in extensions.
 //! - [`Role`] — newtype extractor over `String`; pull the resolved role into handlers.
 //!
-//! Route-level gating (`require_role`, `require_authenticated`) lives in
-//! [`crate::auth::guard`].
+//! Route-level gating layers (`require_role`, `require_authenticated`) live in
+//! [`crate::auth::guard`]. This module only resolves the role; `auth::guard`
+//! compares it against an allow-list.
 //!
 //! # Wiring order
 //!
@@ -28,7 +29,7 @@
 //! struct MyExtractor;
 //!
 //! impl RoleExtractor for MyExtractor {
-//!     async fn extract(&self, parts: &mut http::request::Parts) -> Result<String> {
+//!     async fn extract(&self, _parts: &mut http::request::Parts) -> Result<String> {
 //!         Ok("admin".to_string())
 //!     }
 //! }

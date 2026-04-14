@@ -2,14 +2,30 @@
 
 MiniJinja-based template rendering for the modo web framework.
 
-Provides: filesystem template loading, built-in `t()` i18n function, `static_url()` for
-cache-busted asset paths, per-request locale resolution, Tower middleware for request-scoped
-context, `Renderer` axum extractor, `context!` macro re-export, HTMX support, and static file
-serving.
+Filesystem template loading with debug-mode hot-reload, built-in `t()` i18n
+function with plural rules, `static_url()` for cache-busted asset paths, a
+Tower middleware that injects per-request template context, and a `Renderer`
+axum extractor for ergonomic HTML responses (including HTMX partial rendering).
 
-## Usage
+## Key types
 
-### Building the engine
+| Type / Trait             | Purpose                                                                    |
+| ------------------------ | -------------------------------------------------------------------------- |
+| `Engine`                 | Holds the MiniJinja environment; cheaply cloneable (internal `Arc`)        |
+| `EngineBuilder`          | Fluent builder for `Engine` — obtain via `Engine::builder()`               |
+| `TemplateConfig`         | Configuration for paths, static URL prefix, and locale knobs               |
+| `TemplateContext`        | Per-request key-value map shared by middleware and handlers                |
+| `TemplateContextLayer`   | Tower middleware that populates `TemplateContext` (also `modo::middlewares::TemplateContext`) |
+| `Renderer`               | axum extractor with `html`, `html_partial`, `string` render methods        |
+| `HxRequest`              | Infallible extractor for `HX-Request: true` (also in `modo::extractors`)   |
+| `context!` (macro)       | Re-export of `minijinja::context!` for building template data              |
+| `LocaleResolver` (trait) | Pluggable interface for per-request locale detection                       |
+| `QueryParamResolver`     | Resolves locale from a URL query parameter                                 |
+| `CookieResolver`         | Resolves locale from a cookie                                              |
+| `SessionResolver`        | Resolves locale from the current session                                   |
+| `AcceptLanguageResolver` | Resolves locale from `Accept-Language` header                              |
+
+## Engine setup
 
 ```rust,no_run
 use modo::template::{Engine, TemplateConfig};
@@ -20,57 +36,13 @@ let engine = Engine::builder()
     .expect("failed to build engine");
 ```
 
-### Wiring into the router
+`Engine::builder()` returns an `EngineBuilder` that supports:
 
-```rust,no_run
-use modo::template::{Engine, TemplateContextLayer};
+- `.config(TemplateConfig)` — override defaults.
+- `.function(name, f)` / `.filter(name, f)` — register custom globals.
+- `.locale_resolvers(Vec<Arc<dyn LocaleResolver>>)` — replace the default chain.
 
-fn build_router(engine: Engine) -> axum::Router {
-    axum::Router::new()
-        .merge(engine.static_service())           // serve /assets/*
-        // ... routes ...
-        .layer(TemplateContextLayer::new(engine))  // inject per-request context
-}
-```
-
-### Rendering in a handler
-
-```rust,no_run
-use modo::template::{Renderer, context};
-use axum::response::Html;
-
-async fn home(renderer: Renderer) -> modo::Result<Html<String>> {
-    renderer.html("pages/home.html", context! { title => "Home" })
-}
-```
-
-### HTMX partial rendering
-
-```rust,no_run
-use modo::template::{Renderer, context};
-use axum::response::Html;
-
-async fn dashboard(renderer: Renderer) -> modo::Result<Html<String>> {
-    // renders partial.html for HTMX requests, page.html otherwise
-    renderer.html_partial(
-        "pages/dashboard.html",
-        "partials/dashboard_content.html",
-        context! { count => 42 },
-    )
-}
-```
-
-### Detecting HTMX requests directly
-
-```rust,no_run
-use modo::template::HxRequest;
-
-async fn handler(hx: HxRequest) {
-    if hx.is_htmx() { /* respond with a partial */ }
-}
-```
-
-### Registering custom functions and filters
+### Custom functions and filters
 
 ```rust,no_run
 use modo::template::{Engine, TemplateConfig};
@@ -87,23 +59,91 @@ let engine = Engine::builder()
     .expect("failed to build engine");
 ```
 
-## Configuration
+## Wiring into the router
 
-```yaml
-templates_path: "templates" # MiniJinja template files
-static_path: "static" # static assets (CSS, JS, images)
-static_url_prefix: "/assets" # URL prefix for static files
-locales_path: "locales" # locale YAML files
-default_locale: "en" # fallback locale
-locale_cookie: "lang" # cookie name for locale preference
-locale_query_param: "lang" # query param name for locale preference
+```rust,no_run
+use modo::template::{Engine, TemplateContextLayer};
+
+fn build_router(engine: Engine) -> axum::Router {
+    axum::Router::new()
+        .merge(engine.static_service())            // serves `static_url_prefix`
+        // ... routes ...
+        .layer(TemplateContextLayer::new(engine))  // inject per-request context
+}
 ```
 
-All fields are optional and fall back to the defaults shown above.
+`Engine::static_service()` returns an `axum::Router` that serves
+`TemplateConfig::static_path` under `TemplateConfig::static_url_prefix`. In
+debug builds responses get `Cache-Control: no-cache`; release builds get
+`public, max-age=31536000, immutable`.
 
-## i18n
+The `Engine` must also be added to the service registry so that `Renderer`
+can extract it from `AppState`:
 
-Place YAML files under `locales/<lang>/<namespace>.yaml`:
+```rust,ignore
+// In main() or wherever you build the Registry:
+use modo::service::Registry;
+
+let mut registry = Registry::new();
+registry.add(engine.clone());
+let state = registry.into_state();
+```
+
+## Rendering in a handler
+
+```rust,no_run
+use modo::template::{Renderer, context};
+use axum::response::Html;
+
+async fn home(renderer: Renderer) -> modo::Result<Html<String>> {
+    renderer.html("pages/home.html", context! { title => "Home" })
+}
+```
+
+`Renderer` merges the handler-supplied MiniJinja context with the
+middleware-populated `TemplateContext`. When the same key is set by both,
+the handler value wins.
+
+Available render methods:
+
+- `html(template, context) -> Result<Html<String>>` — full HTML page.
+- `html_partial(page, partial, context) -> Result<Html<String>>` — swaps to
+  `partial` for HTMX requests, renders `page` otherwise.
+- `string(template, context) -> Result<String>` — raw rendered output.
+- `is_htmx() -> bool` — convenience getter.
+
+## HTMX
+
+```rust,no_run
+use modo::template::{Renderer, context};
+use axum::response::Html;
+
+async fn dashboard(renderer: Renderer) -> modo::Result<Html<String>> {
+    // Renders partials/dashboard_content.html for HTMX requests,
+    // pages/dashboard.html otherwise.
+    renderer.html_partial(
+        "pages/dashboard.html",
+        "partials/dashboard_content.html",
+        context! { count => 42 },
+    )
+}
+```
+
+To detect HTMX requests without a renderer, use `HxRequest` directly:
+
+```rust,no_run
+use modo::template::HxRequest;
+
+async fn handler(hx: HxRequest) {
+    if hx.is_htmx() {
+        // respond with a partial
+    }
+}
+```
+
+## Locales
+
+Place YAML files under `locales/<lang>/<namespace>.yaml` (`.yml` also accepted):
 
 ```yaml
 # locales/en/common.yaml
@@ -113,42 +153,77 @@ items:
     other: "{count} items"
 ```
 
-In templates: `{{ t("common.greeting", name="World") }}` and
-`{{ t("common.items", count=5) }}`.
+Templates call `t(key, ...)`:
 
-The locale chain resolves in order: query param → cookie → session (when the
-`session` feature is enabled) → `Accept-Language` header, falling back to
-`default_locale`.
+```jinja
+{{ t("common.greeting", name="World") }}
+{{ t("common.items", count=5) }}
+```
 
-## Key Types
+The built-in locale chain runs in order: `QueryParamResolver` →
+`CookieResolver` → `SessionResolver` → `AcceptLanguageResolver`, falling
+back to `TemplateConfig::default_locale`. Each resolver only accepts
+locales that were discovered on disk. Override the chain with
+`EngineBuilder::locale_resolvers(...)`.
 
-| Type / Trait             | Purpose                                                                    |
-| ------------------------ | -------------------------------------------------------------------------- |
-| `Engine`                 | Holds the MiniJinja environment; cheaply cloneable                         |
-| `EngineBuilder`          | Fluent builder for `Engine`                                                |
-| `TemplateConfig`         | All configuration for the template subsystem                               |
-| `TemplateContext`        | Per-request key-value map shared by middleware/handlers                    |
-| `TemplateContextLayer`   | Tower middleware that populates `TemplateContext`                          |
-| `Renderer`               | axum extractor for rendering templates in handlers                         |
-| `HxRequest`              | Infallible extractor that detects `HX-Request: true`                       |
-| `context!` (macro)       | Re-export of `minijinja::context!` for building template data in handlers  |
-| `LocaleResolver` (trait) | Pluggable interface for locale detection                                   |
-| `QueryParamResolver`     | Resolves locale from a URL query parameter                                 |
-| `CookieResolver`         | Resolves locale from a cookie                                              |
-| `SessionResolver`        | Resolves locale from session data (requires **`session`** feature)         |
-| `AcceptLanguageResolver` | Resolves locale from `Accept-Language` header                              |
+Plural rules come from [`intl_pluralrules`](https://docs.rs/intl-pluralrules)
+and cover CLDR categories (`zero`, `one`, `two`, `few`, `many`, `other`).
+Missing categories fall back to `other`. Placeholders use `{name}` syntax
+(unmatched placeholders are left in place).
+
+## Configuration
+
+```yaml
+templates_path: "templates"   # MiniJinja template files
+static_path: "static"          # static assets (CSS, JS, images)
+static_url_prefix: "/assets"   # URL prefix for static files
+locales_path: "locales"        # locale YAML files
+default_locale: "en"           # fallback locale
+locale_cookie: "lang"          # cookie name read by CookieResolver
+locale_query_param: "lang"     # query param read by QueryParamResolver
+```
+
+All fields are optional and fall back to the defaults shown above.
 
 ## Template variables injected by middleware
 
-| Variable         | Value                                                           |
-| ---------------- | --------------------------------------------------------------- |
-| `current_url`    | Full request URI string                                         |
-| `is_htmx`        | `true` when `HX-Request: true`                                  |
-| `request_id`     | Value of `X-Request-Id` header (if present)                     |
-| `locale`         | Resolved locale string (e.g. `"en"`)                            |
-| `csrf_token`     | CSRF token string (if `csrf()` middleware is active)            |
-| `flash_messages` | Callable that returns flash entries (if `FlashLayer` is active) |
-| `tier_name`      | Name of the active tier (requires **`tier`** feature, if `TierInfo` present) |
-| `tier_has`       | `tier_has(name)` — returns `true` if the feature exists in the tier |
-| `tier_enabled`   | `tier_enabled(name)` — returns `true` if the feature is enabled |
-| `tier_limit`     | `tier_limit(name)` — returns the numeric limit for a feature    |
+| Variable         | Value                                                                  |
+| ---------------- | ---------------------------------------------------------------------- |
+| `current_url`    | Full request URI string                                                |
+| `is_htmx`        | `true` when `HX-Request: true`                                         |
+| `request_id`     | Value of `X-Request-Id` header (if present)                            |
+| `locale`         | Resolved locale string (e.g. `"en"`)                                   |
+| `csrf_token`     | CSRF token string (when `csrf()` middleware is active)                 |
+| `flash_messages` | Callable returning flash entries (when `FlashLayer` is installed)      |
+| `tier_name`      | Name of the active tier (when `TierInfo` extension is present)         |
+| `tier_has`       | `tier_has(name)` — `true` if the feature exists in the tier            |
+| `tier_enabled`   | `tier_enabled(name)` — `true` if the feature is enabled                |
+| `tier_limit`     | `tier_limit(name)` — numeric limit for a feature, or `none`            |
+
+## Partials with `html_partial`
+
+Organize your templates as paired `pages/*.html` (full page with layout) and
+`partials/*.html` (fragment only). `Renderer::html_partial` picks the right
+one by inspecting `HX-Request`:
+
+```
+templates/
+├── pages/
+│   └── dashboard.html        # extends layout, includes partials/dashboard_content.html
+└── partials/
+    └── dashboard_content.html
+```
+
+Non-HTMX navigations render the full page; HTMX swaps get just the partial.
+
+## Static assets and cache busting
+
+Inside templates, reference assets with `static_url()`:
+
+```jinja
+<link rel="stylesheet" href="{{ static_url('css/app.css') }}">
+```
+
+At startup the engine hashes every file under `static_path`; `static_url`
+appends `?v=<sha256-prefix>` to the URL so browsers bust the cache when
+content changes. Unknown paths are returned without the query parameter.

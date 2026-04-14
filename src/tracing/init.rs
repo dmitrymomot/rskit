@@ -51,9 +51,10 @@ impl Default for Config {
 /// [`Config::level`] otherwise. Selects the output format from
 /// [`Config::format`].
 ///
-/// When the `sentry` feature is enabled and a non-empty DSN is supplied,
-/// the Sentry SDK is also initialised and wired to the tracing subscriber
-/// via `sentry-tracing`.
+/// When [`Config::sentry`] contains a non-empty DSN, the Sentry SDK is
+/// also initialised and wired to the tracing subscriber via
+/// `sentry-tracing`. Sentry support is always compiled in — no feature
+/// flag is required.
 ///
 /// Returns a [`TracingGuard`] that must be kept alive for the duration of
 /// the process. Dropping it flushes any buffered Sentry events.

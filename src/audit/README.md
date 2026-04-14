@@ -73,7 +73,7 @@ async fn delete_document(db: Database, audit: AuditLog) -> modo::Result<()> {
 
 ```rust,no_run
 use modo::audit::AuditEntry;
-use modo::extractor::ClientInfo;
+use modo::ip::ClientInfo;
 
 let info = ClientInfo::new()
     .ip("203.0.113.42")

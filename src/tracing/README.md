@@ -2,25 +2,21 @@
 
 Tracing initialisation and structured logging for modo applications.
 
-Wraps [`tracing_subscriber`](https://docs.rs/tracing-subscriber) with a simple YAML-driven configuration and an optional Sentry integration. Call `init` once at startup and hold the returned `TracingGuard` for the process lifetime.
+Wraps [`tracing_subscriber`](https://docs.rs/tracing-subscriber) with a simple YAML-driven configuration and a built-in Sentry integration. Call `init` once at startup and hold the returned `TracingGuard` for the process lifetime.
 
 This module handles **subscriber setup** (log format, level, Sentry). For HTTP request/response tracing, see `modo::middleware::tracing()` which creates a `TraceLayer` with `ModoMakeSpan`.
 
-## Features
-
-| Feature  | What it adds                                                                            |
-| -------- | --------------------------------------------------------------------------------------- |
-| `sentry` | Initialises the Sentry SDK and wires it to the tracing subscriber via `sentry-tracing`. |
-
 ## Key types
 
-| Type / Item    | Description                                                                                         |
-| -------------- | --------------------------------------------------------------------------------------------------- |
-| `Config`       | Log level and output format; optionally embeds `SentryConfig` when the `sentry` feature is enabled. |
-| `init`         | Initialises the global tracing subscriber and optional Sentry client; returns `TracingGuard`.        |
-| `TracingGuard` | RAII guard that keeps the subscriber and Sentry client alive. Implements `Task` and `Default`.       |
-| `SentryConfig` | Sentry DSN, environment tag, and sampling rates. Only present with the `sentry` feature.            |
-| `info!` etc.   | Re-exports of `tracing::{debug, error, info, trace, warn}` for convenience.                         |
+| Type / Item    | Description                                                                                   |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| `Config`       | Log level, output format, and optional `SentryConfig`.                                        |
+| `init`         | Initialises the global tracing subscriber and optional Sentry client; returns `TracingGuard`. |
+| `TracingGuard` | RAII guard that keeps the subscriber and Sentry client alive. Implements `Task` and `Default`. |
+| `SentryConfig` | Sentry DSN, environment tag, and sampling rates.                                              |
+| `info!` etc.   | Re-exports of `tracing::{debug, error, info, trace, warn}` for convenience.                   |
+
+Sentry support is always compiled in — there is no `sentry` feature flag. Sentry is enabled at runtime by supplying a non-empty DSN in `Config::sentry.dsn`.
 
 ## Usage
 
@@ -81,7 +77,7 @@ tracing:
 
 `RUST_LOG` overrides `level` when set.
 
-### With Sentry (requires `sentry` feature)
+### With Sentry
 
 ```yaml
 tracing:
@@ -94,7 +90,26 @@ tracing:
         traces_sample_rate: 0.1
 ```
 
-When `dsn` is empty or absent, Sentry is silently skipped.
+When `dsn` is empty or the `sentry` section is omitted, Sentry is silently skipped. `environment` defaults to the value returned by `modo::config::env()` (the `APP_ENV` environment variable).
+
+## Request span fields
+
+HTTP request spans are created by `modo::middleware::tracing()` using a `ModoMakeSpan` that pre-declares `tenant_id = tracing::field::Empty`. The tenant middleware then calls `span.record("tenant_id", ...)` once the tenant is resolved, so the final log line includes the tenant identifier.
+
+Any additional field that later middleware needs to fill in must be pre-declared on `ModoMakeSpan` — tracing only accepts `record()` calls for fields that already exist on the span.
+
+### Recording custom fields from a handler
+
+Handlers can attach ad-hoc fields to the active span without modifying `ModoMakeSpan`:
+
+```rust,no_run
+use modo::tracing::info;
+
+pub async fn create_order(user_id: String, order_id: String) -> modo::Result<()> {
+    info!(user_id = %user_id, order_id = %order_id, "order created");
+    Ok(())
+}
+```
 
 ## Logging conventions
 

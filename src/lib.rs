@@ -1,20 +1,54 @@
 //! # modo
 //!
-//! A Rust web framework for small monolithic apps.
-//!
-//! Single crate, zero proc macros. Handlers are plain `async fn`, routes
-//! use axum's [`Router`](axum::Router) directly, services are wired
-//! explicitly in `main()`, and database queries use raw libsql.
+//! A Rust web framework for small monolithic apps. Single crate, zero proc
+//! macros, built on [`axum`] 0.8 with [`libsql`](https://crates.io/crates/libsql)
+//! (SQLite) for persistence. Handlers are plain `async fn`, routes use
+//! [`axum::Router`] directly, services are wired explicitly in `main()`, and
+//! database queries use raw libsql.
 //!
 //! ## Quick start
 //!
 //! ```toml
 //! [dependencies]
 //! modo = { package = "modo-rs", version = "0.7" }
+//!
+//! [dev-dependencies]
+//! modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
 //! ```
 //!
-//! Every module is always compiled. The only feature flag is
-//! `test-helpers`, enabled in your `[dev-dependencies]`.
+//! Inside a handler module, pull in the common handler-time types with:
+//!
+//! ```ignore
+//! use modo::prelude::*;
+//! ```
+//!
+//! ## Virtual flat-index modules
+//!
+//! Three virtual modules re-export items across the crate so you don't have
+//! to remember which source module they live in:
+//!
+//! - [`middlewares`] — every public middleware constructor
+//! - [`extractors`] — every public request extractor
+//! - [`guards`] — every route-level gating layer applied via `.route_layer()`
+//!
+//! [`prelude`] bundles the extras a typical handler signature needs on top of
+//! those (`Error`, `Result`, `Json`, `State`, etc.).
+//!
+//! ## Features
+//!
+//! Every module is always compiled — no cargo features gate production code.
+//! The only feature flag is `test-helpers`, which exposes in-memory backends
+//! and test harnesses ([`testing`]); enable it in your `[dev-dependencies]`.
+//!
+//! ## Dependency re-exports
+//!
+//! modo re-exports the four crates that appear in nearly every handler
+//! signature, so you don't need to pin matching versions yourself:
+//!
+//! - [`axum`] — router, extractors, responses
+//! - [`serde`] — `Serialize` / `Deserialize` derives
+//! - [`serde_json`] — JSON values and macros
+//! - [`tokio`] — runtime, tasks, sync primitives
 
 pub mod config;
 pub mod error;

@@ -1,11 +1,23 @@
-//! Common imports for handlers and middleware.
+//! Handler-time prelude.
 //!
-//! `use modo::prelude::*;` brings in the ambient types reached for in
-//! almost every request handler — including the `Session` and `Role`
-//! extractors, since handlers in apps that use them tend to want them
-//! everywhere. Less-universal extractors and domain types (JWT claims,
-//! OAuth providers, mailer, template engine, etc.) are NOT preluded —
-//! import them explicitly where used.
+//! `use modo::prelude::*;` in a handler or middleware module brings in the
+//! ambient types reached for on nearly every request:
+//!
+//! - [`Error`], [`Result`] — the framework error type and alias used by `?`.
+//! - [`AppState`] — the shared application state handle.
+//! - [`Session`], [`Role`] — session and role extractors. Included because
+//!   apps that enable them tend to want them in almost every handler; omit
+//!   the glob import in crates that don't use `auth`.
+//! - [`Flash`] — per-request flash messages.
+//! - [`ClientIp`] — resolved client IP extractor.
+//! - [`Tenant`], [`TenantId`] — multi-tenant extractor and identifier.
+//! - [`Validate`], [`ValidationError`], [`Validator`] — request-body
+//!   validation trait, error, and fluent helper.
+//!
+//! Less-universal extractors and domain types (JWT claims, OAuth providers,
+//! API keys, mailer, template engine, job enqueuer, storage buckets, SSE
+//! broadcaster, etc.) are intentionally NOT preluded — import them
+//! explicitly from their feature-gated modules where used.
 
 pub use crate::error::{Error, Result};
 pub use crate::service::AppState;

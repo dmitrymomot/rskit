@@ -1,21 +1,25 @@
-//! Email delivery with Markdown templates and SMTP transport.
+//! # modo::email
+//!
+//! Transactional email with Markdown templates, layouts, and SMTP delivery.
 //!
 //! Templates are Markdown files with a YAML frontmatter block that specifies
 //! the subject line and optional layout. Variable substitution uses
 //! `{{var_name}}` placeholders throughout both frontmatter and body.
 //!
-//! # Provides
-//!
-//! - [`Mailer`] — renders templates and delivers email over SMTP.
-//! - [`EmailConfig`] / [`SmtpConfig`] / [`SmtpSecurity`] — configuration
-//!   (deserializes from YAML).
+//! Provides:
+//! - [`Mailer`] — renders templates and delivers email over SMTP (cheap
+//!   `Clone` via `Arc`).
+//! - [`EmailConfig`] — top-level configuration (deserializes from YAML).
+//! - [`SmtpConfig`] — SMTP connection settings.
+//! - [`SmtpSecurity`] — TLS mode (`StartTls` / `Tls` / `None`).
 //! - [`SendEmail`] — builder for composing an outgoing email.
 //! - [`SenderProfile`] — per-message `From` / `Reply-To` override.
 //! - [`RenderedEmail`] — output of [`Mailer::render`] (subject, HTML, text).
 //! - [`TemplateSource`] — trait for pluggable template loaders.
-//! - [`FileSource`] / [`CachedSource`] — filesystem loader and LRU-caching
-//!   wrapper.
-//! - [`ButtonType`] — button colour variants for email templates.
+//! - [`FileSource`] — filesystem loader with locale fallback.
+//! - [`CachedSource`] — LRU-caching wrapper around any [`TemplateSource`].
+//! - [`ButtonType`] — colour variants rendered by the `[button|…]` Markdown
+//!   syntax.
 //!
 //! ## Quick start
 //!

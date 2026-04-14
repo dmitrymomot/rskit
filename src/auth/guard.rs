@@ -22,13 +22,37 @@ use crate::auth::role::Role;
 
 // --- require_role ---
 
-/// Creates a guard layer that rejects requests unless the resolved role
-/// matches ANY of the allowed roles. Returns 403 Forbidden if role is
-/// present but not allowed, 401 Unauthorized if no role is present.
+/// Creates a guard layer that rejects requests unless the resolved
+/// [`Role`] matches ANY of the allowed roles. Exact string match only;
+/// there is no hierarchy.
+///
+/// # Status codes
+///
+/// - **401 Unauthorized** — no [`Role`] in request extensions (upstream
+///   middleware never populated one).
+/// - **403 Forbidden** — a role is present but not in the allowed list.
+///   An empty `roles` iterator always returns 403.
+///
+/// # Wiring
 ///
 /// Apply with `.route_layer()` so the guard runs after route matching.
-/// The RBAC middleware must be applied with `.layer()` on the outer router
-/// so that [`Role`] is already in extensions when this guard runs.
+/// A role-resolving middleware (e.g. from [`crate::auth::role`]) must run
+/// earlier via `.layer()` so that [`Role`] is in extensions when this
+/// guard runs.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # fn example() {
+/// use axum::Router;
+/// use axum::routing::get;
+/// use modo::auth::guard::require_role;
+///
+/// let app: Router = Router::new()
+///     .route("/admin", get(|| async { "admin area" }))
+///     .route_layer(require_role(["admin", "owner"]));
+/// # }
+/// ```
 pub fn require_role(roles: impl IntoIterator<Item = impl Into<String>>) -> RequireRoleLayer {
     RequireRoleLayer {
         roles: Arc::new(roles.into_iter().map(Into::into).collect()),
@@ -112,10 +136,34 @@ where
 
 // --- require_authenticated ---
 
-/// Creates a guard layer that rejects requests unless a [`Role`] is present
-/// in extensions. Returns 401 Unauthorized if no role is present.
+/// Creates a guard layer that rejects requests unless a [`Role`] is
+/// present in extensions. The role's value is not inspected — any
+/// resolved role is accepted.
+///
+/// # Status codes
+///
+/// - **401 Unauthorized** — no [`Role`] in request extensions.
+///
+/// # Wiring
 ///
 /// Apply with `.route_layer()` so the guard runs after route matching.
+/// A role-resolving middleware (e.g. from [`crate::auth::role`]) must run
+/// earlier via `.layer()` so that [`Role`] is in extensions when this
+/// guard runs.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # fn example() {
+/// use axum::Router;
+/// use axum::routing::get;
+/// use modo::auth::guard::require_authenticated;
+///
+/// let app: Router = Router::new()
+///     .route("/me", get(|| async { "profile" }))
+///     .route_layer(require_authenticated());
+/// # }
+/// ```
 pub fn require_authenticated() -> RequireAuthenticatedLayer {
     RequireAuthenticatedLayer
 }
@@ -180,11 +228,25 @@ where
 
 // --- require_scope ---
 
-/// Create a route layer that requires the verified API key to have a
-/// specific scope.
+/// Creates a guard layer that rejects requests unless the verified API
+/// key's scope list contains the required scope. Uses exact string
+/// matching; there is no wildcard or hierarchy.
 ///
-/// Uses exact string matching. Must be applied after
-/// [`ApiKeyLayer`](crate::auth::apikey::ApiKeyLayer).
+/// # Status codes
+///
+/// - **500 Internal Server Error** — no [`ApiKeyMeta`] in request
+///   extensions. The guard is fail-closed and logs an error; this state
+///   indicates the wiring is wrong (missing
+///   [`ApiKeyLayer`](crate::auth::apikey::ApiKeyLayer) upstream).
+/// - **403 Forbidden** — the API key is present but does not carry the
+///   required scope.
+///
+/// # Wiring
+///
+/// Apply with `.route_layer()` so the guard runs after route matching.
+/// [`ApiKeyLayer`](crate::auth::apikey::ApiKeyLayer) must run earlier
+/// (via `.layer()`) so that [`ApiKeyMeta`] is in extensions when this
+/// guard runs.
 ///
 /// # Example
 ///

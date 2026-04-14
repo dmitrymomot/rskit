@@ -7,8 +7,8 @@
 //! domain modules construct their layers:
 //!
 //! - **lower_case names are functions** — call them directly:
-//!   `mw::session(store, cfg, key)`, `mw::role(extractor)`,
-//!   `mw::tenant(resolver)`, `mw::cors(origins)`.
+//!   `mw::session(store, cookie_cfg, key)`, `mw::role(extractor)`,
+//!   `mw::tenant(strategy, resolver)`, `mw::cors(cors_cfg)`.
 //! - **PascalCase names are `Layer` structs** — call `::new(...)`:
 //!   `mw::Jwt::new(cfg)`, `mw::ApiKey::new(store)`,
 //!   `mw::Flash::new(cookie_cfg)`, `mw::ClientIp::new(trusted_proxies)`.
