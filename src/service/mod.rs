@@ -27,8 +27,8 @@
 //!     .with_state(state);
 //! ```
 //!
-//! Inside handlers, use the [`Service<T>`](crate::extractor::Service) extractor to
-//! retrieve a registered service by type:
+//! Inside handlers, use the [`Service<T>`] extractor to retrieve a registered
+//! service by type:
 //!
 //! ```
 //! use modo::Service;
@@ -37,10 +37,12 @@
 //! async fn handler(Service(pool): Service<MyPool>) { /* … */ }
 //! ```
 
+mod extractor;
 mod registry;
 mod snapshot;
 mod state;
 
+pub use extractor::Service;
 pub use registry::Registry;
 pub(crate) use snapshot::RegistrySnapshot;
 pub use state::AppState;

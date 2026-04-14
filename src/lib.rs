@@ -88,12 +88,12 @@ pub use embed::{
     to_f32_blob,
 };
 pub use extractor::ClientInfo;
-pub use extractor::Service;
 pub use flash::{Flash, FlashEntry, FlashLayer};
 pub use health::{HealthCheck, HealthChecks};
 pub use ip::{ClientIp, ClientIpLayer};
 pub use rbac::{Role, RoleExtractor};
 pub use sanitize::Sanitize;
+pub use service::Service;
 pub use session::{Session, SessionConfig, SessionData, SessionLayer, SessionToken};
 pub use tenant::{
     HasTenantId, Tenant, TenantId, TenantLayer, TenantResolver, TenantStrategy,

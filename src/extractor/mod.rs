@@ -17,7 +17,6 @@
 //! | [`Query<T>`] | URL query string | `T: DeserializeOwned + Sanitize` |
 //! | [`MultipartRequest<T>`] | `multipart/form-data` body | `T: DeserializeOwned + Sanitize` |
 //! | [`Path`] | URL path parameters | `T: DeserializeOwned` |
-//! | [`Service<T>`] | Service registry | `T: Send + Sync + 'static` |
 //! | [`ClientInfo`] | Client IP, user-agent, fingerprint | — |
 //!
 //! ## Multipart helpers
@@ -33,7 +32,6 @@ mod form;
 mod json;
 mod multipart;
 mod query;
-mod service;
 mod upload_validator;
 
 pub use axum::extract::Path;
@@ -42,5 +40,4 @@ pub use form::FormRequest;
 pub use json::JsonRequest;
 pub use multipart::{Files, MultipartRequest, UploadedFile};
 pub use query::Query;
-pub use service::Service;
 pub use upload_validator::UploadValidator;
