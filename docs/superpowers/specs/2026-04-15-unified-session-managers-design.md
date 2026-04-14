@@ -227,11 +227,12 @@ impl JwtSessions {
     // lifecycle
     pub async fn authenticate(&self, user_id: &str, meta: &SessionMeta) -> Result<TokenPair>;
     pub async fn rotate(&self, refresh_token: &str) -> Result<TokenPair>;
-    /// Revokes the session identified by the token's `jti`. Accepts either
-    /// an access or refresh token — both carry the same `jti`. The token's
-    /// `aud` and `exp` are not validated here; any non-malformed token whose
-    /// `jti` resolves to a live row is accepted.
-    pub async fn logout(&self, token: &str) -> Result<()>;
+    /// Revokes the session identified by the access token's `jti`.
+    /// Validates signature, `iss`, and `aud == "access"`. Rejects refresh
+    /// tokens with `auth:aud_mismatch`; refresh tokens are only accepted
+    /// by `rotate`. `exp` is not checked — an expired access token is still
+    /// a valid logout credential for its own session.
+    pub async fn logout(&self, access_token: &str) -> Result<()>;
 
     // cross-transport (identical signatures to CookieSessions)
     pub async fn list(&self, user_id: &str) -> Result<Vec<SessionRow>>;
