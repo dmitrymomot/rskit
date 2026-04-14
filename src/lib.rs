@@ -66,8 +66,6 @@ pub mod webhook;
 
 pub mod dns;
 
-pub mod apikey;
-
 pub mod tier;
 
 pub mod geolocation;
@@ -122,10 +120,12 @@ pub use webhook::{SignedHeaders, WebhookResponse, WebhookSecret, WebhookSender};
 
 pub use dns::{DnsConfig, DnsError, DomainStatus, DomainVerifier, generate_verification_token};
 
-pub use apikey::{
+pub use auth::apikey::{
     ApiKeyBackend, ApiKeyConfig, ApiKeyCreated, ApiKeyLayer, ApiKeyMeta, ApiKeyRecord, ApiKeyStore,
-    CreateKeyRequest, require_scope,
+    CreateKeyRequest,
 };
+// NOTE: require_scope will move to auth::guard in Task 7
+pub use auth::apikey::require_scope;
 
 pub use tier::{
     FeatureAccess, TierBackend, TierInfo, TierLayer, TierResolver, require_feature, require_limit,

@@ -1,6 +1,6 @@
 #![cfg(feature = "test-helpers")]
 
-use modo::apikey::{ApiKeyConfig, ApiKeyStore, CreateKeyRequest};
+use modo::auth::apikey::{ApiKeyConfig, ApiKeyStore, CreateKeyRequest};
 use modo::testing::TestDb;
 
 const SCHEMA: &str = "\
@@ -271,7 +271,7 @@ use axum::body::Body;
 use http::{Request, Response, StatusCode};
 use tower::{Layer, ServiceExt};
 
-use modo::apikey::{ApiKeyLayer, ApiKeyMeta, require_scope};
+use modo::auth::apikey::{ApiKeyLayer, ApiKeyMeta, require_scope};
 
 /// Inner service that reads ApiKeyMeta from extensions and echoes the tenant_id.
 async fn echo_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {

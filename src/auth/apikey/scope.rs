@@ -22,7 +22,7 @@ use super::types::ApiKeyMeta;
 /// # fn example() {
 /// use axum::Router;
 /// use axum::routing::get;
-/// use modo::apikey::require_scope;
+/// use modo::auth::apikey::require_scope;
 ///
 /// let app: Router = Router::new()
 ///     .route("/orders", get(|| async { "orders" }))

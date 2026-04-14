@@ -1,4 +1,4 @@
-//! # modo::apikey
+//! # modo::auth::apikey
 //!
 //! Prefixed API key issuance, verification, scoping, and lifecycle management.
 //!
@@ -44,7 +44,7 @@
 //! ## Quick start
 //!
 //! ```rust,no_run
-//! use modo::apikey::{ApiKeyConfig, ApiKeyStore, ApiKeyLayer, CreateKeyRequest, require_scope};
+//! use modo::auth::apikey::{ApiKeyConfig, ApiKeyStore, ApiKeyLayer, CreateKeyRequest, require_scope};
 //! use axum::{Router, routing::get};
 //! # fn example(db: modo::db::Database) {
 //!

@@ -34,6 +34,7 @@
 //! JWT and OAuth types are also re-exported at the crate root (`modo::Claims`,
 //! `modo::Google`, etc.) when the `auth` feature is enabled.
 
+pub mod apikey;
 pub mod backup;
 pub mod jwt;
 pub mod otp;
