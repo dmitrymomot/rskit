@@ -3,11 +3,19 @@
 //! Wiring-site ergonomics: `use modo::middlewares as mw;` then
 //! `.layer(mw::session(...))`, `.layer(mw::cors(...))`, etc.
 //!
-//! Domain modules that expose a free constructor (e.g. `session`, `role`,
-//! `tenant`) are re-exported as lower-case functions. Domain modules that
-//! only expose a `Layer` struct (e.g. `Jwt`, `ApiKey`, `Tier`, `ClientIp`,
-//! `Flash`, `Geo`, `TemplateContext`) are re-exported as PascalCase structs
-//! — call `::new(...)` at the wiring site.
+//! Two calling conventions are exported, matching how the underlying
+//! domain modules construct their layers:
+//!
+//! - **lower_case names are functions** — call them directly:
+//!   `mw::session(store, cfg, key)`, `mw::role(extractor)`,
+//!   `mw::tenant(resolver)`, `mw::cors(origins)`.
+//! - **PascalCase names are `Layer` structs** — call `::new(...)`:
+//!   `mw::Jwt::new(cfg)`, `mw::ApiKey::new(store)`,
+//!   `mw::Flash::new(cookie_cfg)`, `mw::ClientIp::new(trusted_proxies)`.
+//!
+//! The split reflects upstream constructor design (some modules expose
+//! free constructors, others only their `Layer` type). It avoids
+//! inventing wrapper functions just for uniformity.
 
 // Free constructor functions.
 pub use crate::auth::role::middleware as role;

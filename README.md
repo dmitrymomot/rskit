@@ -174,6 +174,14 @@ modo = { package = "modo-rs", version = "0.7" }
 modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
 ```
 
+> **Trade-off:** modo deliberately keeps every module always-on so the public
+> API stays one shape regardless of what you use. The cost is that every
+> dependency (templating, email, geolocation, S3, sentry, etc.) compiles into
+> your build, which adds ~20–40 s to a clean build and a few MB to the final
+> binary. If you need to slim a deployment, build with `--release` and rely on
+> linker dead-code elimination — modules you don't reference don't ship runtime
+> code, only their compile cost.
+
 For handler-time imports, prefer the prelude:
 
 ```rust

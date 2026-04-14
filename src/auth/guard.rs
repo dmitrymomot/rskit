@@ -7,7 +7,6 @@
 //! [`ApiKeyLayer`](crate::auth::apikey::ApiKeyLayer)) to have populated
 //! extensions before the guard executes.
 
-use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -262,9 +261,11 @@ where
 
         Box::pin(async move {
             let Some(meta) = request.extensions().get::<ApiKeyMeta>() else {
-                return Ok(
-                    Error::internal("require_scope() called without ApiKeyLayer").into_response(),
+                tracing::error!(
+                    "require_scope guard reached without an API key in extensions; \
+                     ApiKeyLayer must run before this guard"
                 );
+                return Ok(Error::internal("server misconfigured").into_response());
             };
 
             if !meta.scopes.iter().any(|s| s == &scope) {
