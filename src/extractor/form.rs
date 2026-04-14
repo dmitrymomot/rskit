@@ -14,7 +14,7 @@ use crate::sanitize::Sanitize;
 ///
 /// ```
 /// use modo::extractor::FormRequest;
-/// use modo::Sanitize;
+/// use modo::sanitize::Sanitize;
 /// use serde::Deserialize;
 ///
 /// #[derive(Deserialize)]

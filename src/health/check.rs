@@ -42,7 +42,7 @@ where
 /// # Example
 ///
 /// ```
-/// use modo::HealthChecks;
+/// use modo::health::HealthChecks;
 ///
 /// let checks = HealthChecks::new()
 ///     .check_fn("database", || async { Ok(()) })

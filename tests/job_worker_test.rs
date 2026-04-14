@@ -64,7 +64,7 @@ fn fast_config() -> job::JobConfig {
 
 async fn counting_handler(
     _payload: Payload<serde_json::Value>,
-    modo::Service(counter): modo::Service<Arc<AtomicU32>>,
+    modo::service::Service(counter): modo::service::Service<Arc<AtomicU32>>,
 ) -> Result<()> {
     counter.fetch_add(1, Ordering::SeqCst);
     Ok(())

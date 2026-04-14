@@ -152,7 +152,7 @@ impl Files {
 ///
 /// ```
 /// use modo::extractor::{MultipartRequest, Files};
-/// use modo::Sanitize;
+/// use modo::sanitize::Sanitize;
 /// use serde::Deserialize;
 ///
 /// #[derive(Deserialize)]

@@ -31,7 +31,7 @@
 //! service by type:
 //!
 //! ```
-//! use modo::Service;
+//! use modo::service::Service;
 //!
 //! # struct MyPool;
 //! async fn handler(Service(pool): Service<MyPool>) { /* … */ }

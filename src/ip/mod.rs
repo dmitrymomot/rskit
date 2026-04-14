@@ -15,7 +15,7 @@
 //!
 //! ```rust,no_run
 //! use axum::{Router, routing::get};
-//! use modo::{ClientIp, ClientIpLayer};
+//! use modo::ip::{ClientIp, ClientIpLayer};
 //!
 //! let app: Router = Router::new()
 //!     .route("/", get(handler))

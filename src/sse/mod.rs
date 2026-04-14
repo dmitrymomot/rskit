@@ -16,7 +16,7 @@
 //!
 //! ```
 //! use modo::sse::{Broadcaster, Event, LagPolicy, SseConfig, SseStreamExt};
-//! use modo::Service;
+//! use modo::service::Service;
 //!
 //! # #[derive(Clone, serde::Serialize)]
 //! # struct Notification { msg: String }
@@ -44,7 +44,7 @@
 //!
 //! ```
 //! use modo::sse::{Broadcaster, Event};
-//! use modo::Service;
+//! use modo::service::Service;
 //! use std::time::Duration;
 //!
 //! # #[derive(Clone, serde::Serialize)]
@@ -67,7 +67,7 @@
 //!
 //! ```
 //! use modo::sse::{Broadcaster, Event, LagPolicy, SseStreamExt};
-//! use modo::Service;
+//! use modo::service::Service;
 //! # use axum::extract::Path;
 //!
 //! # #[derive(Clone, serde::Serialize)]
