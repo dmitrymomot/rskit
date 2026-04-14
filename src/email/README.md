@@ -2,13 +2,6 @@
 
 Transactional email with Markdown templates, SMTP delivery, and optional LRU caching.
 
-Requires feature `"email"`.
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["email"] }
-```
-
 `Mailer::with_stub_transport` is available with the `test-helpers` feature or in `#[cfg(test)]` blocks.
 
 ## Key types

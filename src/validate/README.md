@@ -2,15 +2,10 @@
 
 Input validation for request data in the `modo` web framework.
 
-Always available (no feature flag required).
-
 This module provides a fluent `Validator` builder that collects per-field
 errors across all fields before returning, and a `Validate` trait for types
 that validate themselves. `ValidationError` converts automatically into
 `modo::Error` (HTTP 422) with the field map in the response `details`.
-
-All three types are re-exported at the crate root as `modo::Validate`,
-`modo::ValidationError`, and `modo::Validator`.
 
 ## Key Types
 
@@ -123,5 +118,4 @@ propagates it as an HTTP 422 response with a JSON body:
 }
 ```
 
-`Validate`, `ValidationError`, and `Validator` are also re-exported at the crate root
-as `modo::Validate`, `modo::ValidationError`, and `modo::Validator`.
+Reach the types via `modo::validate::{Validate, ValidationError, Validator}`.

@@ -2,8 +2,6 @@
 
 Liveness and readiness probe endpoints for Kubernetes and container orchestration.
 
-Always available (no feature flag required).
-
 Registers two routes on an axum `Router`:
 
 - `GET /_live` — always returns `200 OK`; signals the process is running.

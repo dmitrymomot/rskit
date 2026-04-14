@@ -57,7 +57,7 @@ if let Some(cookie_cfg) = &config.cookie {
 ```rust,no_run
 use modo::cookie::key_from_config;
 use modo::flash::FlashLayer;
-use modo::session::{self, Store, SessionConfig};
+use modo::auth::session::{self, Store, SessionConfig};
 use modo::db::Database;
 
 // Assumes `cookie_cfg: &CookieConfig` and `db` are already available.

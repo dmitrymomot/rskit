@@ -5,13 +5,6 @@ OAuth 2.0 Authorization Code flow with PKCE for modo applications.
 Provides built-in provider implementations for Google and GitHub, a shared `OAuthProvider`
 trait for custom providers, and the axum types needed to wire login and callback routes.
 
-Requires the `auth` feature flag.
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["auth"] }
-```
-
 ## Key Types
 
 | Type                   | Role                                                                              |

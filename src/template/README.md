@@ -2,13 +2,6 @@
 
 MiniJinja-based template rendering for the modo web framework.
 
-Requires the **`templates`** feature flag:
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["templates"] }
-```
-
 Provides: filesystem template loading, built-in `t()` i18n function, `static_url()` for
 cache-busted asset paths, per-request locale resolution, Tower middleware for request-scoped
 context, `Renderer` axum extractor, `context!` macro re-export, HTMX support, and static file

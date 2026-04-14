@@ -136,7 +136,7 @@ async fn update_profile(
 The inner value is `Arc<T>`. Returns 500 if `T` was not registered.
 
 ```rust
-use modo::Service;
+use modo::service::Service;
 use std::sync::Arc;
 
 struct EmailService { /* ... */ }
@@ -155,7 +155,7 @@ field; without it, `ip_value()` returns `None`.
 For non-HTTP contexts (background jobs, CLI tools), use the builder:
 
 ```rust
-use modo::extractor::ClientInfo;
+use modo::ip::ClientInfo;
 
 let info = ClientInfo::new()
     .ip("1.2.3.4")
@@ -167,7 +167,7 @@ assert_eq!(info.ip_value(), Some("1.2.3.4"));
 In a handler:
 
 ```rust,ignore
-use modo::ClientInfo;
+use modo::ip::ClientInfo;
 
 async fn handler(client: ClientInfo) {
     if let Some(ip) = client.ip_value() {

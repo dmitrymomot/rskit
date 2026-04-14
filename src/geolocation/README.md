@@ -2,19 +2,6 @@
 
 IP-to-location lookup using a MaxMind GeoLite2/GeoIP2 `.mmdb` database.
 
-Requires the `geolocation` feature flag.
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["geolocation"] }
-```
-
-## Features
-
-| Feature flag  | What it enables                                           |
-| ------------- | --------------------------------------------------------- |
-| `geolocation` | `GeoLocator`, `GeoLayer`, `GeoMiddleware`, `Location`, `GeolocationConfig` |
-
 ## Key Types
 
 | Type                | Description                                                                 |

@@ -15,8 +15,7 @@ request. Handlers read it with the `ClientIp` axum extractor.
 | `ClientIp`          | Axum extractor; wraps `std::net::IpAddr`           |
 | `extract_client_ip` | Low-level resolution function (headers + fallback) |
 
-Both `ClientIp` and `ClientIpLayer` are re-exported at the crate root:
-`modo::ClientIp` / `modo::ClientIpLayer`.
+Reach these types via `modo::ip::ClientIp` / `modo::ip::ClientIpLayer`.
 
 ## Usage
 
@@ -27,13 +26,13 @@ already passes through a load balancer you control.
 
 ```rust
 use axum::{Router, routing::get};
-use modo::ClientIpLayer;
+use modo::ip::ClientIpLayer;
 
 let app: Router = Router::new()
     .route("/", get(handler))
     .layer(ClientIpLayer::new());
 
-async fn handler(modo::ClientIp(ip): modo::ClientIp) -> String {
+async fn handler(modo::ip::ClientIp(ip): modo::ip::ClientIp) -> String {
     ip.to_string()
 }
 ```
@@ -45,7 +44,7 @@ from a known CIDR range. Requests from other addresses use the raw socket IP.
 
 ```rust
 use axum::{Router, routing::get};
-use modo::ClientIpLayer;
+use modo::ip::ClientIpLayer;
 
 let proxies: Vec<ipnet::IpNet> = vec![
     "10.0.0.0/8".parse().unwrap(),
@@ -56,7 +55,7 @@ let app: Router = Router::new()
     .route("/ip", get(handler))
     .layer(ClientIpLayer::with_trusted_proxies(proxies));
 
-async fn handler(modo::ClientIp(ip): modo::ClientIp) -> String {
+async fn handler(modo::ip::ClientIp(ip): modo::ip::ClientIp) -> String {
     ip.to_string()
 }
 ```
@@ -67,7 +66,8 @@ async fn handler(modo::ClientIp(ip): modo::ClientIp) -> String {
 `trusted_proxies`). Parse it at startup and pass to `ClientIpLayer`:
 
 ```rust
-use modo::{ClientIpLayer, Config};
+use modo::Config;
+use modo::ip::ClientIpLayer;
 
 let config: Config = modo::config::load("config/").unwrap();
 let proxies: Vec<ipnet::IpNet> = config
@@ -104,7 +104,8 @@ middleware reads the `ClientIp` extension for fingerprint validation.
 
 ```no_run
 use axum::Router;
-use modo::{ClientIpLayer, session::SessionLayer};
+use modo::auth::session::SessionLayer;
+use modo::ip::ClientIpLayer;
 
 // ClientIpLayer must wrap SessionLayer so IP resolution happens first.
 // Apply layers in reverse order: the last .layer() call is the outermost.

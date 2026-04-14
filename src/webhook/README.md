@@ -2,13 +2,6 @@
 
 Outbound webhook delivery following the [Standard Webhooks](https://www.standardwebhooks.com/) specification.
 
-Requires feature `"webhooks"`:
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["webhooks"] }
-```
-
 ## Key Types
 
 | Item              | Kind   | Description                                                                           |

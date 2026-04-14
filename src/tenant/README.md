@@ -8,9 +8,6 @@ two-step pipeline: a **strategy** extracts a raw identifier, and a
 resolved tenant is stored in request extensions and surfaced to handlers
 via the `Tenant<T>` axum extractor.
 
-Always available — no feature flag required. The `domain` submodule
-(custom domain management) requires both the `db` and `dns` features.
-
 ## Key Types
 
 | Item                             | Kind           | Purpose                                                                      |

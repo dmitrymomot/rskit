@@ -1,12 +1,12 @@
-# testing
+# modo::testing
 
 Test helpers for building and exercising modo applications in-process.
 
-Requires feature `"test-helpers"`.
+Requires the `test-helpers` feature.
 
 ```toml
 [dev-dependencies]
-modo = { path = ".", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
 ```
 
 ## Key types
@@ -160,7 +160,7 @@ async fn test_with_migrations() {
 
 ```rust,ignore
 use axum::routing::get;
-use modo::session::Session;
+use modo::auth::session::Session;
 use modo::testing::{TestApp, TestDb, TestSession};
 
 async fn whoami(session: Session) -> String {
@@ -205,7 +205,7 @@ Use `TestSession::with_config()` to supply explicit `SessionConfig` and
 
 ```rust,ignore
 use modo::cookie::CookieConfig;
-use modo::session::SessionConfig;
+use modo::auth::session::SessionConfig;
 use modo::testing::{TestDb, TestSession};
 
 let db = TestDb::new().await;

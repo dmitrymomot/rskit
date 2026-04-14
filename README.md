@@ -153,7 +153,7 @@ Rate limiting, CORS, CSRF, compression, security headers, request tracing, panic
 | `webhook`     | Outbound webhook delivery with Standard Webhooks signing         |
 | `dns`         | TXT/CNAME verification for custom domain validation              |
 | `geolocation` | MaxMind GeoIP2 location lookup with middleware                   |
-| `rbac`        | Role-based access control with guard middleware                  |
+| `auth::role`  | Role-based access control with guard middleware                  |
 | `tenant`      | Multi-tenancy via subdomain, header, path, or custom resolver    |
 | `flash`       | Signed, read-once cookie flash messages                          |
 | `cron`        | Cron scheduling (5/6-field expressions)                          |
@@ -161,37 +161,28 @@ Rate limiting, CORS, CSRF, compression, security headers, request tracing, panic
 | `cache`       | In-memory LRU cache                                              |
 | `testing`     | `TestDb`, `TestApp`, `TestSession` — in-process, no server needed|
 
-## Feature flags
+## Installation
 
-Core modules are always available: cache, config, cookie, cron, encoding, error, extractor, flash, health, id, ip, middleware, rbac, runtime, sanitize, server, service, tenant, tracing, validate.
-
-Optional modules are behind feature flags:
+Every module is always compiled — there are no per-capability feature flags. The
+only feature is `test-helpers`, enabled in your `[dev-dependencies]`.
 
 ```toml
 [dependencies]
-modo-rs = { version = "0.6", features = ["auth", "templates"] }
+modo = { package = "modo-rs", version = "0.7" }
+
+[dev-dependencies]
+modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
 ```
 
-| Feature          | Modules                                               | Implies        |
-| ---------------- | ----------------------------------------------------- | -------------- |
-| `db` (default)   | Database handle, migrations, query traits, pagination        |                |
-| `session`        | Database-backed sessions with signed cookies                 | `db`           |
-| `job`            | Background job queue with retries and scheduling             | `db`           |
-| `auth`           | Password hashing, JWT, OAuth2, TOTP, backup codes            |                |
-| `templates`      | MiniJinja engine with i18n and static file serving           |                |
-| `sse`            | Server-Sent Events broadcasting                              |                |
-| `email`          | Markdown-to-HTML email rendering with SMTP                   |                |
-| `storage`        | S3-compatible object storage with ACL                        |                |
-| `webhooks`       | Outbound webhook delivery with Standard Webhooks signing     |                |
-| `dns`            | DNS TXT/CNAME domain verification                            |                |
-| `geolocation`    | MaxMind GeoIP2 location lookup                               |                |
-| `qrcode`         | QR code generation with SVG rendering                        |                |
-| `apikey`         | API key issuance, verification, and scoping                  | `db`           |
-| `text-embedding` | Text-to-vector embeddings (OpenAI, Gemini, Mistral, Voyage)  |                |
-| `tier`           | Feature-tier access control (plan-based gating)              |                |
-| `sentry`         | Sentry error tracking and performance monitoring             |                |
-| `test-helpers`   | TestDb, TestApp, TestSession, in-memory/stub backends        | `db`, `session`|
-| `full`           | All of the above                                             |                |
+For handler-time imports, prefer the prelude:
+
+```rust
+use modo::prelude::*;
+```
+
+The prelude brings in the ambient extractors, error/result types, and tracing
+macros that handlers reach for. Module-specific items (`modo::auth::session::Store`,
+`modo::job::Worker`, etc.) are reached through their module path.
 
 ## Re-exports
 
@@ -212,11 +203,10 @@ Once installed, it activates automatically when you build with modo. Or invoke i
 ## Development
 
 ```sh
-cargo check                                        # type check
-cargo test                                         # run tests
-cargo test --all-features                          # run all tests
-cargo clippy --all-features --tests -- -D warnings # lint
-cargo fmt --check                                  # format check
+cargo check                                              # type check
+cargo test --features test-helpers                       # run all tests
+cargo clippy --features test-helpers --tests -- -D warnings  # lint
+cargo fmt --check                                        # format check
 ```
 
 ## License

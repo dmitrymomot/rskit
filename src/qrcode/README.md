@@ -1,20 +1,6 @@
-# QR Code Module
+# modo::qrcode
 
-QR code generation with customizable SVG output, feature-gated under `qrcode`.
-
-## Feature Flag
-
-Enable in `Cargo.toml`:
-
-```toml
-modo = { version = "0.6", features = ["qrcode"] }
-```
-
-For template integration (MiniJinja), also enable `templates`:
-
-```toml
-modo = { version = "0.6", features = ["qrcode", "templates"] }
-```
+QR code generation with customizable SVG output.
 
 ## Key Types
 
@@ -148,4 +134,4 @@ Both convert to `modo::Error` with HTTP 400 status and a stable error code (`"qr
 
 ## Dependencies
 
-Uses `fast_qr` 0.13 for QR matrix generation (optional dependency, pulled in by the `qrcode` feature flag).
+Uses `fast_qr` 0.13 for QR matrix generation.

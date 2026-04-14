@@ -4,7 +4,7 @@ Unique ID generation utilities for the modo web framework.
 
 The module exposes two functions covering the most common ID use cases — a
 full-length ULID for primary keys and a compact short ID for user-visible
-codes. Both are always available with no feature flag required.
+codes.
 
 ## Key Functions
 

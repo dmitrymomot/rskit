@@ -2,13 +2,6 @@
 
 Server-Sent Events (SSE) streaming for modo — keyed broadcast channels, event builders, and reconnection helpers.
 
-Requires the `sse` feature:
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["sse"] }
-```
-
 ## Key Types
 
 | Type                 | Purpose                                                                |
@@ -42,7 +35,7 @@ registry.add(chat);
 
 ```rust,ignore
 use modo::sse::{Broadcaster, Event, LagPolicy, SseStreamExt};
-use modo::Service;
+use modo::service::Service;
 
 async fn chat_events(
     Service(bc): Service<Broadcaster<String, ChatMessage>>,
@@ -64,7 +57,7 @@ loop rather than mapping a broadcast stream.
 
 ```rust,ignore
 use modo::sse::{Broadcaster, Event};
-use modo::Service;
+use modo::service::Service;
 use std::time::Duration;
 
 async fn health_stream(
@@ -84,7 +77,7 @@ async fn health_stream(
 
 ```rust,ignore
 use modo::sse::{Broadcaster, Event, LagPolicy, LastEventId, SseStreamExt, replay};
-use modo::Service;
+use modo::service::Service;
 
 async fn notifications(
     LastEventId(last_id): LastEventId,

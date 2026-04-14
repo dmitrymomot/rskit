@@ -1,25 +1,26 @@
-# modo::rbac
+# modo::auth::role
 
-Role-based access control (RBAC) for axum applications.
+Role-based gating for axum applications.
 
-RBAC is roles-only. Permission checks beyond "does this role match?" belong in handler logic.
+This module is roles-only. Permission checks beyond "does this role match?" belong in handler logic.
 
-The module provides five composable building blocks:
+The module exposes the role extractor and middleware; the route-level guard
+layers (`require_role`, `require_authenticated`) live in [`modo::auth::guard`].
 
-| Item                      | Kind   | Purpose                                                              |
-| ------------------------- | ------ | -------------------------------------------------------------------- |
-| `RoleExtractor`           | trait  | Resolve the current user's role from a request                       |
-| `middleware()`            | fn     | Tower layer that runs the extractor and stores `Role` in extensions  |
-| `require_role()`          | fn     | Guard layer — rejects requests whose role is not in the allowed list |
-| `require_authenticated()` | fn     | Guard layer — rejects requests with no role at all                   |
-| `Role`                    | struct | Newtype over `String`; axum extractor available in handlers          |
+| Item                          | Kind   | Purpose                                                              |
+| ----------------------------- | ------ | -------------------------------------------------------------------- |
+| `auth::role::RoleExtractor`   | trait  | Resolve the current user's role from a request                       |
+| `auth::role::middleware()`    | fn     | Tower layer that runs the extractor and stores `Role` in extensions  |
+| `auth::role::Role`            | struct | Newtype over `String`; axum extractor available in handlers          |
+| `auth::guard::require_role()` | fn     | Guard layer — rejects requests whose role is not in the allowed list |
+| `auth::guard::require_authenticated()` | fn | Guard layer — rejects requests with no role at all                |
 
 ## Usage
 
 ### Implement RoleExtractor
 
 ```rust
-use modo::rbac::RoleExtractor;
+use modo::auth::role::RoleExtractor;
 use modo::{Result, Error};
 
 struct MyExtractor;
@@ -49,7 +50,7 @@ let app: Router = Router::new()
     .layer(role::middleware(MyExtractor));
 ```
 
-The RBAC middleware must be applied with `.layer()` on the outer router so it runs
+The role middleware must be applied with `.layer()` on the outer router so it runs
 before any guard. Guards must be applied with `.route_layer()` so they execute after
 route matching, at which point the outer middleware has already stored `Role` in
 extensions.
@@ -78,7 +79,7 @@ let app: Router = Router::new()
 Use `Option<Role>` for routes that serve both authenticated and unauthenticated users:
 
 ```rust
-use modo::rbac::Role;
+use modo::auth::role::Role;
 
 async fn handler(role: Option<Role>) -> String {
     match role {
@@ -96,9 +97,10 @@ async fn handler(role: Option<Role>) -> String {
   axum `FromRequestParts` (returns 500 if middleware is missing), and
   `OptionalFromRequestParts` (returns `None` if middleware is missing).
 
-The Tower `Layer` / `Service` types (`RbacLayer`, `RequireRoleLayer`,
+The Tower `Layer` / `Service` types (`RoleLayer`, `RequireRoleLayer`,
 `RequireAuthenticatedLayer`, etc.) are internal implementation details. You interact
-with them via the `middleware()`, `require_role()`, and `require_authenticated()` functions.
+with them via `auth::role::middleware()`, `auth::guard::require_role()`, and
+`auth::guard::require_authenticated()`.
 
 ## Behavior Reference
 

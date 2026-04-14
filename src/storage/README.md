@@ -1,4 +1,4 @@
-# storage
+# modo::storage
 
 S3-compatible object storage for the modo framework. Supports AWS S3, RustFS,
 MinIO, and any provider that implements the S3 API.
@@ -6,15 +6,6 @@ MinIO, and any provider that implements the S3 API.
 Request signing uses AWS Signature Version 4. Both path-style
 (`https://endpoint/bucket/key`) and virtual-hosted-style
 (`https://bucket.endpoint/key`) URLs are supported.
-
-## Feature gate
-
-Requires the `storage` feature flag:
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["storage"] }
-```
 
 The memory backend is available inside `#[cfg(test)]` unit-test blocks and
 when the `test-helpers` feature is enabled (for integration tests).

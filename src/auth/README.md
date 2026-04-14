@@ -1,28 +1,21 @@
 # modo::auth
 
-Authentication utilities for the modo framework: Argon2id password hashing,
-numeric OTP, RFC 6238 TOTP, backup recovery codes, JWT middleware, and OAuth 2.0
-provider integrations (GitHub, Google).
-
-## Feature Flag
-
-All items in this module require the `auth` feature:
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["auth"] }
-```
+Identity and access — session, JWT, OAuth, API keys, roles, and gating guards.
 
 ## Modules
 
-| Module     | Purpose                                                    |
-| ---------- | ---------------------------------------------------------- |
-| `password` | Argon2id password hashing and verification                 |
-| `otp`      | Numeric one-time password generation and verification      |
-| `totp`     | RFC 6238 TOTP (Google Authenticator compatible)            |
-| `backup`   | One-time backup recovery code generation and verification  |
-| `jwt`      | JWT encoding, decoding, signing, and axum Tower middleware |
-| `oauth`    | OAuth 2.0 provider integrations (GitHub, Google)           |
+| Module     | Purpose                                                              |
+| ---------- | -------------------------------------------------------------------- |
+| `session`  | Database-backed HTTP session management                              |
+| `apikey`   | Prefixed API key issuance, verification, and lifecycle               |
+| `role`     | Role-based gating (extractor + middleware)                           |
+| `guard`    | Route-level layers (`require_authenticated`, `require_role`, `require_scope`) |
+| `jwt`      | JWT encoding, decoding, signing, and axum Tower middleware           |
+| `oauth`    | OAuth 2.0 provider integrations (GitHub, Google)                     |
+| `password` | Argon2id password hashing and verification                           |
+| `otp`      | Numeric one-time password generation and verification                |
+| `totp`     | RFC 6238 TOTP (Google Authenticator compatible)                      |
+| `backup`   | One-time backup recovery code generation and verification            |
 
 ## Usage
 
@@ -312,6 +305,6 @@ oauth:
 | `AuthorizationRequest` | `modo::auth::oauth`    | Response that redirects + sets the state cookie     |
 | `UserProfile`          | `modo::auth::oauth`    | Normalized user data from any OAuth provider        |
 
-JWT types and OAuth types are also re-exported at the `modo` crate root
-(e.g., `modo::JwtEncoder`, `modo::Claims`, `modo::Google`) when the `auth`
-feature is enabled.
+JWT types are re-exported at `modo::auth` for convenience (e.g.,
+`modo::auth::JwtEncoder`, `modo::auth::Claims`). OAuth providers stay under
+`modo::auth::oauth::{Google, GitHub}`.

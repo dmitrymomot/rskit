@@ -1,13 +1,6 @@
-# apikey
+# modo::auth::apikey
 
 Prefixed API key issuance, verification, scoping, and lifecycle management.
-
-Requires the `apikey` feature flag (depends on `db`):
-
-```toml
-[dependencies]
-modo = { version = "0.6", features = ["apikey"] }
-```
 
 ## Key types
 
@@ -46,7 +39,7 @@ modo = { version = "0.6", features = ["apikey"] }
 ### Creating a store
 
 ```rust,ignore
-use modo::apikey::{ApiKeyConfig, ApiKeyStore};
+use modo::auth::apikey::{ApiKeyConfig, ApiKeyStore};
 
 let store = ApiKeyStore::new(db, ApiKeyConfig::default())?;
 ```
@@ -56,7 +49,7 @@ instead of the built-in SQLite backend:
 
 ```rust,ignore
 use std::sync::Arc;
-use modo::apikey::{ApiKeyConfig, ApiKeyStore, ApiKeyBackend};
+use modo::auth::apikey::{ApiKeyConfig, ApiKeyStore, ApiKeyBackend};
 
 let backend: Arc<dyn ApiKeyBackend> = /* your backend */;
 let store = ApiKeyStore::from_backend(backend, ApiKeyConfig::default())?;
@@ -65,7 +58,7 @@ let store = ApiKeyStore::from_backend(backend, ApiKeyConfig::default())?;
 ### Issuing a key
 
 ```rust,ignore
-use modo::apikey::CreateKeyRequest;
+use modo::auth::apikey::CreateKeyRequest;
 
 let created = store.create(&CreateKeyRequest {
     tenant_id: "tenant_abc".into(),
@@ -96,7 +89,7 @@ Apply `ApiKeyLayer` to verify the `Authorization: Bearer <token>` header:
 
 ```rust,ignore
 use axum::{Router, routing::get};
-use modo::apikey::{ApiKeyLayer, ApiKeyStore};
+use modo::auth::apikey::{ApiKeyLayer, ApiKeyStore};
 
 let app: Router = Router::new()
     .route("/api/resource", get(handler))
@@ -127,7 +120,7 @@ let app: Router = Router::new()
 `ApiKeyMeta` implements `FromRequestParts` and `OptionalFromRequestParts`:
 
 ```rust,ignore
-use modo::apikey::ApiKeyMeta;
+use modo::auth::apikey::ApiKeyMeta;
 
 async fn handler(meta: ApiKeyMeta) -> String {
     format!("Hello tenant {}", meta.tenant_id)
