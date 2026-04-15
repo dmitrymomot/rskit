@@ -30,17 +30,13 @@ config.max_file_size = Some("10mb".into());
 
 let storage = Storage::new(&config)?;
 
-// Using PutInput::new (filename defaults to None)
-let input = PutInput::new(Bytes::from("file contents"), "avatars/", "image/jpeg");
+// Using PutInput::new (filename defaults to None — no extension on generated key)
+let mut input = PutInput::new(Bytes::from("file contents"), "avatars/", "image/jpeg");
 
-// Or construct directly for full control
-let key = storage.put(&PutInput {
-    data: Bytes::from("file contents"),
-    prefix: "avatars/".into(),
-    filename: Some("photo.jpg".into()),
-    content_type: "image/jpeg".into(),
-}).await?;
+// Set filename to preserve extension on the generated key
+input.filename = Some("photo.jpg".into());
 
+let key = storage.put(&input).await?;
 let public_url = storage.url(&key)?;
 ```
 
@@ -75,14 +71,12 @@ let key = storage.put_with(&input, PutOptions {
 use modo::storage::PutFromUrlInput;
 
 // Using the convenience constructor (filename defaults to None)
-let input = PutFromUrlInput::new("https://example.com/image.png", "downloads/");
+let mut input = PutFromUrlInput::new("https://example.com/image.png", "downloads/");
 
-// Or construct directly for full control
-let key = storage.put_from_url(&PutFromUrlInput {
-    url: "https://example.com/image.png".into(),
-    prefix: "downloads/".into(),
-    filename: Some("image.png".into()),
-}).await?;
+// Set filename to preserve extension on the generated key
+input.filename = Some("image.png".into());
+
+let key = storage.put_from_url(&input).await?;
 ```
 
 Redirects are not followed. A hard-coded 30-second timeout applies.
