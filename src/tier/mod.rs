@@ -2,7 +2,7 @@
 //!
 //! Tier-based feature gating for SaaS applications.
 //!
-//! ## Provides
+//! Provides:
 //!
 //! - [`TierBackend`] — trait for pluggable tier resolution (app implements)
 //! - [`TierResolver`] — concrete wrapper (`Arc<dyn TierBackend>`, cheap to clone)
@@ -16,8 +16,8 @@
 //!   (also re-exported as `modo::guards::require_feature`)
 //! - [`require_limit()`] — route guard for usage-limit gates
 //!   (also re-exported as `modo::guards::require_limit`)
-//! - [`mod@test`] — test helpers ([`StaticTierBackend`](test::StaticTierBackend),
-//!   [`FailingTierBackend`](test::FailingTierBackend))
+//! - [`test`] — test helpers ([`test::StaticTierBackend`] and
+//!   [`test::FailingTierBackend`])
 //!
 //! ## Quick start
 //!
