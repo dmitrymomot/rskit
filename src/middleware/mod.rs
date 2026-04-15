@@ -14,7 +14,7 @@
 //! [`modo::middlewares`](crate::middlewares) module is a flat
 //! wiring-site index that re-exports **both** these universal
 //! middlewares **and** domain-specific layers from feature-gated
-//! modules (e.g. `session`, `tenant`, `auth`, `flash`, `ip`, `tier`,
+//! modules (e.g. `tenant`, `auth`, `flash`, `ip`, `tier`,
 //! `geolocation`, `template`). Reach for `modo::middlewares` when you
 //! want a single namespace at your `.layer(...)` call sites; reach for
 //! `modo::middleware` when you only need the universal layers or the

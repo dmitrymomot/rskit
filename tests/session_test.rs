@@ -3,11 +3,21 @@ use axum::body::Body;
 use axum::http::Request;
 use axum::routing::{get, post};
 use http::StatusCode;
-use modo::auth::session::{Session, SessionConfig, Store};
-use modo::cookie::{CookieConfig, key_from_config};
+use modo::auth::session::CookieSessionService;
+use modo::auth::session::{CookieSession, SessionConfig, SessionStore as Store};
+use modo::cookie::CookieConfig;
 use modo::db::{self, ConnExt};
 use modo::service::Registry;
 use tower::ServiceExt;
+
+const CREATE_SESSIONS_TABLE: &str = "CREATE TABLE authenticated_sessions (
+    id TEXT PRIMARY KEY, session_token_hash TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
+    user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
+    device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,
+    data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
+    last_active_at TEXT NOT NULL, expires_at TEXT NOT NULL
+)";
 
 fn test_cookie_config() -> CookieConfig {
     let mut c = CookieConfig::new("a".repeat(64));
@@ -15,49 +25,50 @@ fn test_cookie_config() -> CookieConfig {
     c
 }
 
-async fn setup_store() -> Store {
-    let config = db::Config {
+/// Returns (store, service) sharing the same in-memory DB.
+async fn setup() -> (Store, CookieSessionService) {
+    setup_with_config(SessionConfig::default()).await
+}
+
+async fn setup_with_config(session_config: SessionConfig) -> (Store, CookieSessionService) {
+    let db_config = db::Config {
         path: ":memory:".into(),
         ..Default::default()
     };
-    let db = db::connect(&config).await.unwrap();
+    let db = db::connect(&db_config).await.unwrap();
     db.conn()
-        .execute_raw(
-            "CREATE TABLE sessions (
-                id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
-                user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
-                user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
-                device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,
-                data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
-                last_active_at TEXT NOT NULL, expires_at TEXT NOT NULL
-            )",
-            (),
-        )
+        .execute_raw(CREATE_SESSIONS_TABLE, ())
         .await
         .unwrap();
-    Store::new(db, SessionConfig::default())
+
+    let mut full_config = session_config;
+    full_config.cookie = test_cookie_config();
+
+    let store = Store::new(db.clone(), full_config.clone());
+    let svc = CookieSessionService::new(db, full_config).unwrap();
+    (store, svc)
 }
 
-async fn handler_no_auth(session: Session) -> &'static str {
+async fn handler_no_auth(session: CookieSession) -> &'static str {
     assert!(!session.is_authenticated());
     "ok"
 }
 
-async fn handler_authenticate(session: Session) -> modo::Result<&'static str> {
+async fn handler_authenticate(session: CookieSession) -> modo::Result<&'static str> {
     session.authenticate("user-123").await?;
     assert!(session.is_authenticated());
     assert_eq!(session.user_id(), Some("user-123".to_string()));
     Ok("ok")
 }
 
-async fn handler_logout(session: Session) -> modo::Result<&'static str> {
+async fn handler_logout(session: CookieSession) -> modo::Result<&'static str> {
     session.authenticate("user-123").await?;
     session.logout().await?;
     assert!(!session.is_authenticated());
     Ok("ok")
 }
 
-async fn handler_set_get(session: Session) -> modo::Result<&'static str> {
+async fn handler_set_get(session: CookieSession) -> modo::Result<&'static str> {
     session.authenticate("user-123").await?;
     session.set("theme", &"dark".to_string())?;
     let theme: Option<String> = session.get("theme")?;
@@ -67,13 +78,11 @@ async fn handler_set_get(session: Session) -> modo::Result<&'static str> {
 
 #[tokio::test]
 async fn test_session_middleware_no_cookie_passes_through() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
     let app = Router::new()
         .route("/", get(handler_no_auth))
-        .layer(modo::auth::session::layer(store, &cookie_config, &key))
+        .layer(svc.layer())
         .with_state(Registry::new().into_state());
 
     let response = app
@@ -86,13 +95,11 @@ async fn test_session_middleware_no_cookie_passes_through() {
 
 #[tokio::test]
 async fn test_session_authenticate_sets_cookie() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
     let app = Router::new()
         .route("/login", post(handler_authenticate))
-        .layer(modo::auth::session::layer(store, &cookie_config, &key))
+        .layer(svc.layer())
         .with_state(Registry::new().into_state());
 
     let response = app
@@ -113,13 +120,11 @@ async fn test_session_authenticate_sets_cookie() {
 
 #[tokio::test]
 async fn test_session_logout_removes_cookie() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
     let app = Router::new()
         .route("/", post(handler_logout))
-        .layer(modo::auth::session::layer(store, &cookie_config, &key))
+        .layer(svc.layer())
         .with_state(Registry::new().into_state());
 
     let response = app
@@ -138,13 +143,11 @@ async fn test_session_logout_removes_cookie() {
 
 #[tokio::test]
 async fn test_session_set_and_get_data() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
     let app = Router::new()
         .route("/", post(handler_set_get))
-        .layer(modo::auth::session::layer(store, &cookie_config, &key))
+        .layer(svc.layer())
         .with_state(Registry::new().into_state());
 
     let response = app
@@ -176,30 +179,20 @@ use axum::Extension;
 use modo::auth::session::meta::SessionMeta;
 use modo::service::AppState;
 
-/// Build a Router with the session layer, optionally adding an Extension layer.
-/// This helper exists because `oneshot` consumes the service, so each request
-/// needs a fresh Router built from the same shared state.
+/// Build a Router with the session layer.
 fn build_app(
-    store: &Store,
-    cookie_config: &CookieConfig,
-    key: &modo::cookie::Key,
+    svc: &CookieSessionService,
     route: &str,
     method: axum::routing::MethodRouter<AppState>,
 ) -> Router {
     Router::new()
         .route(route, method)
-        .layer(modo::auth::session::layer(
-            store.clone(),
-            cookie_config,
-            key,
-        ))
+        .layer(svc.layer())
         .with_state(Registry::new().into_state())
 }
 
 fn build_app_with_ext<T: Clone + Send + Sync + 'static>(
-    store: &Store,
-    cookie_config: &CookieConfig,
-    key: &modo::cookie::Key,
+    svc: &CookieSessionService,
     route: &str,
     method: axum::routing::MethodRouter<AppState>,
     ext: T,
@@ -207,11 +200,7 @@ fn build_app_with_ext<T: Clone + Send + Sync + 'static>(
     Router::new()
         .route(route, method)
         .layer(Extension(ext))
-        .layer(modo::auth::session::layer(
-            store.clone(),
-            cookie_config,
-            key,
-        ))
+        .layer(svc.layer())
         .with_state(Registry::new().into_state())
 }
 
@@ -240,53 +229,53 @@ fn cookie_header_value(set_cookie: &str) -> String {
 
 // --- Module-level handlers for the new tests ---
 
-async fn handler_login(session: Session) -> modo::Result<&'static str> {
+async fn handler_login(session: CookieSession) -> modo::Result<&'static str> {
     session.authenticate("user-1").await?;
     Ok("ok")
 }
 
-async fn handler_check_auth(session: Session) -> String {
+async fn handler_check_auth(session: CookieSession) -> String {
     match session.user_id() {
         Some(uid) => uid,
         None => "none".to_string(),
     }
 }
 
-async fn handler_logout_all(session: Session) -> modo::Result<&'static str> {
+async fn handler_logout_all(session: CookieSession) -> modo::Result<&'static str> {
     session.authenticate("user-1").await?;
     session.logout_all().await?;
     Ok("ok")
 }
 
-async fn handler_logout_other(session: Session) -> modo::Result<&'static str> {
+async fn handler_logout_other(session: CookieSession) -> modo::Result<&'static str> {
     session.authenticate("user-1").await?;
     session.logout_other().await?;
     Ok("ok")
 }
 
-async fn handler_rotate(session: Session) -> modo::Result<&'static str> {
+async fn handler_rotate(session: CookieSession) -> modo::Result<&'static str> {
     session.rotate().await?;
     Ok("ok")
 }
 
-async fn handler_list_my_sessions(session: Session) -> modo::Result<&'static str> {
+async fn handler_list_my_sessions(session: CookieSession) -> modo::Result<&'static str> {
     session.list_my_sessions().await?;
     Ok("ok")
 }
 
-async fn handler_authenticate_and_logout(session: Session) -> modo::Result<&'static str> {
+async fn handler_authenticate_and_logout(session: CookieSession) -> modo::Result<&'static str> {
     session.authenticate("user-1").await?;
     session.logout().await?;
     Ok("ok")
 }
 
-async fn handler_set_unauthenticated(session: Session) -> modo::Result<&'static str> {
+async fn handler_set_unauthenticated(session: CookieSession) -> modo::Result<&'static str> {
     session.set("key", &"val".to_string())?;
     Ok("ok")
 }
 
 async fn handler_revoke_ext(
-    session: Session,
+    session: CookieSession,
     Extension(target_id): Extension<String>,
 ) -> modo::Result<&'static str> {
     session.authenticate("user-a").await?;
@@ -299,12 +288,10 @@ async fn handler_revoke_ext(
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_cookie_round_trip() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (store, svc) = setup().await;
 
     // Step 1: POST /login to authenticate and obtain the session cookie.
-    let app1 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    let app1 = build_app(&svc, "/login", post(handler_login));
     let resp = app1
         .oneshot(
             Request::builder()
@@ -321,13 +308,7 @@ async fn test_cookie_round_trip() {
     let cookie_val = cookie_header_value(&set_cookie);
 
     // Step 2: GET /check with the session cookie — should see user-1.
-    let app2 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/check",
-        get(handler_check_auth),
-    );
+    let app2 = build_app(&svc, "/check", get(handler_check_auth));
     let resp = app2
         .oneshot(
             Request::builder()
@@ -348,6 +329,8 @@ async fn test_cookie_round_trip() {
         "user-1",
         "second request must see the authenticated user"
     );
+
+    drop(store); // silence unused warning
 }
 
 // ---------------------------------------------------------------------------
@@ -355,12 +338,10 @@ async fn test_cookie_round_trip() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_fingerprint_mismatch_destroys_session() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (store, svc) = setup().await;
 
     // Login with User-Agent "Chrome"
-    let app1 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    let app1 = build_app(&svc, "/login", post(handler_login));
     let resp = app1
         .oneshot(
             Request::builder()
@@ -378,13 +359,7 @@ async fn test_fingerprint_mismatch_destroys_session() {
     let cookie_val = cookie_header_value(&set_cookie);
 
     // Second request with DIFFERENT User-Agent — fingerprint won't match.
-    let app2 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/check",
-        get(handler_check_auth),
-    );
+    let app2 = build_app(&svc, "/check", get(handler_check_auth));
     let resp = app2
         .oneshot(
             Request::builder()
@@ -420,12 +395,10 @@ async fn test_fingerprint_mismatch_destroys_session() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_authenticate_destroys_old_session() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
     // First login
-    let app1 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    let app1 = build_app(&svc, "/login", post(handler_login));
     let resp1 = app1
         .oneshot(
             Request::builder()
@@ -439,7 +412,7 @@ async fn test_authenticate_destroys_old_session() {
     let set_cookie1 = extract_set_cookie(&resp1).expect("first login must set cookie");
 
     // Second login (fresh request, no cookie — simulates new authentication)
-    let app2 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    let app2 = build_app(&svc, "/login", post(handler_login));
     let resp2 = app2
         .oneshot(
             Request::builder()
@@ -462,7 +435,7 @@ async fn test_authenticate_destroys_old_session() {
     // There should be exactly 2 sessions (each login creates one; old one from
     // first call isn't destroyed because second call has no cookie to identify it).
     // But if we login WITH the first cookie, the old session IS destroyed.
-    let app3 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    let app3 = build_app(&svc, "/login", post(handler_login));
     let resp3 = app3
         .oneshot(
             Request::builder()
@@ -483,13 +456,7 @@ async fn test_authenticate_destroys_old_session() {
     );
 
     // Verify the old session (from set_cookie2) no longer loads.
-    let app4 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/check",
-        get(handler_check_auth),
-    );
+    let app4 = build_app(&svc, "/check", get(handler_check_auth));
     let resp4 = app4
         .oneshot(
             Request::builder()
@@ -515,9 +482,7 @@ async fn test_authenticate_destroys_old_session() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_revoke_other_users_session_returns_not_found() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (store, svc) = setup().await;
 
     // Pre-create a session for user-b directly via the store.
     let meta_b = default_meta();
@@ -525,9 +490,7 @@ async fn test_revoke_other_users_session_returns_not_found() {
 
     // user-a authenticates and tries to revoke user-b's session.
     let app = build_app_with_ext(
-        &store,
-        &cookie_config,
-        &key,
+        &svc,
         "/revoke",
         post(handler_revoke_ext),
         session_b.id.clone(),
@@ -563,9 +526,7 @@ async fn test_revoke_other_users_session_returns_not_found() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_logout_all_destroys_all_sessions() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (store, svc) = setup().await;
 
     // Pre-create 2 sessions for user-1 directly.
     let meta = default_meta();
@@ -573,13 +534,7 @@ async fn test_logout_all_destroys_all_sessions() {
     store.create(&meta, "user-1", None).await.unwrap();
 
     // Authenticate (creates a 3rd session), then logout_all.
-    let app = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/logout-all",
-        post(handler_logout_all),
-    );
+    let app = build_app(&svc, "/logout-all", post(handler_logout_all));
     let resp = app
         .oneshot(
             Request::builder()
@@ -606,22 +561,14 @@ async fn test_logout_all_destroys_all_sessions() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_logout_other_keeps_current() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (store, svc) = setup().await;
 
     // Pre-create 1 extra session for user-1.
     let meta = default_meta();
     store.create(&meta, "user-1", None).await.unwrap();
 
     // Authenticate (creates current session), then logout_other.
-    let app = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/logout-other",
-        post(handler_logout_other),
-    );
+    let app = build_app(&svc, "/logout-other", post(handler_logout_other));
     let resp = app
         .oneshot(
             Request::builder()
@@ -648,17 +595,9 @@ async fn test_logout_other_keeps_current() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_rotate_unauthenticated_returns_error() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
-    let app = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/rotate",
-        post(handler_rotate),
-    );
+    let app = build_app(&svc, "/rotate", post(handler_rotate));
     let resp = app
         .oneshot(
             Request::builder()
@@ -682,17 +621,9 @@ async fn test_rotate_unauthenticated_returns_error() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_list_my_sessions_unauthenticated_returns_error() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
-    let app = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/list",
-        get(handler_list_my_sessions),
-    );
+    let app = build_app(&svc, "/list", get(handler_list_my_sessions));
     let resp = app
         .oneshot(Request::builder().uri("/list").body(Body::empty()).unwrap())
         .await
@@ -710,14 +641,10 @@ async fn test_list_my_sessions_unauthenticated_returns_error() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_logout_removes_cookie_in_response() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
     let app = build_app(
-        &store,
-        &cookie_config,
-        &key,
+        &svc,
         "/auth-then-logout",
         post(handler_authenticate_and_logout),
     );
@@ -753,76 +680,49 @@ async fn test_logout_removes_cookie_in_response() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers for the new tests
-// ---------------------------------------------------------------------------
-
-async fn setup_store_with_config(config: SessionConfig) -> Store {
-    let db_config = db::Config {
-        path: ":memory:".into(),
-        ..Default::default()
-    };
-    let db = db::connect(&db_config).await.unwrap();
-    db.conn()
-        .execute_raw(
-            "CREATE TABLE sessions (
-                id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
-                user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
-                user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
-                device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,
-                data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
-                last_active_at TEXT NOT NULL, expires_at TEXT NOT NULL
-            )",
-            (),
-        )
-        .await
-        .unwrap();
-    Store::new(db, config)
-}
-
 // Module-level handlers for new tests
 
 /// Set "color" = "blue" on an already-authenticated session.
-async fn handler_set_color(session: Session) -> modo::Result<&'static str> {
+async fn handler_set_color(session: CookieSession) -> modo::Result<&'static str> {
     session.set("color", &"blue".to_string())?;
     Ok("ok")
 }
 
-async fn handler_get_color(session: Session) -> modo::Result<String> {
+async fn handler_get_color(session: CookieSession) -> modo::Result<String> {
     let color: Option<String> = session.get("color")?;
     Ok(color.unwrap_or_else(|| "none".to_string()))
 }
 
-async fn handler_rotate_only(session: Session) -> modo::Result<&'static str> {
+async fn handler_rotate_only(session: CookieSession) -> modo::Result<&'static str> {
     session.rotate().await?;
     Ok("ok")
 }
 
-async fn handler_authenticate_with_role(session: Session) -> modo::Result<&'static str> {
+async fn handler_authenticate_with_role(session: CookieSession) -> modo::Result<&'static str> {
     session
         .authenticate_with("user-role", serde_json::json!({"role": "admin"}))
         .await?;
     Ok("ok")
 }
 
-async fn handler_get_role(session: Session) -> modo::Result<String> {
+async fn handler_get_role(session: CookieSession) -> modo::Result<String> {
     let role: Option<String> = session.get("role")?;
     Ok(role.unwrap_or_else(|| "none".to_string()))
 }
 
-async fn handler_set_key_then_remove(session: Session) -> modo::Result<&'static str> {
+async fn handler_set_key_then_remove(session: CookieSession) -> modo::Result<&'static str> {
     session.authenticate("user-remove").await?;
     session.set("key", &"value".to_string())?;
     Ok("ok")
 }
 
-async fn handler_remove_key_and_read(session: Session) -> modo::Result<String> {
+async fn handler_remove_key_and_read(session: CookieSession) -> modo::Result<String> {
     session.remove_key("key");
     let val: Option<String> = session.get("key")?;
     Ok(val.unwrap_or_else(|| "none".to_string()))
 }
 
-async fn handler_current(session: Session) -> modo::Result<String> {
+async fn handler_current(session: CookieSession) -> modo::Result<String> {
     match session.current() {
         Some(data) => Ok(data.user_id),
         None => Ok("none".to_string()),
@@ -834,12 +734,10 @@ async fn handler_current(session: Session) -> modo::Result<String> {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_session_data_persists_across_requests() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
     // Request 1: authenticate to get a session cookie
-    let app1 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    let app1 = build_app(&svc, "/login", post(handler_login));
     let resp1 = app1
         .oneshot(
             Request::builder()
@@ -856,13 +754,7 @@ async fn test_session_data_persists_across_requests() {
 
     // Request 2: set "color" = "blue" on the existing authenticated session
     // (handler_set_color does NOT call authenticate — just calls session.set)
-    let app2 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/set-color",
-        post(handler_set_color),
-    );
+    let app2 = build_app(&svc, "/set-color", post(handler_set_color));
     let resp2 = app2
         .oneshot(
             Request::builder()
@@ -875,17 +767,9 @@ async fn test_session_data_persists_across_requests() {
         .await
         .unwrap();
     assert_eq!(resp2.status(), StatusCode::OK);
-    // Cookie may or may not be refreshed; use the original cookie_val — it is still valid
-    // (rotate was not called, same session ID)
 
     // Request 3: read "color" from session
-    let app3 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/get-color",
-        get(handler_get_color),
-    );
+    let app3 = build_app(&svc, "/get-color", get(handler_get_color));
     let resp3 = app3
         .oneshot(
             Request::builder()
@@ -912,12 +796,10 @@ async fn test_session_data_persists_across_requests() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_rotate_authenticated_session() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
     // Step 1: authenticate, obtain cookie A
-    let app1 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    let app1 = build_app(&svc, "/login", post(handler_login));
     let resp1 = app1
         .oneshot(
             Request::builder()
@@ -932,13 +814,7 @@ async fn test_rotate_authenticated_session() {
     let cookie_a = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie A required"));
 
     // Step 2: rotate using cookie A, obtain cookie B
-    let app2 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/rotate",
-        post(handler_rotate_only),
-    );
+    let app2 = build_app(&svc, "/rotate", post(handler_rotate_only));
     let resp2 = app2
         .oneshot(
             Request::builder()
@@ -957,13 +833,7 @@ async fn test_rotate_authenticated_session() {
     assert_ne!(cookie_a, cookie_b, "rotate must issue a new cookie");
 
     // Step 3: old cookie A should no longer load a session
-    let app3 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/check",
-        get(handler_check_auth),
-    );
+    let app3 = build_app(&svc, "/check", get(handler_check_auth));
     let resp3 = app3
         .oneshot(
             Request::builder()
@@ -984,13 +854,7 @@ async fn test_rotate_authenticated_session() {
     );
 
     // Step 4: new cookie B should load the session successfully
-    let app4 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/check",
-        get(handler_check_auth),
-    );
+    let app4 = build_app(&svc, "/check", get(handler_check_auth));
     let resp4 = app4
         .oneshot(
             Request::builder()
@@ -1016,18 +880,10 @@ async fn test_rotate_authenticated_session() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_session_authenticate_with_initial_data() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
     // Request 1: authenticate_with initial role=admin
-    let app1 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/auth-with",
-        post(handler_authenticate_with_role),
-    );
+    let app1 = build_app(&svc, "/auth-with", post(handler_authenticate_with_role));
     let resp1 = app1
         .oneshot(
             Request::builder()
@@ -1042,13 +898,7 @@ async fn test_session_authenticate_with_initial_data() {
     let cookie_val = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
 
     // Request 2: read "role" from session
-    let app2 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/get-role",
-        get(handler_get_role),
-    );
+    let app2 = build_app(&svc, "/get-role", get(handler_get_role));
     let resp2 = app2
         .oneshot(
             Request::builder()
@@ -1075,18 +925,10 @@ async fn test_session_authenticate_with_initial_data() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_session_remove_key() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
     // Request 1: authenticate and set "key" = "value"
-    let app1 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/set",
-        post(handler_set_key_then_remove),
-    );
+    let app1 = build_app(&svc, "/set", post(handler_set_key_then_remove));
     let resp1 = app1
         .oneshot(
             Request::builder()
@@ -1101,13 +943,7 @@ async fn test_session_remove_key() {
     let cookie_val = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
 
     // Request 2: remove_key("key") and then get("key") should be None
-    let app2 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/remove",
-        post(handler_remove_key_and_read),
-    );
+    let app2 = build_app(&svc, "/remove", post(handler_remove_key_and_read));
     let resp2 = app2
         .oneshot(
             Request::builder()
@@ -1135,12 +971,10 @@ async fn test_session_remove_key() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_session_current() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup().await;
 
-    // Request 1: authenticate as user-current
-    let app1 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    // Request 1: authenticate as user-1
+    let app1 = build_app(&svc, "/login", post(handler_login));
     let resp1 = app1
         .oneshot(
             Request::builder()
@@ -1155,13 +989,7 @@ async fn test_session_current() {
     let cookie_val = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
 
     // Request 2: call current() and verify user_id
-    let app2 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/current",
-        get(handler_current),
-    );
+    let app2 = build_app(&svc, "/current", get(handler_current));
     let resp2 = app2
         .oneshot(
             Request::builder()
@@ -1190,12 +1018,10 @@ async fn test_session_current() {
 async fn test_validate_fingerprint_disabled() {
     let mut config = SessionConfig::default();
     config.validate_fingerprint = false;
-    let store = setup_store_with_config(config).await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (_store, svc) = setup_with_config(config).await;
 
     // Request 1: authenticate with User-Agent "Chrome/100"
-    let app1 = build_app(&store, &cookie_config, &key, "/login", post(handler_login));
+    let app1 = build_app(&svc, "/login", post(handler_login));
     let resp1 = app1
         .oneshot(
             Request::builder()
@@ -1211,13 +1037,7 @@ async fn test_validate_fingerprint_disabled() {
     let cookie_val = cookie_header_value(&extract_set_cookie(&resp1).expect("cookie required"));
 
     // Request 2: send a DIFFERENT User-Agent — fingerprint check is disabled, so session is valid
-    let app2 = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/check",
-        get(handler_check_auth),
-    );
+    let app2 = build_app(&svc, "/check", get(handler_check_auth));
     let resp2 = app2
         .oneshot(
             Request::builder()
@@ -1245,17 +1065,9 @@ async fn test_validate_fingerprint_disabled() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_set_no_op_when_unauthenticated() {
-    let store = setup_store().await;
-    let cookie_config = test_cookie_config();
-    let key = key_from_config(&cookie_config).unwrap();
+    let (store, svc) = setup().await;
 
-    let app = build_app(
-        &store,
-        &cookie_config,
-        &key,
-        "/set",
-        post(handler_set_unauthenticated),
-    );
+    let app = build_app(&svc, "/set", post(handler_set_unauthenticated));
     let resp = app
         .oneshot(
             Request::builder()

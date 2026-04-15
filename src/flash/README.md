@@ -63,7 +63,7 @@ Call `flash.messages()` to retrieve and consume incoming messages. The cookie is
 removed from the response after this call:
 
 ```rust,ignore
-use modo::{Flash, FlashEntry};
+use modo::flash::{Flash, FlashEntry};
 use axum::response::Html;
 
 async fn result_handler(flash: Flash) -> Html<String> {

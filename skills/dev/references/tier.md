@@ -1,6 +1,6 @@
 # Tier
 
-Plan-based feature gating for SaaS applications. Always available.
+Tier-based feature gating for SaaS applications. Always available.
 
 Import directly from `modo::tier`:
 

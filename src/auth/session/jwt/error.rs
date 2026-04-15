@@ -8,7 +8,7 @@ use std::fmt;
 /// # Error identity pattern
 ///
 /// ```rust,ignore
-/// use modo::auth::jwt::JwtError;
+/// use modo::auth::session::jwt::JwtError;
 ///
 /// let err = modo::Error::unauthorized("unauthorized")
 ///     .chain(JwtError::Expired)
@@ -40,10 +40,6 @@ pub enum JwtError {
     InvalidIssuer,
     /// The `aud` claim does not match the required audience.
     InvalidAudience,
-    /// The token's `jti` was found in the revocation store.
-    Revoked,
-    /// The revocation store returned an error (fail-closed).
-    RevocationCheckFailed,
     /// The token header specifies an algorithm that differs from the verifier's algorithm.
     AlgorithmMismatch,
     // Server errors (500)
@@ -69,8 +65,6 @@ impl JwtError {
             Self::NotYetValid => "jwt:not_yet_valid",
             Self::InvalidIssuer => "jwt:invalid_issuer",
             Self::InvalidAudience => "jwt:invalid_audience",
-            Self::Revoked => "jwt:revoked",
-            Self::RevocationCheckFailed => "jwt:revocation_check_failed",
             Self::AlgorithmMismatch => "jwt:algorithm_mismatch",
             Self::SigningFailed => "jwt:signing_failed",
             Self::SerializationFailed => "jwt:serialization_failed",
@@ -90,8 +84,6 @@ impl fmt::Display for JwtError {
             Self::NotYetValid => write!(f, "token is not yet valid"),
             Self::InvalidIssuer => write!(f, "invalid token issuer"),
             Self::InvalidAudience => write!(f, "invalid token audience"),
-            Self::Revoked => write!(f, "token has been revoked"),
-            Self::RevocationCheckFailed => write!(f, "token revocation check failed"),
             Self::AlgorithmMismatch => write!(f, "token algorithm mismatch"),
             Self::SigningFailed => write!(f, "failed to sign token"),
             Self::SerializationFailed => write!(f, "failed to serialize token claims"),
@@ -118,8 +110,6 @@ mod tests {
             JwtError::NotYetValid,
             JwtError::InvalidIssuer,
             JwtError::InvalidAudience,
-            JwtError::Revoked,
-            JwtError::RevocationCheckFailed,
             JwtError::AlgorithmMismatch,
             JwtError::SigningFailed,
             JwtError::SerializationFailed,

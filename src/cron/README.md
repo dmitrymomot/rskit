@@ -85,12 +85,11 @@ async fn slow_job() -> Result<()> {
 async fn main() {
     let registry = Registry::new();
 
+    let mut opts = CronOptions::default();
+    opts.timeout_secs = 600;
+
     let scheduler = Scheduler::builder(&registry)
-        .job_with(
-            "@hourly",
-            slow_job,
-            CronOptions { timeout_secs: 600 },
-        )
+        .job_with("@hourly", slow_job, opts)
         .unwrap()
         .start()
         .await;

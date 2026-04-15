@@ -27,18 +27,18 @@ edition = "2024"
 rust-version = "1.92"
 
 [dependencies]
-modo = { package = "modo-rs", version = "0.7" }
+modo = { package = "modo-rs", version = "0.8" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
 ```
 
 ### Feature flags
 
-modo 0.7 ships every module unconditionally — there are no per-module feature
+modo 0.8 ships every module unconditionally — there are no per-module feature
 flags. The only feature is `test-helpers`, enabled in `[dev-dependencies]` to
 expose in-memory backends (`TestDb`, `TestApp`, `TestSession`, …) for
 integration tests.
@@ -359,7 +359,7 @@ Generate dynamically using `Write`. Replace `{{project_name}}` with the actual p
 ````markdown
 # {{project_name}}
 
-**Framework:** [modo](https://github.com/dmitrymomot/modo) v2 — Rust web framework with SQLite
+**Framework:** [modo](https://github.com/dmitrymomot/modo) v0.8 — Rust web framework with SQLite
 
 ## Commands
 

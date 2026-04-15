@@ -17,6 +17,16 @@ use super::meta::Meta;
 use super::schedule::Schedule;
 
 /// Per-job options supplied to [`SchedulerBuilder::job_with`].
+///
+/// This struct is `#[non_exhaustive]`; construct it via [`Default`] and
+/// mutate the fields you need:
+///
+/// ```rust,no_run
+/// use modo::cron::CronOptions;
+///
+/// let mut opts = CronOptions::default();
+/// opts.timeout_secs = 600;
+/// ```
 #[non_exhaustive]
 pub struct CronOptions {
     /// Maximum number of seconds a single execution may run before it is

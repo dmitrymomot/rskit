@@ -22,8 +22,8 @@
 //!
 //! | Type | Purpose |
 //! |---|---|
-//! | [`UploadedFile`] | Single file extracted from a multipart field |
-//! | [`Files`] | Map of field names to uploaded files |
+//! | [`UploadedFile`] | Single file extracted from a multipart field; also constructable via [`UploadedFile::from_field`] for advanced use |
+//! | [`Files`] | Map of field names to uploaded files; constructable via [`Files::from_map`] for testing or pre-built maps |
 //! | [`UploadValidator`] | Fluent size/content-type validator for [`UploadedFile`] |
 
 mod form;

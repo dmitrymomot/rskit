@@ -32,6 +32,17 @@ pub struct CookieConfig {
     pub same_site: String,
 }
 
+impl Default for CookieConfig {
+    fn default() -> Self {
+        Self {
+            secret: String::new(),
+            secure: true,
+            http_only: true,
+            same_site: "lax".to_string(),
+        }
+    }
+}
+
 impl CookieConfig {
     /// Create a new cookie configuration with the given signing secret.
     ///

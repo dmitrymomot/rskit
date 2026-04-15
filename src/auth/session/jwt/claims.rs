@@ -2,30 +2,29 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-/// JWT claims with all seven registered claims plus user-defined custom fields.
+/// JWT claim payload used by the system auth flow.
 ///
-/// All registered claims are optional — `None` values are omitted from the
-/// serialized token. Custom fields are flattened into the top-level JSON object.
+/// Contains the seven registered JWT claims (`iss`, `sub`, `aud`, `exp`, `nbf`,
+/// `iat`, `jti`). All fields are optional — `None` values are omitted from the
+/// serialized token.
+///
+/// Custom auth flows that need extra payload fields should define their own
+/// struct and pass it directly to [`JwtEncoder::encode<T>`] /
+/// [`JwtDecoder::decode<T>`].
 ///
 /// # Example
 ///
 /// ```rust,ignore
-/// use modo::auth::jwt::Claims;
-/// use serde::{Serialize, Deserialize};
-/// use std::time::Duration;
+/// use modo::auth::session::jwt::Claims;
 ///
-/// #[derive(Serialize, Deserialize, Clone)]
-/// struct MyClaims {
-///     role: String,
-/// }
-///
-/// let claims = Claims::new(MyClaims { role: "admin".into() })
+/// let claims = Claims::new()
 ///     .with_sub("user_123")
+///     .with_aud("my-app")
 ///     .with_iat_now()
-///     .with_exp_in(Duration::from_secs(3600));
+///     .with_exp_in(std::time::Duration::from_secs(3600));
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Claims<T> {
+pub struct Claims {
     /// Issuer (`iss`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub iss: Option<String>,
@@ -44,12 +43,9 @@ pub struct Claims<T> {
     /// Issued-at time (`iat`) as a Unix timestamp in seconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub iat: Option<u64>,
-    /// JWT ID (`jti`) — unique identifier for the token, used for revocation.
+    /// JWT ID (`jti`) — unique identifier for the token.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jti: Option<String>,
-    /// Application-defined custom claims, flattened into the top-level JSON object.
-    #[serde(flatten)]
-    pub custom: T,
 }
 
 fn now_secs() -> u64 {
@@ -59,9 +55,9 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
-impl<T> Claims<T> {
+impl Claims {
     /// Creates a new `Claims` with all registered fields set to `None`.
-    pub fn new(custom: T) -> Self {
+    pub fn new() -> Self {
         Self {
             iss: None,
             sub: None,
@@ -70,7 +66,6 @@ impl<T> Claims<T> {
             nbf: None,
             iat: None,
             jti: None,
-            custom,
         }
     }
 
@@ -116,7 +111,7 @@ impl<T> Claims<T> {
         self
     }
 
-    /// Sets the JWT ID (`jti`). Required for revocation checks.
+    /// Sets the JWT ID (`jti`).
     pub fn with_jti(mut self, jti: impl Into<String>) -> Self {
         self.jti = Some(jti.into());
         self
@@ -161,29 +156,31 @@ impl<T> Claims<T> {
     }
 }
 
+impl Default for Claims {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-    struct Custom {
-        role: String,
-    }
-
     #[test]
-    fn new_sets_custom_and_none_claims() {
-        let claims = Claims::new(Custom {
-            role: "admin".into(),
-        });
-        assert_eq!(claims.custom.role, "admin");
+    fn new_sets_all_fields_none() {
+        let claims = Claims::new();
         assert!(claims.iss.is_none());
         assert!(claims.sub.is_none());
+        assert!(claims.aud.is_none());
         assert!(claims.exp.is_none());
+        assert!(claims.nbf.is_none());
+        assert!(claims.iat.is_none());
+        assert!(claims.jti.is_none());
     }
 
     #[test]
     fn builders_set_fields() {
-        let claims = Claims::new(())
+        let claims = Claims::new()
             .with_sub("user_1")
             .with_iss("my-app")
             .with_aud("api")
@@ -200,7 +197,7 @@ mod tests {
 
     #[test]
     fn with_exp_in_sets_future_timestamp() {
-        let claims = Claims::new(()).with_exp_in(Duration::from_secs(3600));
+        let claims = Claims::new().with_exp_in(Duration::from_secs(3600));
         let exp = claims.exp.unwrap();
         let now = now_secs();
         assert!(exp >= now + 3599 && exp <= now + 3601);
@@ -208,7 +205,7 @@ mod tests {
 
     #[test]
     fn with_iat_now_sets_current_timestamp() {
-        let claims = Claims::new(()).with_iat_now();
+        let claims = Claims::new().with_iat_now();
         let iat = claims.iat.unwrap();
         let now = now_secs();
         assert!(iat >= now - 1 && iat <= now + 1);
@@ -216,68 +213,63 @@ mod tests {
 
     #[test]
     fn is_expired_returns_false_for_future_exp() {
-        let claims = Claims::new(()).with_exp(now_secs() + 3600);
+        let claims = Claims::new().with_exp(now_secs() + 3600);
         assert!(!claims.is_expired());
     }
 
     #[test]
     fn is_expired_returns_true_for_past_exp() {
-        let claims = Claims::new(()).with_exp(now_secs() - 1);
+        let claims = Claims::new().with_exp(now_secs() - 1);
         assert!(claims.is_expired());
     }
 
     #[test]
     fn is_expired_returns_false_when_no_exp() {
-        let claims = Claims::<()>::new(());
+        let claims = Claims::new();
         assert!(!claims.is_expired());
     }
 
     #[test]
     fn is_not_yet_valid_returns_true_for_future_nbf() {
-        let claims = Claims::new(()).with_nbf(now_secs() + 3600);
+        let claims = Claims::new().with_nbf(now_secs() + 3600);
         assert!(claims.is_not_yet_valid());
     }
 
     #[test]
     fn is_not_yet_valid_returns_false_for_past_nbf() {
-        let claims = Claims::new(()).with_nbf(now_secs() - 1);
+        let claims = Claims::new().with_nbf(now_secs() - 1);
         assert!(!claims.is_not_yet_valid());
     }
 
     #[test]
     fn serialization_skips_none_fields() {
-        let claims = Claims::new(Custom {
-            role: "admin".into(),
-        })
-        .with_sub("user_1");
+        let claims = Claims::new().with_sub("user_1");
         let json = serde_json::to_value(&claims).unwrap();
         assert!(json.get("sub").is_some());
         assert!(json.get("iss").is_none());
         assert!(json.get("exp").is_none());
-        assert_eq!(json["role"], "admin"); // flattened
-    }
-
-    #[test]
-    fn flatten_merges_custom_at_top_level() {
-        let claims = Claims::new(Custom {
-            role: "editor".into(),
-        });
-        let json = serde_json::to_value(&claims).unwrap();
-        assert_eq!(json["role"], "editor");
-        assert!(json.get("custom").is_none()); // not nested
     }
 
     #[test]
     fn deserialization_roundtrip() {
-        let original = Claims::new(Custom {
-            role: "admin".into(),
-        })
-        .with_sub("user_1")
-        .with_exp(9999999999);
+        let original = Claims::new()
+            .with_sub("user_1")
+            .with_exp(9999999999)
+            .with_iss("my-app");
         let json = serde_json::to_string(&original).unwrap();
-        let decoded: Claims<Custom> = serde_json::from_str(&json).unwrap();
+        let decoded: Claims = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.sub, original.sub);
         assert_eq!(decoded.exp, original.exp);
-        assert_eq!(decoded.custom, original.custom);
+        assert_eq!(decoded.iss, original.iss);
+    }
+
+    #[test]
+    fn default_matches_new() {
+        let a = Claims::new();
+        let b = Claims::default();
+        assert_eq!(
+            serde_json::to_string(&a).unwrap(),
+            serde_json::to_string(&b).unwrap()
+        );
     }
 }

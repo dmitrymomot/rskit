@@ -133,11 +133,13 @@ let locator = GeoLocator::from_config(&geo_config)?;
 // Register for direct Service<GeoLocator> extraction in handlers
 let mut registry = Registry::new();
 registry.add(locator.clone());
+let state = registry.into_state();
 
 let app = Router::new()
     // ...routes...
     .layer(GeoLayer::new(locator))
-    .layer(ClientIpLayer::with_trusted_proxies(trusted_proxies));
+    .layer(ClientIpLayer::with_trusted_proxies(trusted_proxies))
+    .with_state(state);
 ```
 
 ## Gotchas

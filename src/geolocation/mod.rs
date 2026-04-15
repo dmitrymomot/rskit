@@ -12,8 +12,7 @@
 //!
 //! ## Quick start
 //!
-//! 1. Add `geolocation` to your feature list and configure `mmdb_path` in your
-//!    YAML config.
+//! 1. Configure `mmdb_path` in the `geolocation` section of your YAML config.
 //! 2. Build a [`GeoLocator`] at startup with [`GeoLocator::from_config`].
 //! 3. Add [`ClientIpLayer`](crate::ip::ClientIpLayer) **before** [`GeoLayer`]
 //!    in your middleware stack so client IP resolution happens first.

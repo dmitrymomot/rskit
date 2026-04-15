@@ -168,3 +168,36 @@ fn check_avatar(file: &UploadedFile) -> modo::Result<()> {
 
 `UploadedFile::extension()` returns the lowercased extension without the leading dot
 (e.g. `Some("jpg")` for `"photo.JPG"`), or `None` if the filename has no extension.
+
+## Advanced use
+
+### Building `Files` from a pre-existing map
+
+`Files::from_map` lets you construct a [`Files`] collection from a
+`HashMap<String, Vec<UploadedFile>>` that you assembled yourself — useful in tests or
+when pre-processing fields before passing them to application logic.
+
+```rust,no_run
+use std::collections::HashMap;
+use modo::extractor::{Files, UploadedFile};
+
+let map: HashMap<String, Vec<UploadedFile>> = HashMap::new();
+let files = Files::from_map(map);
+```
+
+### Reading a single multipart field manually
+
+`UploadedFile::from_field` consumes an `axum_extra` multipart field and reads it fully
+into memory. Prefer [`MultipartRequest`] for ordinary handlers; use this only when you
+need to process fields one-by-one before all fields have been consumed.
+
+```rust,no_run
+use axum_extra::extract::multipart::Field;
+use modo::extractor::UploadedFile;
+
+async fn process_field(field: Field) -> modo::Result<()> {
+    let file = UploadedFile::from_field(field).await?;
+    println!("received {} ({} bytes)", file.name, file.size);
+    Ok(())
+}
+```

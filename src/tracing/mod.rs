@@ -43,8 +43,8 @@
 //! spans are produced by [`crate::middleware::tracing`], which wires a
 //! `tower_http::trace::TraceLayer` with a `ModoMakeSpan` that pre-declares
 //! a `tenant_id` field (initially empty) so the tenant middleware can
-//! later record it via `span.record("tenant_id", ...)`. Keep all tracing
-//! field names in snake_case.
+//! later record it via `span.record("tenant_id", ...)`. All tracing field
+//! names use snake_case (`user_id`, `session_id`, `job_id`, etc.).
 //!
 //! ## Quick start
 //!

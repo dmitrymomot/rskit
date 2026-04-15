@@ -147,8 +147,12 @@ the raw API key value — use it only for resolver logic, not for logging.
 ## Tracing
 
 The middleware calls `Span::current().record("tenant_id", ...)` after a
-successful resolve. For this to appear in logs the enclosing tracing span
-must pre-declare the field:
+successful resolve. The `tenant_id` field appears automatically in logs when
+using `modo::middleware::tracing()`, which creates `http_request` spans with
+`tenant_id = tracing::field::Empty` pre-declared via `ModoMakeSpan`.
+
+For custom spans (e.g., background tasks or `#[tracing::instrument]`), you
+must declare the field explicitly:
 
 ```rust
 #[tracing::instrument(fields(tenant_id = tracing::field::Empty))]

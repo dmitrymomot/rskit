@@ -6,11 +6,11 @@
 //! (AWS S3, RustFS, MinIO, etc.). Features include upload from bytes or URL,
 //! presigned URLs, configurable ACLs, and file-size limits.
 //!
-//! # Provides
+//! ## Provides
 //!
 //! | Type | Purpose |
 //! |------|---------|
-//! | [`Storage`] | Single-bucket handle -- upload, delete, public URL, presigned URL |
+//! | [`Storage`] | Single-bucket handle — upload, delete, public URL, presigned URL |
 //! | [`Buckets`] | Named collection of `Storage` instances for multi-bucket apps |
 //! | [`PutInput`] | Input for [`Storage::put()`] / [`Storage::put_with()`] |
 //! | [`PutFromUrlInput`] | Input for [`Storage::put_from_url()`] / [`Storage::put_from_url_with()`] |
@@ -22,11 +22,10 @@
 //! Use [`Storage::with_client()`] to share a [`reqwest::Client`] connection pool
 //! across multiple `Storage` instances or other modules.
 //!
-//! # Quick start
+//! ## Quick start
 //!
-//! ```
+//! ```rust,no_run
 //! use modo::storage::{BucketConfig, Storage, PutInput};
-//! # use bytes::Bytes;
 //!
 //! # fn example() -> modo::Result<()> {
 //! let mut config = BucketConfig::default();
@@ -42,7 +41,7 @@
 //! # }
 //! ```
 //!
-//! # Request signing
+//! ## Request signing
 //!
 //! All requests are signed with AWS Signature Version 4. Both path-style
 //! (`https://endpoint/bucket/key`) and virtual-hosted-style

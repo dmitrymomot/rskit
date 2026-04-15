@@ -1,3 +1,5 @@
+//! # modo::qrcode
+//!
 //! QR code generation with customizable SVG output.
 //!
 //! Generates QR codes from any string and renders them as SVG with
@@ -5,7 +7,7 @@
 //! case is TOTP authenticator enrollment, but the module is
 //! general-purpose.
 //!
-//! # Key types
+//! ## Provides
 //!
 //! - [`QrCode`] — generated QR matrix; call [`QrCode::to_svg`] to render.
 //! - [`QrStyle`] — rendering options: module shape, finder shape, colors, sizes.
@@ -14,12 +16,11 @@
 //! - [`ModuleShape`] — shape of data modules (Square, RoundedSquare, Circle, Diamond).
 //! - [`FinderShape`] — shape of finder patterns (Square, Rounded, Circle).
 //! - [`QrError`] — error type for generation and rendering failures.
-//! - [`qr_svg_function`] — MiniJinja template function factory (requires
-//!   `templates` feature).
+//! - [`qr_svg_function`] — MiniJinja template function factory.
 //!
-//! # Example
+//! ## Quick start
 //!
-//! ```
+//! ```rust,no_run
 //! use modo::qrcode::{QrCode, QrStyle};
 //!
 //! let qr = QrCode::new("https://example.com").unwrap();

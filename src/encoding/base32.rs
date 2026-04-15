@@ -1,4 +1,10 @@
+//! # modo::encoding::base32
+//!
 //! RFC 4648 base32 encoding and decoding without padding.
+//!
+//! Provides:
+//! - [`encode`] — encode bytes to an uppercase base32 string, no padding
+//! - [`decode`] — decode a base32 string back to bytes; accepts upper- and lower-case
 
 const ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 

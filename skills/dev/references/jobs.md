@@ -258,13 +258,13 @@ Invalid expressions return an error at scheduler build time (the `job()` and `jo
 ```rust
 use modo::cron::{Scheduler, CronOptions};
 
+let mut opts = CronOptions::default();
+opts.timeout_secs = 25;
+
 let scheduler = Scheduler::builder(&registry)
     .job("@daily", cleanup_expired)?
     .job("*/5 * * * *", heartbeat)?
-    .job_with("@every 30s", intensive_task, CronOptions {
-        timeout_secs: 25,
-        ..Default::default()
-    })?
+    .job_with("@every 30s", intensive_task, opts)?
     .start()
     .await;
 ```
@@ -273,7 +273,7 @@ let scheduler = Scheduler::builder(&registry)
 
 ### Per-Job Options (`CronOptions`, `#[non_exhaustive]`)
 
-`CronOptions` is `#[non_exhaustive]` -- construct via `CronOptions { timeout_secs: 25, ..Default::default() }`.
+`CronOptions` is `#[non_exhaustive]` -- construct via `let mut opts = CronOptions::default(); opts.timeout_secs = 25;`.
 
 | Field          | Default       | Description                 |
 | -------------- | ------------- | --------------------------- |

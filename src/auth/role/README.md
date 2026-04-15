@@ -39,17 +39,21 @@ object-safe.
 
 ### Wire the middleware and guards
 
-```rust
+```rust,no_run
 use axum::{Router, routing::get};
 use modo::auth::{guard, role};
+use modo::auth::role::RoleExtractor;
 use modo::extractors::Role;
-# use modo::Result;
-# struct MyExtractor;
-# impl modo::auth::role::RoleExtractor for MyExtractor {
-#     async fn extract(&self, _: &mut http::request::Parts) -> Result<String> {
-#         Ok("admin".into())
-#     }
-# }
+use modo::Result;
+
+struct MyExtractor;
+
+impl RoleExtractor for MyExtractor {
+    async fn extract(&self, _parts: &mut http::request::Parts) -> Result<String> {
+        // Read the session, verify a JWT, check an API key, etc.
+        Ok("admin".to_string())
+    }
+}
 
 async fn admin_handler(role: Role) -> String {
     format!("hello, {}", role.as_str())
@@ -68,9 +72,19 @@ extensions.
 
 ### Nested guards
 
-```rust
+```rust,no_run
 use axum::{Router, routing::get};
 use modo::auth::{guard, role};
+use modo::auth::role::RoleExtractor;
+use modo::Result;
+
+struct MyExtractor;
+
+impl RoleExtractor for MyExtractor {
+    async fn extract(&self, _parts: &mut http::request::Parts) -> Result<String> {
+        Ok("admin".to_string())
+    }
+}
 
 let settings = Router::new()
     .route("/general", get(|| async { "ok" }))
@@ -111,7 +125,7 @@ async fn handler(role: Option<Role>) -> String {
 The Tower `Layer` / `Service` types (`RoleLayer`, `RoleMiddleware`) are
 returned by `auth::role::middleware()` but you don't construct them directly.
 The route-level guard layers (`RequireRoleLayer`, `RequireAuthenticatedLayer`)
-live in [`auth::guard`](../guard.rs) and are built via
+live in `auth::guard` and are built via
 `auth::guard::require_role()` and `auth::guard::require_authenticated()`.
 
 Both `Role` and `RoleExtractor` are also reachable as `modo::extractors::Role`

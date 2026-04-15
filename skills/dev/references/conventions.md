@@ -53,11 +53,16 @@ src/
     router.rs           # router() -> Router<AppState>
 ```
 
-`lib.rs` re-exports only a minimal set of identity types at the crate root:
+`lib.rs` re-exports a minimal set of identity types and convenience re-exports at the crate root:
 
 ```rust
 pub use config::Config;
 pub use error::{Error, Result};
+
+pub use axum;
+pub use serde;
+pub use serde_json;
+pub use tokio;
 ```
 
 All other types live under their module path. `modo::prelude::*` brings in the
@@ -69,13 +74,20 @@ Flat aggregators: `modo::extractors`, `modo::middlewares`, `modo::guards`
 re-export every extractor / Tower Layer / route guard modo ships for ergonomic
 wiring.
 
-External crates re-exported for user convenience:
+## Feature Flags (v0.8)
 
-```rust
-pub use axum;
-pub use serde;
-pub use serde_json;
-pub use tokio;
+v0.8 has a single feature flag: **`test-helpers`**. Every production module is
+unconditionally compiled — there are no feature-gated production modules.
+
+| Feature | Purpose |
+|---------|---------|
+| `test-helpers` | Enables `modo::testing` with `TestDb`, `TestApp`, `TestSession`, and all in-memory/stub backends |
+
+Enable in dev-dependencies only:
+
+```toml
+[dev-dependencies]
+modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
 ```
 
 ---
@@ -519,7 +531,7 @@ async fn handler(Service(pool): Service<Pool>) {
 ## IDs
 
 **Module:** `src/id/`
-Always available, no feature flag.
+Always available (no feature flag required — all production modules compile unconditionally in v0.8).
 
 ### `id::ulid() -> String`
 
@@ -552,7 +564,7 @@ Suitable for user-visible codes, slugs, short URLs.
 ## Encoding
 
 **Module:** `src/encoding/`
-Always available, no feature flag.
+Always available (no feature flag).
 
 ### `encoding::base32`
 
@@ -619,7 +631,7 @@ let hash = hex::sha256(b"hello");              // 64-char lowercase hex
 ## Cache
 
 **Module:** `src/cache/`
-Always available, no feature flag.
+Always available (no feature flag).
 
 ### `LruCache<K, V>`
 
@@ -657,7 +669,7 @@ if let Some(data) = cache.get(&"session_abc") {
 ## Health Checks
 
 **Module:** `src/health/`
-Always available, no feature flag.
+Always available (no feature flag).
 **Imports:** `modo::health::{HealthCheck, HealthChecks}`
 
 Provides liveness and readiness probe endpoints for Kubernetes-style health checks.

@@ -1,12 +1,13 @@
 # Test Helpers
 
-**Requires the `test-helpers` feature.** This is the only feature flag modo
-ships — it gates `modo::testing` and every in-memory/stub backend used by
-tests. Enable it in your crate's dev-dependencies:
+**Requires the `test-helpers` feature.** modo ships exactly two features:
+`default` (empty) and `test-helpers`. The `test-helpers` feature gates
+`modo::testing` and every in-memory/stub backend used by tests. Enable it in
+your crate's dev-dependencies:
 
 ```toml
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
 ```
 
 Source: `src/testing/` module. Re-exported as `modo::testing`.
@@ -258,9 +259,9 @@ assert_eq!(users.len(), 1);
 
 ## TestSession
 
-Session infrastructure for integration tests. Creates an in-memory
-`sessions` table, derives a signing key, and provides helpers for
-authenticating test users.
+Session infrastructure for integration tests. Creates the
+`authenticated_sessions` table and its indexes, derives a signing key, and
+provides helpers for authenticating test users.
 
 ### Construction
 
@@ -272,41 +273,73 @@ let session = TestSession::new(&db).await;
 ```
 
 Uses a test-suitable `CookieConfig` (insecure, lax same-site, 64-char secret).
-Creates the `sessions` table automatically.
+Creates the `authenticated_sessions` table and indexes automatically.
 
 **Custom config:**
 
-Both `SessionConfig` and `CookieConfig` are `#[non_exhaustive]`, so construct
-them via `Default::default()` / `CookieConfig::new()` and then assign the
-fields you want to override.
+`CookieSessionsConfig` is `#[non_exhaustive]`, so construct it via
+`Default::default()` and assign the fields you want to override.
 
 ```rust
-use modo::auth::session::SessionConfig;
+use modo::auth::session::CookieSessionsConfig;
 use modo::cookie::CookieConfig;
 
-let mut session_config = SessionConfig::default();
+let mut session_config = CookieSessionsConfig::default();
 session_config.cookie_name = "my_sess".to_string();
 session_config.session_ttl_secs = 60;
 session_config.validate_fingerprint = false;
 
-let mut cookie_config = CookieConfig::new("a".repeat(64));
-cookie_config.secure = false; // local HTTP
+let cookie_config = CookieConfig {
+    secret: "a".repeat(64),
+    secure: false, // local HTTP
+    http_only: true,
+    same_site: "lax".to_string(),
+};
 
 let session = TestSession::with_config(&db, session_config, cookie_config).await;
 ```
 
+### Constants
+
+| Constant      | Type                      | Description                                                      |
+| ------------- | ------------------------- | ---------------------------------------------------------------- |
+| `SCHEMA_SQL`  | `&'static str`            | `CREATE TABLE authenticated_sessions (...)` DDL statement.       |
+| `INDEXES_SQL` | `&'static [&'static str]` | Slice of `CREATE INDEX` statements for the sessions table.       |
+
+These constants let integration tests create the schema without going through
+`TestSession::new`:
+
+```rust
+db.exec(TestSession::SCHEMA_SQL).await;
+for sql in TestSession::INDEXES_SQL {
+    db.exec(sql).await;
+}
+```
+
 ### Methods
 
-| Method                                                               | Description                                                                  |
-| -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `TestSession::with_config(&db, session_config, cookie_config).await` | Associated function: create with custom `SessionConfig` and `CookieConfig`.  |
-| `authenticate(user_id).await`                                        | Create a session, return signed cookie string (e.g., `"_session=<signed>"`). |
-| `authenticate_with(user_id, data).await`                             | Same, with custom JSON session data.                                         |
-| `layer()`                                                            | Return a `SessionLayer` to apply to `TestAppBuilder`.                        |
+| Method                                                                | Description                                                                         |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `TestSession::with_config(&db, session_config, cookie_config).await`  | Associated function: create with custom `CookieSessionsConfig` and `CookieConfig`. |
+| `authenticate(user_id).await`                                         | Create a session, return signed cookie string (e.g., `"_session=<signed>"`).       |
+| `authenticate_with(user_id, data).await`                              | Same, with custom JSON session data.                                                |
+| `layer()`                                                             | Return a `CookieSessionLayer` to apply to `TestAppBuilder`.                         |
+| `service()`                                                           | Return `&CookieSessionService` for calling management ops directly in tests.        |
 
 ### Full pattern
 
+`CookieSession` is the mutable cookie-transport extractor (supports
+`authenticate`, `logout`, etc.). `Session` is the transport-agnostic read-only
+snapshot. Use `CookieSession` when a handler needs to mutate the session; use
+`Session` when only reading session data.
+
 ```rust
+use modo::auth::session::CookieSession;
+
+async fn whoami(session: CookieSession) -> String {
+    session.user_id().unwrap_or_else(|| "anonymous".to_string())
+}
+
 let db = TestDb::new().await;
 let session = TestSession::new(&db).await;
 
@@ -433,8 +466,8 @@ async fn test_full_app_with_db_and_session() {
 
 ## Running tests
 
-modo 0.7 ships every module unconditionally. The only feature flag is
-`test-helpers`, which gates the in-memory/stub backends used by tests:
+modo 0.8 ships two feature flags: `default` (empty) and `test-helpers`.
+`test-helpers` gates the in-memory/stub backends used by tests:
 
 ```bash
 cargo test                         # run all tests without test helpers

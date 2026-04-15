@@ -1,5 +1,4 @@
 use std::future::Future;
-use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -7,46 +6,71 @@ use std::task::{Context, Poll};
 use axum::body::Body;
 use axum::response::IntoResponse;
 use http::Request;
-use serde::de::DeserializeOwned;
 use tower::{Layer, Service};
 
 use crate::Error;
+use crate::auth::session::Session;
 
 use super::claims::Claims;
 use super::decoder::JwtDecoder;
 use super::error::JwtError;
-use super::revocation::Revocation;
+use super::service::JwtSessionService;
 use super::source::{BearerSource, TokenSource};
+use crate::auth::session::token::SessionToken;
 
 /// Tower [`Layer`] that installs JWT authentication on a route.
 ///
 /// For each request the middleware:
 /// 1. Tries each `TokenSource` in order; returns `401` if none yields a token.
 /// 2. Decodes and validates the token with `JwtDecoder`; returns `401` on failure.
-/// 3. If a `Revocation` backend is registered and the token has a `jti`, calls
-///    `is_revoked()`; returns `401` on revocation or backend error (fail-closed).
-/// 4. Inserts `Claims<T>` into request extensions for handler extraction.
+/// 3. Inserts [`Claims`] into request extensions for handler extraction.
+/// 4. When constructed via [`JwtLayer::from_service`], also performs a stateful
+///    database row lookup: hashes the `jti` claim and reads the session row,
+///    inserting the transport-agnostic [`Session`](crate::auth::session::Session)
+///    into extensions. Returns `401` if the row is missing (logged-out / revoked).
 ///
 /// The default token source is [`BearerSource`] (`Authorization: Bearer <token>`).
-pub struct JwtLayer<T> {
+#[derive(Clone)]
+pub struct JwtLayer {
     decoder: JwtDecoder,
     sources: Arc<[Arc<dyn TokenSource>]>,
-    revocation: Option<Arc<dyn Revocation>>,
-    _marker: PhantomData<T>,
+    /// Present only when stateful validation is enabled (constructed via
+    /// [`JwtLayer::from_service`]). When `None` the layer behaves as a
+    /// purely stateless JWT validator.
+    service: Option<JwtSessionService>,
 }
 
-impl<T> JwtLayer<T>
-where
-    T: DeserializeOwned + Clone + Send + Sync + 'static,
-{
-    /// Creates a `JwtLayer` with `BearerSource` as the sole token source
-    /// and no revocation backend.
+impl JwtLayer {
+    /// Creates a `JwtLayer` with `BearerSource` as the sole token source.
+    ///
+    /// This constructor performs **stateless** JWT validation only (signature +
+    /// claims). No database row lookup is performed. Use [`JwtLayer::from_service`]
+    /// for stateful validation that also inserts [`Session`](crate::auth::session::Session)
+    /// into request extensions.
     pub fn new(decoder: JwtDecoder) -> Self {
         Self {
             decoder,
             sources: Arc::from(vec![Arc::new(BearerSource) as Arc<dyn TokenSource>]),
-            revocation: None,
-            _marker: PhantomData,
+            service: None,
+        }
+    }
+
+    /// Creates a `JwtLayer` backed by a [`JwtSessionService`].
+    ///
+    /// After JWT signature/claims validation the middleware hashes the `jti`
+    /// claim, looks up the session row in the database, and inserts the
+    /// transport-agnostic [`Session`](crate::auth::session::Session) into
+    /// request extensions. Returns `401` with `auth:session_not_found` when
+    /// the session row is absent (logged-out or revoked).
+    ///
+    /// Use [`JwtSessionService::layer`] as the primary entry-point; this
+    /// constructor is the lower-level building block.
+    pub fn from_service(service: JwtSessionService) -> Self {
+        let decoder = service.decoder().clone();
+        Self {
+            decoder,
+            sources: Arc::from(vec![Arc::new(BearerSource) as Arc<dyn TokenSource>]),
+            service: Some(service),
         }
     }
 
@@ -57,70 +81,45 @@ where
         self.sources = Arc::from(sources);
         self
     }
-
-    /// Attaches a revocation backend. Tokens with a `jti` claim are checked
-    /// against it on every request.
-    pub fn with_revocation(mut self, revocation: Arc<dyn Revocation>) -> Self {
-        self.revocation = Some(revocation);
-        self
-    }
 }
 
-impl<T> Clone for JwtLayer<T> {
-    fn clone(&self) -> Self {
-        Self {
-            decoder: self.decoder.clone(),
-            sources: self.sources.clone(),
-            revocation: self.revocation.clone(),
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<Svc, T> Layer<Svc> for JwtLayer<T>
-where
-    T: DeserializeOwned + Clone + Send + Sync + 'static,
-{
-    type Service = JwtMiddleware<Svc, T>;
+impl<Svc> Layer<Svc> for JwtLayer {
+    type Service = JwtMiddleware<Svc>;
 
     fn layer(&self, inner: Svc) -> Self::Service {
         JwtMiddleware {
             inner,
             decoder: self.decoder.clone(),
             sources: self.sources.clone(),
-            revocation: self.revocation.clone(),
-            _marker: PhantomData,
+            service: self.service.clone(),
         }
     }
 }
 
 /// Tower [`Service`] produced by [`JwtLayer`]. See that type for behavior details.
-pub struct JwtMiddleware<Svc, T> {
+pub struct JwtMiddleware<Svc> {
     inner: Svc,
     decoder: JwtDecoder,
     sources: Arc<[Arc<dyn TokenSource>]>,
-    revocation: Option<Arc<dyn Revocation>>,
-    _marker: PhantomData<T>,
+    service: Option<JwtSessionService>,
 }
 
-impl<Svc: Clone, T> Clone for JwtMiddleware<Svc, T> {
+impl<Svc: Clone> Clone for JwtMiddleware<Svc> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
             decoder: self.decoder.clone(),
             sources: self.sources.clone(),
-            revocation: self.revocation.clone(),
-            _marker: PhantomData,
+            service: self.service.clone(),
         }
     }
 }
 
-impl<Svc, T> Service<Request<Body>> for JwtMiddleware<Svc, T>
+impl<Svc> Service<Request<Body>> for JwtMiddleware<Svc>
 where
     Svc: Service<Request<Body>, Response = http::Response<Body>> + Clone + Send + 'static,
     Svc::Future: Send + 'static,
     Svc::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send + 'static,
-    T: DeserializeOwned + Clone + Send + Sync + 'static,
 {
     type Response = http::Response<Body>;
     type Error = Svc::Error;
@@ -133,7 +132,7 @@ where
     fn call(&mut self, request: Request<Body>) -> Self::Future {
         let decoder = self.decoder.clone();
         let sources = self.sources.clone();
-        let revocation = self.revocation.clone();
+        let service = self.service.clone();
         let mut inner = self.inner.clone();
         std::mem::swap(&mut self.inner, &mut inner);
 
@@ -153,28 +152,55 @@ where
             };
 
             // Decode and validate (sync)
-            let claims: Claims<T> = match decoder.decode(&token) {
+            let claims: Claims = match decoder.decode(&token) {
                 Ok(c) => c,
                 Err(e) => return Ok(e.into_response()),
             };
 
-            // Check revocation (async) if backend registered and jti present
-            if let (Some(rev), Some(jti)) = (&revocation, claims.token_id()) {
-                match rev.is_revoked(jti).await {
-                    Ok(true) => {
-                        let err = Error::unauthorized("unauthorized")
-                            .chain(JwtError::Revoked)
-                            .with_code(JwtError::Revoked.code());
-                        return Ok(err.into_response());
-                    }
-                    Err(e) => {
-                        tracing::warn!(error = %e, jti = jti, "JWT revocation check failed");
-                        let err = Error::unauthorized("unauthorized")
-                            .chain(JwtError::RevocationCheckFailed)
-                            .with_code(JwtError::RevocationCheckFailed.code());
-                        return Ok(err.into_response());
-                    }
-                    Ok(false) => {} // not revoked, proceed
+            // Stateful validation: when backed by a JwtSessionService and
+            // stateful_validation is enabled, hash the jti claim, load the session
+            // row, and insert the transport-agnostic Session into extensions.
+            // Returns 401 when the row is absent; propagates DB errors as 5xx.
+            if let Some(svc) = service {
+                // Fix #1: reject non-access audience tokens before any DB lookup.
+                if claims.aud.as_deref() != Some("access") {
+                    let err = Error::unauthorized("unauthorized").with_code("auth:aud_mismatch");
+                    return Ok(err.into_response());
+                }
+
+                // Fix #2: honor stateful_validation flag.
+                if svc.config().stateful_validation {
+                    let jti = match claims.jti.as_deref() {
+                        Some(j) => j,
+                        None => {
+                            let err = Error::unauthorized("unauthorized")
+                                .with_code("auth:session_not_found");
+                            return Ok(err.into_response());
+                        }
+                    };
+
+                    let session_token = match SessionToken::from_raw(jti) {
+                        Some(t) => t,
+                        None => {
+                            let err = Error::unauthorized("unauthorized")
+                                .with_code("auth:session_not_found");
+                            return Ok(err.into_response());
+                        }
+                    };
+
+                    // Fix #5: propagate DB errors as 5xx; 401 only for missing row.
+                    let lookup = svc.store().read_by_token_hash(&session_token.hash()).await;
+                    let raw = match lookup {
+                        Err(e) => return Ok(e.into_response()),
+                        Ok(None) => {
+                            let err = Error::unauthorized("unauthorized")
+                                .with_code("auth:session_not_found");
+                            return Ok(err.into_response());
+                        }
+                        Ok(Some(row)) => row,
+                    };
+
+                    parts.extensions.insert(Session::from(raw));
                 }
             }
 
@@ -194,20 +220,12 @@ mod tests {
     use std::convert::Infallible;
     use tower::ServiceExt;
 
-    use crate::auth::jwt::{Claims, JwtConfig, JwtEncoder};
+    use crate::auth::session::jwt::{Claims, JwtEncoder, JwtSessionsConfig};
 
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-    struct TestClaims {
-        role: String,
-    }
-
-    fn test_config() -> JwtConfig {
-        JwtConfig {
-            secret: "test-secret-key-at-least-32-bytes-long!".into(),
-            default_expiry: None,
-            leeway: 0,
-            issuer: None,
-            audience: None,
+    fn test_config() -> JwtSessionsConfig {
+        JwtSessionsConfig {
+            signing_secret: "test-secret-key-at-least-32-bytes-long!".into(),
+            ..JwtSessionsConfig::default()
         }
     }
 
@@ -218,18 +236,14 @@ mod tests {
             .as_secs()
     }
 
-    fn make_token(config: &JwtConfig) -> String {
+    fn make_token(config: &JwtSessionsConfig) -> String {
         let encoder = JwtEncoder::from_config(config);
-        let claims = Claims::new(TestClaims {
-            role: "admin".into(),
-        })
-        .with_sub("user_1")
-        .with_exp(now_secs() + 3600);
+        let claims = Claims::new().with_sub("user_1").with_exp(now_secs() + 3600);
         encoder.encode(&claims).unwrap()
     }
 
     async fn echo_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        let has_claims = req.extensions().get::<Claims<TestClaims>>().is_some();
+        let has_claims = req.extensions().get::<Claims>().is_some();
         let body = if has_claims { "ok" } else { "no-claims" };
         Ok(Response::new(Body::from(body)))
     }
@@ -239,7 +253,7 @@ mod tests {
         let config = test_config();
         let decoder = JwtDecoder::from_config(&config);
         let token = make_token(&config);
-        let layer = JwtLayer::<TestClaims>::new(decoder);
+        let layer = JwtLayer::new(decoder);
         let svc = layer.layer(tower::service_fn(echo_handler));
 
         let req = Request::builder()
@@ -254,7 +268,7 @@ mod tests {
     async fn missing_header_returns_401() {
         let config = test_config();
         let decoder = JwtDecoder::from_config(&config);
-        let layer = JwtLayer::<TestClaims>::new(decoder);
+        let layer = JwtLayer::new(decoder);
         let svc = layer.layer(tower::service_fn(echo_handler));
 
         let req = Request::builder().body(Body::empty()).unwrap();
@@ -267,12 +281,9 @@ mod tests {
         let config = test_config();
         let encoder = JwtEncoder::from_config(&config);
         let decoder = JwtDecoder::from_config(&config);
-        let claims = Claims::new(TestClaims {
-            role: "admin".into(),
-        })
-        .with_exp(now_secs() - 10);
+        let claims = Claims::new().with_exp(now_secs() - 10);
         let token = encoder.encode(&claims).unwrap();
-        let layer = JwtLayer::<TestClaims>::new(decoder);
+        let layer = JwtLayer::new(decoder);
         let svc = layer.layer(tower::service_fn(echo_handler));
 
         let req = Request::builder()
@@ -296,7 +307,7 @@ mod tests {
         let mut bytes = token.into_bytes();
         bytes[mid] = if bytes[mid] == b'A' { b'Z' } else { b'A' };
         let token = String::from_utf8(bytes).unwrap();
-        let layer = JwtLayer::<TestClaims>::new(decoder);
+        let layer = JwtLayer::new(decoder);
         let svc = layer.layer(tower::service_fn(echo_handler));
 
         let req = Request::builder()
@@ -312,11 +323,10 @@ mod tests {
         let config = test_config();
         let decoder = JwtDecoder::from_config(&config);
         let token = make_token(&config);
-        let layer = JwtLayer::<TestClaims>::new(decoder);
+        let layer = JwtLayer::new(decoder);
 
         let inner = tower::service_fn(|req: Request<Body>| async move {
-            let claims = req.extensions().get::<Claims<TestClaims>>().unwrap();
-            assert_eq!(claims.custom.role, "admin");
+            let claims = req.extensions().get::<Claims>().unwrap();
             assert_eq!(claims.subject(), Some("user_1"));
             Ok::<_, Infallible>(Response::new(Body::empty()))
         });
@@ -335,10 +345,9 @@ mod tests {
         let config = test_config();
         let decoder = JwtDecoder::from_config(&config);
         let token = make_token(&config);
-        let layer = JwtLayer::<TestClaims>::new(decoder)
-            .with_sources(vec![
-                Arc::new(super::super::source::QuerySource("token")) as Arc<dyn TokenSource>
-            ]);
+        let layer = JwtLayer::new(decoder).with_sources(vec![Arc::new(
+            super::super::source::QuerySource("token"),
+        ) as Arc<dyn TokenSource>]);
         let svc = layer.layer(tower::service_fn(echo_handler));
 
         let req = Request::builder()

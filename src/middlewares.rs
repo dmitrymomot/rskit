@@ -19,12 +19,13 @@
 
 // Free constructor functions.
 pub use crate::auth::role::middleware as role;
-pub use crate::auth::session::layer as session;
+// NOTE: session layer constructor removed in v0.8 — SessionStore is now pub(crate);
+// use modo::auth::session::layer directly within-crate, or via TestSession in tests.
 pub use crate::tenant::middleware as tenant;
 
 // Layer structs — users call `::new(...)`.
 pub use crate::auth::apikey::ApiKeyLayer as ApiKey;
-pub use crate::auth::jwt::JwtLayer as Jwt;
+pub use crate::auth::session::jwt::JwtLayer as Jwt;
 pub use crate::flash::FlashLayer as Flash;
 pub use crate::geolocation::GeoLayer as Geo;
 pub use crate::ip::ClientIpLayer as ClientIp;

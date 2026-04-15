@@ -4,9 +4,11 @@
 //!
 //! Provides:
 //! - [`Registry`] — mutable builder used at startup to register services by type.
-//!   Implements `Default`.
+//!   Implements [`Default`].
 //! - [`AppState`] — immutable, cheaply-cloneable snapshot of the registry that axum
 //!   holds as its application state.
+//! - [`Service<T>`](Service) — axum extractor that retrieves a registered service by
+//!   type from the application state.
 //!
 //! # Typical startup flow
 //!

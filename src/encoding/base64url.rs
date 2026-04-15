@@ -1,4 +1,13 @@
+//! # modo::encoding::base64url
+//!
 //! RFC 4648 base64url encoding and decoding without padding.
+//!
+//! The alphabet uses `-` and `_` instead of `+` and `/`, making encoded output
+//! safe for URLs, HTTP headers, and cookie values without percent-encoding.
+//!
+//! Provides:
+//! - [`encode`] — encode bytes to a base64url string, no padding
+//! - [`decode`] — decode a base64url string back to bytes
 
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 

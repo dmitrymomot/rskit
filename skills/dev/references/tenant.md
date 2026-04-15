@@ -83,7 +83,7 @@ Required on the resolved tenant type. The middleware calls `tenant.tenant_id()` 
 
 ## TenantLayer and TenantMiddleware
 
-Create via the `middleware()` function (re-exported as `modo::tenant_middleware`):
+Create via the `middleware()` function (re-exported as `modo::middlewares::tenant`):
 
 ```rust
 pub fn middleware<S, R>(strategy: S, resolver: R) -> TenantLayer<S, R>

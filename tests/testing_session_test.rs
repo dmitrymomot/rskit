@@ -1,18 +1,22 @@
 #![cfg(feature = "test-helpers")]
 
 use axum::routing::get;
-use modo::auth::session::{Session, SessionConfig};
+use modo::auth::session::{CookieSession, Session, SessionConfig};
 use modo::cookie::CookieConfig;
 use modo::testing::{TestApp, TestDb, TestSession};
 
-async fn whoami(session: Session) -> String {
-    match session.user_id() {
-        Some(uid) => uid,
+/// Read the authenticated user's ID.
+/// Uses the data extractor `Session` (transport-agnostic snapshot).
+async fn whoami(session: Option<Session>) -> String {
+    match session {
+        Some(s) => s.user_id,
         None => "anonymous".to_string(),
     }
 }
 
-async fn session_data(session: Session) -> String {
+/// Read a JSON key from session data.
+/// Uses `CookieSession` for the .get() helper.
+async fn session_data(session: CookieSession) -> String {
     let role: Option<String> = session.get("role").unwrap_or(None);
     role.unwrap_or_else(|| "none".to_string())
 }

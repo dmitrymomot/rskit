@@ -1,14 +1,15 @@
-//! Health check endpoints for liveness and readiness probes.
+//! # modo::health
 //!
-//! # Provides
+//! Liveness and readiness probe endpoints for Kubernetes and container orchestration.
 //!
+//! Provides:
 //! - [`router()`] — returns a `Router<AppState>` with `/_live` and `/_ready` mounted.
 //! - [`HealthCheck`] — trait for types that can verify their own readiness.
 //! - [`HealthChecks`] — fluent builder that collects named checks; registered in
 //!   the service registry.
 //!
-//! When the `db` feature is enabled, [`Database`](crate::db::Database) implements
-//! [`HealthCheck`] automatically.
+//! [`crate::db::Database`] implements [`HealthCheck`] automatically, verifying
+//! health by executing `SELECT 1` on the connection.
 //!
 //! # Endpoints
 //!
@@ -18,7 +19,7 @@
 //!
 //! # Example
 //!
-//! ```
+//! ```no_run
 //! use modo::health::HealthChecks;
 //! use modo::service::Registry;
 //!

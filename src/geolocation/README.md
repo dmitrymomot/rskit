@@ -9,7 +9,6 @@ IP-to-location lookup using a MaxMind GeoLite2/GeoIP2 `.mmdb` database.
 | `GeolocationConfig` | Config struct; deserializes from the `geolocation` YAML section             |
 | `GeoLocator`        | Reads the `.mmdb` file and performs IP lookups; cheaply cloneable via `Arc` |
 | `GeoLayer`          | Tower layer; runs lookup per request and inserts `Location` in extensions   |
-| `GeoMiddleware<S>`  | Tower service produced by `GeoLayer`                                        |
 | `Location`          | Resolved geolocation data; also an axum extractor                           |
 
 ## MaxMind database setup

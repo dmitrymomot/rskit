@@ -14,9 +14,9 @@
 pub use crate::extractor::{FormRequest, JsonRequest, MultipartRequest, Query, UploadedFile};
 
 pub use crate::auth::apikey::ApiKeyMeta;
-pub use crate::auth::jwt::{Bearer, Claims};
 pub use crate::auth::role::Role;
 pub use crate::auth::session::Session;
+pub use crate::auth::session::jwt::{Bearer, Claims};
 
 pub use crate::flash::Flash;
 pub use crate::ip::{ClientInfo, ClientIp};

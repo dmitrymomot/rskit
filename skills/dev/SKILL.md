@@ -95,7 +95,7 @@ modo is a single Rust crate with zero proc macros. Everything is explicit:
 - **Middleware** is standard Tower layers applied via `.layer()` on the router.
 - **Config** loads from YAML files with `${VAR}` / `${VAR:default}` env var substitution.
 
-Every module is always compiled — modo 0.7 has a single feature flag,
+Every module is always compiled — modo 0.8 has a single feature flag,
 `test-helpers`, enabled in `[dev-dependencies]` to expose in-memory backends
 (`TestDb`, `TestApp`, `TestSession`, …) to integration tests.
 
@@ -113,7 +113,7 @@ Every modo app follows this structure in `main()`:
 
 Middleware layer order (innermost to outermost, matching `.layer()` call order):
 `error_handler` -> `catch_panic` -> `tracing` -> `request_id` -> `compression` ->
-`security_headers` -> `cors` -> `csrf` -> `auth::session::layer` -> `flash::FlashLayer` ->
+`security_headers` -> `cors` -> `csrf` -> `session_svc.layer()` -> `flash::FlashLayer` ->
 `ip::ClientIpLayer` -> `rate_limit`. Optional layers
 (`template::TemplateContextLayer`, `geolocation::GeoLayer`) slot in at their
 documented positions.

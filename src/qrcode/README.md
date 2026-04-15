@@ -13,7 +13,7 @@ QR code generation with customizable SVG output.
 | `ModuleShape`     | Shape of data modules: `Square`, `RoundedSquare { radius }`, `Circle`, `Diamond`.                                    |
 | `FinderShape`     | Shape of the three 7x7 finder patterns: `Square`, `Rounded`, `Circle`.                                               |
 | `QrError`         | Error type with variants `DataTooLong` and `InvalidColor`. Converts to `modo::Error` (HTTP 400).                     |
-| `qr_svg_function` | MiniJinja template function factory (requires `templates` feature).                                                  |
+| `qr_svg_function` | MiniJinja template function factory.                                                                                  |
 
 ## Usage
 

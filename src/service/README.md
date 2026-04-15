@@ -14,10 +14,11 @@ second `add` call for the same type overwrites the previous entry.
 
 ## Key Types
 
-| Type       | Description                                                                          |
-| ---------- | ------------------------------------------------------------------------------------ |
-| `Registry` | Mutable type-map; add services at startup, then call `into_state()`. Impl `Default`. |
-| `AppState` | Frozen service map wrapped in `Arc`; used as axum router state. Impl `Clone`.        |
+| Type          | Description                                                                          |
+| ------------- | ------------------------------------------------------------------------------------ |
+| `Registry`    | Mutable type-map; add services at startup, then call `into_state()`. Impl `Default`. |
+| `AppState`    | Frozen service map wrapped in `Arc`; used as axum router state. Impl `Clone`.        |
+| `Service<T>`  | axum extractor that retrieves `Arc<T>` from `AppState`; 500 if the type is absent.  |
 
 ## Usage
 
@@ -93,6 +94,6 @@ let state = registry.into_state();
 `impl<S: Clone> FromRef<S> for S` in axum, so it composes with every extractor
 bound by `AppState: FromRef<S>`:
 
-- `Service<T>` — always available; retrieves any registered service.
-- `Renderer` — requires the `templates` feature; retrieves the template engine.
-- `OAuthState` — requires the `auth` feature; reads and verifies the OAuth state cookie.
+- `Service<T>` — retrieves any registered service by type.
+- `Renderer` (`modo::template`) — retrieves the template engine registered as a service.
+- `OAuthState` (`modo::auth`) — reads and verifies the OAuth state cookie.

@@ -5,7 +5,7 @@ use std::time::Duration;
 /// `exp` is always enforced (not configurable). These fields control
 /// additional checks for `iss`, `aud`, and clock skew tolerance.
 ///
-/// Built automatically from [`JwtConfig`](super::config::JwtConfig) by
+/// Built automatically from [`JwtSessionsConfig`](super::config::JwtSessionsConfig) by
 /// `JwtEncoder::from_config()` and `JwtDecoder::from_config()`.
 #[non_exhaustive]
 #[derive(Debug, Clone)]
@@ -26,6 +26,34 @@ impl Default for ValidationConfig {
             require_issuer: None,
             require_audience: None,
         }
+    }
+}
+
+impl ValidationConfig {
+    /// Require that decoded tokens carry a specific `aud` claim.
+    ///
+    /// Returns a new `ValidationConfig` with `require_audience` set. All other
+    /// fields are unchanged.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let validation = ValidationConfig::default().with_audience("my-app");
+    /// ```
+    #[must_use]
+    pub fn with_audience(mut self, aud: impl Into<String>) -> Self {
+        self.require_audience = Some(aud.into());
+        self
+    }
+
+    /// Require that decoded tokens carry a specific `iss` claim.
+    ///
+    /// Returns a new `ValidationConfig` with `require_issuer` set. All other
+    /// fields are unchanged.
+    #[must_use]
+    pub fn with_issuer(mut self, iss: impl Into<String>) -> Self {
+        self.require_issuer = Some(iss.into());
+        self
     }
 }
 

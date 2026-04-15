@@ -6,7 +6,7 @@ Requires the `test-helpers` feature.
 
 ```toml
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
 ```
 
 ## Key types
@@ -19,7 +19,7 @@ modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
 | `TestPool` | In-memory `DatabasePool` (default database and shards both `:memory:`) |
 | `TestRequestBuilder` | Fluent builder for a single in-process HTTP request |
 | `TestResponse` | Captured response with status, header, and body accessors |
-| `TestSession` | Session infrastructure: creates the `sessions` table and signs cookies |
+| `TestSession` | Session infrastructure: creates the `authenticated_sessions` table, signs cookies, and builds `CookieSessionLayer`. Exposes `SCHEMA_SQL` and `INDEXES_SQL` constants. |
 
 ## Usage
 
@@ -183,10 +183,10 @@ async fn test_pool() {
 
 ```rust,ignore
 use axum::routing::get;
-use modo::auth::session::Session;
+use modo::auth::session::CookieSession;
 use modo::testing::{TestApp, TestDb, TestSession};
 
-async fn whoami(session: Session) -> String {
+async fn whoami(session: CookieSession) -> String {
     session.user_id().unwrap_or_else(|| "anonymous".to_string())
 }
 
@@ -221,14 +221,32 @@ let cookie = session
     .await;
 ```
 
+### Session schema constants
+
+`TestSession::SCHEMA_SQL` and `TestSession::INDEXES_SQL` are public constants
+containing the DDL for the `authenticated_sessions` table and its indexes.
+They are useful when you need to set up the schema independently of
+`TestSession::new`:
+
+```rust,ignore
+use modo::testing::{TestDb, TestSession};
+
+// Apply schema manually instead of using TestSession::new
+let db = TestDb::new().await;
+db.db().conn().execute_raw(TestSession::SCHEMA_SQL, ()).await.unwrap();
+for sql in TestSession::INDEXES_SQL {
+    db.db().conn().execute_raw(sql, ()).await.unwrap();
+}
+```
+
 ### Sessions with custom config
 
-Use `TestSession::with_config()` to supply explicit `SessionConfig` and
+Use `TestSession::with_config()` to supply explicit `CookieSessionsConfig` and
 `CookieConfig`:
 
 ```rust,ignore
 use modo::cookie::CookieConfig;
-use modo::auth::session::SessionConfig;
+use modo::auth::session::CookieSessionsConfig;
 use modo::testing::{TestDb, TestSession};
 
 let db = TestDb::new().await;
@@ -238,7 +256,7 @@ let cookie_config = CookieConfig {
     http_only: true,
     same_site: "lax".to_string(),
 };
-let session = TestSession::with_config(&db, SessionConfig::default(), cookie_config).await;
+let session = TestSession::with_config(&db, CookieSessionsConfig::default(), cookie_config).await;
 ```
 
 ## Feature flag

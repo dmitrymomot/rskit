@@ -20,7 +20,7 @@ use tower::{Layer, Service};
 ///
 /// # Example
 ///
-/// ```
+/// ```rust,no_run
 /// use axum::{Router, routing::get};
 /// use axum::response::IntoResponse;
 ///

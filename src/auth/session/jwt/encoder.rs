@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::encoding::base64url;
 use crate::{Error, Result};
 
-use super::config::JwtConfig;
+use super::config::JwtSessionsConfig;
 use super::error::JwtError;
 use super::signer::{HmacSigner, TokenSigner};
 
@@ -28,18 +28,18 @@ impl JwtEncoder {
     /// Creates a `JwtEncoder` from YAML configuration.
     ///
     /// Uses `HmacSigner` (HS256) with the configured secret. The validation
-    /// config (leeway, issuer, audience) is stored so a matching `JwtDecoder`
+    /// config (issuer) is stored so a matching `JwtDecoder`
     /// can be created via `JwtDecoder::from(&encoder)`.
-    pub fn from_config(config: &JwtConfig) -> Self {
-        let signer = HmacSigner::new(config.secret.as_bytes());
+    pub fn from_config(config: &JwtSessionsConfig) -> Self {
+        let signer = HmacSigner::new(config.signing_secret.as_bytes());
         Self {
             inner: Arc::new(JwtEncoderInner {
                 signer: Arc::new(signer),
-                default_expiry: config.default_expiry.map(Duration::from_secs),
+                default_expiry: Some(Duration::from_secs(config.access_ttl_secs)),
                 validation: super::validation::ValidationConfig {
-                    leeway: Duration::from_secs(config.leeway),
+                    leeway: Duration::ZERO,
                     require_issuer: config.issuer.clone(),
-                    require_audience: config.audience.clone(),
+                    require_audience: None,
                 },
             }),
         }
@@ -59,36 +59,39 @@ impl JwtEncoder {
         self.inner.validation.clone()
     }
 
-    /// Encodes claims into a signed JWT token string.
+    /// Encodes a serializable payload into a signed JWT token string.
     ///
-    /// If `claims.exp` is `None` and `default_expiry` is configured,
-    /// `exp` is automatically set to `now + default_expiry` before signing.
-    /// An explicitly set `exp` is never overwritten.
+    /// If the payload serializes to a JSON object without an `exp` field and
+    /// `default_expiry` is configured, `exp` is automatically set to
+    /// `now + default_expiry` before signing. An explicitly set `exp` field
+    /// is never overwritten.
+    ///
+    /// The system auth flow passes [`Claims`](super::claims::Claims) here.
+    /// Custom auth flows can pass any `Serialize` struct directly.
     ///
     /// # Errors
     ///
     /// Returns `Error::internal` with [`JwtError::SerializationFailed`](super::JwtError::SerializationFailed)
-    /// if the claims cannot be serialized to JSON, or
+    /// if the payload cannot be serialized to JSON, or
     /// [`JwtError::SigningFailed`](super::JwtError::SigningFailed) if the HMAC signing
     /// operation fails.
-    pub fn encode<T: Serialize>(&self, claims: &super::claims::Claims<T>) -> Result<String> {
+    pub fn encode<T: Serialize>(&self, claims: &T) -> Result<String> {
         // Auto-fill exp if missing and default_expiry is configured
-        let claims_json = if claims.exp.is_none() {
-            if let Some(default_exp) = self.inner.default_expiry {
+        let claims_json = if let Some(default_exp) = self.inner.default_expiry {
+            let mut value = serde_json::to_value(claims).map_err(|_| {
+                Error::internal("failed to serialize token")
+                    .chain(JwtError::SerializationFailed)
+                    .with_code(JwtError::SerializationFailed.code())
+            })?;
+            // Only inject exp when the payload has no exp field already
+            if value.get("exp").is_none() {
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .expect("system clock before UNIX epoch")
                     .as_secs();
-                let mut value = serde_json::to_value(claims).map_err(|_| {
-                    Error::internal("failed to serialize token")
-                        .chain(JwtError::SerializationFailed)
-                        .with_code(JwtError::SerializationFailed.code())
-                })?;
                 value["exp"] = serde_json::Value::Number((now + default_exp.as_secs()).into());
-                serde_json::to_vec(&value)
-            } else {
-                serde_json::to_vec(claims)
             }
+            serde_json::to_vec(&value)
         } else {
             serde_json::to_vec(claims)
         }
@@ -124,28 +127,19 @@ mod tests {
     use super::*;
     use serde::Deserialize;
 
-    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-    struct TestClaims {
-        role: String,
-    }
+    use super::super::claims::Claims;
 
-    fn test_config() -> JwtConfig {
-        JwtConfig {
-            secret: "test-secret-key-at-least-32-bytes-long!".into(),
-            default_expiry: None,
-            leeway: 0,
-            issuer: None,
-            audience: None,
+    fn test_config() -> JwtSessionsConfig {
+        JwtSessionsConfig {
+            signing_secret: "test-secret-key-at-least-32-bytes-long!".into(),
+            ..JwtSessionsConfig::default()
         }
     }
 
     #[test]
     fn encode_produces_three_part_token() {
         let encoder = JwtEncoder::from_config(&test_config());
-        let claims = super::super::claims::Claims::new(TestClaims {
-            role: "admin".into(),
-        })
-        .with_exp(9999999999);
+        let claims = Claims::new().with_exp(9999999999);
         let token = encoder.encode(&claims).unwrap();
         assert_eq!(token.split('.').count(), 3);
     }
@@ -153,7 +147,7 @@ mod tests {
     #[test]
     fn encode_header_contains_hs256() {
         let encoder = JwtEncoder::from_config(&test_config());
-        let claims = super::super::claims::Claims::new(()).with_exp(9999999999);
+        let claims = Claims::new().with_exp(9999999999);
         let token = encoder.encode(&claims).unwrap();
         let header_b64 = token.split('.').next().unwrap();
         let header_bytes = base64url::decode(header_b64).unwrap();
@@ -164,11 +158,10 @@ mod tests {
 
     #[test]
     fn encode_with_default_expiry_auto_sets_exp() {
-        let mut config = test_config();
-        config.default_expiry = Some(3600);
+        // access_ttl_secs is always used as default expiry — no manual override needed.
+        let config = test_config(); // access_ttl_secs defaults to 900
         let encoder = JwtEncoder::from_config(&config);
-        let claims = super::super::claims::Claims::new(());
-        // claims.exp is None — should be auto-filled
+        let claims = Claims::new(); // no exp — should be auto-filled from access_ttl_secs
         let token = encoder.encode(&claims).unwrap();
         let payload_b64 = token.split('.').nth(1).unwrap();
         let payload_bytes = base64url::decode(payload_b64).unwrap();
@@ -178,10 +171,9 @@ mod tests {
 
     #[test]
     fn encode_explicit_exp_not_overwritten() {
-        let mut config = test_config();
-        config.default_expiry = Some(3600);
+        let config = test_config();
         let encoder = JwtEncoder::from_config(&config);
-        let claims = super::super::claims::Claims::new(()).with_exp(42);
+        let claims = Claims::new().with_exp(42);
         let token = encoder.encode(&claims).unwrap();
         let payload_b64 = token.split('.').nth(1).unwrap();
         let payload_bytes = base64url::decode(payload_b64).unwrap();
@@ -190,10 +182,29 @@ mod tests {
     }
 
     #[test]
+    fn encode_custom_struct_directly() {
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        struct CustomPayload {
+            sub: String,
+            role: String,
+            exp: u64,
+        }
+
+        let encoder = JwtEncoder::from_config(&test_config());
+        let payload = CustomPayload {
+            sub: "user_1".into(),
+            role: "admin".into(),
+            exp: 9999999999,
+        };
+        let token = encoder.encode(&payload).unwrap();
+        assert_eq!(token.split('.').count(), 3);
+    }
+
+    #[test]
     fn clone_produces_working_encoder() {
         let encoder = JwtEncoder::from_config(&test_config());
         let cloned = encoder.clone();
-        let claims = super::super::claims::Claims::new(()).with_exp(9999999999);
+        let claims = Claims::new().with_exp(9999999999);
         assert!(cloned.encode(&claims).is_ok());
     }
 }

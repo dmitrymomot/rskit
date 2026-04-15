@@ -125,15 +125,15 @@ server:
   shutdown_timeout_secs: 30
 ```
 
-## Key types
+## Public API
 
-| Type          | Description                                                                          |
-| ------------- | ------------------------------------------------------------------------------------ |
-| `Config`      | Server bind address and shutdown timeout; deserializes from YAML                     |
-| `HttpServer`  | Opaque handle to the running server; implements `Task` for graceful shutdown         |
-| `http`        | Binds a TCP listener and starts serving; accepts `impl Into<axum::Router>`           |
-| `HostRouter`  | Routes requests to different routers by `Host` header; exact and wildcard matching   |
-| `MatchedHost` | Axum extractor providing the subdomain captured by a wildcard `HostRouter` pattern   |
+| Item          | Kind      | Description                                                                        |
+| ------------- | --------- | ---------------------------------------------------------------------------------- |
+| `Config`      | struct    | Server bind address and shutdown timeout; deserializes from YAML                   |
+| `HttpServer`  | struct    | Opaque handle to the running server; implements `Task` for graceful shutdown       |
+| `http`        | async fn  | Binds a TCP listener and starts serving; accepts `impl Into<axum::Router>`         |
+| `HostRouter`  | struct    | Routes requests to different routers by `Host` header; exact and wildcard matching |
+| `MatchedHost` | struct    | Axum extractor providing the subdomain captured by a wildcard `HostRouter` pattern |
 
 ## Host resolution
 

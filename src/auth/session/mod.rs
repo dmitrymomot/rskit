@@ -1,64 +1,57 @@
 //! # modo::auth::session
 //!
-//! Database-backed HTTP session management.
+//! Unified session management for cookie and JWT transports.
 //!
-//! Sessions are stored in a SQLite table (`sessions`) and identified by a
-//! signed, opaque cookie. The middleware handles the full request/response
-//! lifecycle: reading the session token from the cookie on the request path,
-//! loading and fingerprint-validating the session, running the handler, and
-//! then flushing dirty data or touching the expiry timestamp before writing the
-//! `Set-Cookie` header on the response path.
+//! v0.8 provides two independent transports that share one SQLite table
+//! (`authenticated_sessions`) and one public data type ([`Session`]).
 //!
-//! # Provides
+//! ## Transports
 //!
-//! - [`SessionConfig`] — deserialised session configuration (TTL, cookie name, limits).
-//! - [`Session`] — axum extractor; primary API for handlers.
-//! - [`SessionData`] — snapshot of a session row returned from the database.
+//! | Transport | Module | Entry point |
+//! |-----------|--------|-------------|
+//! | Cookie | [`cookie`] | [`cookie::CookieSessionService`] |
+//! | JWT | [`jwt`] | [`jwt::JwtSessionService`] |
+//!
+//! ## Provides
+//!
+//! - [`Session`] — transport-agnostic session data extractor (read-only snapshot).
 //! - [`SessionToken`] — opaque 32-byte random token; redacted in `Debug`/`Display`.
-//! - [`Store`] — low-level SQLite store; use directly for background jobs.
-//! - [`SessionLayer`] — Tower layer; apply to a `Router` to enable session support.
-//! - [`layer`] — convenience constructor for [`SessionLayer`].
+//! - [`cookie`] — cookie-backed session transport ([`cookie::CookieSession`], [`cookie::CookieSessionService`], [`cookie::CookieSessionLayer`], [`cookie::CookieSessionsConfig`]).
+//! - [`jwt`] — JWT-backed session transport ([`jwt::JwtSession`], [`jwt::JwtSessionService`], [`jwt::JwtLayer`], [`jwt::JwtSessionsConfig`]).
 //! - [`device`] — user-agent parsing helpers for device classification.
 //! - [`fingerprint`] — browser fingerprinting for session hijacking detection.
 //! - [`meta`] — request metadata ([`meta::SessionMeta`]) and [`meta::header_str`] helper.
-//!
-//! # Quick start
-//!
-//! ```rust,no_run
-//! use modo::auth::session::{self, SessionConfig, Store};
-//! use modo::cookie::{CookieConfig, key_from_config};
-//! use modo::db::Database;
-//!
-//! async fn build_app(
-//!     db: Database,
-//!     session_cfg: SessionConfig,
-//!     cookie_cfg: CookieConfig,
-//! ) -> modo::Result<axum::Router> {
-//!     let key = key_from_config(&cookie_cfg)?;
-//!     let store = Store::new(db, session_cfg);
-//!     let session_layer = session::layer(store, &cookie_cfg, &key);
-//!
-//!     let router = axum::Router::new()
-//!         // .route(...)
-//!         .layer(session_layer);
-//!
-//!     Ok(router)
-//! }
-//! ```
+//! - [`token`] — [`SessionToken`] type (also re-exported at this level).
 
-mod config;
+mod data;
+pub(crate) mod store;
+
+pub mod cookie;
 pub mod device;
-mod extractor;
 pub mod fingerprint;
+pub mod jwt;
 pub mod meta;
-mod middleware;
-mod store;
-mod token;
+pub mod token;
 
-pub use config::SessionConfig;
-pub use extractor::Session;
-pub(crate) use extractor::SessionState;
-pub use middleware::SessionLayer;
-pub use middleware::layer;
-pub use store::{SessionData, Store};
+// Primary public data type — transport-agnostic session snapshot.
+pub use data::Session;
+pub use data::Session as SessionData; // alias for back-compat
+
 pub use token::SessionToken;
+
+// Re-exports from cookie for back-compat during refactor.
+pub(crate) use cookie::SessionState;
+pub use cookie::{
+    CookieSession, CookieSessionLayer, CookieSessionService, CookieSessionsConfig, SessionConfig,
+    SessionLayer,
+};
+
+// Back-compat: old callers using `auth::session::Session` as the cookie extractor.
+// Maps to CookieSession so existing handler signatures keep compiling.
+pub use cookie::CookieSession as SessionExtractor;
+
+// SessionStore and layer exposed for integration tests only.
+#[cfg(any(test, feature = "test-helpers"))]
+pub use cookie::layer;
+#[cfg(any(test, feature = "test-helpers"))]
+pub use store::SessionStore;

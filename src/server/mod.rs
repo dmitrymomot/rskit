@@ -1,15 +1,19 @@
-//! HTTP server startup and graceful shutdown.
+//! # modo::server
 //!
-//! This module provides:
+//! HTTP server startup, host-based routing, and graceful shutdown.
+//!
+//! Provides:
 //!
 //! - [`Config`] — bind address and shutdown timeout, loaded from YAML.
-//! - [`http()`] — starts a TCP listener and returns an [`HttpServer`] handle.
+//! - [`http()`] — binds a TCP listener and returns an [`HttpServer`] handle.
 //! - [`HttpServer`] — opaque server handle that implements
 //!   [`crate::runtime::Task`] for use with the [`crate::run!`] macro.
-//! - [`HostRouter`] — host-based request routing to different axum routers.
-//! - [`MatchedHost`] — extractor for the subdomain matched by a wildcard pattern.
+//! - [`HostRouter`] — routes requests to different axum routers by `Host` header;
+//!   supports exact matches and single-level wildcard subdomains.
+//! - [`MatchedHost`] — axum extractor for the subdomain captured by a wildcard
+//!   `HostRouter` pattern.
 //!
-//! # Example
+//! ## Quick start
 //!
 //! ```no_run
 //! use modo::server::{Config, http};

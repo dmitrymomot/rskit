@@ -67,7 +67,7 @@ Flat index of every axum extractor modo ships. Re-exports (for `use modo::extrac
 
 - `FormRequest`, `JsonRequest`, `MultipartRequest`, `Query`, `UploadedFile` (from `extractor`)
 - `ApiKeyMeta` (from `auth::apikey`)
-- `Bearer`, `Claims` (from `auth::jwt`)
+- `Bearer`, `Claims` (from `auth::session::jwt`)
 - `Role`, `Session` (from `auth::role`, `auth::session`)
 - `Flash` (from `flash`)
 - `ClientInfo`, `ClientIp` (from `ip`)
@@ -110,17 +110,18 @@ All middleware functions return Tower-compatible layers. Apply them with `.layer
 
 - **lower_case names are free functions** -- call directly:
     - `mw::role(extractor)` (from `auth::role::middleware`)
-    - `mw::session(store, cookie_cfg, key)` (from `auth::session::layer`)
     - `mw::tenant(strategy, resolver)` (from `tenant::middleware`)
     - Always-available universals: `mw::catch_panic()`, `mw::compression()`, `mw::cors(&cfg)`, `mw::csrf(&cfg, &key)`, `mw::error_handler(f)`, `mw::rate_limit(&cfg, cancel)`, `mw::request_id()`, `mw::security_headers(&cfg)?`, `mw::tracing()`
 - **PascalCase names are `Layer` structs** -- call `::new(...)`:
-    - `mw::Jwt::new(cfg)` (aliases `auth::jwt::JwtLayer`)
+    - `mw::Jwt::new(cfg)` (aliases `auth::session::jwt::JwtLayer`)
     - `mw::ApiKey::new(store)` (aliases `auth::apikey::ApiKeyLayer`)
     - `mw::Flash::new(cookie_cfg)` (aliases `flash::FlashLayer`)
     - `mw::Geo::new(...)` (aliases `geolocation::GeoLayer`)
     - `mw::ClientIp::new(trusted_proxies)` (aliases `ip::ClientIpLayer`)
     - `mw::TemplateContext::new(...)` (aliases `template::TemplateContextLayer`)
     - `mw::Tier::new(...)` (aliases `tier::TierLayer`)
+
+> **v0.8 note:** The `session` free function (`mw::session(...)`) was removed. Session middleware is now constructed via `CookieSessionService::layer()` -- see `modo::auth::session::cookie::CookieSessionService`. The session layer is not re-exported from `modo::middlewares`.
 
 The underlying `modo::middleware` module (singular) ships only the universal always-available layers (CORS, CSRF, compression, request-id, tracing, catch-panic, error-handler, security-headers, rate-limit) along with their configs and supporting types (`CorsConfig`, `CsrfConfig`, `CsrfToken`, `RateLimitConfig`, `RateLimitLayer`, `SecurityHeadersConfig`, `KeyExtractor`, `PeerIpKeyExtractor`, `GlobalKeyExtractor`, predicates `subdomains`/`urls`).
 

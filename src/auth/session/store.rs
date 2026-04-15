@@ -1,15 +1,24 @@
+//! Low-level SQLite-backed session store — internal to `auth::session`.
+//!
+//! [`SessionStore`] is `pub(crate)` in normal builds and exposed as `pub` only
+//! under `#[cfg(any(test, feature = "test-helpers"))]`. Application code should
+//! interact with sessions through [`super::cookie::CookieSessionService`] or
+//! [`super::jwt::JwtSessionService`] rather than this type directly.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::db::{ColumnMap, ConnExt, ConnQueryExt, Database, FromRow};
 use crate::error::{Error, Result};
 
-use super::config::SessionConfig;
+use super::cookie::CookieSessionsConfig;
 use super::meta::SessionMeta;
 use super::token::SessionToken;
 
 const SESSION_COLUMNS: &str = "id, user_id, ip_address, user_agent, device_name, device_type, \
     fingerprint, data, created_at, last_active_at, expires_at";
+
+const TABLE: &str = "authenticated_sessions";
 
 /// A snapshot of a session row as returned from the database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,22 +50,23 @@ pub struct SessionData {
 /// Low-level SQLite-backed session store.
 ///
 /// Wraps a [`Database`] handle and exposes async methods for all session CRUD
-/// operations. Consumed by [`super::middleware::SessionLayer`] and available
-/// to handlers via [`super::extractor::Session`].
+/// operations. Consumed by [`super::cookie::CookieSessionLayer`] and
+/// [`super::jwt::JwtLayer`]; session data is exposed to handlers via
+/// [`super::data::Session`].
 #[derive(Clone)]
-pub struct Store {
+pub struct SessionStore {
     db: Database,
-    config: SessionConfig,
+    config: CookieSessionsConfig,
 }
 
-impl Store {
+impl SessionStore {
     /// Create a store from a [`Database`] handle and session configuration.
-    pub fn new(db: Database, config: SessionConfig) -> Self {
+    pub fn new(db: Database, config: CookieSessionsConfig) -> Self {
         Self { db, config }
     }
 
     /// Return the session configuration for this store.
-    pub fn config(&self) -> &SessionConfig {
+    pub fn config(&self) -> &CookieSessionsConfig {
         &self.config
     }
 
@@ -76,8 +86,8 @@ impl Store {
             .conn()
             .query_optional(
                 &format!(
-                    "SELECT {SESSION_COLUMNS} FROM sessions \
-                     WHERE token_hash = ?1 AND expires_at > ?2"
+                    "SELECT {SESSION_COLUMNS} FROM {TABLE} \
+                     WHERE session_token_hash = ?1 AND expires_at > ?2"
                 ),
                 libsql::params![hash, now],
             )
@@ -99,7 +109,7 @@ impl Store {
             .db
             .conn()
             .query_optional(
-                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
+                &format!("SELECT {SESSION_COLUMNS} FROM {TABLE} WHERE id = ?1"),
                 libsql::params![id],
             )
             .await?;
@@ -120,7 +130,7 @@ impl Store {
             .conn()
             .query_all(
                 &format!(
-                    "SELECT {SESSION_COLUMNS} FROM sessions \
+                    "SELECT {SESSION_COLUMNS} FROM {TABLE} \
                      WHERE user_id = ?1 AND expires_at > ?2 \
                      ORDER BY last_active_at DESC"
                 ),
@@ -165,10 +175,12 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "INSERT INTO sessions \
-                 (id, token_hash, user_id, ip_address, user_agent, device_name, device_type, \
-                  fingerprint, data, created_at, last_active_at, expires_at) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                &format!(
+                    "INSERT INTO {TABLE} \
+                     (id, session_token_hash, user_id, ip_address, user_agent, device_name, \
+                      device_type, fingerprint, data, created_at, last_active_at, expires_at) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"
+                ),
                 libsql::params![
                     id.as_str(),
                     token_hash.as_str(),
@@ -192,13 +204,15 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "DELETE FROM sessions WHERE id IN (\
-                     SELECT id FROM sessions \
-                     WHERE user_id = ?1 AND expires_at > ?2 \
-                     ORDER BY last_active_at ASC \
-                     LIMIT MAX(0, (SELECT COUNT(*) FROM sessions \
-                                   WHERE user_id = ?3 AND expires_at > ?4) - ?5)\
-                 )",
+                &format!(
+                    "DELETE FROM {TABLE} WHERE id IN (\
+                         SELECT id FROM {TABLE} \
+                         WHERE user_id = ?1 AND expires_at > ?2 \
+                         ORDER BY last_active_at ASC \
+                         LIMIT MAX(0, (SELECT COUNT(*) FROM {TABLE} \
+                                       WHERE user_id = ?3 AND expires_at > ?4) - ?5)\
+                     )"
+                ),
                 libsql::params![user_id, now_str.as_str(), user_id, now_str.as_str(), max],
             )
             .await
@@ -229,7 +243,10 @@ impl Store {
     pub async fn destroy(&self, id: &str) -> Result<()> {
         self.db
             .conn()
-            .execute_raw("DELETE FROM sessions WHERE id = ?1", libsql::params![id])
+            .execute_raw(
+                &format!("DELETE FROM {TABLE} WHERE id = ?1"),
+                libsql::params![id],
+            )
             .await
             .map_err(|e| Error::internal(format!("destroy session: {e}")))?;
         Ok(())
@@ -244,7 +261,7 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "DELETE FROM sessions WHERE user_id = ?1",
+                &format!("DELETE FROM {TABLE} WHERE user_id = ?1"),
                 libsql::params![user_id],
             )
             .await
@@ -263,7 +280,7 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "DELETE FROM sessions WHERE user_id = ?1 AND id != ?2",
+                &format!("DELETE FROM {TABLE} WHERE user_id = ?1 AND id != ?2"),
                 libsql::params![user_id, keep_id],
             )
             .await
@@ -271,8 +288,64 @@ impl Store {
         Ok(())
     }
 
+    /// Look up an active (non-expired) session directly by the stored token hash.
+    ///
+    /// Unlike [`read_by_token`](Self::read_by_token), this variant accepts a
+    /// pre-computed hash string, which is needed by the JWT session service that
+    /// stores the token hex as the JWT `jti` and computes the hash itself.
+    ///
+    /// Returns `None` if no matching session exists or the session has expired.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails or the stored data cannot
+    /// be deserialised.
+    pub async fn read_by_token_hash(&self, hash: &str) -> Result<Option<SessionData>> {
+        let now = Utc::now().to_rfc3339();
+        let row: Option<SessionRow> = self
+            .db
+            .conn()
+            .query_optional(
+                &format!(
+                    "SELECT {SESSION_COLUMNS} FROM {TABLE} \
+                     WHERE session_token_hash = ?1 AND expires_at > ?2"
+                ),
+                libsql::params![hash, now],
+            )
+            .await?;
+
+        row.map(row_to_session_data).transpose()
+    }
+
+    /// Rotate the session token to a caller-supplied new token.
+    ///
+    /// Updates `session_token_hash` and `last_active_at` for the session with
+    /// the given `id`. Used by the JWT session service, which needs to control
+    /// the new token value (so the `jti` in the refresh JWT matches the stored
+    /// hash).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails.
+    pub async fn rotate_token_to(&self, id: &str, new_token: &SessionToken) -> Result<()> {
+        let new_hash = new_token.hash();
+        let now = Utc::now().to_rfc3339();
+        self.db
+            .conn()
+            .execute_raw(
+                &format!(
+                    "UPDATE {TABLE} SET session_token_hash = ?1, last_active_at = ?2 WHERE id = ?3"
+                ),
+                libsql::params![new_hash, now, id],
+            )
+            .await
+            .map_err(|e| Error::internal(format!("rotate token to: {e}")))?;
+        Ok(())
+    }
+
     /// Issue a new token for an existing session, invalidating the old one.
     ///
+    /// Updates `session_token_hash` and `last_active_at` in a single statement.
     /// Returns the new [`SessionToken`]. The middleware will write this token
     /// to the session cookie on the response.
     ///
@@ -282,11 +355,14 @@ impl Store {
     pub async fn rotate_token(&self, id: &str) -> Result<SessionToken> {
         let new_token = SessionToken::generate();
         let new_hash = new_token.hash();
+        let now = Utc::now().to_rfc3339();
         self.db
             .conn()
             .execute_raw(
-                "UPDATE sessions SET token_hash = ?1 WHERE id = ?2",
-                libsql::params![new_hash, id],
+                &format!(
+                    "UPDATE {TABLE} SET session_token_hash = ?1, last_active_at = ?2 WHERE id = ?3"
+                ),
+                libsql::params![new_hash, now, id],
             )
             .await
             .map_err(|e| Error::internal(format!("rotate token: {e}")))?;
@@ -314,8 +390,10 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "UPDATE sessions SET data = ?1, last_active_at = ?2, expires_at = ?3 \
-                 WHERE id = ?4",
+                &format!(
+                    "UPDATE {TABLE} SET data = ?1, last_active_at = ?2, expires_at = ?3 \
+                     WHERE id = ?4"
+                ),
                 libsql::params![data_str, now.to_rfc3339(), expires_at.to_rfc3339(), id],
             )
             .await
@@ -340,7 +418,7 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "UPDATE sessions SET last_active_at = ?1, expires_at = ?2 WHERE id = ?3",
+                &format!("UPDATE {TABLE} SET last_active_at = ?1, expires_at = ?2 WHERE id = ?3"),
                 libsql::params![now.to_rfc3339(), expires_at.to_rfc3339(), id],
             )
             .await
@@ -356,13 +434,14 @@ impl Store {
     /// # Errors
     ///
     /// Returns an error if the database delete fails.
+    #[allow(dead_code)]
     pub async fn cleanup_expired(&self) -> Result<u64> {
         let now = Utc::now().to_rfc3339();
         let affected = self
             .db
             .conn()
             .execute_raw(
-                "DELETE FROM sessions WHERE expires_at < ?1",
+                &format!("DELETE FROM {TABLE} WHERE expires_at < ?1"),
                 libsql::params![now],
             )
             .await

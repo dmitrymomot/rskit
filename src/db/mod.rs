@@ -9,11 +9,16 @@
 //! |------|---------|
 //! | [`Database`] | Clone-able, `Arc`-wrapped single-connection handle |
 //! | [`Config`] | YAML-deserializable database configuration with PRAGMA defaults |
-//! | [`ManagedDatabase`] | Wrapper for graceful shutdown via [`crate::run!`] |
-//! | [`managed`] | Wraps a [`Database`] into a [`ManagedDatabase`] |
+//! | [`ManagedDatabase`] | Wrapper for graceful shutdown via `modo::run!` |
 //! | [`DatabasePool`] | Multi-database pool with lazy shard opening for tenant isolation |
-//! | [`PoolConfig`] | Configuration for database sharding (base path, shard count) |
-//! | [`ManagedDatabasePool`] | Wrapper for graceful pool shutdown via [`crate::run!`] |
+//! | [`PoolConfig`] | Configuration for database sharding (`base_path`, `lock_shards`) |
+//! | [`ManagedDatabasePool`] | Wrapper for graceful pool shutdown via `modo::run!` |
+//!
+//! ## Factory functions
+//!
+//! | Function | Purpose |
+//! |----------|---------|
+//! | [`managed`] | Wraps a [`Database`] into a [`ManagedDatabase`] |
 //! | [`managed_pool`] | Wraps a [`DatabasePool`] into a [`ManagedDatabasePool`] |
 //!
 //! ## Connection & querying
@@ -23,7 +28,7 @@
 //! | [`connect`] | Open a database, apply PRAGMAs, optionally run migrations |
 //! | [`migrate`] | Run `*.sql` migrations from a directory with checksum tracking |
 //! | [`ConnExt`] | Low-level `query_raw`/`execute_raw` trait for `Connection` and `Transaction` |
-//! | [`ConnQueryExt`] | High-level `query_one`/`query_all`/`query_optional` helpers (blanket impl on `ConnExt`) |
+//! | [`ConnQueryExt`] | High-level `query_one`/`query_all`/`query_optional` + `_map` variants (blanket impl on `ConnExt`) |
 //! | [`SelectBuilder`] | Composable query builder combining filters, sorting, and pagination |
 //!
 //! ## Row mapping

@@ -1,14 +1,16 @@
 use cookie::{Cookie, CookieJar};
 
+use crate::auth::session::CookieSessionService;
+use crate::auth::session::CookieSessionsConfig;
 use crate::auth::session::meta::SessionMeta;
-use crate::auth::session::{SessionConfig, Store};
+use crate::auth::session::store::SessionStore;
 use crate::cookie::{CookieConfig, Key, key_from_config};
 
 use super::db::TestDb;
 
-const SESSIONS_TABLE_SQL: &str = "CREATE TABLE sessions (
+const SESSIONS_TABLE_SQL: &str = "CREATE TABLE authenticated_sessions (
         id TEXT PRIMARY KEY,
-        token_hash TEXT NOT NULL UNIQUE,
+        session_token_hash TEXT NOT NULL UNIQUE,
         user_id TEXT NOT NULL,
         ip_address TEXT NOT NULL,
         user_agent TEXT NOT NULL,
@@ -21,11 +23,16 @@ const SESSIONS_TABLE_SQL: &str = "CREATE TABLE sessions (
         expires_at TEXT NOT NULL
     )";
 
+const SESSIONS_INDEXES_SQL: &[&str] = &[
+    "CREATE INDEX idx_sessions_user_id ON authenticated_sessions (user_id)",
+    "CREATE INDEX idx_sessions_expires_at ON authenticated_sessions (expires_at)",
+];
+
 /// Session infrastructure for integration tests.
 ///
 /// `TestSession` sets up an in-memory `sessions` table on the provided
 /// [`TestDb`], derives a signing key, and exposes helpers for authenticating
-/// test users and building the [`SessionLayer`](crate::auth::session::SessionLayer)
+/// test users and building the [`CookieSessionLayer`](crate::auth::session::CookieSessionLayer)
 /// needed by [`super::TestApp`].
 ///
 /// # Example
@@ -34,10 +41,10 @@ const SESSIONS_TABLE_SQL: &str = "CREATE TABLE sessions (
 /// # #[cfg(feature = "test-helpers")]
 /// # async fn example() {
 /// use axum::routing::get;
-/// use modo::auth::session::Session;
+/// use modo::auth::session::CookieSession;
 /// use modo::testing::{TestApp, TestDb, TestSession};
 ///
-/// async fn whoami(session: Session) -> String {
+/// async fn whoami(session: CookieSession) -> String {
 ///     session.user_id().unwrap_or_else(|| "anonymous".to_string())
 /// }
 ///
@@ -55,17 +62,29 @@ const SESSIONS_TABLE_SQL: &str = "CREATE TABLE sessions (
 /// # }
 /// ```
 pub struct TestSession {
-    store: Store,
-    cookie_config: CookieConfig,
+    store: SessionStore,
     key: Key,
-    session_config: SessionConfig,
+    session_config: CookieSessionsConfig,
+    service: CookieSessionService,
 }
 
 impl TestSession {
-    /// Create a `TestSession` with default [`SessionConfig`] and a
+    /// The SQL statement used to create the `authenticated_sessions` table.
+    ///
+    /// Integration tests that need to set up the schema without going through
+    /// `TestSession::new` can reference this constant directly.
+    pub const SCHEMA_SQL: &'static str = SESSIONS_TABLE_SQL;
+
+    /// The SQL statements used to create indexes on the `authenticated_sessions` table.
+    ///
+    /// Integration tests that need to set up indexes without going through
+    /// `TestSession::new` can iterate over this slice and execute each statement.
+    pub const INDEXES_SQL: &'static [&'static str] = SESSIONS_INDEXES_SQL;
+
+    /// Create a `TestSession` with default [`CookieSessionsConfig`] and a
     /// test-suitable [`CookieConfig`] (insecure, lax same-site, 64-char secret).
     ///
-    /// Creates the `sessions` table on `db`.
+    /// Creates the `authenticated_sessions` table and indexes on `db`.
     ///
     /// # Panics
     ///
@@ -78,12 +97,12 @@ impl TestSession {
             http_only: true,
             same_site: "lax".to_string(),
         };
-        Self::with_config(db, SessionConfig::default(), cookie_config).await
+        Self::with_config(db, CookieSessionsConfig::default(), cookie_config).await
     }
 
-    /// Create a `TestSession` with explicit [`SessionConfig`] and [`CookieConfig`].
+    /// Create a `TestSession` with explicit [`CookieSessionsConfig`] and [`CookieConfig`].
     ///
-    /// Creates the `sessions` table on `db`.
+    /// Creates the `authenticated_sessions` table and indexes on `db`.
     ///
     /// # Panics
     ///
@@ -91,7 +110,7 @@ impl TestSession {
     /// cannot be derived.
     pub async fn with_config(
         db: &TestDb,
-        session_config: SessionConfig,
+        session_config: CookieSessionsConfig,
         cookie_config: CookieConfig,
     ) -> Self {
         use crate::db::ConnExt;
@@ -100,15 +119,28 @@ impl TestSession {
             .execute_raw(SESSIONS_TABLE_SQL, ())
             .await
             .expect("failed to create sessions table");
+        for sql in SESSIONS_INDEXES_SQL {
+            db.db()
+                .conn()
+                .execute_raw(sql, ())
+                .await
+                .expect("failed to create sessions index");
+        }
 
         let key = key_from_config(&cookie_config).expect("failed to derive cookie key");
-        let store = Store::new(db.db(), session_config.clone());
+        let database = db.db();
+        let store = SessionStore::new(database.clone(), session_config.clone());
+
+        let mut svc_config = session_config.clone();
+        svc_config.cookie = cookie_config;
+        let service = CookieSessionService::new(database, svc_config)
+            .expect("failed to build CookieSessionService");
 
         Self {
             store,
-            cookie_config,
             key,
             session_config,
+            service,
         }
     }
 
@@ -135,7 +167,7 @@ impl TestSession {
     pub async fn authenticate_with(&self, user_id: &str, data: serde_json::Value) -> String {
         let meta = SessionMeta::from_headers("127.0.0.1".to_string(), "", "", "");
 
-        let (_session_data, token) = self
+        let (_session_data, token): (crate::auth::session::store::SessionData, _) = self
             .store
             .create(&meta, user_id, Some(data))
             .await
@@ -154,12 +186,20 @@ impl TestSession {
         format!("{cookie_name}={signed_value}")
     }
 
-    /// Build a [`SessionLayer`](crate::auth::session::SessionLayer) configured with
+    /// Build a [`CookieSessionLayer`](crate::auth::session::CookieSessionLayer) configured with
     /// the same store and cookie settings as this `TestSession`.
     ///
     /// Apply this layer to a [`super::TestAppBuilder`] so that handlers can
-    /// use the [`Session`](crate::auth::session::Session) extractor.
-    pub fn layer(&self) -> crate::auth::session::SessionLayer {
-        crate::auth::session::layer(self.store.clone(), &self.cookie_config, &self.key)
+    /// use the [`CookieSession`](crate::auth::session::CookieSession) extractor.
+    pub fn layer(&self) -> crate::auth::session::CookieSessionLayer {
+        self.service.layer()
+    }
+
+    /// Return a reference to the [`CookieSessionService`] used by this `TestSession`.
+    ///
+    /// Useful for calling management operations (`list`, `revoke`, etc.) directly
+    /// in integration tests without going through HTTP.
+    pub fn service(&self) -> &CookieSessionService {
+        &self.service
     }
 }
