@@ -30,12 +30,19 @@ if let Some(user_id) = cache.get(&"token:abc") {
 `LruCache` is not `Sync`. Wrap it in `std::sync::RwLock` when sharing across
 request handlers. Because `get` requires `&mut self` to update the recency
 order, even read-only lookups must acquire a write lock. Never hold the lock
-across an `.await` point.
+across an `.await` point. See the next section for a complete example including
+registration with the service registry.
 
-```rust
+### Registering with the Service Registry
+
+Wrap the cache in a named newtype so it can be registered and retrieved by type
+via `modo::service::Registry`.
+
+```rust,ignore
 use std::num::NonZeroUsize;
 use std::sync::{Arc, RwLock};
 use modo::cache::LruCache;
+use modo::service::Registry;
 
 #[derive(Clone)]
 pub struct TokenCache(Arc<RwLock<LruCache<String, String>>>);
@@ -54,21 +61,10 @@ impl TokenCache {
         self.0.write().unwrap().put(key, value);
     }
 }
-```
-
-### Registering with the Service Registry
-
-```rust
-use std::num::NonZeroUsize;
-use std::sync::{Arc, RwLock};
-use modo::cache::LruCache;
-use modo::service::Registry;
-
-let cache: Arc<RwLock<LruCache<String, String>>> =
-    Arc::new(RwLock::new(LruCache::new(NonZeroUsize::new(512).unwrap())));
 
 let mut registry = Registry::new();
-registry.add(cache);
+registry.add(TokenCache::new(512));
+let state = registry.into_state();
 ```
 
 ## Eviction Policy

@@ -10,8 +10,8 @@ use super::entry::AuditEntry;
 /// Concrete audit log service.
 ///
 /// Wraps an [`AuditLogBackend`] behind `Arc` for cheap cloning.
-/// Register with `.with_service(audit_log)` and extract as
-/// `Service(audit): Service<AuditLog>`.
+/// Register via `registry.add(audit_log)` at startup and extract in
+/// handlers as `Service(audit): Service<AuditLog>`.
 ///
 /// Two write methods:
 /// - [`record()`](Self::record) — propagates errors via `Result`

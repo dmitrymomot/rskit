@@ -105,6 +105,7 @@ async fn list_events(db: Database) -> modo::Result<()> {
 Implement `AuditLogBackend` to route events to a different store:
 
 ```rust,no_run
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use modo::audit::{AuditLogBackend, AuditEntry, AuditLog};
