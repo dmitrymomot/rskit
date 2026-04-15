@@ -7,7 +7,7 @@
 //! per-request context injection, HTMX-aware rendering, i18n with plural
 //! rules, and cache-busted static-asset URLs.
 //!
-//! ## Provided types
+//! ## Provides
 //!
 //! | Type / Trait                | Description |
 //! |-----------------------------|-------------|
@@ -24,7 +24,7 @@
 //! | [`AcceptLanguageResolver`]  | Resolves the active locale from the `Accept-Language` header. |
 //! | [`SessionResolver`]         | Resolves the active locale from the current session. |
 //!
-//! # Quick start
+//! ## Quick start
 //!
 //! ```rust,no_run
 //! use modo::template::{Engine, TemplateConfig, TemplateContextLayer};
