@@ -49,7 +49,7 @@ impl Default for SentryConfig {
 /// RAII guard that keeps the tracing subscriber and Sentry client alive.
 ///
 /// Returned by [`crate::tracing::init`]. Hold this value for the entire
-/// lifetime of the process — typically by passing it to [`crate::run!`]
+/// lifetime of the process — typically by passing it to the `run!` macro
 /// or calling [`Task::shutdown`] at the end of `main`.
 ///
 /// Dropping the guard without calling `shutdown` is safe but may not flush
