@@ -3,11 +3,13 @@
 mod config;
 mod extractor;
 mod middleware;
+mod service;
 
 pub use config::CookieSessionsConfig;
 pub use extractor::Session;
 pub(crate) use extractor::SessionState;
 pub use middleware::{SessionLayer, layer};
+pub use service::CookieSessionService;
 
 // Back-compat alias: external callers using SessionConfig keep compiling.
 pub use config::CookieSessionsConfig as SessionConfig;

@@ -346,3 +346,20 @@ impl Session {
         self.state.store.destroy(id).await
     }
 }
+
+/// Convert a v0.7-internal [`RawSessionRow`] into the public [`crate::auth::session::data::Session`] type.
+pub(crate) fn raw_to_session(raw: RawSessionRow) -> crate::auth::session::data::Session {
+    crate::auth::session::data::Session {
+        id: raw.id,
+        user_id: raw.user_id,
+        ip_address: raw.ip_address,
+        user_agent: raw.user_agent,
+        device_name: raw.device_name,
+        device_type: raw.device_type,
+        fingerprint: raw.fingerprint,
+        data: raw.data,
+        created_at: raw.created_at,
+        last_active_at: raw.last_active_at,
+        expires_at: raw.expires_at,
+    }
+}
