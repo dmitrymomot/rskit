@@ -359,7 +359,7 @@ Generate dynamically using `Write`. Replace `{{project_name}}` with the actual p
 ````markdown
 # {{project_name}}
 
-**Framework:** [modo](https://github.com/dmitrymomot/modo) v2 — Rust web framework with SQLite
+**Framework:** [modo](https://github.com/dmitrymomot/modo) v0.8 — Rust web framework with SQLite
 
 ## Commands
 
