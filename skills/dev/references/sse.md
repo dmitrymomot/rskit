@@ -22,7 +22,7 @@ Import as `modo::sse::{Broadcaster, Event, ...}`. `LastEventId` is also exposed 
 
 ## Broadcaster
 
-`Broadcaster<K, T>` is a keyed fan-out channel registry. `K` is the channel key type (typically `String`), `T` is the message payload type. Implements `Clone` (manual via `Arc<Inner>`), cheaply cloneable.
+`Broadcaster<K, T>` is a keyed fan-out channel registry. `K: Hash + Eq + Clone + Send + Sync + 'static` (typically `String`), `T: Clone + Send + Sync + 'static`. Implements `Clone` (manual via `Arc<Inner>`), cheaply cloneable.
 
 ### Construction
 
@@ -74,12 +74,13 @@ fn channel<F, Fut>(&self, f: F) -> Response
 
 ## BroadcastStream
 
-`BroadcastStream<T>` implements `Stream<Item = Result<T, Error>>` and `Drop` (cleanup closure). It yields raw `T` values, not `Event`s. Convert downstream with `SseStreamExt::cast_events()`.
+`BroadcastStream<T>` implements `Stream<Item = Result<T, Error>>` and `Drop` (cleanup closure). It yields raw `T` values, not `Event`s. Convert downstream with `SseStreamExt::cast_events()`. Requires `T: Clone + Send + 'static`.
 
 ### Construction
 
 ```rust
 // Create from a raw broadcast::Receiver (no cleanup, no auto-removal).
+// Requires T: Clone + Send + 'static.
 pub fn new(rx: broadcast::Receiver<T>) -> Self
 ```
 
@@ -157,7 +158,7 @@ let event_stream = bc.subscribe(&key)
     });
 ```
 
-- The closure receives each `Ok(T)` and must return `Result<Event, Error>`.
+- The closure is `FnMut(T) -> Result<Event, Error>` — called for each `Ok(T)`.
 - Source stream errors pass through converted via `Into<Error>`.
 - Closure errors also propagate.
 
