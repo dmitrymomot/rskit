@@ -2,7 +2,7 @@
 //!
 //! Database-backed HTTP session management.
 //!
-//! Sessions are stored in a SQLite table (`sessions`) and identified by a
+//! Sessions are stored in a SQLite table (`authenticated_sessions`) and identified by a
 //! signed, opaque cookie. The middleware handles the full request/response
 //! lifecycle: reading the session token from the cookie on the request path,
 //! loading and fingerprint-validating the session, running the handler, and
@@ -15,36 +15,11 @@
 //! - [`Session`] — axum extractor; primary API for handlers.
 //! - [`SessionData`] — snapshot of a session row returned from the database.
 //! - [`SessionToken`] — opaque 32-byte random token; redacted in `Debug`/`Display`.
-//! - [`Store`] — low-level SQLite store; use directly for background jobs.
 //! - [`SessionLayer`] — Tower layer; apply to a `Router` to enable session support.
 //! - [`layer`] — convenience constructor for [`SessionLayer`].
 //! - [`device`] — user-agent parsing helpers for device classification.
 //! - [`fingerprint`] — browser fingerprinting for session hijacking detection.
 //! - [`meta`] — request metadata ([`meta::SessionMeta`]) and [`meta::header_str`] helper.
-//!
-//! # Quick start
-//!
-//! ```rust,no_run
-//! use modo::auth::session::{self, SessionConfig, Store};
-//! use modo::cookie::{CookieConfig, key_from_config};
-//! use modo::db::Database;
-//!
-//! async fn build_app(
-//!     db: Database,
-//!     session_cfg: SessionConfig,
-//!     cookie_cfg: CookieConfig,
-//! ) -> modo::Result<axum::Router> {
-//!     let key = key_from_config(&cookie_cfg)?;
-//!     let store = Store::new(db, session_cfg);
-//!     let session_layer = session::layer(store, &cookie_cfg, &key);
-//!
-//!     let router = axum::Router::new()
-//!         // .route(...)
-//!         .layer(session_layer);
-//!
-//!     Ok(router)
-//! }
-//! ```
 
 mod config;
 mod data;
@@ -53,7 +28,7 @@ mod extractor;
 pub mod fingerprint;
 pub mod meta;
 mod middleware;
-mod store;
+pub(crate) mod store;
 mod token;
 
 pub use config::SessionConfig;
@@ -61,6 +36,16 @@ pub use data::Session as SessionData; // temporary alias — will be un-aliased 
 pub use extractor::Session;
 pub(crate) use extractor::SessionState;
 pub use middleware::SessionLayer;
-pub use middleware::layer;
-pub use store::Store;
+pub use store::SessionData as RawSessionRow; // legacy name; will be removed at end of Phase 2
 pub use token::SessionToken;
+
+// SessionStore and layer: pub(crate) in normal builds; exposed via test-helpers for integration tests.
+#[cfg(not(any(test, feature = "test-helpers")))]
+pub(crate) use middleware::layer;
+#[cfg(not(any(test, feature = "test-helpers")))]
+pub(crate) use store::SessionStore;
+
+#[cfg(any(test, feature = "test-helpers"))]
+pub use middleware::layer;
+#[cfg(any(test, feature = "test-helpers"))]
+pub use store::SessionStore;

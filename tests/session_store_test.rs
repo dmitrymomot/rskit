@@ -1,10 +1,10 @@
 use modo::auth::session::meta::SessionMeta;
-use modo::auth::session::{SessionConfig, Store};
+use modo::auth::session::{SessionConfig, SessionStore as Store};
 use modo::db::{self, ConnExt};
 
-const CREATE_TABLE_SQL: &str = "CREATE TABLE sessions (
+const CREATE_TABLE_SQL: &str = "CREATE TABLE authenticated_sessions (
     id TEXT PRIMARY KEY,
-    token_hash TEXT NOT NULL UNIQUE,
+    session_token_hash TEXT NOT NULL UNIQUE,
     user_id TEXT NOT NULL,
     ip_address TEXT NOT NULL,
     user_agent TEXT NOT NULL,
@@ -25,12 +25,15 @@ async fn setup_store() -> Store {
     let db = db::connect(&config).await.unwrap();
     db.conn().execute_raw(CREATE_TABLE_SQL, ()).await.unwrap();
     db.conn()
-        .execute_raw("CREATE INDEX idx_sessions_user_id ON sessions(user_id)", ())
+        .execute_raw(
+            "CREATE INDEX idx_sessions_user_id ON authenticated_sessions(user_id)",
+            (),
+        )
         .await
         .unwrap();
     db.conn()
         .execute_raw(
-            "CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)",
+            "CREATE INDEX idx_sessions_expires_at ON authenticated_sessions(expires_at)",
             (),
         )
         .await
@@ -46,12 +49,15 @@ async fn setup_store_with_config(session_config: SessionConfig) -> (Store, db::D
     let db = db::connect(&config).await.unwrap();
     db.conn().execute_raw(CREATE_TABLE_SQL, ()).await.unwrap();
     db.conn()
-        .execute_raw("CREATE INDEX idx_sessions_user_id ON sessions(user_id)", ())
+        .execute_raw(
+            "CREATE INDEX idx_sessions_user_id ON authenticated_sessions(user_id)",
+            (),
+        )
         .await
         .unwrap();
     db.conn()
         .execute_raw(
-            "CREATE INDEX idx_sessions_expires_at ON sessions(expires_at)",
+            "CREATE INDEX idx_sessions_expires_at ON authenticated_sessions(expires_at)",
             (),
         )
         .await
@@ -267,7 +273,7 @@ async fn test_cleanup_expired_deletes_rows() {
     // Manually expire the session
     db.conn()
         .execute_raw(
-            "UPDATE sessions SET expires_at = ?1 WHERE id = ?2",
+            "UPDATE authenticated_sessions SET expires_at = ?1 WHERE id = ?2",
             libsql::params!["2020-01-01T00:00:00+00:00", session.id.as_str()],
         )
         .await
@@ -307,7 +313,7 @@ async fn test_list_for_user_excludes_expired() {
     // Manually expire the session
     db.conn()
         .execute_raw(
-            "UPDATE sessions SET expires_at = ?1 WHERE id = ?2",
+            "UPDATE authenticated_sessions SET expires_at = ?1 WHERE id = ?2",
             libsql::params!["2020-01-01T00:00:00+00:00", session.id.as_str()],
         )
         .await
@@ -326,7 +332,7 @@ async fn test_read_by_token_returns_none_for_expired() {
     // Manually expire the session
     db.conn()
         .execute_raw(
-            "UPDATE sessions SET expires_at = ?1 WHERE id = ?2",
+            "UPDATE authenticated_sessions SET expires_at = ?1 WHERE id = ?2",
             libsql::params!["2020-01-01T00:00:00+00:00", session.id.as_str()],
         )
         .await

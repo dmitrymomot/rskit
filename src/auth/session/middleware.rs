@@ -15,7 +15,7 @@ use crate::ip::ClientIp;
 
 use super::extractor::{SessionAction, SessionState};
 use super::meta::{SessionMeta, header_str};
-use super::store::Store;
+use super::store::SessionStore;
 use super::token::SessionToken;
 
 // --- Layer ---
@@ -34,29 +34,13 @@ use super::token::SessionToken;
 /// timestamp, and sets or clears the session cookie as needed.
 #[derive(Clone)]
 pub struct SessionLayer {
-    store: Arc<Store>,
+    store: Arc<SessionStore>,
     cookie_config: CookieConfig,
     key: Key,
 }
 
-/// Create a [`SessionLayer`] from a [`Store`], [`CookieConfig`], and signing [`Key`].
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use modo::auth::session::{self, SessionConfig, Store};
-/// use modo::cookie::{CookieConfig, key_from_config};
-/// use modo::db::Database;
-///
-/// # async fn example(db: Database) -> modo::Result<()> {
-/// let store = Store::new(db, SessionConfig::default());
-/// let cookie_config: CookieConfig = todo!("load from config");
-/// let key = key_from_config(&cookie_config)?;
-/// let session_layer = session::layer(store, &cookie_config, &key);
-/// # Ok(())
-/// # }
-/// ```
-pub fn layer(store: Store, cookie_config: &CookieConfig, key: &Key) -> SessionLayer {
+/// Create a [`SessionLayer`] from a [`SessionStore`], [`CookieConfig`], and signing [`Key`].
+pub fn layer(store: SessionStore, cookie_config: &CookieConfig, key: &Key) -> SessionLayer {
     SessionLayer {
         store: Arc::new(store),
         cookie_config: cookie_config.clone(),
@@ -85,7 +69,7 @@ impl<S> Layer<S> for SessionLayer {
 #[derive(Clone)]
 pub struct SessionMiddleware<S> {
     inner: S,
-    store: Arc<Store>,
+    store: Arc<SessionStore>,
     cookie_config: CookieConfig,
     key: Key,
 }

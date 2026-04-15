@@ -3,7 +3,7 @@ use axum::body::Body;
 use axum::http::Request;
 use axum::routing::{get, post};
 use http::StatusCode;
-use modo::auth::session::{Session, SessionConfig, Store};
+use modo::auth::session::{Session, SessionConfig, SessionStore as Store};
 use modo::cookie::{CookieConfig, key_from_config};
 use modo::db::{self, ConnExt};
 use modo::service::Registry;
@@ -23,8 +23,8 @@ async fn setup_store() -> Store {
     let db = db::connect(&config).await.unwrap();
     db.conn()
         .execute_raw(
-            "CREATE TABLE sessions (
-                id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
+            "CREATE TABLE authenticated_sessions (
+                id TEXT PRIMARY KEY, session_token_hash TEXT NOT NULL UNIQUE,
                 user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
                 user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
                 device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,
@@ -765,8 +765,8 @@ async fn setup_store_with_config(config: SessionConfig) -> Store {
     let db = db::connect(&db_config).await.unwrap();
     db.conn()
         .execute_raw(
-            "CREATE TABLE sessions (
-                id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
+            "CREATE TABLE authenticated_sessions (
+                id TEXT PRIMARY KEY, session_token_hash TEXT NOT NULL UNIQUE,
                 user_id TEXT NOT NULL, ip_address TEXT NOT NULL,
                 user_agent TEXT NOT NULL, device_name TEXT NOT NULL,
                 device_type TEXT NOT NULL, fingerprint TEXT NOT NULL,

@@ -19,7 +19,8 @@
 
 // Free constructor functions.
 pub use crate::auth::role::middleware as role;
-pub use crate::auth::session::layer as session;
+// NOTE: session layer constructor removed in v0.8 — SessionStore is now pub(crate);
+// use modo::auth::session::layer directly within-crate, or via TestSession in tests.
 pub use crate::tenant::middleware as tenant;
 
 // Layer structs — users call `::new(...)`.

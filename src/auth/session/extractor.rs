@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 use crate::error::{Error, HttpError};
 
 use super::meta::SessionMeta;
-use super::store::{SessionData, Store};
+use super::store::{SessionData as RawSessionRow, SessionStore};
 use super::token::SessionToken;
 
 #[derive(Clone)]
@@ -20,9 +20,9 @@ pub(crate) enum SessionAction {
 }
 
 pub(crate) struct SessionState {
-    pub store: Store,
+    pub store: SessionStore,
     pub meta: SessionMeta,
-    pub current: Mutex<Option<SessionData>>,
+    pub current: Mutex<Option<RawSessionRow>>,
     pub dirty: AtomicBool,
     pub action: Mutex<SessionAction>,
 }
@@ -100,7 +100,7 @@ impl Session {
     }
 
     /// Return a clone of the full session data, or `None` if unauthenticated.
-    pub fn current(&self) -> Option<SessionData> {
+    pub fn current(&self) -> Option<RawSessionRow> {
         let guard = self.state.current.lock().expect("session mutex poisoned");
         guard.clone()
     }
@@ -301,7 +301,7 @@ impl Session {
     ///
     /// Returns `401 Unauthorized` when no active session exists, or an
     /// internal error if the database query fails.
-    pub async fn list_my_sessions(&self) -> crate::Result<Vec<SessionData>> {
+    pub async fn list_my_sessions(&self) -> crate::Result<Vec<RawSessionRow>> {
         let user_id = {
             let current = self.state.current.lock().expect("session mutex poisoned");
             let session = current

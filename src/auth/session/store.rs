@@ -11,6 +11,8 @@ use super::token::SessionToken;
 const SESSION_COLUMNS: &str = "id, user_id, ip_address, user_agent, device_name, device_type, \
     fingerprint, data, created_at, last_active_at, expires_at";
 
+const TABLE: &str = "authenticated_sessions";
+
 /// A snapshot of a session row as returned from the database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionData {
@@ -44,12 +46,12 @@ pub struct SessionData {
 /// operations. Consumed by [`super::middleware::SessionLayer`] and available
 /// to handlers via [`super::extractor::Session`].
 #[derive(Clone)]
-pub struct Store {
+pub struct SessionStore {
     db: Database,
     config: SessionConfig,
 }
 
-impl Store {
+impl SessionStore {
     /// Create a store from a [`Database`] handle and session configuration.
     pub fn new(db: Database, config: SessionConfig) -> Self {
         Self { db, config }
@@ -76,8 +78,8 @@ impl Store {
             .conn()
             .query_optional(
                 &format!(
-                    "SELECT {SESSION_COLUMNS} FROM sessions \
-                     WHERE token_hash = ?1 AND expires_at > ?2"
+                    "SELECT {SESSION_COLUMNS} FROM {TABLE} \
+                     WHERE session_token_hash = ?1 AND expires_at > ?2"
                 ),
                 libsql::params![hash, now],
             )
@@ -99,7 +101,7 @@ impl Store {
             .db
             .conn()
             .query_optional(
-                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
+                &format!("SELECT {SESSION_COLUMNS} FROM {TABLE} WHERE id = ?1"),
                 libsql::params![id],
             )
             .await?;
@@ -120,7 +122,7 @@ impl Store {
             .conn()
             .query_all(
                 &format!(
-                    "SELECT {SESSION_COLUMNS} FROM sessions \
+                    "SELECT {SESSION_COLUMNS} FROM {TABLE} \
                      WHERE user_id = ?1 AND expires_at > ?2 \
                      ORDER BY last_active_at DESC"
                 ),
@@ -165,10 +167,12 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "INSERT INTO sessions \
-                 (id, token_hash, user_id, ip_address, user_agent, device_name, device_type, \
-                  fingerprint, data, created_at, last_active_at, expires_at) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                &format!(
+                    "INSERT INTO {TABLE} \
+                     (id, session_token_hash, user_id, ip_address, user_agent, device_name, \
+                      device_type, fingerprint, data, created_at, last_active_at, expires_at) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"
+                ),
                 libsql::params![
                     id.as_str(),
                     token_hash.as_str(),
@@ -192,13 +196,15 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "DELETE FROM sessions WHERE id IN (\
-                     SELECT id FROM sessions \
-                     WHERE user_id = ?1 AND expires_at > ?2 \
-                     ORDER BY last_active_at ASC \
-                     LIMIT MAX(0, (SELECT COUNT(*) FROM sessions \
-                                   WHERE user_id = ?3 AND expires_at > ?4) - ?5)\
-                 )",
+                &format!(
+                    "DELETE FROM {TABLE} WHERE id IN (\
+                         SELECT id FROM {TABLE} \
+                         WHERE user_id = ?1 AND expires_at > ?2 \
+                         ORDER BY last_active_at ASC \
+                         LIMIT MAX(0, (SELECT COUNT(*) FROM {TABLE} \
+                                       WHERE user_id = ?3 AND expires_at > ?4) - ?5)\
+                     )"
+                ),
                 libsql::params![user_id, now_str.as_str(), user_id, now_str.as_str(), max],
             )
             .await
@@ -229,7 +235,10 @@ impl Store {
     pub async fn destroy(&self, id: &str) -> Result<()> {
         self.db
             .conn()
-            .execute_raw("DELETE FROM sessions WHERE id = ?1", libsql::params![id])
+            .execute_raw(
+                &format!("DELETE FROM {TABLE} WHERE id = ?1"),
+                libsql::params![id],
+            )
             .await
             .map_err(|e| Error::internal(format!("destroy session: {e}")))?;
         Ok(())
@@ -244,7 +253,7 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "DELETE FROM sessions WHERE user_id = ?1",
+                &format!("DELETE FROM {TABLE} WHERE user_id = ?1"),
                 libsql::params![user_id],
             )
             .await
@@ -263,7 +272,7 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "DELETE FROM sessions WHERE user_id = ?1 AND id != ?2",
+                &format!("DELETE FROM {TABLE} WHERE user_id = ?1 AND id != ?2"),
                 libsql::params![user_id, keep_id],
             )
             .await
@@ -285,7 +294,7 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "UPDATE sessions SET token_hash = ?1 WHERE id = ?2",
+                &format!("UPDATE {TABLE} SET session_token_hash = ?1 WHERE id = ?2"),
                 libsql::params![new_hash, id],
             )
             .await
@@ -314,8 +323,10 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "UPDATE sessions SET data = ?1, last_active_at = ?2, expires_at = ?3 \
-                 WHERE id = ?4",
+                &format!(
+                    "UPDATE {TABLE} SET data = ?1, last_active_at = ?2, expires_at = ?3 \
+                     WHERE id = ?4"
+                ),
                 libsql::params![data_str, now.to_rfc3339(), expires_at.to_rfc3339(), id],
             )
             .await
@@ -340,7 +351,7 @@ impl Store {
         self.db
             .conn()
             .execute_raw(
-                "UPDATE sessions SET last_active_at = ?1, expires_at = ?2 WHERE id = ?3",
+                &format!("UPDATE {TABLE} SET last_active_at = ?1, expires_at = ?2 WHERE id = ?3"),
                 libsql::params![now.to_rfc3339(), expires_at.to_rfc3339(), id],
             )
             .await
@@ -356,13 +367,14 @@ impl Store {
     /// # Errors
     ///
     /// Returns an error if the database delete fails.
+    #[allow(dead_code)]
     pub async fn cleanup_expired(&self) -> Result<u64> {
         let now = Utc::now().to_rfc3339();
         let affected = self
             .db
             .conn()
             .execute_raw(
-                "DELETE FROM sessions WHERE expires_at < ?1",
+                &format!("DELETE FROM {TABLE} WHERE expires_at < ?1"),
                 libsql::params![now],
             )
             .await
