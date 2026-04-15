@@ -1,6 +1,6 @@
 # Email Module
 
-Enable `test-helpers` for the stub transport in tests.
+`Mailer::with_stub_transport` is available under `#[cfg(test)]` or with the `test-helpers` feature.
 
 Source: `src/email/`.
 
@@ -152,7 +152,7 @@ let mailer = Mailer::new(&email_config)?;
 let source: Arc<dyn TemplateSource> = Arc::new(MyDbSource::new());
 let mailer = Mailer::with_source(&email_config, source)?;
 
-// Stub transport for tests (requires feature "test-helpers")
+// Stub transport for tests (requires feature "test-helpers" or #[cfg(test)])
 let stub = lettre::transport::stub::AsyncStubTransport::new_ok();
 let mailer = Mailer::with_stub_transport(&email_config, stub)?;
 ```
