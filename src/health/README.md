@@ -9,13 +9,13 @@ Registers two routes on an axum `Router`:
 
 ## Key types
 
-| Type | Description |
+| Item | Description |
 |---|---|
 | `health::HealthCheck` | Trait for types that can verify their own readiness |
 | `health::HealthChecks` | Fluent builder that collects named checks; registered in the service registry |
 | `health::router()` | Returns a `Router<AppState>` with `/_live` and `/_ready` mounted |
 
-When the `db` feature is enabled, `db::Database` implements `HealthCheck` out of the box — it verifies health by executing a simple `SELECT 1` on the connection.
+`db::Database` implements `HealthCheck` out of the box — it verifies health by executing a simple `SELECT 1` on the connection.
 
 ## Usage
 
