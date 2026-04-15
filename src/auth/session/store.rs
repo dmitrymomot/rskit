@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::db::{ColumnMap, ConnExt, ConnQueryExt, Database, FromRow};
 use crate::error::{Error, Result};
 
-use super::config::SessionConfig;
+use super::cookie::SessionConfig;
 use super::meta::SessionMeta;
 use super::token::SessionToken;
 

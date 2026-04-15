@@ -21,31 +21,30 @@
 //! - [`fingerprint`] — browser fingerprinting for session hijacking detection.
 //! - [`meta`] — request metadata ([`meta::SessionMeta`]) and [`meta::header_str`] helper.
 
-mod config;
 mod data;
+pub(crate) mod store;
+
+pub mod cookie;
 pub mod device;
-mod extractor;
 pub mod fingerprint;
 pub mod meta;
-mod middleware;
-pub(crate) mod store;
-mod token;
+pub mod token;
 
-pub use config::SessionConfig;
 pub use data::Session as SessionData; // temporary alias — will be un-aliased in Phase 3
-pub use extractor::Session;
-pub(crate) use extractor::SessionState;
-pub use middleware::SessionLayer;
 pub use store::SessionData as RawSessionRow; // legacy name; will be removed at end of Phase 2
 pub use token::SessionToken;
 
+// Re-exports from cookie for back-compat during refactor.
+pub(crate) use cookie::SessionState;
+pub use cookie::{CookieSession as Session, SessionConfig, SessionLayer};
+
 // SessionStore and layer: pub(crate) in normal builds; exposed via test-helpers for integration tests.
 #[cfg(not(any(test, feature = "test-helpers")))]
-pub(crate) use middleware::layer;
+pub(crate) use cookie::layer;
 #[cfg(not(any(test, feature = "test-helpers")))]
 pub(crate) use store::SessionStore;
 
 #[cfg(any(test, feature = "test-helpers"))]
-pub use middleware::layer;
+pub use cookie::layer;
 #[cfg(any(test, feature = "test-helpers"))]
 pub use store::SessionStore;

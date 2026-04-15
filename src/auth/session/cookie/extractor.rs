@@ -8,9 +8,9 @@ use serde::de::DeserializeOwned;
 
 use crate::error::{Error, HttpError};
 
-use super::meta::SessionMeta;
-use super::store::{SessionData as RawSessionRow, SessionStore};
-use super::token::SessionToken;
+use crate::auth::session::meta::SessionMeta;
+use crate::auth::session::store::{SessionData as RawSessionRow, SessionStore};
+use crate::auth::session::token::SessionToken;
 
 #[derive(Clone)]
 pub(crate) enum SessionAction {
