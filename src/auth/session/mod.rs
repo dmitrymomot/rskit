@@ -1,25 +1,27 @@
 //! # modo::auth::session
 //!
-//! Database-backed HTTP session management.
+//! Unified session management for cookie and JWT transports.
 //!
-//! Sessions are stored in a SQLite table (`authenticated_sessions`) and identified by a
-//! signed, opaque cookie. The middleware handles the full request/response
-//! lifecycle: reading the session token from the cookie on the request path,
-//! loading and fingerprint-validating the session, running the handler, and
-//! then flushing dirty data or touching the expiry timestamp before writing the
-//! `Set-Cookie` header on the response path.
+//! v0.8 provides two independent transports that share one SQLite table
+//! (`authenticated_sessions`) and one public data type ([`Session`]).
 //!
-//! # Provides
+//! ## Transports
 //!
-//! - [`CookieSessionsConfig`] — deserialised session configuration (TTL, cookie name, limits).
-//! - [`CookieSession`] — axum extractor; primary API for handlers needing session mutation.
-//! - [`Session`] — transport-agnostic session data snapshot (alias: `SessionData`).
+//! | Transport | Module | Entry point |
+//! |-----------|--------|-------------|
+//! | Cookie | [`cookie`] | [`cookie::CookieSessionService`] |
+//! | JWT | [`jwt`] | [`jwt::JwtSessionService`] |
+//!
+//! ## Provides
+//!
+//! - [`Session`] — transport-agnostic session data extractor (read-only snapshot).
 //! - [`SessionToken`] — opaque 32-byte random token; redacted in `Debug`/`Display`.
-//! - [`CookieSessionLayer`] — Tower layer; apply to a `Router` to enable session support.
-//! - [`layer`] — convenience constructor for [`CookieSessionLayer`].
+//! - [`cookie`] — cookie-backed session transport ([`cookie::CookieSession`], [`cookie::CookieSessionService`], [`cookie::CookieSessionLayer`], [`cookie::CookieSessionsConfig`]).
+//! - [`jwt`] — JWT-backed session transport ([`jwt::JwtSession`], [`jwt::JwtSessionService`], [`jwt::JwtLayer`], [`jwt::JwtSessionsConfig`]).
 //! - [`device`] — user-agent parsing helpers for device classification.
 //! - [`fingerprint`] — browser fingerprinting for session hijacking detection.
 //! - [`meta`] — request metadata ([`meta::SessionMeta`]) and [`meta::header_str`] helper.
+//! - [`token`] — [`SessionToken`] type (also re-exported at this level).
 
 mod data;
 pub(crate) mod store;
@@ -48,12 +50,7 @@ pub use cookie::{
 // Maps to CookieSession so existing handler signatures keep compiling.
 pub use cookie::CookieSession as SessionExtractor;
 
-// SessionStore and layer: pub(crate) in normal builds; exposed via test-helpers for integration tests.
-#[cfg(not(any(test, feature = "test-helpers")))]
-pub(crate) use cookie::layer;
-#[cfg(not(any(test, feature = "test-helpers")))]
-pub(crate) use store::SessionStore;
-
+// SessionStore and layer exposed for integration tests only.
 #[cfg(any(test, feature = "test-helpers"))]
 pub use cookie::layer;
 #[cfg(any(test, feature = "test-helpers"))]

@@ -1,3 +1,9 @@
+//! [`SessionToken`] — opaque 32-byte cryptographic session token.
+//!
+//! The raw bytes are never transmitted; the hex-encoded value goes in the
+//! signed cookie, and only the SHA-256 hash is stored in the database.
+//! `Debug` and `Display` both redact the value as `"****"`.
+
 use sha2::{Digest, Sha256};
 use std::fmt;
 

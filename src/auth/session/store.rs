@@ -1,3 +1,10 @@
+//! Low-level SQLite-backed session store — internal to `auth::session`.
+//!
+//! [`SessionStore`] is `pub(crate)` in normal builds and exposed as `pub` only
+//! under `#[cfg(any(test, feature = "test-helpers"))]`. Application code should
+//! interact with sessions through [`super::cookie::CookieSessionService`] or
+//! [`super::jwt::JwtSessionService`] rather than this type directly.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -43,8 +50,9 @@ pub struct SessionData {
 /// Low-level SQLite-backed session store.
 ///
 /// Wraps a [`Database`] handle and exposes async methods for all session CRUD
-/// operations. Consumed by [`super::middleware::SessionLayer`] and available
-/// to handlers via [`super::extractor::Session`].
+/// operations. Consumed by [`super::cookie::CookieSessionLayer`] and
+/// [`super::jwt::JwtLayer`]; session data is exposed to handlers via
+/// [`super::data::Session`].
 #[derive(Clone)]
 pub struct SessionStore {
     db: Database,

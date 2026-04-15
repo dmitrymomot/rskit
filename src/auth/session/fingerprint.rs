@@ -8,9 +8,8 @@ use sha2::{Digest, Sha256};
 /// prevent boundary confusion. Returns the fingerprint as a 64-character
 /// lowercase hex string.
 ///
-/// Used by [`super::middleware::SessionLayer`] to detect potential session
-/// hijacking when [`super::config::SessionConfig::validate_fingerprint`] is
-/// `true`.
+/// Used by [`super::cookie::CookieSessionLayer`] to detect potential session
+/// hijacking when the session configuration has fingerprint validation enabled.
 pub fn compute_fingerprint(
     user_agent: &str,
     accept_language: &str,

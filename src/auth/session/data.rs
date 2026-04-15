@@ -1,4 +1,8 @@
-//! Session data and extractor — transport-agnostic.
+//! [`Session`] — transport-agnostic session data type and axum extractor.
+//!
+//! Populated into request extensions by [`super::cookie::CookieSessionLayer`]
+//! (cookie transport) or [`super::jwt::JwtLayer`] (JWT transport). Handlers
+//! extract it the same way regardless of which transport is active.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
