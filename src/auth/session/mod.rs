@@ -35,7 +35,6 @@ pub mod token;
 pub use data::Session;
 pub use data::Session as SessionData; // alias for back-compat
 
-pub use store::SessionData as RawSessionRow; // legacy name; will be removed at end of Phase 2
 pub use token::SessionToken;
 
 // Re-exports from cookie for back-compat during refactor.

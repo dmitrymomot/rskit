@@ -10,7 +10,7 @@ use crate::error::{Error, HttpError};
 
 use crate::auth::session::data::Session;
 use crate::auth::session::meta::SessionMeta;
-use crate::auth::session::store::SessionData as RawSessionRow;
+use crate::auth::session::store::SessionData;
 use crate::auth::session::token::SessionToken;
 
 use super::CookieSessionService;
@@ -25,7 +25,7 @@ pub(crate) enum SessionAction {
 pub(crate) struct SessionState {
     pub service: CookieSessionService,
     pub meta: SessionMeta,
-    pub current: Mutex<Option<RawSessionRow>>,
+    pub current: Mutex<Option<SessionData>>,
     pub dirty: AtomicBool,
     pub action: Mutex<SessionAction>,
 }
@@ -378,8 +378,8 @@ impl CookieSession {
     }
 }
 
-/// Convert a store-internal [`RawSessionRow`] into the public [`Session`] type.
-pub(crate) fn raw_to_session(raw: RawSessionRow) -> Session {
+/// Convert a store-internal [`SessionData`] into the public [`Session`] type.
+pub(crate) fn raw_to_session(raw: SessionData) -> Session {
     Session {
         id: raw.id,
         user_id: raw.user_id,
