@@ -222,7 +222,7 @@ Default order (first `Some` wins):
 
 1. `QueryParamResolver` -- reads `?lang=uk` from URL query string.
 2. `CookieResolver` -- reads `lang` cookie.
-3. `SessionResolver` -- reads `"locale"` key from session data (requires `SessionLayer`). Only included when the `session` feature is enabled.
+3. `SessionResolver` -- reads `"locale"` key from session data (requires `SessionLayer`). Always in the chain; returns `None` silently when no session extension is present.
 4. `AcceptLanguageResolver` -- parses `Accept-Language` header, picks highest-quality match.
 
 All resolvers validate against available locales when `available_locales` is non-empty.
