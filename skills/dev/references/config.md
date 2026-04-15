@@ -114,7 +114,7 @@ cfg.server.port = 3000;
 | `cors`             | `middleware::CorsConfig`                  | `cors`             | CORS policy                                                                 |
 | `csrf`             | `middleware::CsrfConfig`                  | `csrf`             | CSRF protection                                                             |
 | `rate_limit`       | `middleware::RateLimitConfig`             | `rate_limit`       | Token-bucket rate limiting                                                  |
-| `session`          | `auth::session::SessionConfig`            | `session`          | Session TTL, cookie name, fingerprint, touch, per-user limit                |
+| `session`          | `auth::session::CookieSessionsConfig`     | `session`          | Session TTL, cookie name, fingerprint, touch, per-user limit, cookie config |
 | `job`              | `job::JobConfig`                          | `job`              | Background job queue settings                                               |
 | `trusted_proxies`  | `Vec<String>`                             | `trusted_proxies`  | CIDR ranges for `ClientIpLayer`                                             |
 | `oauth`            | `auth::oauth::OAuthConfig`                | `oauth`            | OAuth provider settings                                                     |
@@ -124,7 +124,7 @@ cfg.server.port = 3000;
 | `storage`          | `storage::BucketConfig`                   | `storage`          | S3-compatible storage bucket                                                |
 | `dns`              | `dns::DnsConfig`                          | `dns`              | DNS verification                                                            |
 | `apikey`           | `auth::apikey::ApiKeyConfig`              | `apikey`           | API key module                                                              |
-| `jwt`              | `auth::jwt::JwtConfig`                    | `jwt`              | JWT signing and validation                                                  |
+| `jwt`              | `auth::session::jwt::JwtSessionsConfig`   | `jwt`              | JWT session signing, validation, and token source configuration             |
 
 ## Sub-Config Details
 
@@ -233,15 +233,25 @@ The `modo::tracing` module re-exports the following macros from the `tracing` cr
 | `cleanup_interval_secs` | `u64`   | `60`    | Purge interval for expired entries |
 | `max_keys`              | `usize` | `10000` | Max tracked keys. `0` = unlimited  |
 
-### `auth::session::SessionConfig`
+### `auth::session::CookieSessionsConfig`
 
-| Field                   | Type     | Default      | Description                                           |
-| ----------------------- | -------- | ------------ | ----------------------------------------------------- |
-| `session_ttl_secs`      | `u64`    | `2592000`    | Session lifetime (30 days)                            |
-| `cookie_name`           | `String` | `"_session"` | Session cookie name                                   |
-| `validate_fingerprint`  | `bool`   | `true`       | Reject mismatched browser fingerprints                |
-| `touch_interval_secs`   | `u64`    | `300`        | Min interval between `last_active_at` updates (5 min) |
-| `max_sessions_per_user` | `usize`  | `10`         | Max concurrent sessions per user. Must be > 0         |
+`#[non_exhaustive]`. Also exported as the back-compat alias `auth::session::SessionConfig`.
+
+| Field                   | Type           | Default      | Description                                           |
+| ----------------------- | -------------- | ------------ | ----------------------------------------------------- |
+| `session_ttl_secs`      | `u64`          | `2592000`    | Session lifetime (30 days)                            |
+| `cookie_name`           | `String`       | `"_session"` | Session cookie name                                   |
+| `validate_fingerprint`  | `bool`         | `true`       | Reject mismatched browser fingerprints                |
+| `touch_interval_secs`   | `u64`          | `300`        | Min interval between `last_active_at` updates (5 min) |
+| `max_sessions_per_user` | `usize`        | `10`         | Max concurrent sessions per user. Must be > 0         |
+| `cookie`                | `CookieConfig` | see defaults | Cookie security attributes (secret, Secure, HttpOnly, SameSite). The `secret` field is required when actually used. |
+
+Because `cookie` is embedded directly (not `Option`), a bare `session:` block will use the `CookieConfig` defaults. Set `session.cookie.secret` before constructing `CookieSessionService`.
+
+```rust
+let mut cfg = CookieSessionsConfig::default();
+cfg.cookie.secret = "a-64-character-or-longer-secret-for-signing-cookies..".to_string();
+```
 
 ### `job::JobConfig`
 
@@ -324,15 +334,47 @@ Size format for `max_file_size`: `<number><unit>` where unit is `b`, `kb`, `mb`,
 | `txt_prefix` | `String` | `"_modo-verify"` | Prefix for TXT record lookups (`{txt_prefix}.{domain}`)                 |
 | `timeout_ms` | `u64`    | `5000`           | UDP receive timeout in milliseconds                                     |
 
-### `auth::jwt::JwtConfig`
+### `auth::session::jwt::JwtSessionsConfig`
 
-| Field            | Type             | Default | Description                                                                                      |
-| ---------------- | ---------------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `secret`         | `String`         | `""`    | HMAC secret for signing and verifying tokens                                                     |
-| `default_expiry` | `Option<u64>`    | `None`  | Default token lifetime in seconds. Applied by `JwtEncoder::encode()` when `claims.exp` is `None` |
-| `leeway`         | `u64`            | `0`     | Clock skew tolerance in seconds for `exp` and `nbf` checks                                       |
-| `issuer`         | `Option<String>` | `None`  | Required `iss` claim. Decoder rejects non-matching tokens                                        |
-| `audience`       | `Option<String>` | `None`  | Required `aud` claim. Decoder rejects non-matching tokens                                        |
+`#[non_exhaustive]`. JWT-backed session transport. The `jwt:` YAML key maps to this struct.
+
+| Field                  | Type                | Default                              | Description                                                          |
+| ---------------------- | ------------------- | ------------------------------------ | -------------------------------------------------------------------- |
+| `signing_secret`       | `String`            | `""`                                 | HMAC secret for signing and verifying tokens. Required for use.      |
+| `issuer`               | `Option<String>`    | `None`                               | Required `iss` claim. Decoder rejects non-matching tokens.           |
+| `access_ttl_secs`      | `u64`               | `900`                                | Access token lifetime in seconds (15 minutes).                       |
+| `refresh_ttl_secs`     | `u64`               | `2592000`                            | Refresh token lifetime in seconds (30 days).                         |
+| `max_per_user`         | `usize`             | `20`                                 | Maximum concurrent sessions per user.                                |
+| `touch_interval_secs`  | `u64`               | `300`                                | Min interval between session touch updates in seconds (5 minutes).   |
+| `stateful_validation`  | `bool`              | `true`                               | Validate tokens against the session store on every request.          |
+| `access_source`        | `TokenSourceConfig` | `bearer`                             | Where to extract access tokens from requests.                        |
+| `refresh_source`       | `TokenSourceConfig` | `body { field: "refresh_token" }`    | Where to extract refresh tokens from requests.                       |
+
+**`TokenSourceConfig`** — selects the token extraction strategy. Serialized as a tagged enum with `kind`:
+
+| `kind`    | Extra fields        | Description                                              |
+| --------- | ------------------- | -------------------------------------------------------- |
+| `bearer`  | —                   | `Authorization: Bearer <token>` header                   |
+| `cookie`  | `name: String`      | Named cookie                                             |
+| `header`  | `name: String`      | Custom request header                                    |
+| `query`   | `name: String`      | Named query parameter                                    |
+| `body`    | `field: String`     | JSON body field (read in session handler, not middleware) |
+
+```yaml
+jwt:
+  signing_secret: "${JWT_SECRET}"
+  issuer: "my-app"
+  access_ttl_secs: 900
+  refresh_ttl_secs: 2592000
+  max_per_user: 20
+  touch_interval_secs: 300
+  stateful_validation: true
+  access_source:
+    kind: bearer
+  refresh_source:
+    kind: body
+    field: refresh_token
+```
 
 ### `auth::apikey::ApiKeyConfig`
 
@@ -375,6 +417,6 @@ Every framework module (`db`, `session`, `job`, `auth`, `email`, `template`, `st
 
 10. **Sentry is always compiled in** — there is no `sentry` cargo feature. Set a non-empty `tracing.sentry.dsn` to enable it at runtime; leave it empty (or omit the `sentry` section) to disable.
 
-11. **Session config path** — `SessionConfig` lives under `modo::auth::session`, not a top-level `modo::session`. Similarly `OAuthConfig`, `JwtConfig`, and `ApiKeyConfig` live under `modo::auth`.
+11. **Session config paths** — `CookieSessionsConfig` (and its back-compat alias `SessionConfig`) live under `modo::auth::session`. `JwtSessionsConfig` lives under `modo::auth::session::jwt`. `OAuthConfig` and `ApiKeyConfig` live under `modo::auth`.
 
 12. **`#[non_exhaustive]` constructors** — `Config`, `tracing::Config`, and `SentryConfig` are `#[non_exhaustive]`. Build them with `Default::default()` plus field assignment rather than struct literals from outside the crate.
