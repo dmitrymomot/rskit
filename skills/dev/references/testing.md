@@ -6,7 +6,7 @@ tests. Enable it in your crate's dev-dependencies:
 
 ```toml
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
 ```
 
 Source: `src/testing/` module. Re-exported as `modo::testing`.
@@ -433,7 +433,7 @@ async fn test_full_app_with_db_and_session() {
 
 ## Running tests
 
-modo 0.7 ships every module unconditionally. The only feature flag is
+modo 0.8 ships every module unconditionally. The only feature flag is
 `test-helpers`, which gates the in-memory/stub backends used by tests:
 
 ```bash

@@ -2,7 +2,7 @@
 
 ## Overview
 
-modo provides database-backed HTTP sessions (libsql/SQLite via `sessions` table), signed cookie utilities, and cookie-based flash messages. All three are always available in modo 0.7 — no feature flags required.
+modo provides database-backed HTTP sessions (libsql/SQLite via `sessions` table), signed cookie utilities, and cookie-based flash messages. All three are always available in modo 0.8 — no feature flags required.
 
 ---
 
@@ -373,7 +373,7 @@ shortcuts `modo::middlewares::{session, Flash}` are also available.
 
 1. **Raw `cookie::CookieJar`, not `axum_extra`**: The session and flash middleware use the raw `cookie` crate's `CookieJar` and `SignedJar` internally for cookie signing -- not `axum_extra::extract::cookie::SignedCookieJar`. The `axum_extra` types are re-exported from `modo::cookie` for use in handlers, but the middleware does its own signing.
 
-2. **Session, Flash, and cookie are always compiled**: no feature flags in modo 0.7.
+2. **Session, Flash, and cookie are always compiled**: no feature flags in modo 0.8.
 
 3. **`sessions` table schema not shipped**: The `sessions` table schema is not shipped as a migration -- end-apps own their DB schema.
 

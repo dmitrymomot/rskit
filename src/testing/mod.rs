@@ -7,7 +7,7 @@
 //!
 //! ```toml
 //! [dev-dependencies]
-//! modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
+//! modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
 //! ```
 //!
 //! Integration test files that use these helpers should also guard their

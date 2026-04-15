@@ -89,7 +89,7 @@ cookie:
 
 ## Config Struct
 
-`modo::Config` — top-level framework config (`#[non_exhaustive]`). All fields use `#[serde(default)]`, so any section can be omitted. Every sub-config is present on every build (modo 0.7 compiles every module unconditionally).
+`modo::Config` — top-level framework config (`#[non_exhaustive]`). All fields use `#[serde(default)]`, so any section can be omitted. Every sub-config is present on every build (modo 0.8 compiles every module unconditionally).
 
 Source: `src/config/modo.rs`
 
@@ -344,11 +344,11 @@ Size format for `max_file_size`: `<number><unit>` where unit is `b`, `kb`, `mb`,
 
 ## Feature Flags
 
-modo 0.7 has exactly one cargo feature: `test-helpers`. Enable it only under `[dev-dependencies]` to gate the `modo::testing` module and all in-memory/stub backends:
+modo 0.8 has exactly one cargo feature: `test-helpers`. Enable it only under `[dev-dependencies]` to gate the `modo::testing` module and all in-memory/stub backends:
 
 ```toml
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
 ```
 
 Every framework module (`db`, `session`, `job`, `auth`, `email`, `template`, `storage`, `dns`, `geolocation`, `apikey`, `jwt`, `sentry`, `tier`, etc.) is compiled unconditionally. To disable a module, simply leave its YAML config section at defaults and skip wiring it into `main`.
@@ -367,7 +367,7 @@ Every framework module (`db`, `session`, `job`, `auth`, `email`, `template`, `st
 
 6. **`load()` is not async** — it reads the file synchronously with `std::fs::read_to_string`. Call it at startup before entering the async runtime's hot path.
 
-7. **All config sections are always present on `Config`** — modo 0.7 compiles every module unconditionally, so `database`, `session`, `job`, etc. are available on every build. Unknown YAML keys are silently ignored by serde.
+7. **All config sections are always present on `Config`** — modo 0.8 compiles every module unconditionally, so `database`, `session`, `job`, etc. are available on every build. Unknown YAML keys are silently ignored by serde.
 
 8. **`max_sessions_per_user` must be > 0** — deserialization fails if set to `0` (custom deserializer rejects it to prevent locking out all users).
 

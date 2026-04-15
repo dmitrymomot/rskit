@@ -1,7 +1,7 @@
 # Auth Reference (OAuth2, JWT, Password, TOTP, Role-Based Gating, Guards)
 
 All identity and access features live under `modo::auth` and are always
-available — there are no per-module feature flags in modo 0.7. The only
+available — there are no per-module feature flags in modo 0.8. The only
 cargo feature is `test-helpers` (dev-only test scaffolding), which does
 not gate any of the modules below.
 
@@ -679,7 +679,7 @@ The JWT module follows this pattern consistently -- all `JwtError` variants prod
 - `RoleExtractor` is RPITIT (not object-safe). Never use `dyn RoleExtractor`; pass concrete types into `modo::auth::role::middleware(...)`.
 - `Revocation` and `TokenSource` are object-safe -- use `Arc<dyn Revocation>` and `Arc<dyn TokenSource>`. `Revocation::is_revoked` returns `Pin<Box<dyn Future>>` (not RPITIT) so it stays object-safe.
 - `TokenVerifier` and `TokenSigner` are object-safe -- use `Arc<dyn TokenVerifier>` and `Arc<dyn TokenSigner>`.
-- All auth modules are always compiled in modo 0.7 — only `test-helpers` exists as a cargo feature, and it gates none of these modules.
+- All auth modules are always compiled in modo 0.8 — only `test-helpers` exists as a cargo feature, and it gates none of these modules.
 - The role middleware must apply via `.layer()` on the outer router. `ApiKeyLayer` likewise applies via `.layer()`. Guards (`require_authenticated`, `require_role`, `require_scope`) must apply via `.route_layer()` after route matching.
 - `require_scope` returns **500** (not 401) when `ApiKeyLayer` is missing — missing middleware is a server wiring bug, not a client auth failure. The guard logs the misconfiguration via `tracing::error!`.
 - `Role` extractor returns **500** when `auth::role::middleware()` is not applied — same rationale (server wiring bug, not a client failure).

@@ -10,10 +10,10 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { package = "modo-rs", version = "0.7" }
+//! modo = { package = "modo-rs", version = "0.8" }
 //!
 //! [dev-dependencies]
-//! modo = { package = "modo-rs", version = "0.7", features = ["test-helpers"] }
+//! modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
 //! ```
 //!
 //! Inside a handler module, pull in the common handler-time types with:
