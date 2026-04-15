@@ -130,9 +130,26 @@ impl JwtSessionService {
     }
 
     /// Returns a reference to the underlying session store.
-    #[allow(dead_code)]
     pub(crate) fn store(&self) -> &SessionStore {
         &self.inner.store
+    }
+
+    /// Creates a [`JwtLayer`](super::middleware::JwtLayer) backed by this service.
+    ///
+    /// The returned layer performs stateful validation: after verifying the JWT
+    /// signature and claims it hashes the `jti`, loads the session row, and
+    /// inserts the transport-agnostic [`Session`](crate::auth::session::Session)
+    /// into request extensions. Returns `401` when the session row is absent.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let svc = JwtSessionService::new(db, config)?;
+    /// let app = Router::new()
+    ///     .route("/me", get(whoami).route_layer(svc.layer()));
+    /// ```
+    pub fn layer(&self) -> super::middleware::JwtLayer {
+        super::middleware::JwtLayer::from_service(self.clone())
     }
 
     /// Authenticate a user and issue a new [`TokenPair`].

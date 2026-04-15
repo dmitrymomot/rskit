@@ -13,7 +13,9 @@ use crate::Error;
 use super::claims::Claims;
 use super::decoder::JwtDecoder;
 use super::error::JwtError;
+use super::service::JwtSessionService;
 use super::source::{BearerSource, TokenSource};
+use crate::auth::session::token::SessionToken;
 
 /// Tower [`Layer`] that installs JWT authentication on a route.
 ///
@@ -21,20 +23,53 @@ use super::source::{BearerSource, TokenSource};
 /// 1. Tries each `TokenSource` in order; returns `401` if none yields a token.
 /// 2. Decodes and validates the token with `JwtDecoder`; returns `401` on failure.
 /// 3. Inserts [`Claims`] into request extensions for handler extraction.
+/// 4. When constructed via [`JwtLayer::from_service`], also performs a stateful
+///    database row lookup: hashes the `jti` claim and reads the session row,
+///    inserting the transport-agnostic [`Session`](crate::auth::session::Session)
+///    into extensions. Returns `401` if the row is missing (logged-out / revoked).
 ///
 /// The default token source is [`BearerSource`] (`Authorization: Bearer <token>`).
 #[derive(Clone)]
 pub struct JwtLayer {
     decoder: JwtDecoder,
     sources: Arc<[Arc<dyn TokenSource>]>,
+    /// Present only when stateful validation is enabled (constructed via
+    /// [`JwtLayer::from_service`]). When `None` the layer behaves as a
+    /// purely stateless JWT validator.
+    service: Option<JwtSessionService>,
 }
 
 impl JwtLayer {
     /// Creates a `JwtLayer` with `BearerSource` as the sole token source.
+    ///
+    /// This constructor performs **stateless** JWT validation only (signature +
+    /// claims). No database row lookup is performed. Use [`JwtLayer::from_service`]
+    /// for stateful validation that also inserts [`Session`](crate::auth::session::Session)
+    /// into request extensions.
     pub fn new(decoder: JwtDecoder) -> Self {
         Self {
             decoder,
             sources: Arc::from(vec![Arc::new(BearerSource) as Arc<dyn TokenSource>]),
+            service: None,
+        }
+    }
+
+    /// Creates a `JwtLayer` backed by a [`JwtSessionService`].
+    ///
+    /// After JWT signature/claims validation the middleware hashes the `jti`
+    /// claim, looks up the session row in the database, and inserts the
+    /// transport-agnostic [`Session`](crate::auth::session::Session) into
+    /// request extensions. Returns `401` with `auth:session_not_found` when
+    /// the session row is absent (logged-out or revoked).
+    ///
+    /// Use [`JwtSessionService::layer`] as the primary entry-point; this
+    /// constructor is the lower-level building block.
+    pub fn from_service(service: JwtSessionService) -> Self {
+        let decoder = service.decoder().clone();
+        Self {
+            decoder,
+            sources: Arc::from(vec![Arc::new(BearerSource) as Arc<dyn TokenSource>]),
+            service: Some(service),
         }
     }
 
@@ -55,6 +90,7 @@ impl<Svc> Layer<Svc> for JwtLayer {
             inner,
             decoder: self.decoder.clone(),
             sources: self.sources.clone(),
+            service: self.service.clone(),
         }
     }
 }
@@ -64,6 +100,7 @@ pub struct JwtMiddleware<Svc> {
     inner: Svc,
     decoder: JwtDecoder,
     sources: Arc<[Arc<dyn TokenSource>]>,
+    service: Option<JwtSessionService>,
 }
 
 impl<Svc: Clone> Clone for JwtMiddleware<Svc> {
@@ -72,6 +109,7 @@ impl<Svc: Clone> Clone for JwtMiddleware<Svc> {
             inner: self.inner.clone(),
             decoder: self.decoder.clone(),
             sources: self.sources.clone(),
+            service: self.service.clone(),
         }
     }
 }
@@ -93,6 +131,7 @@ where
     fn call(&mut self, request: Request<Body>) -> Self::Future {
         let decoder = self.decoder.clone();
         let sources = self.sources.clone();
+        let service = self.service.clone();
         let mut inner = self.inner.clone();
         std::mem::swap(&mut self.inner, &mut inner);
 
@@ -116,6 +155,46 @@ where
                 Ok(c) => c,
                 Err(e) => return Ok(e.into_response()),
             };
+
+            // Stateful validation: when backed by a JwtSessionService, hash the
+            // jti claim, load the session row, and insert the transport-agnostic
+            // Session into extensions. Returns 401 when the row is absent.
+            if let Some(svc) = service {
+                let jti = match claims.jti.as_deref() {
+                    Some(j) => j,
+                    None => {
+                        let err =
+                            Error::unauthorized("unauthorized").with_code("auth:session_not_found");
+                        return Ok(err.into_response());
+                    }
+                };
+
+                let session_token = match SessionToken::from_raw(jti) {
+                    Some(t) => t,
+                    None => {
+                        let err =
+                            Error::unauthorized("unauthorized").with_code("auth:session_not_found");
+                        return Ok(err.into_response());
+                    }
+                };
+
+                let raw = match svc.store().read_by_token_hash(&session_token.hash()).await {
+                    Ok(Some(row)) => row,
+                    Ok(None) => {
+                        let err =
+                            Error::unauthorized("unauthorized").with_code("auth:session_not_found");
+                        return Ok(err.into_response());
+                    }
+                    Err(_) => {
+                        let err =
+                            Error::unauthorized("unauthorized").with_code("auth:session_not_found");
+                        return Ok(err.into_response());
+                    }
+                };
+
+                let session_data = super::extractor::raw_to_session(raw);
+                parts.extensions.insert(session_data);
+            }
 
             // Insert claims into extensions
             parts.extensions.insert(claims);
