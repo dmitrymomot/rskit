@@ -53,8 +53,10 @@ async fn list_users(
     Ok(Json(users))
 }
 
-async fn whoami(session: Session) -> String {
-    session.user_id().unwrap_or_else(|| "anonymous".to_string())
+async fn whoami(session: Option<Session>) -> String {
+    session
+        .map(|s| s.user_id)
+        .unwrap_or_else(|| "anonymous".to_string())
 }
 
 #[tokio::test]

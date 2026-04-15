@@ -10,53 +10,45 @@ use cookie::{Cookie, CookieJar, SameSite};
 use http::{HeaderValue, Request, Response};
 use tower::{Layer, Service};
 
-use crate::cookie::{CookieConfig, Key};
 use crate::ip::ClientIp;
 
-use super::extractor::{SessionAction, SessionState};
+use super::CookieSessionService;
+use super::extractor::{SessionAction, SessionState, raw_to_session};
 use crate::auth::session::meta::{SessionMeta, header_str};
-use crate::auth::session::store::SessionStore;
 use crate::auth::session::token::SessionToken;
+use crate::cookie::{CookieConfig, Key};
 
 // --- Layer ---
 
 /// Tower [`Layer`] that installs the session middleware into the request pipeline.
 ///
-/// Construct with [`layer`] rather than directly. Apply before route handlers
-/// with `Router::layer(session_layer)`.
+/// Construct with [`layer`] or [`CookieSessionService::layer`] rather than
+/// directly. Apply before route handlers with `Router::layer(session_layer)`.
 ///
 /// The middleware reads the signed session cookie, loads the session from the
-/// database, validates the browser fingerprint (when configured), and inserts
-/// an `Arc<SessionState>` into the request extensions so the [`super::extractor::Session`]
-/// extractor can access it.
+/// database, validates the browser fingerprint (when configured), and inserts:
+/// - an `Arc<SessionState>` for the [`super::extractor::CookieSession`] extractor
+/// - a [`crate::auth::session::data::Session`] snapshot for the data extractor
 ///
 /// On the response path it flushes dirty session data, touches the expiry
 /// timestamp, and sets or clears the session cookie as needed.
 #[derive(Clone)]
-pub struct SessionLayer {
-    store: Arc<SessionStore>,
-    cookie_config: CookieConfig,
-    key: Key,
+pub struct CookieSessionLayer {
+    service: CookieSessionService,
 }
 
-/// Create a [`SessionLayer`] from a [`SessionStore`], [`CookieConfig`], and signing [`Key`].
-pub fn layer(store: SessionStore, cookie_config: &CookieConfig, key: &Key) -> SessionLayer {
-    SessionLayer {
-        store: Arc::new(store),
-        cookie_config: cookie_config.clone(),
-        key: key.clone(),
-    }
+/// Create a [`CookieSessionLayer`] from a [`CookieSessionService`].
+pub fn layer(service: CookieSessionService) -> CookieSessionLayer {
+    CookieSessionLayer { service }
 }
 
-impl<S> Layer<S> for SessionLayer {
-    type Service = SessionMiddleware<S>;
+impl<S> Layer<S> for CookieSessionLayer {
+    type Service = CookieSessionMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        SessionMiddleware {
+        CookieSessionMiddleware {
             inner,
-            store: self.store.clone(),
-            cookie_config: self.cookie_config.clone(),
-            key: self.key.clone(),
+            service: self.service.clone(),
         }
     }
 }
@@ -65,16 +57,14 @@ impl<S> Layer<S> for SessionLayer {
 
 /// Tower [`Service`] that manages the session lifecycle for each request.
 ///
-/// Produced by [`SessionLayer`]; not constructed directly.
+/// Produced by [`CookieSessionLayer`]; not constructed directly.
 #[derive(Clone)]
-pub struct SessionMiddleware<S> {
+pub struct CookieSessionMiddleware<S> {
     inner: S,
-    store: Arc<SessionStore>,
-    cookie_config: CookieConfig,
-    key: Key,
+    service: CookieSessionService,
 }
 
-impl<S, ReqBody> Service<Request<ReqBody>> for SessionMiddleware<S>
+impl<S, ReqBody> Service<Request<ReqBody>> for CookieSessionMiddleware<S>
 where
     S: Service<Request<ReqBody>, Response = Response<Body>> + Clone + Send + 'static,
     S::Future: Send + 'static,
@@ -90,15 +80,16 @@ where
     }
 
     fn call(&mut self, mut request: Request<ReqBody>) -> Self::Future {
-        let store = self.store.clone();
-        let cookie_config = self.cookie_config.clone();
-        let key = self.key.clone();
+        let svc = self.service.clone();
         let mut inner = self.inner.clone();
         std::mem::swap(&mut self.inner, &mut inner);
 
         Box::pin(async move {
+            let store = svc.store();
             let config = store.config();
             let cookie_name = &config.cookie_name;
+            let key = svc.cookie_key();
+            let cookie_config = svc.config().cookie.clone();
 
             // 1. Extract client IP
             let ip = request
@@ -122,7 +113,7 @@ where
             let meta = SessionMeta::from_headers(ip, ua, accept_lang, accept_enc);
 
             // 3. Read signed session cookie
-            let session_token = read_signed_cookie(request.headers(), cookie_name, &key);
+            let session_token = read_signed_cookie(request.headers(), cookie_name, key);
             let had_cookie = session_token.is_some();
 
             // 4. Load session from DB
@@ -161,9 +152,15 @@ where
                 elapsed >= chrono::Duration::seconds(config.touch_interval_secs as i64)
             });
 
-            // 7. Build SessionState
+            // 7. Insert Session data view for the data extractor
+            if let Some(raw) = current_session.as_ref() {
+                let session_data = raw_to_session(raw.clone());
+                request.extensions_mut().insert(session_data);
+            }
+
+            // 8. Build SessionState and insert for CookieSession extractor
             let session_state = Arc::new(SessionState {
-                store: (*store).clone(),
+                service: svc.clone(),
                 meta,
                 current: Mutex::new(current_session.clone()),
                 dirty: AtomicBool::new(false),
@@ -192,11 +189,11 @@ where
                         &token.as_hex(),
                         ttl_secs,
                         &cookie_config,
-                        &key,
+                        key,
                     );
                 }
                 SessionAction::Remove => {
-                    remove_signed_cookie(&mut response, cookie_name, &cookie_config, &key);
+                    remove_signed_cookie(&mut response, cookie_name, &cookie_config, key);
                 }
                 SessionAction::None => {
                     if let Some(ref session) = current_session {
@@ -239,14 +236,14 @@ where
                                 &token.as_hex(),
                                 ttl_secs,
                                 &cookie_config,
-                                &key,
+                                key,
                             );
                         }
                     }
 
                     // Stale cookie cleanup
                     if had_cookie && current_session.is_none() && !read_failed {
-                        remove_signed_cookie(&mut response, cookie_name, &cookie_config, &key);
+                        remove_signed_cookie(&mut response, cookie_name, &cookie_config, key);
                     }
                 }
             }

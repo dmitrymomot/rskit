@@ -1,9 +1,11 @@
 use cookie::{Cookie, CookieJar};
 
+use crate::auth::session::CookieSessionService;
 use crate::auth::session::CookieSessionsConfig;
 use crate::auth::session::meta::SessionMeta;
 use crate::auth::session::store::SessionStore;
 use crate::cookie::{CookieConfig, Key, key_from_config};
+use crate::db::Database;
 
 use super::db::TestDb;
 
@@ -32,7 +34,7 @@ const SESSIONS_INDEXES_SQL: &[&str] = &[
 ///
 /// `TestSession` sets up an in-memory `sessions` table on the provided
 /// [`TestDb`], derives a signing key, and exposes helpers for authenticating
-/// test users and building the [`SessionLayer`](crate::auth::session::SessionLayer)
+/// test users and building the [`CookieSessionLayer`](crate::auth::session::CookieSessionLayer)
 /// needed by [`super::TestApp`].
 ///
 /// # Example
@@ -41,10 +43,10 @@ const SESSIONS_INDEXES_SQL: &[&str] = &[
 /// # #[cfg(feature = "test-helpers")]
 /// # async fn example() {
 /// use axum::routing::get;
-/// use modo::auth::session::Session;
+/// use modo::auth::session::CookieSession;
 /// use modo::testing::{TestApp, TestDb, TestSession};
 ///
-/// async fn whoami(session: Session) -> String {
+/// async fn whoami(session: CookieSession) -> String {
 ///     session.user_id().unwrap_or_else(|| "anonymous".to_string())
 /// }
 ///
@@ -62,6 +64,7 @@ const SESSIONS_INDEXES_SQL: &[&str] = &[
 /// # }
 /// ```
 pub struct TestSession {
+    db: Database,
     store: SessionStore,
     cookie_config: CookieConfig,
     key: Key,
@@ -116,9 +119,11 @@ impl TestSession {
         }
 
         let key = key_from_config(&cookie_config).expect("failed to derive cookie key");
-        let store = SessionStore::new(db.db(), session_config.clone());
+        let database = db.db();
+        let store = SessionStore::new(database.clone(), session_config.clone());
 
         Self {
+            db: database,
             store,
             cookie_config,
             key,
@@ -168,12 +173,17 @@ impl TestSession {
         format!("{cookie_name}={signed_value}")
     }
 
-    /// Build a [`SessionLayer`](crate::auth::session::SessionLayer) configured with
+    /// Build a [`CookieSessionLayer`](crate::auth::session::CookieSessionLayer) configured with
     /// the same store and cookie settings as this `TestSession`.
     ///
     /// Apply this layer to a [`super::TestAppBuilder`] so that handlers can
-    /// use the [`Session`](crate::auth::session::Session) extractor.
-    pub fn layer(&self) -> crate::auth::session::SessionLayer {
-        crate::auth::session::layer(self.store.clone(), &self.cookie_config, &self.key)
+    /// use the [`CookieSession`](crate::auth::session::CookieSession) extractor.
+    pub fn layer(&self) -> crate::auth::session::CookieSessionLayer {
+        // Build a CookieSessionsConfig with our test cookie config embedded.
+        let mut config = self.session_config.clone();
+        config.cookie = self.cookie_config.clone();
+        let svc = CookieSessionService::new(self.db.clone(), config)
+            .expect("failed to build CookieSessionService for TestSession");
+        svc.layer()
     }
 }

@@ -36,9 +36,7 @@ pub struct CookieSessionService {
 
 struct Inner {
     store: SessionStore,
-    #[allow(dead_code)]
     config: CookieSessionsConfig,
-    #[allow(dead_code)]
     cookie_key: Key,
 }
 
@@ -65,19 +63,16 @@ impl CookieSessionService {
     }
 
     /// Return a reference to the underlying session store.
-    #[allow(dead_code)]
     pub(crate) fn store(&self) -> &SessionStore {
         &self.inner.store
     }
 
     /// Return a reference to the session configuration.
-    #[allow(dead_code)]
     pub(crate) fn config(&self) -> &CookieSessionsConfig {
         &self.inner.config
     }
 
     /// Return a reference to the cookie signing key.
-    #[allow(dead_code)]
     pub(crate) fn cookie_key(&self) -> &Key {
         &self.inner.cookie_key
     }
@@ -138,5 +133,13 @@ impl CookieSessionService {
     /// Returns an error if the database delete fails.
     pub async fn cleanup_expired(&self) -> Result<u64> {
         self.inner.store.cleanup_expired().await
+    }
+
+    /// Build a [`CookieSessionLayer`](super::middleware::CookieSessionLayer) from this service.
+    ///
+    /// Convenience method so callers can write `service.layer()` instead of
+    /// `session::layer(service.clone())`.
+    pub fn layer(&self) -> super::middleware::CookieSessionLayer {
+        super::middleware::layer(self.clone())
     }
 }

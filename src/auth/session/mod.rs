@@ -12,11 +12,11 @@
 //! # Provides
 //!
 //! - [`CookieSessionsConfig`] — deserialised session configuration (TTL, cookie name, limits).
-//! - [`Session`] — axum extractor; primary API for handlers.
-//! - [`SessionData`] — snapshot of a session row returned from the database.
+//! - [`CookieSession`] — axum extractor; primary API for handlers needing session mutation.
+//! - [`Session`] — transport-agnostic session data snapshot (alias: `SessionData`).
 //! - [`SessionToken`] — opaque 32-byte random token; redacted in `Debug`/`Display`.
-//! - [`SessionLayer`] — Tower layer; apply to a `Router` to enable session support.
-//! - [`layer`] — convenience constructor for [`SessionLayer`].
+//! - [`CookieSessionLayer`] — Tower layer; apply to a `Router` to enable session support.
+//! - [`layer`] — convenience constructor for [`CookieSessionLayer`].
 //! - [`device`] — user-agent parsing helpers for device classification.
 //! - [`fingerprint`] — browser fingerprinting for session hijacking detection.
 //! - [`meta`] — request metadata ([`meta::SessionMeta`]) and [`meta::header_str`] helper.
@@ -30,13 +30,23 @@ pub mod fingerprint;
 pub mod meta;
 pub mod token;
 
-pub use data::Session as SessionData; // temporary alias — will be un-aliased in Phase 3
+// Primary public data type — transport-agnostic session snapshot.
+pub use data::Session;
+pub use data::Session as SessionData; // alias for back-compat
+
 pub use store::SessionData as RawSessionRow; // legacy name; will be removed at end of Phase 2
 pub use token::SessionToken;
 
 // Re-exports from cookie for back-compat during refactor.
 pub(crate) use cookie::SessionState;
-pub use cookie::{CookieSession as Session, CookieSessionsConfig, SessionConfig, SessionLayer};
+pub use cookie::{
+    CookieSession, CookieSessionLayer, CookieSessionService, CookieSessionsConfig, SessionConfig,
+    SessionLayer,
+};
+
+// Back-compat: old callers using `auth::session::Session` as the cookie extractor.
+// Maps to CookieSession so existing handler signatures keep compiling.
+pub use cookie::CookieSession as SessionExtractor;
 
 // SessionStore and layer: pub(crate) in normal builds; exposed via test-helpers for integration tests.
 #[cfg(not(any(test, feature = "test-helpers")))]
