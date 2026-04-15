@@ -47,6 +47,7 @@
 //! ```
 
 mod config;
+mod data;
 pub mod device;
 mod extractor;
 pub mod fingerprint;
@@ -56,9 +57,10 @@ mod store;
 mod token;
 
 pub use config::SessionConfig;
+pub use data::Session as SessionData; // temporary alias — will be un-aliased in Phase 3
 pub use extractor::Session;
 pub(crate) use extractor::SessionState;
 pub use middleware::SessionLayer;
 pub use middleware::layer;
-pub use store::{SessionData, Store};
+pub use store::Store;
 pub use token::SessionToken;
