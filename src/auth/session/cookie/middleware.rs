@@ -92,13 +92,11 @@ where
             let key = svc.cookie_key();
             let cookie_config = svc.config().cookie.clone();
 
-            // 1. Extract client IP
             let ip = request
                 .extensions()
                 .get::<ClientIp>()
                 .map(|c| c.0.to_string())
                 .unwrap_or_else(|| {
-                    // Fallback: no ClientIpLayer applied — use ConnectInfo directly
                     request
                         .extensions()
                         .get::<ConnectInfo<std::net::SocketAddr>>()
@@ -107,17 +105,14 @@ where
                 });
             let headers = request.headers();
 
-            // 2. Build SessionMeta
             let ua = header_str(headers, "user-agent");
             let accept_lang = header_str(headers, "accept-language");
             let accept_enc = header_str(headers, "accept-encoding");
             let meta = SessionMeta::from_headers(ip, ua, accept_lang, accept_enc);
 
-            // 3. Read signed session cookie
             let session_token = read_signed_cookie(request.headers(), cookie_name, key);
             let had_cookie = session_token.is_some();
 
-            // 4. Load session from DB
             let (current_session, read_failed) = if let Some(ref token) = session_token {
                 match store.read_by_token(token).await {
                     Ok(session) => (session, false),
@@ -130,7 +125,6 @@ where
                 (None, false)
             };
 
-            // 5/6. Validate fingerprint
             let current_session = if let Some(session) = current_session {
                 if config.validate_fingerprint && meta.fingerprint != session.fingerprint {
                     tracing::warn!(
@@ -147,19 +141,16 @@ where
                 None
             };
 
-            // Check if touch interval elapsed
             let should_touch = current_session.as_ref().is_some_and(|s| {
                 let elapsed = chrono::Utc::now() - s.last_active_at;
                 elapsed >= chrono::Duration::seconds(config.touch_interval_secs as i64)
             });
 
-            // 7. Insert Session data view for the data extractor
             if let Some(raw) = current_session.as_ref() {
                 let session_data = Session::from(raw.clone());
                 request.extensions_mut().insert(session_data);
             }
 
-            // 8. Build SessionState and insert for CookieSession extractor
             let session_state = Arc::new(SessionState {
                 service: svc.clone(),
                 meta,
@@ -170,10 +161,7 @@ where
 
             request.extensions_mut().insert(session_state.clone());
 
-            // Run inner service
             let mut response = inner.call(request).await?;
-
-            // --- Response path ---
 
             let action = {
                 let guard = session_state.action.lock().expect("session mutex poisoned");
@@ -227,7 +215,6 @@ where
                             );
                         }
 
-                        // Refresh cookie if we did a flush or touch
                         if (is_dirty || should_touch)
                             && let Some(ref token) = session_token
                         {
@@ -242,7 +229,6 @@ where
                         }
                     }
 
-                    // Stale cookie cleanup
                     if had_cookie && current_session.is_none() && !read_failed {
                         remove_signed_cookie(&mut response, cookie_name, &cookie_config, key);
                     }
@@ -269,7 +255,6 @@ fn read_signed_cookie(
         if let Some((name, value)) = pair.split_once('=')
             && name.trim() == cookie_name
         {
-            // Verify signature using cookie crate's signed jar
             let mut jar = CookieJar::new();
             jar.add_original(Cookie::new(
                 cookie_name.to_string(),
@@ -301,7 +286,6 @@ fn set_signed_cookie(
         .value()
         .to_string();
 
-    // Build Set-Cookie header with attributes
     let same_site = match config.same_site.as_str() {
         "strict" => SameSite::Strict,
         "none" => SameSite::None,

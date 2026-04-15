@@ -132,8 +132,8 @@ impl Totp {
     /// and time period. Authenticator apps scan this URI to provision the key.
     pub fn otpauth_uri(&self, issuer: &str, account: &str) -> String {
         let secret_b32 = crate::encoding::base32::encode(&self.secret);
-        let encoded_account = urlencoding_encode(account);
-        let encoded_issuer = urlencoding_encode(issuer);
+        let encoded_account = urlencoding::encode(account);
+        let encoded_issuer = urlencoding::encode(issuer);
         format!(
             "otpauth://totp/{encoded_issuer}:{encoded_account}?secret={secret_b32}&issuer={encoded_issuer}&digits={}&period={}",
             self.config.digits, self.config.step_secs
@@ -154,19 +154,4 @@ fn hotp(secret: &[u8], counter: u64, digits: u32) -> u32 {
         result[offset + 3],
     ]);
     code % 10u32.pow(digits)
-}
-
-fn urlencoding_encode(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                result.push(b as char);
-            }
-            _ => {
-                result.push_str(&format!("%{b:02X}"));
-            }
-        }
-    }
-    result
 }

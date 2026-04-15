@@ -48,16 +48,18 @@ pub struct HmacSigner {
 }
 
 struct HmacSignerInner {
-    secret: Vec<u8>,
+    // Pre-initialized HMAC template; cloned per call so the key block is
+    // expanded once at construction instead of on every sign/verify.
+    mac: HmacSha256,
 }
 
 impl HmacSigner {
     /// Creates a new `HmacSigner` with the given secret.
     pub fn new(secret: impl AsRef<[u8]>) -> Self {
+        let mac = HmacSha256::new_from_slice(secret.as_ref())
+            .expect("HMAC-SHA256 accepts keys of any length");
         Self {
-            inner: Arc::new(HmacSignerInner {
-                secret: secret.as_ref().to_vec(),
-            }),
+            inner: Arc::new(HmacSignerInner { mac }),
         }
     }
 }
@@ -72,8 +74,7 @@ impl Clone for HmacSigner {
 
 impl TokenVerifier for HmacSigner {
     fn verify(&self, header_payload: &[u8], signature: &[u8]) -> Result<()> {
-        let mut mac = HmacSha256::new_from_slice(&self.inner.secret)
-            .map_err(|_| Error::internal("invalid HMAC key").chain(JwtError::InvalidSignature))?;
+        let mut mac = self.inner.mac.clone();
         mac.update(header_payload);
         mac.verify_slice(signature).map_err(|_| {
             Error::unauthorized("unauthorized")
@@ -89,8 +90,7 @@ impl TokenVerifier for HmacSigner {
 
 impl TokenSigner for HmacSigner {
     fn sign(&self, header_payload: &[u8]) -> Result<Vec<u8>> {
-        let mut mac = HmacSha256::new_from_slice(&self.inner.secret)
-            .map_err(|_| Error::internal("invalid HMAC key").chain(JwtError::SigningFailed))?;
+        let mut mac = self.inner.mac.clone();
         mac.update(header_payload);
         Ok(mac.finalize().into_bytes().to_vec())
     }

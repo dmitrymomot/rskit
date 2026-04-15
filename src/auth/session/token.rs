@@ -4,7 +4,6 @@
 //! signed cookie, and only the SHA-256 hash is stored in the database.
 //! `Debug` and `Display` both redact the value as `"****"`.
 
-use sha2::{Digest, Sha256};
 use std::fmt;
 
 /// A cryptographically random 32-byte session token.
@@ -59,8 +58,7 @@ impl SessionToken {
     /// the hash ensures that a read of the database cannot be used to impersonate
     /// users.
     pub fn hash(&self) -> String {
-        let digest = Sha256::digest(self.0);
-        crate::encoding::hex::encode(&digest)
+        crate::encoding::hex::sha256(self.0)
     }
 
     /// Expose the raw token as a 64-character hex string.

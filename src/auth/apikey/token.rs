@@ -1,7 +1,7 @@
+use crate::auth::internal::{random_string, verify_sha256_hex};
 use crate::encoding::hex;
-use subtle::ConstantTimeEq;
 
-const BASE62: &[u8; 62] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const BASE62: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const ULID_LEN: usize = 26;
 
 /// Result of parsing a raw API key token.
@@ -12,24 +12,9 @@ pub(crate) struct ParsedToken<'a> {
     pub secret: &'a str,
 }
 
-/// Maximum byte value that avoids modulo bias for base62 (62 * 4 = 248).
-const BIAS_LIMIT: u8 = 248;
-
 /// Generate a random base62 secret of `len` characters.
-///
-/// Uses rejection sampling to avoid modulo bias: bytes >= 248 are
-/// discarded so every base62 character has equal probability.
 pub(crate) fn generate_secret(len: usize) -> String {
-    let mut result = String::with_capacity(len);
-    let mut buf = [0u8; 1];
-    while result.len() < len {
-        rand::fill(&mut buf[..]);
-        let b = buf[0];
-        if b < BIAS_LIMIT {
-            result.push(BASE62[(b as usize) % 62] as char);
-        }
-    }
-    result
+    random_string(BASE62, len)
 }
 
 /// Format a full token: `{prefix}_{ulid}{secret}`.
@@ -59,8 +44,7 @@ pub(crate) fn hash_secret(secret: &str) -> String {
 
 /// Constant-time comparison of a secret against a stored hash.
 pub(crate) fn verify_hash(secret: &str, stored_hash: &str) -> bool {
-    let computed = hash_secret(secret);
-    computed.as_bytes().ct_eq(stored_hash.as_bytes()).into()
+    verify_sha256_hex(secret, stored_hash)
 }
 
 #[cfg(test)]

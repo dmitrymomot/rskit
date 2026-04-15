@@ -44,16 +44,7 @@ pub struct QuerySource(pub &'static str);
 
 impl TokenSource for QuerySource {
     fn extract(&self, parts: &Parts) -> Option<String> {
-        let query = parts.uri.query()?;
-        for pair in query.split('&') {
-            if let Some((key, value)) = pair.split_once('=')
-                && key == self.0
-                && !value.is_empty()
-            {
-                return Some(value.to_string());
-            }
-        }
-        None
+        extract_query(parts, self.0)
     }
 }
 
@@ -65,17 +56,7 @@ pub struct CookieSource(pub &'static str);
 
 impl TokenSource for CookieSource {
     fn extract(&self, parts: &Parts) -> Option<String> {
-        let cookie_header = parts.headers.get(http::header::COOKIE)?.to_str().ok()?;
-        for cookie in cookie_header.split(';') {
-            let cookie = cookie.trim();
-            if let Some((name, value)) = cookie.split_once('=')
-                && name.trim() == self.0
-                && !value.is_empty()
-            {
-                return Some(value.trim().to_string());
-            }
-        }
-        None
+        extract_cookie(parts, self.0)
     }
 }
 
@@ -86,30 +67,15 @@ pub struct HeaderSource(pub &'static str);
 
 impl TokenSource for HeaderSource {
     fn extract(&self, parts: &Parts) -> Option<String> {
-        let value = parts.headers.get(self.0)?.to_str().ok()?;
-        if value.is_empty() {
-            return None;
-        }
-        Some(value.to_string())
+        extract_header(parts, self.0)
     }
 }
-
-// ── Owned-string variants used internally by TokenSourceConfig::build() ────────
 
 struct OwnedQuerySource(String);
 
 impl TokenSource for OwnedQuerySource {
     fn extract(&self, parts: &Parts) -> Option<String> {
-        let query = parts.uri.query()?;
-        for pair in query.split('&') {
-            if let Some((key, value)) = pair.split_once('=')
-                && key == self.0
-                && !value.is_empty()
-            {
-                return Some(value.to_string());
-            }
-        }
-        None
+        extract_query(parts, &self.0)
     }
 }
 
@@ -117,17 +83,7 @@ struct OwnedCookieSource(String);
 
 impl TokenSource for OwnedCookieSource {
     fn extract(&self, parts: &Parts) -> Option<String> {
-        let cookie_header = parts.headers.get(http::header::COOKIE)?.to_str().ok()?;
-        for cookie in cookie_header.split(';') {
-            let cookie = cookie.trim();
-            if let Some((name, value)) = cookie.split_once('=')
-                && name.trim() == self.0
-                && !value.is_empty()
-            {
-                return Some(value.trim().to_string());
-            }
-        }
-        None
+        extract_cookie(parts, &self.0)
     }
 }
 
@@ -135,12 +91,43 @@ struct OwnedHeaderSource(String);
 
 impl TokenSource for OwnedHeaderSource {
     fn extract(&self, parts: &Parts) -> Option<String> {
-        let value = parts.headers.get(self.0.as_str())?.to_str().ok()?;
-        if value.is_empty() {
-            return None;
-        }
-        Some(value.to_string())
+        extract_header(parts, &self.0)
     }
+}
+
+fn extract_query(parts: &Parts, name: &str) -> Option<String> {
+    let query = parts.uri.query()?;
+    for pair in query.split('&') {
+        if let Some((key, value)) = pair.split_once('=')
+            && key == name
+            && !value.is_empty()
+        {
+            return Some(value.to_string());
+        }
+    }
+    None
+}
+
+fn extract_cookie(parts: &Parts, name: &str) -> Option<String> {
+    let cookie_header = parts.headers.get(http::header::COOKIE)?.to_str().ok()?;
+    for cookie in cookie_header.split(';') {
+        let cookie = cookie.trim();
+        if let Some((cname, value)) = cookie.split_once('=')
+            && cname.trim() == name
+            && !value.is_empty()
+        {
+            return Some(value.trim().to_string());
+        }
+    }
+    None
+}
+
+fn extract_header(parts: &Parts, name: &str) -> Option<String> {
+    let value = parts.headers.get(name)?.to_str().ok()?;
+    if value.is_empty() {
+        return None;
+    }
+    Some(value.to_string())
 }
 
 // ── TokenSourceConfig ────────────────────────────────────────────────────────
