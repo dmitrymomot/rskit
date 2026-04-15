@@ -28,8 +28,8 @@
 //!
 //! # async fn run() -> modo::Result<()> {
 //! let mut config = EmailConfig::default();
-//! config.templates_path = "emails".into();
 //! config.default_from_email = "noreply@example.com".into();
+//! config.smtp.host = "smtp.example.com".into();
 //! let mailer = Mailer::new(&config)?;
 //!
 //! mailer.send(

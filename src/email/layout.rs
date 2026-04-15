@@ -52,7 +52,16 @@ const LOGO_SECTION: &str = r#"<tr><td align="center" style="padding-bottom: 24px
 const FOOTER_SECTION: &str = r#"<tr><td class="email-footer" align="center" style="padding-top: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; color: #71717a;">{{footer_text}}</td></tr>"#;
 
 /// Load custom layouts from the given directory.
-/// Returns a map of layout name -> layout HTML content.
+///
+/// Returns a map of layout name → layout HTML content, keyed by the file
+/// stem (e.g., `"marketing"` for `marketing.html`). Non-HTML files are
+/// silently ignored. If `layouts_path` does not exist, an empty map is
+/// returned without error.
+///
+/// # Errors
+///
+/// Returns an error if the directory exists but cannot be read, or if any
+/// `.html` file inside it cannot be read.
 pub fn load_layouts(layouts_path: &str) -> Result<HashMap<String, String>> {
     let path = Path::new(layouts_path);
     let mut layouts = HashMap::new();
@@ -86,7 +95,11 @@ pub fn load_layouts(layouts_path: &str) -> Result<HashMap<String, String>> {
 }
 
 /// Apply a layout to rendered HTML content.
-/// Resolves `{{content}}`, `{{logo_section}}`, `{{footer_section}}`, and all vars.
+///
+/// Resolves the special `{{content}}` placeholder with the rendered body,
+/// conditionally injects `{{logo_section}}` (when `logo_url` is in `vars`)
+/// and `{{footer_section}}` (when `footer_text` is in `vars`), then performs
+/// full variable substitution over the combined HTML.
 pub fn apply_layout(layout_html: &str, content: &str, vars: &HashMap<String, String>) -> String {
     // Resolve conditional sections in the base layout
     let logo_section = if vars.contains_key("logo_url") {
@@ -111,7 +124,15 @@ pub fn apply_layout(layout_html: &str, content: &str, vars: &HashMap<String, Str
 }
 
 /// Resolve a layout name to its HTML content.
-/// "base" returns the built-in layout; anything else looks up the custom layouts map.
+///
+/// `"base"` returns the built-in responsive layout ([`BASE_LAYOUT`]); any
+/// other name is looked up in the `custom_layouts` map loaded by
+/// [`load_layouts`].
+///
+/// # Errors
+///
+/// Returns a 404 error when `name` is not `"base"` and is not present in
+/// `custom_layouts`.
 pub fn resolve_layout<'a>(
     name: &str,
     custom_layouts: &'a HashMap<String, String>,

@@ -7,7 +7,9 @@ use super::backend::EmbeddingBackend;
 /// Concrete embedding provider — wraps any [`EmbeddingBackend`].
 ///
 /// Cheap to clone (wraps `Arc` internally). Use as an axum service via
-/// `Service(embedder): Service<EmbeddingProvider>`.
+/// `Service(embedder): Service<EmbeddingProvider>` where `embedder` is
+/// `Arc<EmbeddingProvider>`; `Arc<T>` derefs to `T` so calling `.embed()`
+/// directly on `embedder` works without extra unwrapping.
 ///
 /// # Example
 ///

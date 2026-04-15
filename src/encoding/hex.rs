@@ -1,4 +1,10 @@
+//! # modo::encoding::hex
+//!
 //! Lowercase hexadecimal encoding and SHA-256 digest helper.
+//!
+//! Provides:
+//! - [`encode`] — encode a byte slice to a lowercase hex string
+//! - [`sha256`] — SHA-256 hash of input, returned as a 64-character hex string
 
 use sha2::{Digest as _, Sha256};
 
