@@ -145,23 +145,58 @@ async fn query_source_works_with_router() {
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
-// ── Revocation tests (ignored: Revocation trait removed in v0.8, replaced by stateful row lookup) ──
+// ── Stateful validation tests ──
+//
+// In v0.8 the `Revocation` trait is gone. Revocation is handled by
+// `JwtSessionService::logout()` which deletes the session row, causing
+// the next stateful `JwtLayer` request to return 401. The full
+// login→logout→401 and login→200 flows are covered by
+// `tests/jwt_layer_stateful_test.rs` (`jwt_layer_rejects_after_logout` and
+// `jwt_layer_loads_session_into_extensions`). Only the distinct stateless
+// path — a token without a `jti` reaching a stateful layer — is tested here.
 
+#[cfg(feature = "test-helpers")]
 #[tokio::test]
-#[ignore = "v0.8 stateful validation"]
-async fn revocation_rejects_revoked_token() {}
+async fn stateful_layer_rejects_token_without_jti() {
+    // A token that has no `jti` claim cannot be looked up in the session
+    // store. The stateful JwtLayer must return 401 with auth:session_not_found.
+    use modo::auth::session::jwt::{JwtSessionService, JwtSessionsConfig};
+    use modo::db::ConnExt;
+    use modo::testing::{TestDb, TestSession};
 
-#[tokio::test]
-#[ignore = "v0.8 stateful validation"]
-async fn revocation_accepts_non_revoked_token() {}
+    let db = TestDb::new().await;
+    db.db()
+        .conn()
+        .execute_raw(TestSession::SCHEMA_SQL, ())
+        .await
+        .unwrap();
+    let mut cfg = JwtSessionsConfig::default();
+    cfg.signing_secret = "test-secret-must-be-32-bytes-yes!".into();
+    let svc = JwtSessionService::new(db.db(), cfg).unwrap();
 
-#[tokio::test]
-#[ignore = "v0.8 stateful validation"]
-async fn revocation_check_failure_rejects_token() {}
+    // Build a token without a jti — use the underlying encoder directly.
+    let claims = modo::auth::session::jwt::Claims::new()
+        .with_sub("user_no_jti")
+        .with_exp(now_secs() + 3600);
+    let token = svc.encoder().encode(&claims).unwrap();
 
-#[tokio::test]
-#[ignore = "v0.8 stateful validation"]
-async fn revocation_skipped_when_no_jti() {}
+    let app = Router::new()
+        .route("/me", get(claims_handler))
+        .route_layer(svc.layer());
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/me")
+                .header("Authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
 
 // ── Additional coverage tests ──
 
@@ -354,12 +389,31 @@ async fn test_jwt_issuer_validation() {
 }
 
 #[tokio::test]
-#[ignore = "audience validation via from_config removed in v0.8; use ValidationConfig directly"]
 async fn test_jwt_audience_validation() {
-    // JwtSessionsConfig no longer has an audience field.
-    // Audience validation still works via ValidationConfig::require_audience,
-    // but from_config() sets it to None. Task 18 will rewrite this test.
-    let _ = test_config();
+    // JwtSessionsConfig no longer has an audience field. Audience validation
+    // is still supported by constructing a JwtDecoder with a ValidationConfig
+    // that has require_audience set. Verify that a token with the wrong
+    // audience is rejected with jwt:invalid_audience.
+    use modo::auth::session::jwt::{HmacSigner, ValidationConfig};
+    use std::sync::Arc;
+
+    let config = test_config();
+    let encoder = JwtEncoder::from_config(&config);
+
+    // Build a decoder that requires audience "expected-audience"
+    let signer = HmacSigner::new(config.signing_secret.as_bytes());
+    let validation = ValidationConfig::default().with_audience("expected-audience");
+    let decoder = JwtDecoder::new(Arc::new(signer), validation);
+
+    // Token with the wrong audience
+    let claims = Claims::new()
+        .with_sub("user_1")
+        .with_exp(now_secs() + 3600)
+        .with_aud("wrong-audience");
+    let token = encoder.encode(&claims).unwrap();
+
+    let err = decoder.decode::<Claims>(&token).unwrap_err();
+    assert_eq!(err.error_code(), Some("jwt:invalid_audience"));
 }
 
 #[tokio::test]

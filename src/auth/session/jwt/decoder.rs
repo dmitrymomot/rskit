@@ -33,6 +33,33 @@ fn jwt_err(kind: JwtError) -> Error {
 }
 
 impl JwtDecoder {
+    /// Creates a `JwtDecoder` with an explicit verifier and validation policy.
+    ///
+    /// Use this constructor when you need full control over the validation
+    /// config, e.g. to set `require_audience` or `leeway`.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use std::sync::Arc;
+    /// use modo::auth::session::jwt::{HmacSigner, JwtDecoder, ValidationConfig};
+    ///
+    /// let signer = HmacSigner::new(b"my-secret");
+    /// let validation = ValidationConfig {
+    ///     require_audience: Some("my-app".into()),
+    ///     ..ValidationConfig::default()
+    /// };
+    /// let decoder = JwtDecoder::new(Arc::new(signer), validation);
+    /// ```
+    pub fn new(verifier: Arc<dyn TokenVerifier>, validation: ValidationConfig) -> Self {
+        Self {
+            inner: Arc::new(JwtDecoderInner {
+                verifier,
+                validation,
+            }),
+        }
+    }
+
     /// Creates a `JwtDecoder` from YAML configuration.
     ///
     /// Uses `HmacSigner` (HS256) with the configured secret.
@@ -282,12 +309,19 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "audience validation via from_config removed in v0.8; use ValidationConfig directly"]
     fn rejects_wrong_audience() {
-        // JwtSessionsConfig no longer has an audience field.
-        // Audience validation is still supported via ValidationConfig,
-        // but from_config() always sets require_audience = None.
-        // This test is kept as a placeholder for a future constructor.
+        let config = test_config();
+        let encoder = JwtEncoder::from_config(&config);
+        let signer = HmacSigner::new(config.signing_secret.as_bytes());
+        let validation = super::super::validation::ValidationConfig::default()
+            .with_audience("expected-audience");
+        let decoder = JwtDecoder::new(Arc::new(signer), validation);
+        let claims = Claims::new()
+            .with_exp(now_secs() + 3600)
+            .with_aud("wrong-audience");
+        let token = encoder.encode(&claims).unwrap();
+        let err = decoder.decode::<Claims>(&token).unwrap_err();
+        assert_eq!(err.error_code(), Some("jwt:invalid_audience"));
     }
 
     #[test]

@@ -18,11 +18,7 @@ async fn setup() -> (TestDb, CookieSessionService, JwtSessionService) {
         .await
         .unwrap();
     for sql in TestSession::INDEXES_SQL {
-        db.db()
-            .conn()
-            .execute_raw(sql, ())
-            .await
-            .unwrap();
+        db.db().conn().execute_raw(sql, ()).await.unwrap();
     }
 
     let mut cookie_cfg = CookieSessionsConfig::default();
@@ -50,16 +46,32 @@ async fn revoke_all_from_jwt_wipes_cookie_rows_too() {
     // Both services share the same table — each should see 2 rows.
     let from_cookie = cookies.list("user_1").await.unwrap();
     let from_jwt = jwts.list("user_1").await.unwrap();
-    assert_eq!(from_cookie.len(), 2, "cookie service should see 2 rows before revoke");
-    assert_eq!(from_jwt.len(), 2, "jwt service should see 2 rows before revoke");
+    assert_eq!(
+        from_cookie.len(),
+        2,
+        "cookie service should see 2 rows before revoke"
+    );
+    assert_eq!(
+        from_jwt.len(),
+        2,
+        "jwt service should see 2 rows before revoke"
+    );
 
     // Revoking all via the JWT service must also wipe cookie-backed rows.
     jwts.revoke_all("user_1").await.unwrap();
 
     let after_cookie = cookies.list("user_1").await.unwrap();
     let after_jwt = jwts.list("user_1").await.unwrap();
-    assert_eq!(after_cookie.len(), 0, "cookie rows should be gone after jwt revoke_all");
-    assert_eq!(after_jwt.len(), 0, "jwt rows should be gone after jwt revoke_all");
+    assert_eq!(
+        after_cookie.len(),
+        0,
+        "cookie rows should be gone after jwt revoke_all"
+    );
+    assert_eq!(
+        after_jwt.len(),
+        0,
+        "jwt rows should be gone after jwt revoke_all"
+    );
 }
 
 #[tokio::test]
@@ -76,14 +88,30 @@ async fn revoke_all_from_cookie_wipes_jwt_rows_too() {
     // Both services share the same table — each should see 2 rows.
     let from_cookie = cookies.list("user_1").await.unwrap();
     let from_jwt = jwts.list("user_1").await.unwrap();
-    assert_eq!(from_cookie.len(), 2, "cookie service should see 2 rows before revoke");
-    assert_eq!(from_jwt.len(), 2, "jwt service should see 2 rows before revoke");
+    assert_eq!(
+        from_cookie.len(),
+        2,
+        "cookie service should see 2 rows before revoke"
+    );
+    assert_eq!(
+        from_jwt.len(),
+        2,
+        "jwt service should see 2 rows before revoke"
+    );
 
     // Revoking all via the cookie service must also wipe JWT-backed rows.
     cookies.revoke_all("user_1").await.unwrap();
 
     let after_cookie = cookies.list("user_1").await.unwrap();
     let after_jwt = jwts.list("user_1").await.unwrap();
-    assert_eq!(after_cookie.len(), 0, "cookie rows should be gone after cookie revoke_all");
-    assert_eq!(after_jwt.len(), 0, "jwt rows should be gone after cookie revoke_all");
+    assert_eq!(
+        after_cookie.len(),
+        0,
+        "cookie rows should be gone after cookie revoke_all"
+    );
+    assert_eq!(
+        after_jwt.len(),
+        0,
+        "jwt rows should be gone after cookie revoke_all"
+    );
 }
