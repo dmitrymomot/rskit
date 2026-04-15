@@ -113,7 +113,7 @@ Every modo app follows this structure in `main()`:
 
 Middleware layer order (innermost to outermost, matching `.layer()` call order):
 `error_handler` -> `catch_panic` -> `tracing` -> `request_id` -> `compression` ->
-`security_headers` -> `cors` -> `csrf` -> `auth::session::layer` -> `flash::FlashLayer` ->
+`security_headers` -> `cors` -> `csrf` -> `session_svc.layer()` -> `flash::FlashLayer` ->
 `ip::ClientIpLayer` -> `rate_limit`. Optional layers
 (`template::TemplateContextLayer`, `geolocation::GeoLayer`) slot in at their
 documented positions.

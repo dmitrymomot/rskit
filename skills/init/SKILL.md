@@ -190,7 +190,7 @@ let app = routes::router(registry)
     // Template context (if templates)
     .layer(modo::template::TemplateContextLayer::new(engine))
     // Session
-    .layer(modo::auth::session::layer(session_store, cookie_config, &cookie_key))
+    .layer(session_svc.layer())
     // Flash
     .layer(modo::flash::FlashLayer::new(cookie_config, &cookie_key))
     // Geolocation (if selected, must be after ClientIp)
