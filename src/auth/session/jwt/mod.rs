@@ -85,8 +85,10 @@ mod encoder;
 mod error;
 mod extractor;
 mod middleware;
+mod service;
 mod signer;
 mod source;
+mod tokens;
 mod validation;
 
 pub use claims::Claims;
@@ -98,8 +100,10 @@ pub use encoder::JwtEncoder;
 pub use error::JwtError;
 pub use extractor::Bearer;
 pub use middleware::JwtLayer;
+pub use service::JwtSessionService;
 pub use signer::{HmacSigner, TokenSigner, TokenVerifier};
 pub use source::{
     BearerSource, CookieSource, HeaderSource, QuerySource, TokenSource, TokenSourceConfig,
 };
+pub use tokens::TokenPair;
 pub use validation::ValidationConfig;

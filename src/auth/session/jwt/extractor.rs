@@ -3,6 +3,29 @@ use http::request::Parts;
 
 use crate::Error;
 
+/// Convert a raw [`store::SessionData`](crate::auth::session::store::SessionData) row into the
+/// transport-agnostic [`Session`](crate::auth::session::Session) type.
+///
+/// Used by [`super::service::JwtSessionService`] to unify the store row representation
+/// with the public session API.
+pub(crate) fn raw_to_session(
+    raw: crate::auth::session::store::SessionData,
+) -> crate::auth::session::Session {
+    crate::auth::session::Session {
+        id: raw.id,
+        user_id: raw.user_id,
+        ip_address: raw.ip_address,
+        user_agent: raw.user_agent,
+        device_name: raw.device_name,
+        device_type: raw.device_type,
+        fingerprint: raw.fingerprint,
+        data: raw.data,
+        created_at: raw.created_at,
+        last_active_at: raw.last_active_at,
+        expires_at: raw.expires_at,
+    }
+}
+
 use super::claims::Claims;
 use super::error::JwtError;
 

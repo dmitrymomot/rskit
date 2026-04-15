@@ -280,6 +280,61 @@ impl SessionStore {
         Ok(())
     }
 
+    /// Look up an active (non-expired) session directly by the stored token hash.
+    ///
+    /// Unlike [`read_by_token`](Self::read_by_token), this variant accepts a
+    /// pre-computed hash string, which is needed by the JWT session service that
+    /// stores the token hex as the JWT `jti` and computes the hash itself.
+    ///
+    /// Returns `None` if no matching session exists or the session has expired.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails or the stored data cannot
+    /// be deserialised.
+    pub async fn read_by_token_hash(&self, hash: &str) -> Result<Option<SessionData>> {
+        let now = Utc::now().to_rfc3339();
+        let row: Option<SessionRow> = self
+            .db
+            .conn()
+            .query_optional(
+                &format!(
+                    "SELECT {SESSION_COLUMNS} FROM {TABLE} \
+                     WHERE session_token_hash = ?1 AND expires_at > ?2"
+                ),
+                libsql::params![hash, now],
+            )
+            .await?;
+
+        row.map(row_to_session_data).transpose()
+    }
+
+    /// Rotate the session token to a caller-supplied new token.
+    ///
+    /// Updates `session_token_hash` and `last_active_at` for the session with
+    /// the given `id`. Used by the JWT session service, which needs to control
+    /// the new token value (so the `jti` in the refresh JWT matches the stored
+    /// hash).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails.
+    pub async fn rotate_token_to(&self, id: &str, new_token: &SessionToken) -> Result<()> {
+        let new_hash = new_token.hash();
+        let now = Utc::now().to_rfc3339();
+        self.db
+            .conn()
+            .execute_raw(
+                &format!(
+                    "UPDATE {TABLE} SET session_token_hash = ?1, last_active_at = ?2 WHERE id = ?3"
+                ),
+                libsql::params![new_hash, now, id],
+            )
+            .await
+            .map_err(|e| Error::internal(format!("rotate token to: {e}")))?;
+        Ok(())
+    }
+
     /// Issue a new token for an existing session, invalidating the old one.
     ///
     /// Returns the new [`SessionToken`]. The middleware will write this token

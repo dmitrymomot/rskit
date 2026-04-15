@@ -56,6 +56,22 @@ impl SessionToken {
         let digest = Sha256::digest(self.0);
         crate::encoding::hex::encode(&digest)
     }
+
+    /// Expose the raw token as a 64-character hex string.
+    ///
+    /// This intentionally breaks the redaction guarantee and is meant only for
+    /// JWT `jti` round-tripping inside the crate. Do not use for logging.
+    pub fn expose(&self) -> String {
+        self.as_hex()
+    }
+
+    /// Reconstruct a `SessionToken` from a 64-character hex string (the value
+    /// previously returned by [`expose`](Self::expose)).
+    ///
+    /// Returns `None` if the string is not a valid 64-character hex encoding.
+    pub fn from_raw(s: &str) -> Option<Self> {
+        Self::from_hex(s).ok()
+    }
 }
 
 impl fmt::Debug for SessionToken {
