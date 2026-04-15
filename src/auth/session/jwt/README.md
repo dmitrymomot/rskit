@@ -295,20 +295,23 @@ refresh_source:
 | `JwtSessionService` | Stateful service: authenticate, rotate, logout, list, cleanup |
 | `JwtSessionsConfig` | YAML-deserializable configuration |
 | `JwtLayer` | Tower middleware returned by `JwtSessionService::layer()` |
-| `JwtSession` | Axum extractor for request-scoped session operations |
-| `Claims` | System JWT claims (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`) |
+| `JwtSession` | Axum `FromRequest` extractor for request-scoped session operations |
+| `Bearer` | Axum `FromRequestParts` extractor for the raw Bearer token string |
+| `Claims` | System JWT claims (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`); axum extractor |
 | `TokenPair` | Access + refresh token pair returned by authenticate/rotate |
 | `JwtEncoder` | Signs any `Serialize` payload into a JWT string (HS256) |
 | `JwtDecoder` | Verifies and deserializes any `DeserializeOwned` from a JWT string |
 | `JwtError` | Typed error enum with static `code()` strings |
-| `TokenSource` | Trait for pluggable token extraction |
+| `ValidationConfig` | Runtime validation policy (leeway, issuer, audience) |
+| `TokenSource` | Trait for pluggable token extraction from request parts |
+| `TokenSigner` | Trait for JWT signing; extends `TokenVerifier` |
+| `TokenVerifier` | Object-safe trait for JWT signature verification |
+| `HmacSigner` | HMAC-SHA256 signer/verifier implementing both traits |
 | `BearerSource` | Extracts from `Authorization: Bearer` header |
 | `CookieSource` | Extracts from a named cookie |
 | `HeaderSource` | Extracts from a custom header |
 | `QuerySource` | Extracts from a named query parameter |
 | `TokenSourceConfig` | YAML enum for selecting a token extraction strategy |
-| `ValidationConfig` | Runtime validation policy (leeway, issuer, audience) |
-| `HmacSigner` | HMAC-SHA256 signer/verifier |
 
 ## Error codes
 
