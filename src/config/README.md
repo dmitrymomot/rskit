@@ -91,7 +91,6 @@ server:
 
 database:
     path: ${DATABASE_URL:data/app.db}
-    max_connections: 10
 
 tracing:
     level: ${LOG_LEVEL:info}
@@ -122,7 +121,7 @@ trusted_proxies:
 `Config` composes the sub-configs of every built-in module. All fields use
 `#[serde(default)]`, so any section omitted from the YAML file falls back to
 the type's own `Default` implementation. Every module is always compiled in
-v0.7+, so every field is always present.
+v0.8+, so every field is always present.
 
 | Field              | Type                                |
 | ------------------ | ----------------------------------- |
@@ -144,4 +143,4 @@ v0.7+, so every field is always present.
 | `storage`          | `storage::BucketConfig`             |
 | `dns`              | `dns::DnsConfig`                    |
 | `apikey`           | `auth::apikey::ApiKeyConfig`        |
-| `jwt`              | `auth::session::jwt::JwtConfig`              |
+| `jwt`              | `auth::session::jwt::JwtSessionsConfig`      |
