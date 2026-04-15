@@ -1,5 +1,4 @@
 use std::future::Future;
-use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -7,7 +6,6 @@ use std::task::{Context, Poll};
 use axum::body::Body;
 use axum::response::IntoResponse;
 use http::Request;
-use serde::de::DeserializeOwned;
 use tower::{Layer, Service};
 
 use crate::Error;
@@ -22,25 +20,21 @@ use super::source::{BearerSource, TokenSource};
 /// For each request the middleware:
 /// 1. Tries each `TokenSource` in order; returns `401` if none yields a token.
 /// 2. Decodes and validates the token with `JwtDecoder`; returns `401` on failure.
-/// 3. Inserts `Claims<T>` into request extensions for handler extraction.
+/// 3. Inserts [`Claims`] into request extensions for handler extraction.
 ///
 /// The default token source is [`BearerSource`] (`Authorization: Bearer <token>`).
-pub struct JwtLayer<T> {
+#[derive(Clone)]
+pub struct JwtLayer {
     decoder: JwtDecoder,
     sources: Arc<[Arc<dyn TokenSource>]>,
-    _marker: PhantomData<T>,
 }
 
-impl<T> JwtLayer<T>
-where
-    T: DeserializeOwned + Clone + Send + Sync + 'static,
-{
+impl JwtLayer {
     /// Creates a `JwtLayer` with `BearerSource` as the sole token source.
     pub fn new(decoder: JwtDecoder) -> Self {
         Self {
             decoder,
             sources: Arc::from(vec![Arc::new(BearerSource) as Arc<dyn TokenSource>]),
-            _marker: PhantomData,
         }
     }
 
@@ -53,57 +47,40 @@ where
     }
 }
 
-impl<T> Clone for JwtLayer<T> {
-    fn clone(&self) -> Self {
-        Self {
-            decoder: self.decoder.clone(),
-            sources: self.sources.clone(),
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<Svc, T> Layer<Svc> for JwtLayer<T>
-where
-    T: DeserializeOwned + Clone + Send + Sync + 'static,
-{
-    type Service = JwtMiddleware<Svc, T>;
+impl<Svc> Layer<Svc> for JwtLayer {
+    type Service = JwtMiddleware<Svc>;
 
     fn layer(&self, inner: Svc) -> Self::Service {
         JwtMiddleware {
             inner,
             decoder: self.decoder.clone(),
             sources: self.sources.clone(),
-            _marker: PhantomData,
         }
     }
 }
 
 /// Tower [`Service`] produced by [`JwtLayer`]. See that type for behavior details.
-pub struct JwtMiddleware<Svc, T> {
+pub struct JwtMiddleware<Svc> {
     inner: Svc,
     decoder: JwtDecoder,
     sources: Arc<[Arc<dyn TokenSource>]>,
-    _marker: PhantomData<T>,
 }
 
-impl<Svc: Clone, T> Clone for JwtMiddleware<Svc, T> {
+impl<Svc: Clone> Clone for JwtMiddleware<Svc> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
             decoder: self.decoder.clone(),
             sources: self.sources.clone(),
-            _marker: PhantomData,
         }
     }
 }
 
-impl<Svc, T> Service<Request<Body>> for JwtMiddleware<Svc, T>
+impl<Svc> Service<Request<Body>> for JwtMiddleware<Svc>
 where
     Svc: Service<Request<Body>, Response = http::Response<Body>> + Clone + Send + 'static,
     Svc::Future: Send + 'static,
     Svc::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send + 'static,
-    T: DeserializeOwned + Clone + Send + Sync + 'static,
 {
     type Response = http::Response<Body>;
     type Error = Svc::Error;
@@ -135,7 +112,7 @@ where
             };
 
             // Decode and validate (sync)
-            let claims: Claims<T> = match decoder.decode(&token) {
+            let claims: Claims = match decoder.decode(&token) {
                 Ok(c) => c,
                 Err(e) => return Ok(e.into_response()),
             };
@@ -158,11 +135,6 @@ mod tests {
 
     use crate::auth::session::jwt::{Claims, JwtConfig, JwtEncoder};
 
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-    struct TestClaims {
-        role: String,
-    }
-
     fn test_config() -> JwtConfig {
         JwtConfig {
             secret: "test-secret-key-at-least-32-bytes-long!".into(),
@@ -182,16 +154,12 @@ mod tests {
 
     fn make_token(config: &JwtConfig) -> String {
         let encoder = JwtEncoder::from_config(config);
-        let claims = Claims::new(TestClaims {
-            role: "admin".into(),
-        })
-        .with_sub("user_1")
-        .with_exp(now_secs() + 3600);
+        let claims = Claims::new().with_sub("user_1").with_exp(now_secs() + 3600);
         encoder.encode(&claims).unwrap()
     }
 
     async fn echo_handler(req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        let has_claims = req.extensions().get::<Claims<TestClaims>>().is_some();
+        let has_claims = req.extensions().get::<Claims>().is_some();
         let body = if has_claims { "ok" } else { "no-claims" };
         Ok(Response::new(Body::from(body)))
     }
@@ -201,7 +169,7 @@ mod tests {
         let config = test_config();
         let decoder = JwtDecoder::from_config(&config);
         let token = make_token(&config);
-        let layer = JwtLayer::<TestClaims>::new(decoder);
+        let layer = JwtLayer::new(decoder);
         let svc = layer.layer(tower::service_fn(echo_handler));
 
         let req = Request::builder()
@@ -216,7 +184,7 @@ mod tests {
     async fn missing_header_returns_401() {
         let config = test_config();
         let decoder = JwtDecoder::from_config(&config);
-        let layer = JwtLayer::<TestClaims>::new(decoder);
+        let layer = JwtLayer::new(decoder);
         let svc = layer.layer(tower::service_fn(echo_handler));
 
         let req = Request::builder().body(Body::empty()).unwrap();
@@ -229,12 +197,9 @@ mod tests {
         let config = test_config();
         let encoder = JwtEncoder::from_config(&config);
         let decoder = JwtDecoder::from_config(&config);
-        let claims = Claims::new(TestClaims {
-            role: "admin".into(),
-        })
-        .with_exp(now_secs() - 10);
+        let claims = Claims::new().with_exp(now_secs() - 10);
         let token = encoder.encode(&claims).unwrap();
-        let layer = JwtLayer::<TestClaims>::new(decoder);
+        let layer = JwtLayer::new(decoder);
         let svc = layer.layer(tower::service_fn(echo_handler));
 
         let req = Request::builder()
@@ -258,7 +223,7 @@ mod tests {
         let mut bytes = token.into_bytes();
         bytes[mid] = if bytes[mid] == b'A' { b'Z' } else { b'A' };
         let token = String::from_utf8(bytes).unwrap();
-        let layer = JwtLayer::<TestClaims>::new(decoder);
+        let layer = JwtLayer::new(decoder);
         let svc = layer.layer(tower::service_fn(echo_handler));
 
         let req = Request::builder()
@@ -274,11 +239,10 @@ mod tests {
         let config = test_config();
         let decoder = JwtDecoder::from_config(&config);
         let token = make_token(&config);
-        let layer = JwtLayer::<TestClaims>::new(decoder);
+        let layer = JwtLayer::new(decoder);
 
         let inner = tower::service_fn(|req: Request<Body>| async move {
-            let claims = req.extensions().get::<Claims<TestClaims>>().unwrap();
-            assert_eq!(claims.custom.role, "admin");
+            let claims = req.extensions().get::<Claims>().unwrap();
             assert_eq!(claims.subject(), Some("user_1"));
             Ok::<_, Infallible>(Response::new(Body::empty()))
         });
@@ -297,10 +261,9 @@ mod tests {
         let config = test_config();
         let decoder = JwtDecoder::from_config(&config);
         let token = make_token(&config);
-        let layer = JwtLayer::<TestClaims>::new(decoder)
-            .with_sources(vec![
-                Arc::new(super::super::source::QuerySource("token")) as Arc<dyn TokenSource>
-            ]);
+        let layer = JwtLayer::new(decoder).with_sources(vec![Arc::new(
+            super::super::source::QuerySource("token"),
+        ) as Arc<dyn TokenSource>]);
         let svc = layer.layer(tower::service_fn(echo_handler));
 
         let req = Request::builder()

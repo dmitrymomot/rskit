@@ -53,53 +53,42 @@ impl<S: Send + Sync> FromRequestParts<S> for Bearer {
     }
 }
 
-/// Extracts typed `Claims<T>` from request extensions.
+/// Extracts [`Claims`] from request extensions.
 ///
-/// `JwtLayer` must be applied to the route — the middleware decodes the token
-/// and inserts `Claims<T>` into extensions before the handler is called.
-/// Returns `401 Unauthorized` when claims are not present in extensions.
-impl<S: Send + Sync, T> FromRequestParts<S> for Claims<T>
-where
-    T: Clone + Send + Sync + 'static,
-{
+/// [`JwtLayer`](super::middleware::JwtLayer) must be applied to the route — the
+/// middleware decodes the token and inserts `Claims` into extensions before the
+/// handler is called. Returns `401 Unauthorized` when claims are not present
+/// in extensions.
+impl<S: Send + Sync> FromRequestParts<S> for Claims {
     type Rejection = Error;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         parts
             .extensions
-            .get::<Claims<T>>()
+            .get::<Claims>()
             .cloned()
             .ok_or_else(|| Error::unauthorized("unauthorized"))
     }
 }
 
-/// Optionally extracts typed `Claims<T>` from request extensions.
+/// Optionally extracts [`Claims`] from request extensions.
 ///
 /// Returns `Ok(None)` when `JwtLayer` is not applied or the token is missing/invalid,
 /// allowing routes to serve both authenticated and unauthenticated users.
-impl<S: Send + Sync, T> OptionalFromRequestParts<S> for Claims<T>
-where
-    T: Clone + Send + Sync + 'static,
-{
+impl<S: Send + Sync> OptionalFromRequestParts<S> for Claims {
     type Rejection = Error;
 
     async fn from_request_parts(
         parts: &mut Parts,
         _state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
-        Ok(parts.extensions.get::<Claims<T>>().cloned())
+        Ok(parts.extensions.get::<Claims>().cloned())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-    struct TestClaims {
-        role: String,
-    }
 
     #[tokio::test]
     async fn bearer_extracts_token() {
@@ -139,24 +128,18 @@ mod tests {
     #[tokio::test]
     async fn claims_extract_from_extensions() {
         let (mut parts, _) = http::Request::builder().body(()).unwrap().into_parts();
-        let claims = Claims::new(TestClaims {
-            role: "admin".into(),
-        })
-        .with_sub("user_1")
-        .with_exp(9999999999);
+        let claims = Claims::new().with_sub("user_1").with_exp(9999999999);
         parts.extensions.insert(claims.clone());
-        let extracted =
-            <Claims<TestClaims> as FromRequestParts<()>>::from_request_parts(&mut parts, &())
-                .await
-                .unwrap();
-        assert_eq!(extracted.custom.role, "admin");
+        let extracted = <Claims as FromRequestParts<()>>::from_request_parts(&mut parts, &())
+            .await
+            .unwrap();
         assert_eq!(extracted.sub, Some("user_1".into()));
     }
 
     #[tokio::test]
     async fn claims_missing_returns_401() {
         let (mut parts, _) = http::Request::builder().body(()).unwrap().into_parts();
-        let err = <Claims<TestClaims> as FromRequestParts<()>>::from_request_parts(&mut parts, &())
+        let err = <Claims as FromRequestParts<()>>::from_request_parts(&mut parts, &())
             .await
             .unwrap_err();
         assert_eq!(err.status(), http::StatusCode::UNAUTHORIZED);
@@ -165,11 +148,8 @@ mod tests {
     #[tokio::test]
     async fn option_claims_none_when_missing() {
         let (mut parts, _) = http::Request::builder().body(()).unwrap().into_parts();
-        let result = <Claims<TestClaims> as OptionalFromRequestParts<()>>::from_request_parts(
-            &mut parts,
-            &(),
-        )
-        .await;
+        let result =
+            <Claims as OptionalFromRequestParts<()>>::from_request_parts(&mut parts, &()).await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
     }
@@ -177,14 +157,9 @@ mod tests {
     #[tokio::test]
     async fn option_claims_some_when_present() {
         let (mut parts, _) = http::Request::builder().body(()).unwrap().into_parts();
-        parts.extensions.insert(Claims::new(TestClaims {
-            role: "admin".into(),
-        }));
-        let result = <Claims<TestClaims> as OptionalFromRequestParts<()>>::from_request_parts(
-            &mut parts,
-            &(),
-        )
-        .await;
+        parts.extensions.insert(Claims::new().with_sub("user_1"));
+        let result =
+            <Claims as OptionalFromRequestParts<()>>::from_request_parts(&mut parts, &()).await;
         assert!(result.unwrap().is_some());
     }
 }

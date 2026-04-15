@@ -1,15 +1,15 @@
 //! # modo::auth::session::jwt
 //!
-//! JWT authentication — token encoding, decoding, middleware, and revocation.
+//! JWT authentication — token encoding, decoding, middleware, and extractors.
 //!
 //! ## Provides
 //!
 //! | Type | Purpose |
 //! |------|---------|
-//! | [`Claims`] | JWT claims with registered and custom fields; axum extractor |
+//! | [`Claims`] | Standard JWT registered claims; axum extractor |
 //! | [`JwtConfig`] | YAML-deserialized configuration (secret, expiry, leeway, issuer, audience) |
-//! | [`JwtEncoder`] | Signs and produces JWT token strings (HS256) |
-//! | [`JwtDecoder`] | Verifies signatures and validates claims |
+//! | [`JwtEncoder`] | Signs any `Serialize` payload into a JWT token string (HS256) |
+//! | [`JwtDecoder`] | Verifies signatures, validates claims, and deserializes into any `DeserializeOwned` |
 //! | [`JwtLayer`] | Tower middleware that enforces JWT auth on axum routes |
 //! | [`Bearer`] | Standalone axum extractor for the raw Bearer token string |
 //! | [`JwtError`] | Typed error enum with static `code()` strings |
@@ -32,35 +32,49 @@
 //! |--------|-----------|
 //! | [`HmacSigner`] | HMAC-SHA256 (HS256), implements [`TokenSigner`] and [`TokenVerifier`] |
 //!
-//! ## Quick start
+//! ## Quick start — system auth flow
 //!
 //! ```rust,ignore
 //! use modo::auth::session::jwt::{JwtConfig, JwtEncoder, JwtDecoder, JwtLayer, Claims};
-//! use serde::{Serialize, Deserialize};
-//!
-//! #[derive(Clone, Serialize, Deserialize)]
-//! struct MyClaims { role: String }
 //!
 //! let config = JwtConfig::new("my-super-secret-key-for-signing-tokens");
 //! let encoder = JwtEncoder::from_config(&config);
 //! let decoder = JwtDecoder::from_config(&config);
 //!
 //! // Encode
-//! let claims = Claims::new(MyClaims { role: "admin".into() })
+//! let claims = Claims::new()
 //!     .with_sub("user_123")
 //!     .with_iat_now()
 //!     .with_exp_in(std::time::Duration::from_secs(3600));
 //! let token = encoder.encode(&claims).unwrap();
 //!
 //! // Decode
-//! let decoded: Claims<MyClaims> = decoder.decode(&token).unwrap();
+//! let decoded: Claims = decoder.decode(&token).unwrap();
 //!
-//! // Middleware
+//! // Middleware (inserts Claims into request extensions)
 //! use axum::Router;
 //! use axum::routing::get;
 //! let app: Router = Router::new()
-//!     .route("/me", get(|| async { "ok" }))
-//!     .layer(JwtLayer::<MyClaims>::new(decoder));
+//!     .route("/me", get(|claims: Claims| async move { claims.sub.unwrap_or_default() }))
+//!     .layer(JwtLayer::new(decoder));
+//! ```
+//!
+//! ## Custom payload
+//!
+//! ```rust,ignore
+//! use modo::auth::session::jwt::{JwtConfig, JwtEncoder, JwtDecoder};
+//! use serde::{Serialize, Deserialize};
+//!
+//! #[derive(Serialize, Deserialize)]
+//! struct MyPayload { sub: String, role: String, exp: u64 }
+//!
+//! let config = JwtConfig::new("my-super-secret-key-for-signing-tokens");
+//! let encoder = JwtEncoder::from_config(&config);
+//! let decoder = JwtDecoder::from_config(&config);
+//!
+//! let payload = MyPayload { sub: "user_123".into(), role: "admin".into(), exp: 9999999999 };
+//! let token = encoder.encode(&payload).unwrap();
+//! let decoded: MyPayload = decoder.decode(&token).unwrap();
 //! ```
 
 mod claims;
