@@ -80,6 +80,7 @@ Behavior:
 - Gets current UTC timestamp.
 - Calls `sign_headers()` to produce Standard Webhooks headers.
 - Sets headers: `content-type: application/json`, `user-agent`, `webhook-id`, `webhook-timestamp`, `webhook-signature`.
+- Returns `Error::bad_request` if `id` contains characters that are invalid as an HTTP header value.
 - Delegates to internal `client::post()` which uses `reqwest::Client`.
 - Empty body is accepted.
 
@@ -168,7 +169,8 @@ Builds signed content as `{id}.{timestamp}.{body}` and signs with each secret us
 // HMAC-SHA256, returns standard base64 string:
 pub fn sign(secret: &WebhookSecret, content: &[u8]) -> String
 
-// Constant-time verification, returns false on invalid base64 or mismatch:
+// Constant-time verification via subtle::ConstantTimeEq.
+// Returns false on invalid base64 or mismatch:
 pub fn verify(secret: &WebhookSecret, content: &[u8], signature: &str) -> bool
 ```
 
@@ -202,6 +204,7 @@ The following are `pub(crate)` and not part of the public API:
 
 ## Gotchas
 
+- **Constant-time comparison via `subtle::ConstantTimeEq`**: `verify()` uses `subtle::ConstantTimeEq` (the `subtle` crate) to compare HMAC bytes, preventing timing side-channels. Never substitute a plain `==` comparison for signatures or HMAC values.
 - **base64 crate, not encoding::base64url**: The webhook module uses the `base64` crate with `general_purpose::STANDARD` encoding. This is standard base64 with padding, per the Standard Webhooks spec. Do NOT use `modo::encoding::base64url` (which is RFC 4648 no-padding).
 - **with_user_agent panics after clone**: Must be called on the original `WebhookSender` before any `.clone()` calls. Uses `Arc::get_mut` internally.
 - **with_user_agent silently ignores invalid values**: If the provided string is not a valid HTTP header value, the method returns `self` unchanged without error.
