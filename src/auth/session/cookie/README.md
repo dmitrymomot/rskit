@@ -57,30 +57,25 @@ On the response path it flushes dirty data and sets or clears the cookie.
 ```rust,ignore
 use axum::http::StatusCode;
 use modo::auth::session::cookie::CookieSession;
-use modo::auth::session::meta::{SessionMeta, header_str};
-use modo::ip::ClientIp;
 
-async fn login(
-    cookie: CookieSession,
-    ClientIp(ip): ClientIp,
-    headers: axum::http::HeaderMap,
-) -> modo::Result<StatusCode> {
+async fn login(cookie: CookieSession) -> modo::Result<StatusCode> {
     // ... validate credentials, get user_id ...
     let user_id = "01JQXK5M3N8R4T6V2W9Y0ZABCD";
 
-    let meta = SessionMeta::from_headers(
-        ip.to_string(),
-        header_str(&headers, "user-agent"),
-        header_str(&headers, "accept-language"),
-        header_str(&headers, "accept-encoding"),
-    );
-    cookie.authenticate_with(user_id, serde_json::json!({ "role": "admin" })).await?;
+    // authenticate — no initial data
+    cookie.authenticate(user_id).await?;
+
+    // authenticate_with — supply initial JSON data
+    // cookie.authenticate_with(user_id, serde_json::json!({ "role": "admin" })).await?;
+
     Ok(StatusCode::OK)
 }
 ```
 
 `authenticate` (no initial data) and `authenticate_with` (with initial data)
-both destroy any pre-existing session first, preventing session fixation.
+both destroy any pre-existing session first, preventing session fixation. The
+session metadata (IP, user-agent, fingerprint) is captured automatically by the
+middleware and does not need to be passed to `authenticate`.
 
 ### Reading session data (read-only handlers)
 
@@ -228,11 +223,10 @@ reads it.
 | Type | Purpose |
 |------|---------|
 | `CookieSessionService` | Long-lived service; holds store, key, and config |
-| `CookieSessionsConfig` | YAML-deserializable configuration |
-| `CookieSessionLayer` | Tower layer returned by `CookieSessionService::layer()` |
+| `CookieSessionsConfig` | YAML-deserializable configuration (alias: `SessionConfig`) |
+| `CookieSessionLayer` | Tower layer returned by `CookieSessionService::layer()` (alias: `SessionLayer`) |
 | `CookieSession` | Axum extractor for mutable session access in handlers |
 | `Session` | Read-only transport-agnostic data snapshot (`auth::session::Session`) |
-| `SessionToken` | Opaque 32-byte token; redacted in `Debug`/`Display` |
 
 ## Security notes
 
