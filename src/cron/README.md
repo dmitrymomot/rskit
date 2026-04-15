@@ -89,7 +89,7 @@ async fn main() {
         .job_with(
             "@hourly",
             slow_job,
-            CronOptions { timeout_secs: 600 },
+            CronOptions { timeout_secs: 600, ..CronOptions::default() },
         )
         .unwrap()
         .start()

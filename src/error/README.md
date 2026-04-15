@@ -102,11 +102,13 @@ error (without `source`) is also inserted into response extensions under the typ
 | `Error::internal(msg)`             | 500    |
 | `Error::bad_gateway(msg)`          | 502    |
 | `Error::gateway_timeout(msg)`      | 504    |
+| `Error::lagged(skipped)`           | 500    |
+| `Error::new(status, msg)`          | any    |
+| `Error::with_source(status, msg, source)` | any |
 
-For SSE subscriber errors, use `Error::lagged(skipped: u64)`, which produces a `500` with
-`is_lagged()` returning `true`.
-
-For a custom status code, use `Error::new(status, msg)` or `Error::with_source(status, msg, source)`.
+`Error::lagged` sets `is_lagged()` to `true` and is used by the SSE broadcaster when a
+subscriber drops messages. `Error::new` and `Error::with_source` accept any
+[`http::StatusCode`] for cases not covered by the named constructors.
 
 ## HttpError Variants
 

@@ -7,15 +7,16 @@
 //! an optional machine-readable error code. `Error` implements [`axum::response::IntoResponse`],
 //! so it can be returned directly from axum handlers.
 //!
-//! Provides:
+//! ## Provides
+//!
 //! - [`Error`] — primary framework error with status code, message, optional source/details/code
-//! - [`Result<T>`] — type alias for `std::result::Result<T, Error>`
-//! - [`HttpError`] — lightweight `Copy` enum of common HTTP error statuses, converts into `Error`
+//! - [`Result`] — type alias for `std::result::Result<T, Error>`
+//! - [`HttpError`] — lightweight `Copy` enum of common HTTP error statuses, converts into [`Error`]
 //!
-//! Automatic `From` conversions are provided for [`std::io::Error`], [`serde_json::Error`],
-//! and [`serde_yaml_ng::Error`].
+//! Automatic [`From`] conversions into [`Error`] are provided for [`std::io::Error`]
+//! (→ 500), [`serde_json::Error`] (→ 400), and [`serde_yaml_ng::Error`] (→ 500).
 //!
-//! # Quick start
+//! ## Quick start
 //!
 //! ```rust
 //! use modo::error::{Error, Result};
@@ -28,9 +29,9 @@
 //! }
 //! ```
 //!
-//! # Error identity
+//! ## Error identity
 //!
-//! After `Error` is converted into an HTTP response, the source error is discarded. Use
+//! After [`Error`] is converted into an HTTP response, the source error is discarded. Use
 //! [`Error::with_code`] to attach a static code string that survives through the response
 //! pipeline and can be read back via [`Error::error_code`].
 //!
