@@ -259,43 +259,61 @@ pub fn verify(code: &str, hash: &str) -> bool
 
 ## JWT
 
-**Module:** `modo::auth::jwt`
+**Module:** `modo::auth::session::jwt`
 
-### JwtConfig
+Back-compat alias: `modo::auth::jwt` re-exports everything from `modo::auth::session::jwt`.
+Prefer the canonical path `modo::auth::session::jwt::*` in new code.
+
+### JwtSessionsConfig
 
 ```rust
 #[non_exhaustive]
-pub struct JwtConfig {
-    pub secret: String,              // HMAC secret
-    pub default_expiry: Option<u64>, // seconds; auto-fills exp when claims.exp is None
-    pub leeway: u64,                 // clock skew tolerance in seconds (default 0)
-    pub issuer: Option<String>,      // required iss claim
-    pub audience: Option<String>,    // required aud claim
+#[derive(Debug, Clone, Deserialize)]
+pub struct JwtSessionsConfig {
+    pub signing_secret: String,         // HMAC secret (required — empty string fails at JwtSessionService::new)
+    pub issuer: Option<String>,         // required iss claim (default: None)
+    pub access_ttl_secs: u64,           // access token lifetime in seconds (default: 900 = 15 min)
+    pub refresh_ttl_secs: u64,          // refresh token lifetime in seconds (default: 2592000 = 30 days)
+    pub max_per_user: usize,            // max concurrent sessions per user (default: 20)
+    pub touch_interval_secs: u64,       // min interval between session touch updates (default: 300)
+    pub stateful_validation: bool,      // validate tokens against session store on every request (default: true)
+    pub access_source: TokenSourceConfig,  // where to extract access tokens (default: Bearer)
+    pub refresh_source: TokenSourceConfig, // where to extract refresh tokens (default: Body { field: "refresh_token" })
 }
 
-impl JwtConfig {
-    pub fn new(secret: impl Into<String>) -> Self  // all other fields default (None/0)
+impl JwtSessionsConfig {
+    pub fn new(signing_secret: impl Into<String>) -> Self  // all other fields default
 }
 
-impl Default for JwtConfig  // secret defaults to empty string
+impl Default for JwtSessionsConfig  // signing_secret defaults to empty string
 ```
 
-`#[non_exhaustive]` -- use `JwtConfig::new(secret)` constructor or `Default::default()`.
+`#[non_exhaustive]` -- use `JwtSessionsConfig::new(secret)` or `Default::default()` and override fields.
+
+`JwtConfig` is a back-compat alias for `JwtSessionsConfig` (re-exported as
+`pub use config::JwtSessionsConfig as JwtConfig`).
 
 ```yaml
 jwt:
-    secret: "${JWT_SECRET}"
-    default_expiry: 3600
-    leeway: 5
+    signing_secret: "${JWT_SECRET}"
     issuer: "my-app"
-    audience: "api"
+    access_ttl_secs: 900
+    refresh_ttl_secs: 2592000
+    max_per_user: 20
+    touch_interval_secs: 300
+    stateful_validation: true
+    access_source:
+        kind: bearer
+    refresh_source:
+        kind: body
+        field: refresh_token
 ```
 
-### Claims\<T\>
+### Claims
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Claims<T> {
+pub struct Claims {
     pub iss: Option<String>,
     pub sub: Option<String>,
     pub aud: Option<String>,
@@ -303,20 +321,22 @@ pub struct Claims<T> {
     pub nbf: Option<u64>,
     pub iat: Option<u64>,
     pub jti: Option<String>,
-    #[serde(flatten)]
-    pub custom: T,
 }
 ```
+
+`Claims` is **non-generic** — it carries only the seven standard registered JWT claims.
+Custom auth flows that need extra payload fields should define their own struct and pass it
+directly to `JwtEncoder::encode<T>` / `JwtDecoder::decode<T>`.
 
 Builder methods (all consume and return `Self`):
 
 ```rust
-Claims::new(custom: T) -> Self                              // all registered fields None
+Claims::new() -> Self                               // all registered fields None
     .with_iss(self, iss: impl Into<String>) -> Self
     .with_sub(self, sub: impl Into<String>) -> Self
     .with_aud(self, aud: impl Into<String>) -> Self
-    .with_exp(self, exp: u64) -> Self                       // absolute Unix timestamp
-    .with_exp_in(self, duration: Duration) -> Self           // relative to now
+    .with_exp(self, exp: u64) -> Self               // absolute Unix timestamp
+    .with_exp_in(self, duration: Duration) -> Self  // relative to now
     .with_nbf(self, nbf: u64) -> Self
     .with_iat_now(self) -> Self
     .with_jti(self, jti: impl Into<String>) -> Self
@@ -329,32 +349,37 @@ pub fn subject(&self) -> Option<&str>
 pub fn token_id(&self) -> Option<&str>
 pub fn issuer(&self) -> Option<&str>
 pub fn audience(&self) -> Option<&str>
-pub fn is_expired(&self) -> bool           // checks exp against current time
-pub fn is_not_yet_valid(&self) -> bool     // checks nbf against current time
+pub fn is_expired(&self) -> bool           // checks exp against current time; false when exp absent
+pub fn is_not_yet_valid(&self) -> bool     // checks nbf against current time; false when nbf absent
 ```
 
-Custom fields are flattened into the top-level JSON object (not nested under `"custom"`).
+`None` fields are skipped during serialization (`#[serde(skip_serializing_if = "Option::is_none")]`).
 
-`Claims<T>` is also an axum `FromRequestParts` extractor (reads from request extensions inserted by `JwtLayer`). Returns 401 if not present. Implements `OptionalFromRequestParts` for `Option<Claims<T>>`. Requires `T: Clone + Send + Sync + 'static` for the extractor to work.
+`Claims` is also an axum `FromRequestParts` extractor (reads from request extensions inserted
+by `JwtLayer`). Returns 401 if not present. Implements `OptionalFromRequestParts` for
+`Option<Claims>` (returns `Ok(None)` when absent).
 
 ### JwtEncoder
 
 ```rust
-JwtEncoder::from_config(config: &JwtConfig) -> Self
-encoder.encode(claims: &Claims<T>) -> Result<String>  // T: Serialize
+JwtEncoder::from_config(config: &JwtSessionsConfig) -> Self
+encoder.encode<T: Serialize>(claims: &T) -> Result<String>
 ```
 
-- If `claims.exp` is `None` and `default_expiry` is configured, `exp` is auto-filled.
-- Explicit `exp` is never overwritten.
+- If the payload serializes to a JSON object without an `exp` field and `access_ttl_secs` is
+  configured (always, since it defaults to 900), `exp` is auto-filled as `now + access_ttl_secs`.
+- An explicitly set `exp` field is never overwritten.
 - Uses HS256 via `HmacSigner`.
 - Cloning is cheap (state behind `Arc`).
+- Accepts any `T: Serialize` directly — `Claims` is the system type, but custom structs work too.
 
 ### JwtDecoder
 
 ```rust
-JwtDecoder::from_config(config: &JwtConfig) -> Self
-JwtDecoder::from(&encoder) -> Self  // shares key + validation config
-decoder.decode::<T>(token: &str) -> Result<Claims<T>>  // T: DeserializeOwned
+JwtDecoder::from_config(config: &JwtSessionsConfig) -> Self
+JwtDecoder::new(verifier: Arc<dyn TokenVerifier>, validation: ValidationConfig) -> Self
+JwtDecoder::from(&encoder) -> Self  // shares key + validation config (via From<&JwtEncoder>)
+decoder.decode::<T: DeserializeOwned>(token: &str) -> Result<T>
 ```
 
 Validation order:
@@ -362,11 +387,12 @@ Validation order:
 1. Split into 3 parts
 2. Decode header, check algorithm matches (`HS256`)
 3. Verify HMAC signature
-4. Deserialize payload into `Claims<T>`
+4. Decode payload into JSON value
 5. Enforce `exp` (always required; missing `exp` is treated as expired)
 6. Check `nbf` if present
 7. Check `iss` if `require_issuer` is configured
 8. Check `aud` if `require_audience` is configured
+9. Deserialize validated JSON value into `T`
 
 Leeway applies to `exp` and `nbf` checks.
 
@@ -386,30 +412,43 @@ pub struct HmacSigner { /* Arc<Inner> */ }
 HmacSigner::new(secret: impl AsRef<[u8]>) -> Self
 ```
 
-`HmacSigner` implements both traits (HS256). Cloning is cheap (`Arc`). Converts `Into<Arc<dyn TokenSigner>>` and `Into<Arc<dyn TokenVerifier>>`.
+`HmacSigner` implements both traits (HS256). Cloning is cheap (`Arc`). Converts
+`Into<Arc<dyn TokenSigner>>` and `Into<Arc<dyn TokenVerifier>>`.
 
 `TokenVerifier` and `TokenSigner` are object-safe -- can be wrapped in `Arc<dyn Trait>`.
 
-### JwtLayer\<T\>
+### JwtLayer
 
-Tower middleware layer. Decodes JWT, validates claims, optionally checks revocation, inserts `Claims<T>` into request extensions. Also re-exported as `modo::middlewares::Jwt`.
-
-`T: DeserializeOwned + Clone + Send + Sync + 'static`.
+Tower middleware layer. Decodes JWT, validates claims, optionally performs a stateful
+database row lookup, and inserts `Claims` into request extensions.
+Also re-exported as `modo::middlewares::Jwt`.
 
 ```rust
-JwtLayer::<MyClaims>::new(decoder: JwtDecoder) -> Self
-    .with_sources(self, sources: Vec<Arc<dyn TokenSource>>) -> Self  // override token sources
-    .with_revocation(self, revocation: Arc<dyn Revocation>) -> Self  // attach revocation backend
+JwtLayer::new(decoder: JwtDecoder) -> Self
+    // Stateless JWT validation only (signature + claims). No DB lookup.
+
+JwtLayer::from_service(service: JwtSessionService) -> Self
+    // Stateful: after JWT validation, hashes the jti claim and loads the session row.
+    // Inserts Session into extensions. Returns 401 (auth:session_not_found) when row is absent.
+    // Preferred entry-point: JwtSessionService::layer() (calls this internally).
+
+    .with_sources(self, sources: Vec<Arc<dyn TokenSource>>) -> Self
+    // Override token sources (tried in order; first Some wins).
 ```
 
 Default token source: `BearerSource` (`Authorization: Bearer <token>`).
 
-Middleware flow:
+Middleware flow (`JwtLayer::new`):
 
 1. Try each `TokenSource` in order; 401 if none yields a token.
 2. Decode and validate with `JwtDecoder`; 401 on failure.
-3. If `Revocation` backend registered AND token has `jti`, call `is_revoked()`. Fail-closed (errors reject the request).
-4. Insert `Claims<T>` into request extensions.
+3. Insert `Claims` into request extensions.
+
+Additional steps when constructed via `JwtLayer::from_service` (stateful):
+
+4. Hash `jti` claim; load session row from `authenticated_sessions`. Return 401 with
+   `auth:session_not_found` when row is absent (logged-out / revoked).
+5. Insert transport-agnostic `Session` into request extensions.
 
 ### TokenSource trait
 
@@ -428,23 +467,45 @@ Built-in implementations:
 | `CookieSource("name")`   | Cookie `name=<token>`                  |
 | `HeaderSource("X-Name")` | Custom header value                    |
 
-### Revocation trait
+### TokenSourceConfig
+
+YAML-deserialized enum that selects and builds a `TokenSource`. Used in
+`JwtSessionsConfig` for `access_source` and `refresh_source`.
 
 ```rust
-pub trait Revocation: Send + Sync {
-    fn is_revoked(&self, jti: &str) -> Pin<Box<dyn Future<Output = Result<bool>> + Send + '_>>;
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TokenSourceConfig {
+    Bearer,
+    Cookie { name: String },
+    Header { name: String },
+    Query { name: String },
+    Body { field: String },  // read from JSON request body; Body variants fall back to BearerSource in JwtLayer
+}
+
+impl TokenSourceConfig {
+    pub fn build(&self) -> Box<dyn TokenSource>
 }
 ```
 
-Object-safe (`Pin<Box<dyn Future>>` returns, not RPITIT). Implement against your storage (DB, Redis, `LruCache`).
+YAML examples:
 
-Behavior:
+```yaml
+access_source:
+  kind: bearer
 
-- Only called when registered AND token has `jti`.
-- Token without `jti` + registered backend: accepted (no call).
-- `Ok(true)`: rejected with `jwt:revoked`.
-- `Ok(false)`: accepted.
-- `Err(_)`: rejected with `jwt:revocation_check_failed` (fail-closed).
+refresh_source:
+  kind: cookie
+  name: refresh_jwt
+
+# or
+refresh_source:
+  kind: body
+  field: refresh_token
+```
+
+`Body` variants are handled at the session-handler level (by `JwtSession`), not inside
+`JwtLayer`. When `JwtLayer` encounters a `Body` source config, it falls back to `BearerSource`.
 
 ### Bearer extractor
 
@@ -453,7 +514,12 @@ Behavior:
 pub struct Bearer(pub String);
 ```
 
-Axum `FromRequestParts` extractor. Reads the raw token string from `Authorization: Bearer <token>` (accepts the exact prefixes `Bearer ` or `bearer `; other capitalizations and other schemes are rejected). Does **not** decode or validate -- independent of `JwtLayer`. Returns 401 with `jwt:missing_token` if the header is absent, uses a different scheme, or carries an empty token. Also available via `modo::extractors::Bearer`; `Claims<T>` is at `modo::extractors::Claims`.
+Axum `FromRequestParts` extractor. Reads the raw token string from
+`Authorization: Bearer <token>` (accepts the exact prefixes `Bearer ` or `bearer `;
+other capitalizations and other schemes are rejected). Does **not** decode or validate --
+independent of `JwtLayer`. Returns 401 with `jwt:missing_token` if the header is absent,
+uses a different scheme, or carries an empty token. Also available via
+`modo::extractors::Bearer`; `Claims` is at `modo::extractors::Claims`.
 
 ### JwtError
 
@@ -473,50 +539,59 @@ Typed error enum chained into `modo::Error` via `chain()`.
 
 Variants and codes:
 
-| Variant                 | Code                          | HTTP status |
-| ----------------------- | ----------------------------- | ----------- |
-| `MissingToken`          | `jwt:missing_token`           | 401         |
-| `InvalidHeader`         | `jwt:invalid_header`          | 401         |
-| `MalformedToken`        | `jwt:malformed_token`         | 401         |
-| `DeserializationFailed` | `jwt:deserialization_failed`  | 401         |
-| `InvalidSignature`      | `jwt:invalid_signature`       | 401         |
-| `Expired`               | `jwt:expired`                 | 401         |
-| `NotYetValid`           | `jwt:not_yet_valid`           | 401         |
-| `InvalidIssuer`         | `jwt:invalid_issuer`          | 401         |
-| `InvalidAudience`       | `jwt:invalid_audience`        | 401         |
-| `Revoked`               | `jwt:revoked`                 | 401         |
-| `RevocationCheckFailed` | `jwt:revocation_check_failed` | 401         |
-| `AlgorithmMismatch`     | `jwt:algorithm_mismatch`      | 401         |
-| `SigningFailed`         | `jwt:signing_failed`          | 500         |
-| `SerializationFailed`   | `jwt:serialization_failed`    | 500         |
+| Variant                 | Code                         | HTTP status |
+| ----------------------- | ---------------------------- | ----------- |
+| `MissingToken`          | `jwt:missing_token`          | 401         |
+| `InvalidHeader`         | `jwt:invalid_header`         | 401         |
+| `MalformedToken`        | `jwt:malformed_token`        | 401         |
+| `DeserializationFailed` | `jwt:deserialization_failed` | 401         |
+| `InvalidSignature`      | `jwt:invalid_signature`      | 401         |
+| `Expired`               | `jwt:expired`                | 401         |
+| `NotYetValid`           | `jwt:not_yet_valid`          | 401         |
+| `InvalidIssuer`         | `jwt:invalid_issuer`         | 401         |
+| `InvalidAudience`       | `jwt:invalid_audience`       | 401         |
+| `AlgorithmMismatch`     | `jwt:algorithm_mismatch`     | 401         |
+| `SigningFailed`         | `jwt:signing_failed`         | 500         |
+| `SerializationFailed`   | `jwt:serialization_failed`   | 500         |
 
 ### Imports
 
 ```rust
-use modo::auth::jwt::{
+use modo::auth::session::jwt::{
     Bearer, Claims, HmacSigner, JwtConfig, JwtDecoder, JwtEncoder, JwtError,
-    JwtLayer, Revocation, TokenSigner, TokenSource, TokenVerifier, ValidationConfig,
+    JwtLayer, JwtSessionsConfig, TokenSigner, TokenSource, TokenSourceConfig,
+    TokenVerifier, ValidationConfig,
 };
+// Back-compat: modo::auth::jwt::* also resolves (alias).
 ```
 
 ### ValidationConfig
 
 ```rust
 #[non_exhaustive]
+#[derive(Debug, Clone)]
 pub struct ValidationConfig {
-    pub leeway: Duration,                   // clock skew tolerance
+    pub leeway: Duration,                   // clock skew tolerance (default: Duration::ZERO)
     pub require_issuer: Option<String>,     // required iss claim
     pub require_audience: Option<String>,   // required aud claim
 }
 
 impl Default for ValidationConfig  // leeway=ZERO, no issuer/audience requirements
+
+impl ValidationConfig {
+    pub fn with_audience(self, aud: impl Into<String>) -> Self  // sets require_audience
+    pub fn with_issuer(self, iss: impl Into<String>) -> Self    // sets require_issuer
+}
 ```
 
-`#[non_exhaustive]` -- use `ValidationConfig::default()` and override fields. Used internally by `JwtDecoder`. Built automatically from `JwtConfig` fields (`leeway`, `issuer`, `audience`).
+`#[non_exhaustive]` -- use `ValidationConfig::default()` and override fields or use the
+builder methods. Used internally by `JwtDecoder`. Built automatically from
+`JwtSessionsConfig` fields (`issuer`).
 
 ### Concrete TokenSource types
 
-Available at `modo::auth::jwt::{BearerSource, QuerySource, CookieSource, HeaderSource}` (not re-exported at crate root). See the TokenSource table above for usage.
+Available at `modo::auth::session::jwt::{BearerSource, QuerySource, CookieSource, HeaderSource}`
+(not re-exported at crate root). See the TokenSource table above for usage.
 
 ---
 
@@ -655,7 +730,7 @@ they run before the per-route `.route_layer()` guards. See
 `modo::Error` drops `source` on `Clone` and `IntoResponse`. To preserve error identity through the response pipeline, use `error_code`:
 
 ```rust
-use modo::auth::jwt::JwtError;
+use modo::auth::session::jwt::JwtError;
 
 // Building the error:
 let err = modo::Error::unauthorized("unauthorized")
@@ -677,18 +752,22 @@ The JWT module follows this pattern consistently -- all `JwtError` variants prod
 
 - `OAuthProvider` is RPITIT (not object-safe). Never use `dyn OAuthProvider` or `Arc<dyn OAuthProvider>`.
 - `RoleExtractor` is RPITIT (not object-safe). Never use `dyn RoleExtractor`; pass concrete types into `modo::auth::role::middleware(...)`.
-- `Revocation` and `TokenSource` are object-safe -- use `Arc<dyn Revocation>` and `Arc<dyn TokenSource>`. `Revocation::is_revoked` returns `Pin<Box<dyn Future>>` (not RPITIT) so it stays object-safe.
-- `TokenVerifier` and `TokenSigner` are object-safe -- use `Arc<dyn TokenVerifier>` and `Arc<dyn TokenSigner>`.
+- `TokenSource` and `TokenVerifier`/`TokenSigner` are object-safe -- use `Arc<dyn TokenSource>`, `Arc<dyn TokenVerifier>`, `Arc<dyn TokenSigner>`.
 - All auth modules are always compiled in modo 0.8 — only `test-helpers` exists as a cargo feature, and it gates none of these modules.
 - The role middleware must apply via `.layer()` on the outer router. `ApiKeyLayer` likewise applies via `.layer()`. Guards (`require_authenticated`, `require_role`, `require_scope`) must apply via `.route_layer()` after route matching.
 - `require_scope` returns **500** (not 401) when `ApiKeyLayer` is missing — missing middleware is a server wiring bug, not a client auth failure. The guard logs the misconfiguration via `tracing::error!`.
 - `Role` extractor returns **500** when `auth::role::middleware()` is not applied — same rationale (server wiring bug, not a client failure).
 - `JwtDecoder::decode()` always requires `exp` -- tokens without `exp` are rejected as expired (`jwt:expired`).
 - `OAuthState` extractor requires `Key` (from `axum_extra::extract::cookie`) registered in `AppState`. Missing-key returns `Error::internal`; missing/tampered cookie returns `Error::bad_request`.
-- `Claims<T>` requires `JwtLayer<T>` to be applied to the route -- the middleware inserts claims into extensions. `T` must be `Clone + Send + Sync + 'static` for the extractor; encoding additionally requires `Serialize`, decoding `DeserializeOwned`.
+- `Claims` requires `JwtLayer` to be applied to the route -- the middleware inserts claims into extensions. For the extractor to work: no generic parameter required (`Claims` is non-generic in v0.8).
 - `Bearer` extractor is independent of `JwtLayer` -- it only reads the raw token string, no decode/validate.
 - `JwtEncoder`/`JwtDecoder` are cheap to clone (state behind `Arc`).
-- `JwtDecoder::from(&encoder)` shares the signing key and validation policy -- use when encoder and decoder come from the same `JwtConfig`.
-- `PasswordConfig`, `TotpConfig`, `JwtConfig`, `ValidationConfig`, `OAuthConfig`, `OAuthProviderConfig`, `CallbackParams`, and `UserProfile` are all `#[non_exhaustive]` -- never construct with struct literals (no `..Default::default()` either). Use the provided constructors (`::new(...)`, `Default::default()`) and override fields by direct assignment.
-- `JwtConfig` and `OAuthConfig` have `#[serde(default)]` at struct level -- all fields are optional in YAML (fall back to defaults).
+- `JwtDecoder::from(&encoder)` shares the signing key and validation policy -- use when encoder and decoder come from the same `JwtSessionsConfig`.
+- `JwtConfig` is a back-compat alias for `JwtSessionsConfig`. Prefer `JwtSessionsConfig` in new code.
+- `Claims` is **non-generic** in v0.8. There is no `Claims<T>`. Custom payload fields: define your own struct and pass it to `encoder.encode(&my_payload)` / `decoder.decode::<MyPayload>(&token)`.
+- `JwtLayer` has no generic parameter in v0.8 (`JwtLayer`, not `JwtLayer<T>`). It always decodes into `Claims`.
+- The `Revocation` trait and `with_revocation()` no longer exist. Stateful row lookup in `JwtLayer::from_service` replaces revocation: the session row absent = revoked. The `Revoked` and `RevocationCheckFailed` `JwtError` variants no longer exist.
+- `PasswordConfig`, `TotpConfig`, `JwtSessionsConfig`, `ValidationConfig`, `OAuthConfig`, `OAuthProviderConfig`, `CallbackParams`, and `UserProfile` are all `#[non_exhaustive]` -- never construct with struct literals (no `..Default::default()` either). Use the provided constructors (`::new(...)`, `Default::default()`) and override fields by direct assignment.
+- `JwtSessionsConfig` and `OAuthConfig` have `#[serde(default)]` at struct level -- all fields are optional in YAML (fall back to defaults).
 - `RequireRoleLayer`, `RequireAuthenticatedLayer`, and `ScopeLayer` are the return types of `require_role()`, `require_authenticated()`, and `require_scope()`. They are not re-exported -- chain them directly into `.route_layer(...)` rather than naming them.
+- `TokenSourceConfig::Body` variants are read in session-handler logic (by `JwtSession`), not inside `JwtLayer`. When `JwtLayer` encounters a Body source, it falls back to `BearerSource`.
