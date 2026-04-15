@@ -23,7 +23,6 @@ const SESSIONS_TABLE_SQL: &str = "CREATE TABLE authenticated_sessions (
         expires_at TEXT NOT NULL
     )";
 
-#[allow(dead_code)]
 const SESSIONS_INDEXES_SQL: &[&str] = &[
     "CREATE INDEX idx_sessions_user_id ON authenticated_sessions (user_id)",
     "CREATE INDEX idx_sessions_expires_at ON authenticated_sessions (expires_at)",
@@ -75,6 +74,12 @@ impl TestSession {
     /// Integration tests that need to set up the schema without going through
     /// `TestSession::new` can reference this constant directly.
     pub const SCHEMA_SQL: &'static str = SESSIONS_TABLE_SQL;
+
+    /// The SQL statements used to create indexes on the `authenticated_sessions` table.
+    ///
+    /// Integration tests that need to set up indexes without going through
+    /// `TestSession::new` can iterate over this slice and execute each statement.
+    pub const INDEXES_SQL: &'static [&'static str] = SESSIONS_INDEXES_SQL;
 
     /// Create a `TestSession` with default [`CookieSessionsConfig`] and a
     /// test-suitable [`CookieConfig`] (insecure, lax same-site, 64-char secret).

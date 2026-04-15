@@ -63,6 +63,13 @@ impl CookieSessionService {
     }
 
     /// Return a reference to the underlying session store.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn store(&self) -> &SessionStore {
+        &self.inner.store
+    }
+
+    /// Return a reference to the underlying session store (crate-internal).
+    #[cfg(not(any(test, feature = "test-helpers")))]
     pub(crate) fn store(&self) -> &SessionStore {
         &self.inner.store
     }
