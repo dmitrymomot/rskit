@@ -14,18 +14,18 @@ Size helpers are available at `modo::storage::{gb, kb, mb}`.
 
 Wraps an `Arc<StorageInner>` -- cheaply cloneable. Constructed from `BucketConfig`.
 
+`BucketConfig` is `#[non_exhaustive]` — external callers must build from `Default::default()` and assign fields:
+
 ```rust
-let config = BucketConfig {
-    bucket: "my-bucket".into(),
-    endpoint: "https://s3.us-east-1.amazonaws.com".into(),
-    access_key: "AKIA...".into(),
-    secret_key: "wJal...".into(),
-    region: Some("us-east-1".into()),
-    public_url: Some("https://cdn.example.com".into()),
-    max_file_size: Some("10mb".into()),
-    path_style: true, // default
-    ..Default::default()
-};
+let mut config = BucketConfig::default();
+config.bucket = "my-bucket".into();
+config.endpoint = "https://s3.us-east-1.amazonaws.com".into();
+config.access_key = "AKIA...".into();
+config.secret_key = "wJal...".into();
+config.region = Some("us-east-1".into());
+config.public_url = Some("https://cdn.example.com".into());
+config.max_file_size = Some("10mb".into());
+// path_style defaults to true
 let storage = Storage::new(&config)?;
 ```
 
@@ -67,7 +67,7 @@ Size helper functions: `kb(n)`, `mb(n)`, `gb(n)` convert to bytes.
 
 ## BucketConfig
 
-`#[non_exhaustive]` — use `..Default::default()` for forward compatibility.
+`#[non_exhaustive]` — external callers must use `BucketConfig::default()` + field assignment (struct-literal syntax is not allowed outside the crate).
 
 ```rust
 pub struct BucketConfig {
@@ -92,11 +92,16 @@ Implements `Default` and `Deserialize` (`#[serde(default)]`). Loaded from YAML c
 Named collection of `Storage` instances for multi-bucket apps. Wraps `Arc<HashMap<String, Storage>>`.
 
 ```rust
-let configs = vec![
-    BucketConfig { name: "avatars".into(), bucket: "avatars-bucket".into(), /* ... */ ..Default::default() },
-    BucketConfig { name: "docs".into(), bucket: "docs-bucket".into(), /* ... */ ..Default::default() },
-];
-let buckets = Buckets::new(&configs)?;
+let mut avatars_cfg = BucketConfig::default();
+avatars_cfg.name = "avatars".into();
+avatars_cfg.bucket = "avatars-bucket".into();
+// ... set endpoint, access_key, secret_key, etc.
+
+let mut docs_cfg = BucketConfig::default();
+docs_cfg.name = "docs".into();
+docs_cfg.bucket = "docs-bucket".into();
+
+let buckets = Buckets::new(&[avatars_cfg, docs_cfg])?;
 
 let store = buckets.get("avatars")?; // cheap Arc clone
 store.put(&input).await?;
