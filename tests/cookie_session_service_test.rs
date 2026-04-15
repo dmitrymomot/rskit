@@ -15,12 +15,18 @@ async fn service_constructs_and_cleanup_expired_returns_zero() {
     assert_eq!(removed, 0);
 }
 
-// The second test that needs TestSession::SCHEMA_SQL is deferred to Task 9.
-// #[tokio::test]
-// async fn service_list_returns_empty_for_unknown_user() {
-//     let db = TestDb::new().await;
-//     db.db().conn().execute(modo::testing::TestSession::SCHEMA_SQL, ()).await.unwrap();
-//     let svc = CookieSessionService::new(db.db(), CookieSessionsConfig::default()).unwrap();
-//     let rows = svc.list("nobody").await.unwrap();
-//     assert_eq!(rows.len(), 0);
-// }
+#[tokio::test]
+async fn service_list_returns_empty_for_unknown_user() {
+    use modo::db::ConnExt;
+    let db = TestDb::new().await;
+    db.db()
+        .conn()
+        .execute_raw(modo::testing::TestSession::SCHEMA_SQL, ())
+        .await
+        .unwrap();
+    let mut cfg = CookieSessionsConfig::default();
+    cfg.cookie.secret = "a".repeat(64);
+    let svc = CookieSessionService::new(db.db(), cfg).unwrap();
+    let rows = svc.list("nobody").await.unwrap();
+    assert_eq!(rows.len(), 0);
+}

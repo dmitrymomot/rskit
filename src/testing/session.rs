@@ -5,7 +5,6 @@ use crate::auth::session::CookieSessionsConfig;
 use crate::auth::session::meta::SessionMeta;
 use crate::auth::session::store::SessionStore;
 use crate::cookie::{CookieConfig, Key, key_from_config};
-use crate::db::Database;
 
 use super::db::TestDb;
 
@@ -64,14 +63,19 @@ const SESSIONS_INDEXES_SQL: &[&str] = &[
 /// # }
 /// ```
 pub struct TestSession {
-    db: Database,
     store: SessionStore,
-    cookie_config: CookieConfig,
     key: Key,
     session_config: CookieSessionsConfig,
+    service: CookieSessionService,
 }
 
 impl TestSession {
+    /// The SQL statement used to create the `authenticated_sessions` table.
+    ///
+    /// Integration tests that need to set up the schema without going through
+    /// `TestSession::new` can reference this constant directly.
+    pub const SCHEMA_SQL: &'static str = SESSIONS_TABLE_SQL;
+
     /// Create a `TestSession` with default [`CookieSessionsConfig`] and a
     /// test-suitable [`CookieConfig`] (insecure, lax same-site, 64-char secret).
     ///
@@ -122,12 +126,16 @@ impl TestSession {
         let database = db.db();
         let store = SessionStore::new(database.clone(), session_config.clone());
 
+        let mut svc_config = session_config.clone();
+        svc_config.cookie = cookie_config;
+        let service = CookieSessionService::new(database, svc_config)
+            .expect("failed to build CookieSessionService");
+
         Self {
-            db: database,
             store,
-            cookie_config,
             key,
             session_config,
+            service,
         }
     }
 
@@ -179,11 +187,14 @@ impl TestSession {
     /// Apply this layer to a [`super::TestAppBuilder`] so that handlers can
     /// use the [`CookieSession`](crate::auth::session::CookieSession) extractor.
     pub fn layer(&self) -> crate::auth::session::CookieSessionLayer {
-        // Build a CookieSessionsConfig with our test cookie config embedded.
-        let mut config = self.session_config.clone();
-        config.cookie = self.cookie_config.clone();
-        let svc = CookieSessionService::new(self.db.clone(), config)
-            .expect("failed to build CookieSessionService for TestSession");
-        svc.layer()
+        self.service.layer()
+    }
+
+    /// Return a reference to the [`CookieSessionService`] used by this `TestSession`.
+    ///
+    /// Useful for calling management operations (`list`, `revoke`, etc.) directly
+    /// in integration tests without going through HTTP.
+    pub fn service(&self) -> &CookieSessionService {
+        &self.service
     }
 }
