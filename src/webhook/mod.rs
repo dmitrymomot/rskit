@@ -1,7 +1,9 @@
+//! # modo::webhook
+//!
 //! Outbound webhook delivery following the
 //! [Standard Webhooks](https://www.standardwebhooks.com/) specification.
 //!
-//! This module provides signed outbound HTTP POST requests using HMAC-SHA256,
+//! Provides signed outbound HTTP POST requests using HMAC-SHA256,
 //! plus verification helpers for incoming webhook requests.
 //!
 //! # Provides
