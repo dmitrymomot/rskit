@@ -8,11 +8,10 @@ use axum::response::IntoResponse;
 use http::Request;
 use tower::{Layer, Service};
 
-use crate::Error;
 use crate::auth::session::Session;
 
 use super::claims::Claims;
-use super::decoder::JwtDecoder;
+use super::decoder::{JwtDecoder, auth_err, jwt_err};
 use super::error::JwtError;
 use super::service::JwtSessionService;
 use super::source::{BearerSource, TokenSource};
@@ -139,63 +138,34 @@ where
         Box::pin(async move {
             let (mut parts, body) = request.into_parts();
 
-            // Try each token source in order
-            let token = sources.iter().find_map(|s| s.extract(&parts));
-            let token = match token {
+            let token = match sources.iter().find_map(|s| s.extract(&parts)) {
                 Some(t) => t,
-                None => {
-                    let err = Error::unauthorized("unauthorized")
-                        .chain(JwtError::MissingToken)
-                        .with_code(JwtError::MissingToken.code());
-                    return Ok(err.into_response());
-                }
+                None => return Ok(jwt_err(JwtError::MissingToken).into_response()),
             };
 
-            // Decode and validate (sync)
             let claims: Claims = match decoder.decode(&token) {
                 Ok(c) => c,
                 Err(e) => return Ok(e.into_response()),
             };
 
-            // Stateful validation: when backed by a JwtSessionService and
-            // stateful_validation is enabled, hash the jti claim, load the session
-            // row, and insert the transport-agnostic Session into extensions.
-            // Returns 401 when the row is absent; propagates DB errors as 5xx.
             if let Some(svc) = service {
-                // Fix #1: reject non-access audience tokens before any DB lookup.
                 if claims.aud.as_deref() != Some("access") {
-                    let err = Error::unauthorized("unauthorized").with_code("auth:aud_mismatch");
-                    return Ok(err.into_response());
+                    return Ok(auth_err("auth:aud_mismatch").into_response());
                 }
 
-                // Fix #2: honor stateful_validation flag.
                 if svc.config().stateful_validation {
-                    let jti = match claims.jti.as_deref() {
-                        Some(j) => j,
-                        None => {
-                            let err = Error::unauthorized("unauthorized")
-                                .with_code("auth:session_not_found");
-                            return Ok(err.into_response());
-                        }
-                    };
-
-                    let session_token = match SessionToken::from_raw(jti) {
+                    let session_token = match claims.jti.as_deref().and_then(SessionToken::from_raw)
+                    {
                         Some(t) => t,
                         None => {
-                            let err = Error::unauthorized("unauthorized")
-                                .with_code("auth:session_not_found");
-                            return Ok(err.into_response());
+                            return Ok(auth_err("auth:session_not_found").into_response());
                         }
                     };
 
-                    // Fix #5: propagate DB errors as 5xx; 401 only for missing row.
-                    let lookup = svc.store().read_by_token_hash(&session_token.hash()).await;
-                    let raw = match lookup {
+                    let raw = match svc.store().read_by_token_hash(&session_token.hash()).await {
                         Err(e) => return Ok(e.into_response()),
                         Ok(None) => {
-                            let err = Error::unauthorized("unauthorized")
-                                .with_code("auth:session_not_found");
-                            return Ok(err.into_response());
+                            return Ok(auth_err("auth:session_not_found").into_response());
                         }
                         Ok(Some(row)) => row,
                     };
@@ -204,7 +174,6 @@ where
                 }
             }
 
-            // Insert claims into extensions
             parts.extensions.insert(claims);
 
             let request = Request::from_parts(parts, body);

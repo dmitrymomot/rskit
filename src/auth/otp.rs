@@ -1,4 +1,6 @@
-use subtle::ConstantTimeEq;
+use super::internal::{random_string, verify_sha256_hex};
+
+const DIGITS: &[u8] = b"0123456789";
 
 /// Generates a numeric one-time password of `length` digits.
 ///
@@ -8,19 +10,8 @@ use subtle::ConstantTimeEq;
 ///
 /// Requires feature `"auth"`.
 pub fn generate(length: usize) -> (String, String) {
-    let mut code = String::with_capacity(length);
-    for _ in 0..length {
-        let mut byte = [0u8; 1];
-        loop {
-            rand::fill(&mut byte);
-            // Rejection sampling: only accept values 0-249 to avoid modulo bias
-            if byte[0] < 250 {
-                code.push((b'0' + (byte[0] % 10)) as char);
-                break;
-            }
-        }
-    }
-    let hash = sha256_hex(&code);
+    let code = random_string(DIGITS, length);
+    let hash = crate::encoding::hex::sha256(&code);
     (code, hash)
 }
 
@@ -30,10 +21,5 @@ pub fn generate(length: usize) -> (String, String) {
 ///
 /// Requires feature `"auth"`.
 pub fn verify(code: &str, hash: &str) -> bool {
-    let computed = sha256_hex(code);
-    computed.as_bytes().ct_eq(hash.as_bytes()).into()
-}
-
-fn sha256_hex(input: &str) -> String {
-    crate::encoding::hex::sha256(input)
+    verify_sha256_hex(code, hash)
 }

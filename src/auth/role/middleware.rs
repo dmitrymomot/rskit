@@ -100,13 +100,11 @@ where
         Box::pin(async move {
             let (mut parts, body) = request.into_parts();
 
-            // Extract role
             let role = match extractor.extract(&mut parts).await {
                 Ok(r) => r,
                 Err(e) => return Ok(e.into_response()),
             };
 
-            // Insert into extensions
             parts.extensions.insert(Role(role));
 
             let request = Request::from_parts(parts, body);

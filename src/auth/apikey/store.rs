@@ -134,38 +134,39 @@ impl ApiKeyStore {
     /// Returns `unauthorized` if the token is malformed, not found, revoked,
     /// expired, or the hash does not match. Propagates backend lookup errors.
     pub async fn verify(&self, raw_token: &str) -> Result<ApiKeyMeta> {
-        let parsed = token::parse_token(raw_token, &self.0.config.prefix)
-            .ok_or_else(|| Error::unauthorized("invalid API key"))?;
+        // Run hash compare against a dummy for missing/revoked/expired paths
+        // so timing doesn't distinguish between "key id unknown" and "wrong secret".
+        const DUMMY_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
-        let record = self
-            .0
-            .backend
-            .lookup(parsed.id)
-            .await?
-            .ok_or_else(|| Error::unauthorized("invalid API key"))?;
+        let parsed = token::parse_token(raw_token, &self.0.config.prefix);
+        let record = match parsed.as_ref() {
+            Some(p) => self.0.backend.lookup(p.id).await?,
+            None => None,
+        };
 
-        // Revoked?
-        if record.revoked_at.is_some() {
+        let unusable = record
+            .as_ref()
+            .map(|r| {
+                r.revoked_at.is_some()
+                    || r.expires_at
+                        .as_deref()
+                        .map(expires_at_passed)
+                        .unwrap_or(false)
+            })
+            .unwrap_or(true);
+
+        let secret = parsed.as_ref().map(|p| p.secret).unwrap_or("");
+        let stored_hash = record
+            .as_ref()
+            .map(|r| r.key_hash.as_str())
+            .unwrap_or(DUMMY_HASH);
+        let hash_ok = token::verify_hash(secret, stored_hash);
+
+        if unusable || !hash_ok {
             return Err(Error::unauthorized("invalid API key"));
         }
+        let record = record.expect("hash_ok implies record");
 
-        // Expired?
-        if let Some(ref exp) = record.expires_at {
-            if let Ok(exp_dt) = chrono::DateTime::parse_from_rfc3339(exp) {
-                if exp_dt <= Utc::now() {
-                    return Err(Error::unauthorized("invalid API key"));
-                }
-            } else {
-                return Err(Error::unauthorized("invalid API key"));
-            }
-        }
-
-        // Constant-time hash verification
-        if !token::verify_hash(parsed.secret, &record.key_hash) {
-            return Err(Error::unauthorized("invalid API key"));
-        }
-
-        // Touch throttling — fire-and-forget if threshold elapsed
         self.maybe_touch(&record);
 
         Ok(record.into_meta())
@@ -247,4 +248,10 @@ impl ApiKeyStore {
             });
         }
     }
+}
+
+fn expires_at_passed(rfc3339: &str) -> bool {
+    chrono::DateTime::parse_from_rfc3339(rfc3339)
+        .map(|dt| dt <= Utc::now())
+        .unwrap_or(true)
 }
