@@ -9,12 +9,12 @@ request. Handlers read it with the `ClientIp` axum extractor.
 
 ## Key Types
 
-| Type                | Description                                                  |
-| ------------------- | ------------------------------------------------------------ |
-| `ClientIpLayer`     | Tower layer; add to the router with `.layer()`               |
-| `ClientIp`          | Axum extractor; wraps `std::net::IpAddr`                     |
-| `ClientInfo`        | Axum extractor: IP + user-agent + `x-fingerprint` header     |
-| `extract_client_ip` | Low-level resolution function (headers + trusted proxies)    |
+| Type                  | Description                                                  |
+| --------------------- | ------------------------------------------------------------ |
+| [`ClientIpLayer`]     | Tower layer; add to the router with `.layer()`               |
+| [`ClientIp`]          | Axum extractor; wraps `std::net::IpAddr`                     |
+| [`ClientInfo`]        | Axum extractor: IP + user-agent + `x-fingerprint` header     |
+| [`extract_client_ip`] | Low-level resolution function (headers + trusted proxies)    |
 
 Canonical paths: `modo::ip::{ClientIp, ClientInfo, ClientIpLayer}`.
 
