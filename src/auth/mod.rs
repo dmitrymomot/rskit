@@ -56,6 +56,7 @@ pub use password::PasswordConfig;
 pub use totp::{Totp, TotpConfig};
 
 pub use jwt::{
-    Bearer, Claims, HmacSigner, JwtConfig, JwtDecoder, JwtEncoder, JwtError, JwtLayer, TokenSigner,
-    TokenSource, TokenVerifier, ValidationConfig,
+    Bearer, Claims, HmacSigner, JwtConfig, JwtDecoder, JwtEncoder, JwtError, JwtLayer,
+    JwtSessionsConfig, TokenSigner, TokenSource, TokenSourceConfig, TokenVerifier,
+    ValidationConfig,
 };

@@ -133,15 +133,12 @@ mod tests {
     use std::convert::Infallible;
     use tower::ServiceExt;
 
-    use crate::auth::session::jwt::{Claims, JwtConfig, JwtEncoder};
+    use crate::auth::session::jwt::{Claims, JwtEncoder, JwtSessionsConfig};
 
-    fn test_config() -> JwtConfig {
-        JwtConfig {
-            secret: "test-secret-key-at-least-32-bytes-long!".into(),
-            default_expiry: None,
-            leeway: 0,
-            issuer: None,
-            audience: None,
+    fn test_config() -> JwtSessionsConfig {
+        JwtSessionsConfig {
+            signing_secret: "test-secret-key-at-least-32-bytes-long!".into(),
+            ..JwtSessionsConfig::default()
         }
     }
 
@@ -152,7 +149,7 @@ mod tests {
             .as_secs()
     }
 
-    fn make_token(config: &JwtConfig) -> String {
+    fn make_token(config: &JwtSessionsConfig) -> String {
         let encoder = JwtEncoder::from_config(config);
         let claims = Claims::new().with_sub("user_1").with_exp(now_secs() + 3600);
         encoder.encode(&claims).unwrap()

@@ -1,3 +1,5 @@
+use serde::Deserialize;
+
 use http::request::Parts;
 
 /// Trait for extracting JWT token strings from HTTP requests.
@@ -88,6 +90,105 @@ impl TokenSource for HeaderSource {
             return None;
         }
         Some(value.to_string())
+    }
+}
+
+// ── Owned-string variants used internally by TokenSourceConfig::build() ────────
+
+struct OwnedQuerySource(String);
+
+impl TokenSource for OwnedQuerySource {
+    fn extract(&self, parts: &Parts) -> Option<String> {
+        let query = parts.uri.query()?;
+        for pair in query.split('&') {
+            if let Some((key, value)) = pair.split_once('=')
+                && key == self.0
+                && !value.is_empty()
+            {
+                return Some(value.to_string());
+            }
+        }
+        None
+    }
+}
+
+struct OwnedCookieSource(String);
+
+impl TokenSource for OwnedCookieSource {
+    fn extract(&self, parts: &Parts) -> Option<String> {
+        let cookie_header = parts.headers.get(http::header::COOKIE)?.to_str().ok()?;
+        for cookie in cookie_header.split(';') {
+            let cookie = cookie.trim();
+            if let Some((name, value)) = cookie.split_once('=')
+                && name.trim() == self.0
+                && !value.is_empty()
+            {
+                return Some(value.trim().to_string());
+            }
+        }
+        None
+    }
+}
+
+struct OwnedHeaderSource(String);
+
+impl TokenSource for OwnedHeaderSource {
+    fn extract(&self, parts: &Parts) -> Option<String> {
+        let value = parts.headers.get(self.0.as_str())?.to_str().ok()?;
+        if value.is_empty() {
+            return None;
+        }
+        Some(value.to_string())
+    }
+}
+
+// ── TokenSourceConfig ────────────────────────────────────────────────────────
+
+/// YAML-deserialized configuration that selects and constructs a [`TokenSource`].
+///
+/// Used in [`JwtSessionsConfig`](super::config::JwtSessionsConfig) for
+/// `access_source` and `refresh_source`.
+///
+/// # Examples
+///
+/// ```yaml
+/// access_source:
+///   kind: bearer
+///
+/// refresh_source:
+///   kind: cookie
+///   name: refresh_jwt
+/// ```
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TokenSourceConfig {
+    /// `Authorization: Bearer <token>` header.
+    Bearer,
+    /// Named cookie (e.g., `Cookie: jwt=xxx`).
+    Cookie { name: String },
+    /// Custom request header (e.g., `X-API-Token: xxx`).
+    Header { name: String },
+    /// Named query parameter (e.g., `?token=xxx`).
+    Query { name: String },
+    /// JSON body field — the token is read from the request body during
+    /// session operations; not extracted by [`JwtLayer`](super::middleware::JwtLayer).
+    Body { field: String },
+}
+
+impl TokenSourceConfig {
+    /// Build a boxed [`TokenSource`] for use in middleware.
+    ///
+    /// `Body` variants fall back to `BearerSource` because body extraction is
+    /// handled at the session-handler level, not in request-parts middleware.
+    pub fn build(&self) -> Box<dyn TokenSource> {
+        match self {
+            Self::Bearer => Box::new(BearerSource),
+            Self::Cookie { name } => Box::new(OwnedCookieSource(name.clone())),
+            Self::Header { name } => Box::new(OwnedHeaderSource(name.clone())),
+            Self::Query { name } => Box::new(OwnedQuerySource(name.clone())),
+            // Body tokens are read in the session handler, not by JwtLayer.
+            Self::Body { .. } => Box::new(BearerSource),
+        }
     }
 }
 

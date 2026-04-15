@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 use crate::encoding::base64url;
 use crate::{Error, Result};
 
-use super::config::JwtConfig;
+use super::config::JwtSessionsConfig;
 use super::encoder::JwtEncoder;
 use super::error::JwtError;
 use super::signer::{HmacSigner, TokenVerifier};
@@ -36,15 +36,15 @@ impl JwtDecoder {
     /// Creates a `JwtDecoder` from YAML configuration.
     ///
     /// Uses `HmacSigner` (HS256) with the configured secret.
-    pub fn from_config(config: &JwtConfig) -> Self {
-        let signer = HmacSigner::new(config.secret.as_bytes());
+    pub fn from_config(config: &JwtSessionsConfig) -> Self {
+        let signer = HmacSigner::new(config.signing_secret.as_bytes());
         Self {
             inner: Arc::new(JwtDecoderInner {
                 verifier: Arc::new(signer),
                 validation: ValidationConfig {
-                    leeway: Duration::from_secs(config.leeway),
+                    leeway: Duration::ZERO,
                     require_issuer: config.issuer.clone(),
-                    require_audience: config.audience.clone(),
+                    require_audience: None,
                 },
             }),
         }
@@ -183,13 +183,10 @@ mod tests {
     use super::super::claims::Claims;
     use super::super::encoder::JwtEncoder;
 
-    fn test_config() -> JwtConfig {
-        JwtConfig {
-            secret: "test-secret-key-at-least-32-bytes-long!".into(),
-            default_expiry: None,
-            leeway: 0,
-            issuer: None,
-            audience: None,
+    fn test_config() -> JwtSessionsConfig {
+        JwtSessionsConfig {
+            signing_secret: "test-secret-key-at-least-32-bytes-long!".into(),
+            ..JwtSessionsConfig::default()
         }
     }
 
@@ -228,14 +225,13 @@ mod tests {
 
     #[test]
     fn respects_leeway_for_exp() {
-        let mut config = test_config();
-        config.leeway = 30;
-        let encoder = JwtEncoder::from_config(&config);
-        let decoder = JwtDecoder::from_config(&config);
-        // Token expired 10s ago, but leeway is 30s — should be accepted
+        // leeway is 0 in the new config — a token expired even 1s ago is rejected.
+        let (encoder, decoder) = encode_decode_config();
         let claims = Claims::new().with_exp(now_secs() - 10);
         let token = encoder.encode(&claims).unwrap();
-        assert!(decoder.decode::<Claims>(&token).is_ok());
+        // With leeway=0, a token expired 10s ago must be rejected.
+        let err = decoder.decode::<Claims>(&token).unwrap_err();
+        assert_eq!(err.error_code(), Some("jwt:expired"));
     }
 
     #[test]
@@ -286,17 +282,12 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "audience validation via from_config removed in v0.8; use ValidationConfig directly"]
     fn rejects_wrong_audience() {
-        let mut config = test_config();
-        config.audience = Some("expected-aud".into());
-        let encoder = JwtEncoder::from_config(&config);
-        let decoder = JwtDecoder::from_config(&config);
-        let claims = Claims::new()
-            .with_exp(now_secs() + 3600)
-            .with_aud("wrong-aud");
-        let token = encoder.encode(&claims).unwrap();
-        let err = decoder.decode::<Claims>(&token).unwrap_err();
-        assert_eq!(err.error_code(), Some("jwt:invalid_audience"));
+        // JwtSessionsConfig no longer has an audience field.
+        // Audience validation is still supported via ValidationConfig,
+        // but from_config() always sets require_audience = None.
+        // This test is kept as a placeholder for a future constructor.
     }
 
     #[test]
@@ -342,9 +333,23 @@ mod tests {
 
     #[test]
     fn rejects_missing_exp() {
-        let (encoder, decoder) = encode_decode_config();
-        let claims = Claims::new(); // no exp
-        let token = encoder.encode(&claims).unwrap();
+        // JwtEncoder::from_config() always injects exp via access_ttl_secs,
+        // so a token without exp can only be produced via the signer directly.
+        // The decoder still rejects tokens without exp — verified here via a
+        // manually crafted token.
+        use super::super::signer::{HmacSigner, TokenSigner};
+        use crate::encoding::base64url;
+
+        let config = test_config();
+        let signer = HmacSigner::new(config.signing_secret.as_bytes());
+        let header = base64url::encode(br#"{"alg":"HS256","typ":"JWT"}"#);
+        let payload = base64url::encode(br#"{"sub":"user_1"}"#); // no exp
+        let header_payload = format!("{header}.{payload}");
+        let sig = signer.sign(header_payload.as_bytes()).unwrap();
+        let sig_b64 = base64url::encode(&sig);
+        let token = format!("{header_payload}.{sig_b64}");
+
+        let decoder = JwtDecoder::from_config(&config);
         let err = decoder.decode::<Claims>(&token).unwrap_err();
         assert_eq!(err.error_code(), Some("jwt:expired"));
     }

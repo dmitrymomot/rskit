@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::encoding::base64url;
 use crate::{Error, Result};
 
-use super::config::JwtConfig;
+use super::config::JwtSessionsConfig;
 use super::error::JwtError;
 use super::signer::{HmacSigner, TokenSigner};
 
@@ -28,18 +28,18 @@ impl JwtEncoder {
     /// Creates a `JwtEncoder` from YAML configuration.
     ///
     /// Uses `HmacSigner` (HS256) with the configured secret. The validation
-    /// config (leeway, issuer, audience) is stored so a matching `JwtDecoder`
+    /// config (issuer) is stored so a matching `JwtDecoder`
     /// can be created via `JwtDecoder::from(&encoder)`.
-    pub fn from_config(config: &JwtConfig) -> Self {
-        let signer = HmacSigner::new(config.secret.as_bytes());
+    pub fn from_config(config: &JwtSessionsConfig) -> Self {
+        let signer = HmacSigner::new(config.signing_secret.as_bytes());
         Self {
             inner: Arc::new(JwtEncoderInner {
                 signer: Arc::new(signer),
-                default_expiry: config.default_expiry.map(Duration::from_secs),
+                default_expiry: Some(Duration::from_secs(config.access_ttl_secs)),
                 validation: super::validation::ValidationConfig {
-                    leeway: Duration::from_secs(config.leeway),
+                    leeway: Duration::ZERO,
                     require_issuer: config.issuer.clone(),
-                    require_audience: config.audience.clone(),
+                    require_audience: None,
                 },
             }),
         }
@@ -129,13 +129,10 @@ mod tests {
 
     use super::super::claims::Claims;
 
-    fn test_config() -> JwtConfig {
-        JwtConfig {
-            secret: "test-secret-key-at-least-32-bytes-long!".into(),
-            default_expiry: None,
-            leeway: 0,
-            issuer: None,
-            audience: None,
+    fn test_config() -> JwtSessionsConfig {
+        JwtSessionsConfig {
+            signing_secret: "test-secret-key-at-least-32-bytes-long!".into(),
+            ..JwtSessionsConfig::default()
         }
     }
 
@@ -161,10 +158,10 @@ mod tests {
 
     #[test]
     fn encode_with_default_expiry_auto_sets_exp() {
-        let mut config = test_config();
-        config.default_expiry = Some(3600);
+        // access_ttl_secs is always used as default expiry — no manual override needed.
+        let config = test_config(); // access_ttl_secs defaults to 900
         let encoder = JwtEncoder::from_config(&config);
-        let claims = Claims::new(); // no exp — should be auto-filled
+        let claims = Claims::new(); // no exp — should be auto-filled from access_ttl_secs
         let token = encoder.encode(&claims).unwrap();
         let payload_b64 = token.split('.').nth(1).unwrap();
         let payload_bytes = base64url::decode(payload_b64).unwrap();
@@ -174,8 +171,7 @@ mod tests {
 
     #[test]
     fn encode_explicit_exp_not_overwritten() {
-        let mut config = test_config();
-        config.default_expiry = Some(3600);
+        let config = test_config();
         let encoder = JwtEncoder::from_config(&config);
         let claims = Claims::new().with_exp(42);
         let token = encoder.encode(&claims).unwrap();

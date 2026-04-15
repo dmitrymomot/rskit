@@ -7,7 +7,8 @@
 //! | Type | Purpose |
 //! |------|---------|
 //! | [`Claims`] | Standard JWT registered claims; axum extractor |
-//! | [`JwtConfig`] | YAML-deserialized configuration (secret, expiry, leeway, issuer, audience) |
+//! | [`JwtSessionsConfig`] | YAML-deserialized configuration (signing secret, TTLs, sources) |
+//! | [`TokenSourceConfig`] | YAML enum for selecting a token extraction strategy |
 //! | [`JwtEncoder`] | Signs any `Serialize` payload into a JWT token string (HS256) |
 //! | [`JwtDecoder`] | Verifies signatures, validates claims, and deserializes into any `DeserializeOwned` |
 //! | [`JwtLayer`] | Tower middleware that enforces JWT auth on axum routes |
@@ -35,9 +36,9 @@
 //! ## Quick start — system auth flow
 //!
 //! ```rust,ignore
-//! use modo::auth::session::jwt::{JwtConfig, JwtEncoder, JwtDecoder, JwtLayer, Claims};
+//! use modo::auth::session::jwt::{JwtSessionsConfig, JwtEncoder, JwtDecoder, JwtLayer, Claims};
 //!
-//! let config = JwtConfig::new("my-super-secret-key-for-signing-tokens");
+//! let config = JwtSessionsConfig::new("my-super-secret-key-for-signing-tokens");
 //! let encoder = JwtEncoder::from_config(&config);
 //! let decoder = JwtDecoder::from_config(&config);
 //!
@@ -62,13 +63,13 @@
 //! ## Custom payload
 //!
 //! ```rust,ignore
-//! use modo::auth::session::jwt::{JwtConfig, JwtEncoder, JwtDecoder};
+//! use modo::auth::session::jwt::{JwtSessionsConfig, JwtEncoder, JwtDecoder};
 //! use serde::{Serialize, Deserialize};
 //!
 //! #[derive(Serialize, Deserialize)]
 //! struct MyPayload { sub: String, role: String, exp: u64 }
 //!
-//! let config = JwtConfig::new("my-super-secret-key-for-signing-tokens");
+//! let config = JwtSessionsConfig::new("my-super-secret-key-for-signing-tokens");
 //! let encoder = JwtEncoder::from_config(&config);
 //! let decoder = JwtDecoder::from_config(&config);
 //!
@@ -89,12 +90,16 @@ mod source;
 mod validation;
 
 pub use claims::Claims;
-pub use config::JwtConfig;
+pub use config::JwtSessionsConfig;
+/// Back-compat alias — prefer [`JwtSessionsConfig`].
+pub use config::JwtSessionsConfig as JwtConfig;
 pub use decoder::JwtDecoder;
 pub use encoder::JwtEncoder;
 pub use error::JwtError;
 pub use extractor::Bearer;
 pub use middleware::JwtLayer;
 pub use signer::{HmacSigner, TokenSigner, TokenVerifier};
-pub use source::{BearerSource, CookieSource, HeaderSource, QuerySource, TokenSource};
+pub use source::{
+    BearerSource, CookieSource, HeaderSource, QuerySource, TokenSource, TokenSourceConfig,
+};
 pub use validation::ValidationConfig;

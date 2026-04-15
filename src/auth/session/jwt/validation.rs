@@ -5,7 +5,7 @@ use std::time::Duration;
 /// `exp` is always enforced (not configurable). These fields control
 /// additional checks for `iss`, `aud`, and clock skew tolerance.
 ///
-/// Built automatically from [`JwtConfig`](super::config::JwtConfig) by
+/// Built automatically from [`JwtSessionsConfig`](super::config::JwtSessionsConfig) by
 /// `JwtEncoder::from_config()` and `JwtDecoder::from_config()`.
 #[non_exhaustive]
 #[derive(Debug, Clone)]
