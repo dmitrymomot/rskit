@@ -55,23 +55,28 @@ if let Some(cookie_cfg) = &config.cookie {
 ### Wire with flash and session layers
 
 ```rust,no_run
-use modo::cookie::key_from_config;
+use modo::cookie::{CookieConfig, key_from_config};
 use modo::flash::FlashLayer;
-use modo::auth::session::{self, Store, SessionConfig};
+use modo::auth::session::{CookieSessionService, SessionConfig};
 use modo::db::Database;
 
-// Assumes `cookie_cfg: &CookieConfig` and `db` are already available.
 # async fn example(
 #     router: axum::Router,
-#     cookie_cfg: &modo::cookie::CookieConfig,
+#     cookie_cfg: CookieConfig,
 #     db: Database,
 # ) -> modo::Result<()> {
-let key = key_from_config(cookie_cfg)?;
-let store = Store::new(db, SessionConfig::default());
+// CookieSessionService derives its own key internally from config.cookie.secret.
+let session_cfg = SessionConfig {
+    cookie: cookie_cfg.clone(),
+    ..SessionConfig::default()
+};
+let svc = CookieSessionService::new(db, session_cfg)?;
 
+// FlashLayer still needs its own key reference.
+let key = key_from_config(&cookie_cfg)?;
 let router = router
-    .layer(FlashLayer::new(cookie_cfg, &key))
-    .layer(session::layer(store, cookie_cfg, &key));
+    .layer(FlashLayer::new(&cookie_cfg, &key))
+    .layer(svc.layer());
 # Ok(())
 # }
 ```
