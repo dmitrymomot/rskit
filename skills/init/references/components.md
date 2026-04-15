@@ -60,9 +60,9 @@ async fn main() -> Result<()> {
         .expect("cookie config is required");
     let cookie_key = modo::cookie::key_from_config(cookie_config)?;
 
-    // 5. Session store
-    let session_store =
-        modo::auth::session::Store::new(db.clone(), config.modo.session.clone());
+    // 5. Cookie session service
+    let session_svc =
+        modo::auth::session::CookieSessionService::new(db.clone(), config.modo.session.clone())?;
 
     // === COMPONENT INIT BLOCKS GO HERE ===
 
@@ -86,7 +86,7 @@ async fn main() -> Result<()> {
         .layer(modo::middleware::cors(&config.modo.cors))
         .layer(modo::middleware::csrf(&config.modo.csrf, &cookie_key))
         // === COMPONENT MIDDLEWARE LAYERS GO HERE ===
-        .layer(modo::auth::session::layer(session_store, cookie_config, &cookie_key))
+        .layer(session_svc.layer())
         .layer(modo::flash::FlashLayer::new(cookie_config, &cookie_key))
         .layer(modo::ip::ClientIpLayer::new())
         .layer(rate_limit_layer);
@@ -176,6 +176,9 @@ cookie:
 session:
   session_ttl_secs: 86400
   cookie_name: sid
+  cookie:
+    secret: ${COOKIE_SECRET:change-me-in-production-at-least-64-bytes-long-secret-key-here!!}
+    secure: false
 
 rate_limit:
   per_second: 10
@@ -220,6 +223,9 @@ cookie:
 session:
   session_ttl_secs: 86400
   cookie_name: sid
+  cookie:
+    secret: ${COOKIE_SECRET}
+    secure: true
 
 rate_limit:
   per_second: 50
@@ -257,23 +263,23 @@ COOKIE_SECRET=change-me-in-production-at-least-64-bytes-long-secret-key-here!!
 
 ```sql
 -- Sessions table (required by modo session middleware)
-CREATE TABLE IF NOT EXISTS sessions (
-    id             TEXT    NOT NULL PRIMARY KEY,
-    token_hash     TEXT    NOT NULL UNIQUE,
-    user_id        TEXT    NOT NULL,
-    ip_address     TEXT    NOT NULL DEFAULT '',
-    user_agent     TEXT    NOT NULL DEFAULT '',
-    device_name    TEXT    NOT NULL DEFAULT '',
-    device_type    TEXT    NOT NULL DEFAULT '',
-    fingerprint    TEXT    NOT NULL DEFAULT '',
-    data           TEXT    NOT NULL DEFAULT '{}',
-    created_at     TEXT    NOT NULL,
-    last_active_at TEXT    NOT NULL,
-    expires_at     TEXT    NOT NULL
+CREATE TABLE IF NOT EXISTS authenticated_sessions (
+    id                 TEXT    NOT NULL PRIMARY KEY,
+    session_token_hash TEXT    NOT NULL UNIQUE,
+    user_id            TEXT    NOT NULL,
+    ip_address         TEXT    NOT NULL DEFAULT '',
+    user_agent         TEXT    NOT NULL DEFAULT '',
+    device_name        TEXT    NOT NULL DEFAULT '',
+    device_type        TEXT    NOT NULL DEFAULT '',
+    fingerprint        TEXT    NOT NULL DEFAULT '',
+    data               TEXT    NOT NULL DEFAULT '{}',
+    created_at         TEXT    NOT NULL,
+    last_active_at     TEXT    NOT NULL,
+    expires_at         TEXT    NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_authenticated_sessions_user_id ON authenticated_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_authenticated_sessions_expires_at ON authenticated_sessions(expires_at);
 ```
 
 ### Core run! macro args
@@ -449,7 +455,7 @@ registry.add(jwt_decoder);
 
 ```yaml
 jwt:
-  secret: ${JWT_SECRET:change-me-in-production-at-least-64-bytes-long-jwt-secret-key-here!!!!!}
+  signing_secret: ${JWT_SECRET:change-me-in-production-at-least-64-bytes-long-jwt-secret-key-here!!!!!}
 
 # Uncomment when OAuth credentials are configured:
 # oauth:
@@ -467,7 +473,7 @@ jwt:
 
 ```yaml
 jwt:
-  secret: ${JWT_SECRET}
+  signing_secret: ${JWT_SECRET}
 
 oauth:
   github:
