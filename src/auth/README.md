@@ -359,6 +359,10 @@ oauth:
 | `AuthorizationRequest` | `modo::auth::oauth`    | Response that redirects + sets the state cookie     |
 | `UserProfile`          | `modo::auth::oauth`    | Normalized user data from any OAuth provider        |
 
-JWT types are re-exported at `modo::auth` for convenience (e.g.,
-`modo::auth::JwtEncoder`, `modo::auth::Claims`, `modo::auth::JwtSessionService`).
+Selected JWT types are re-exported at `modo::auth` for convenience (e.g.,
+`modo::auth::JwtEncoder`, `modo::auth::Claims`, `modo::auth::JwtSessionsConfig`,
+`modo::auth::Bearer`). Types specific to the stateful session flow
+(`JwtSessionService`, `JwtSession`, `TokenPair`) and concrete token sources
+(`BearerSource`, `CookieSource`, `QuerySource`, `HeaderSource`) are only
+available under `modo::auth::session::jwt` / `modo::auth::jwt`.
 OAuth providers stay under `modo::auth::oauth::{Google, GitHub}`.
