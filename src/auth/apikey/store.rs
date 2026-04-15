@@ -136,6 +136,8 @@ impl ApiKeyStore {
     pub async fn verify(&self, raw_token: &str) -> Result<ApiKeyMeta> {
         // Run hash compare against a dummy for missing/revoked/expired paths
         // so timing doesn't distinguish between "key id unknown" and "wrong secret".
+        // Note: malformed tokens (parse_token failure) still skip the DB round-trip
+        // and so remain timing-distinguishable from valid-format-but-unknown ids.
         const DUMMY_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
         let parsed = token::parse_token(raw_token, &self.0.config.prefix);

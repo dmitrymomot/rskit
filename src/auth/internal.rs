@@ -15,14 +15,16 @@ pub(crate) fn verify_sha256_hex(plain: impl AsRef<[u8]>, stored_hex: &str) -> bo
 pub(crate) fn random_string(alphabet: &[u8], len: usize) -> String {
     assert!(!alphabet.is_empty(), "alphabet must not be empty");
     let n = alphabet.len();
-    let bias_limit = ((256 / n) * n) as u8;
+    // Keep the comparison in usize: when n divides 256 evenly the limit is 256,
+    // which would wrap to 0 if cast to u8 and hang the loop forever.
+    let bias_limit: usize = (256 / n) * n;
     let mut out = String::with_capacity(len);
     let mut buf = [0u8; 1];
     while out.len() < len {
         rand::fill(&mut buf[..]);
-        let b = buf[0];
+        let b = buf[0] as usize;
         if b < bias_limit {
-            out.push(alphabet[(b as usize) % n] as char);
+            out.push(alphabet[b % n] as char);
         }
     }
     out
