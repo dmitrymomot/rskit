@@ -1,16 +1,16 @@
-//! Graceful shutdown runtime for the modo framework.
+//! # modo::runtime
 //!
-//! This module provides three building blocks for orderly application teardown:
+//! Graceful shutdown runtime for modo applications.
+//!
+//! Provides three composable building blocks for orderly process teardown:
 //!
 //! - [`Task`] — a trait for any service that can be shut down asynchronously.
-//! - [`wait_for_shutdown_signal`] — an async function that resolves when the process
-//!   receives `SIGINT` (Ctrl+C) or, on Unix, `SIGTERM`.
-//! - `run!` — a macro that waits for a shutdown signal and then calls
+//! - [`wait_for_shutdown_signal`] — async function that resolves on `SIGINT`
+//!   (Ctrl+C) or, on Unix, `SIGTERM`.
+//! - [`run!`](crate::run) — macro that waits for a signal and then calls
 //!   [`Task::shutdown`] on each supplied value in declaration order.
 //!
-//! # Examples
-//!
-//! ## Using the `run!` macro
+//! ## Quick start
 //!
 //! ```rust,no_run
 //! use modo::runtime::Task;
@@ -32,7 +32,7 @@
 //! }
 //! ```
 //!
-//! ## Using `wait_for_shutdown_signal` directly
+//! ### Using `wait_for_shutdown_signal` directly
 //!
 //! ```rust,no_run
 //! use modo::runtime::wait_for_shutdown_signal;

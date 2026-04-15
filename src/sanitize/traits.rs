@@ -4,7 +4,7 @@
 /// (trim whitespace, lowercase emails, etc.) before validation.
 ///
 /// The `JsonRequest`, `FormRequest`, `Query`, and `MultipartRequest` extractors
-/// call `sanitize()` automatically after deserialization, so every bound on
+/// call [`Sanitize::sanitize`] automatically after deserialization, so every bound on
 /// those extractors requires `T: Sanitize`.
 pub trait Sanitize {
     /// Normalize the fields of `self` in place.
