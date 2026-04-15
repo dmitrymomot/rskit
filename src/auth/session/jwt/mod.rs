@@ -17,7 +17,6 @@
 //!
 //! | Trait | Purpose |
 //! |-------|---------|
-//! | [`Revocation`] | Pluggable async token revocation backend |
 //! | [`TokenSource`] | Pluggable token extraction from HTTP requests |
 //! | [`TokenSigner`] | JWT signing (extends [`TokenVerifier`]) |
 //! | [`TokenVerifier`] | JWT signature verification |
@@ -71,7 +70,6 @@ mod encoder;
 mod error;
 mod extractor;
 mod middleware;
-mod revocation;
 mod signer;
 mod source;
 mod validation;
@@ -83,7 +81,6 @@ pub use encoder::JwtEncoder;
 pub use error::JwtError;
 pub use extractor::Bearer;
 pub use middleware::JwtLayer;
-pub use revocation::Revocation;
 pub use signer::{HmacSigner, TokenSigner, TokenVerifier};
 pub use source::{BearerSource, CookieSource, HeaderSource, QuerySource, TokenSource};
 pub use validation::ValidationConfig;

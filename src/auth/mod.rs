@@ -34,7 +34,6 @@
 //! - [`JwtError`] — typed JWT error enum
 //! - [`HmacSigner`], [`TokenSigner`], [`TokenVerifier`] — JWT signing traits and HMAC implementation
 //! - [`TokenSource`] — pluggable token extraction trait
-//! - [`Revocation`] — async token revocation trait
 //! - [`ValidationConfig`] — JWT validation policy
 
 pub mod apikey;
@@ -57,6 +56,6 @@ pub use password::PasswordConfig;
 pub use totp::{Totp, TotpConfig};
 
 pub use jwt::{
-    Bearer, Claims, HmacSigner, JwtConfig, JwtDecoder, JwtEncoder, JwtError, JwtLayer, Revocation,
-    TokenSigner, TokenSource, TokenVerifier, ValidationConfig,
+    Bearer, Claims, HmacSigner, JwtConfig, JwtDecoder, JwtEncoder, JwtError, JwtLayer, TokenSigner,
+    TokenSource, TokenVerifier, ValidationConfig,
 };

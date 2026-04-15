@@ -1,5 +1,3 @@
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use axum::Router;
@@ -8,10 +6,9 @@ use axum::routing::get;
 use http::{Request, StatusCode};
 use tower::ServiceExt;
 
-use modo::Error;
 use modo::auth::jwt::{
     BearerSource, Claims, CookieSource, HeaderSource, JwtConfig, JwtDecoder, JwtEncoder, JwtLayer,
-    QuerySource, Revocation, TokenSource,
+    QuerySource, TokenSource,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -159,142 +156,23 @@ async fn query_source_works_with_router() {
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
-// ── Revocation tests ──
-
-struct AlwaysRevoked;
-impl Revocation for AlwaysRevoked {
-    fn is_revoked(
-        &self,
-        _jti: &str,
-    ) -> Pin<Box<dyn Future<Output = modo::Result<bool>> + Send + '_>> {
-        Box::pin(async { Ok(true) })
-    }
-}
-
-struct NeverRevoked;
-impl Revocation for NeverRevoked {
-    fn is_revoked(
-        &self,
-        _jti: &str,
-    ) -> Pin<Box<dyn Future<Output = modo::Result<bool>> + Send + '_>> {
-        Box::pin(async { Ok(false) })
-    }
-}
-
-struct FailingRevocation;
-impl Revocation for FailingRevocation {
-    fn is_revoked(
-        &self,
-        _jti: &str,
-    ) -> Pin<Box<dyn Future<Output = modo::Result<bool>> + Send + '_>> {
-        Box::pin(async { Err(Error::internal("db down")) })
-    }
-}
+// ── Revocation tests (ignored: Revocation trait removed in v0.8, replaced by stateful row lookup) ──
 
 #[tokio::test]
-async fn revocation_rejects_revoked_token() {
-    let config = test_config();
-    let encoder = JwtEncoder::from_config(&config);
-    let decoder = JwtDecoder::from_config(&config);
-    let token = make_token_with(&encoder, "admin", now_secs() + 3600);
-
-    let app = Router::new()
-        .route("/me", get(claims_handler))
-        .layer(JwtLayer::<TestClaims>::new(decoder).with_revocation(Arc::new(AlwaysRevoked)));
-
-    let resp = app
-        .oneshot(
-            Request::builder()
-                .uri("/me")
-                .header("Authorization", format!("Bearer {token}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
-}
+#[ignore = "v0.8 stateful validation"]
+async fn revocation_rejects_revoked_token() {}
 
 #[tokio::test]
-async fn revocation_accepts_non_revoked_token() {
-    let config = test_config();
-    let encoder = JwtEncoder::from_config(&config);
-    let decoder = JwtDecoder::from_config(&config);
-    let token = make_token_with(&encoder, "admin", now_secs() + 3600);
-
-    let app = Router::new()
-        .route("/me", get(claims_handler))
-        .layer(JwtLayer::<TestClaims>::new(decoder).with_revocation(Arc::new(NeverRevoked)));
-
-    let resp = app
-        .oneshot(
-            Request::builder()
-                .uri("/me")
-                .header("Authorization", format!("Bearer {token}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(resp.status(), StatusCode::OK);
-}
+#[ignore = "v0.8 stateful validation"]
+async fn revocation_accepts_non_revoked_token() {}
 
 #[tokio::test]
-async fn revocation_check_failure_rejects_token() {
-    let config = test_config();
-    let encoder = JwtEncoder::from_config(&config);
-    let decoder = JwtDecoder::from_config(&config);
-    let token = make_token_with(&encoder, "admin", now_secs() + 3600);
-
-    let app = Router::new()
-        .route("/me", get(claims_handler))
-        .layer(JwtLayer::<TestClaims>::new(decoder).with_revocation(Arc::new(FailingRevocation)));
-
-    let resp = app
-        .oneshot(
-            Request::builder()
-                .uri("/me")
-                .header("Authorization", format!("Bearer {token}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
-}
+#[ignore = "v0.8 stateful validation"]
+async fn revocation_check_failure_rejects_token() {}
 
 #[tokio::test]
-async fn revocation_skipped_when_no_jti() {
-    let config = test_config();
-    let encoder = JwtEncoder::from_config(&config);
-    let decoder = JwtDecoder::from_config(&config);
-    // Token without jti — revocation check should be skipped
-    let claims = Claims::new(TestClaims {
-        role: "admin".into(),
-    })
-    .with_exp(now_secs() + 3600);
-    let token = encoder.encode(&claims).unwrap();
-
-    let app = Router::new().route("/me", get(claims_handler)).layer(
-        JwtLayer::<TestClaims>::new(decoder).with_revocation(Arc::new(AlwaysRevoked)), // would reject if checked
-    );
-
-    let resp = app
-        .oneshot(
-            Request::builder()
-                .uri("/me")
-                .header("Authorization", format!("Bearer {token}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(resp.status(), StatusCode::OK);
-}
+#[ignore = "v0.8 stateful validation"]
+async fn revocation_skipped_when_no_jti() {}
 
 // ── Additional coverage tests ──
 

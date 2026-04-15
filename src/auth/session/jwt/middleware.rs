@@ -15,7 +15,6 @@ use crate::Error;
 use super::claims::Claims;
 use super::decoder::JwtDecoder;
 use super::error::JwtError;
-use super::revocation::Revocation;
 use super::source::{BearerSource, TokenSource};
 
 /// Tower [`Layer`] that installs JWT authentication on a route.
@@ -23,15 +22,12 @@ use super::source::{BearerSource, TokenSource};
 /// For each request the middleware:
 /// 1. Tries each `TokenSource` in order; returns `401` if none yields a token.
 /// 2. Decodes and validates the token with `JwtDecoder`; returns `401` on failure.
-/// 3. If a `Revocation` backend is registered and the token has a `jti`, calls
-///    `is_revoked()`; returns `401` on revocation or backend error (fail-closed).
-/// 4. Inserts `Claims<T>` into request extensions for handler extraction.
+/// 3. Inserts `Claims<T>` into request extensions for handler extraction.
 ///
 /// The default token source is [`BearerSource`] (`Authorization: Bearer <token>`).
 pub struct JwtLayer<T> {
     decoder: JwtDecoder,
     sources: Arc<[Arc<dyn TokenSource>]>,
-    revocation: Option<Arc<dyn Revocation>>,
     _marker: PhantomData<T>,
 }
 
@@ -39,13 +35,11 @@ impl<T> JwtLayer<T>
 where
     T: DeserializeOwned + Clone + Send + Sync + 'static,
 {
-    /// Creates a `JwtLayer` with `BearerSource` as the sole token source
-    /// and no revocation backend.
+    /// Creates a `JwtLayer` with `BearerSource` as the sole token source.
     pub fn new(decoder: JwtDecoder) -> Self {
         Self {
             decoder,
             sources: Arc::from(vec![Arc::new(BearerSource) as Arc<dyn TokenSource>]),
-            revocation: None,
             _marker: PhantomData,
         }
     }
@@ -57,13 +51,6 @@ where
         self.sources = Arc::from(sources);
         self
     }
-
-    /// Attaches a revocation backend. Tokens with a `jti` claim are checked
-    /// against it on every request.
-    pub fn with_revocation(mut self, revocation: Arc<dyn Revocation>) -> Self {
-        self.revocation = Some(revocation);
-        self
-    }
 }
 
 impl<T> Clone for JwtLayer<T> {
@@ -71,7 +58,6 @@ impl<T> Clone for JwtLayer<T> {
         Self {
             decoder: self.decoder.clone(),
             sources: self.sources.clone(),
-            revocation: self.revocation.clone(),
             _marker: PhantomData,
         }
     }
@@ -88,7 +74,6 @@ where
             inner,
             decoder: self.decoder.clone(),
             sources: self.sources.clone(),
-            revocation: self.revocation.clone(),
             _marker: PhantomData,
         }
     }
@@ -99,7 +84,6 @@ pub struct JwtMiddleware<Svc, T> {
     inner: Svc,
     decoder: JwtDecoder,
     sources: Arc<[Arc<dyn TokenSource>]>,
-    revocation: Option<Arc<dyn Revocation>>,
     _marker: PhantomData<T>,
 }
 
@@ -109,7 +93,6 @@ impl<Svc: Clone, T> Clone for JwtMiddleware<Svc, T> {
             inner: self.inner.clone(),
             decoder: self.decoder.clone(),
             sources: self.sources.clone(),
-            revocation: self.revocation.clone(),
             _marker: PhantomData,
         }
     }
@@ -133,7 +116,6 @@ where
     fn call(&mut self, request: Request<Body>) -> Self::Future {
         let decoder = self.decoder.clone();
         let sources = self.sources.clone();
-        let revocation = self.revocation.clone();
         let mut inner = self.inner.clone();
         std::mem::swap(&mut self.inner, &mut inner);
 
@@ -157,26 +139,6 @@ where
                 Ok(c) => c,
                 Err(e) => return Ok(e.into_response()),
             };
-
-            // Check revocation (async) if backend registered and jti present
-            if let (Some(rev), Some(jti)) = (&revocation, claims.token_id()) {
-                match rev.is_revoked(jti).await {
-                    Ok(true) => {
-                        let err = Error::unauthorized("unauthorized")
-                            .chain(JwtError::Revoked)
-                            .with_code(JwtError::Revoked.code());
-                        return Ok(err.into_response());
-                    }
-                    Err(e) => {
-                        tracing::warn!(error = %e, jti = jti, "JWT revocation check failed");
-                        let err = Error::unauthorized("unauthorized")
-                            .chain(JwtError::RevocationCheckFailed)
-                            .with_code(JwtError::RevocationCheckFailed.code());
-                        return Ok(err.into_response());
-                    }
-                    Ok(false) => {} // not revoked, proceed
-                }
-            }
 
             // Insert claims into extensions
             parts.extensions.insert(claims);
