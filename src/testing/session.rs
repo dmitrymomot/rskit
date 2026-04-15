@@ -6,9 +6,9 @@ use crate::cookie::{CookieConfig, Key, key_from_config};
 
 use super::db::TestDb;
 
-const SESSIONS_TABLE_SQL: &str = "CREATE TABLE sessions (
+const SESSIONS_TABLE_SQL: &str = "CREATE TABLE authenticated_sessions (
         id TEXT PRIMARY KEY,
-        token_hash TEXT NOT NULL UNIQUE,
+        session_token_hash TEXT NOT NULL UNIQUE,
         user_id TEXT NOT NULL,
         ip_address TEXT NOT NULL,
         user_agent TEXT NOT NULL,
@@ -20,6 +20,12 @@ const SESSIONS_TABLE_SQL: &str = "CREATE TABLE sessions (
         last_active_at TEXT NOT NULL,
         expires_at TEXT NOT NULL
     )";
+
+#[allow(dead_code)]
+const SESSIONS_INDEXES_SQL: &[&str] = &[
+    "CREATE INDEX idx_sessions_user_id ON authenticated_sessions (user_id)",
+    "CREATE INDEX idx_sessions_expires_at ON authenticated_sessions (expires_at)",
+];
 
 /// Session infrastructure for integration tests.
 ///
@@ -65,7 +71,7 @@ impl TestSession {
     /// Create a `TestSession` with default [`SessionConfig`] and a
     /// test-suitable [`CookieConfig`] (insecure, lax same-site, 64-char secret).
     ///
-    /// Creates the `sessions` table on `db`.
+    /// Creates the `authenticated_sessions` table and indexes on `db`.
     ///
     /// # Panics
     ///
@@ -83,7 +89,7 @@ impl TestSession {
 
     /// Create a `TestSession` with explicit [`SessionConfig`] and [`CookieConfig`].
     ///
-    /// Creates the `sessions` table on `db`.
+    /// Creates the `authenticated_sessions` table and indexes on `db`.
     ///
     /// # Panics
     ///
@@ -100,6 +106,13 @@ impl TestSession {
             .execute_raw(SESSIONS_TABLE_SQL, ())
             .await
             .expect("failed to create sessions table");
+        for sql in SESSIONS_INDEXES_SQL {
+            db.db()
+                .conn()
+                .execute_raw(sql, ())
+                .await
+                .expect("failed to create sessions index");
+        }
 
         let key = key_from_config(&cookie_config).expect("failed to derive cookie key");
         let store = Store::new(db.db(), session_config.clone());
