@@ -106,16 +106,24 @@ let layer = ApiKeyLayer::from_header(store, "x-api-key")?;
 
 ### Requiring scopes
 
-Apply `require_scope` as a route layer **after** `ApiKeyLayer`:
+Apply `require_scope` as a `route_layer` **inside** `ApiKeyLayer`. Layers are
+applied bottom-up, so `ApiKeyLayer` runs first (outer `.layer`), then
+`require_scope` gates the matched routes:
 
 ```rust,ignore
 use axum::{Router, routing::get};
+use modo::auth::apikey::{ApiKeyLayer, ApiKeyStore};
 use modo::auth::guard::require_scope;
 
 let app: Router = Router::new()
     .route("/orders", get(list_orders))
-    .route_layer(require_scope("read:orders"));
+    .route_layer(require_scope("read:orders"))
+    .layer(ApiKeyLayer::new(store));
 ```
+
+`require_scope` returns `403 Forbidden` when the verified key lacks the
+required scope, and `500 Internal Server Error` when applied without
+`ApiKeyLayer`.
 
 ### Extracting key metadata in handlers
 

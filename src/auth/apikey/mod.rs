@@ -38,19 +38,20 @@
 //! ## Quick start
 //!
 //! ```rust,no_run
-//! use modo::auth::apikey::{ApiKeyConfig, ApiKeyStore, ApiKeyLayer, CreateKeyRequest};
+//! use modo::auth::apikey::{ApiKeyConfig, ApiKeyStore, ApiKeyLayer};
 //! use modo::auth::guard::require_scope;
 //! use axum::{Router, routing::get};
-//! # fn example(db: modo::db::Database) {
+//! # fn example(db: modo::db::Database) -> modo::Result<()> {
 //!
 //! // Build the store from config + database
-//! let store = ApiKeyStore::new(db, ApiKeyConfig::default()).unwrap();
+//! let store = ApiKeyStore::new(db, ApiKeyConfig::default())?;
 //!
 //! // Protect routes with the API key middleware and optional scope checks
 //! let app: Router = Router::new()
 //!     .route("/orders", get(|| async { "orders" }))
 //!     .route_layer(require_scope("read:orders"))
 //!     .layer(ApiKeyLayer::new(store));
+//! # Ok(())
 //! # }
 //! ```
 
