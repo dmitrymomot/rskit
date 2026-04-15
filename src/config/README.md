@@ -144,4 +144,4 @@ v0.7+, so every field is always present.
 | `storage`          | `storage::BucketConfig`             |
 | `dns`              | `dns::DnsConfig`                    |
 | `apikey`           | `auth::apikey::ApiKeyConfig`        |
-| `jwt`              | `auth::jwt::JwtConfig`              |
+| `jwt`              | `auth::session::jwt::JwtConfig`              |

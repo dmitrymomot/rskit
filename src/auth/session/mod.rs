@@ -27,6 +27,7 @@ pub(crate) mod store;
 pub mod cookie;
 pub mod device;
 pub mod fingerprint;
+pub mod jwt;
 pub mod meta;
 pub mod token;
 

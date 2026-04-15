@@ -65,5 +65,5 @@ pub struct Config {
     pub apikey: crate::auth::apikey::ApiKeyConfig,
     /// JWT signing and validation settings.
     #[serde(default)]
-    pub jwt: crate::auth::jwt::JwtConfig,
+    pub jwt: crate::auth::session::jwt::JwtConfig,
 }

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// # Example
 ///
 /// ```rust,ignore
-/// use modo::auth::jwt::Claims;
+/// use modo::auth::session::jwt::Claims;
 /// use serde::{Serialize, Deserialize};
 /// use std::time::Duration;
 ///

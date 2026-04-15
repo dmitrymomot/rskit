@@ -15,7 +15,7 @@
 //! | [`apikey`]   | Prefixed API key issuance, verification, and lifecycle |
 //! | [`role`]     | Role-based gating (extractor + middleware) |
 //! | [`guard`]    | Route-level gating layers (`require_authenticated`, `require_role`, `require_scope`) |
-//! | [`jwt`]      | JWT encoding, decoding, signing, and axum Tower middleware |
+//! | [`session::jwt`] | JWT encoding, decoding, signing, and axum Tower middleware (also re-exported as [`jwt`]) |
 //! | [`oauth`]    | OAuth 2.0 provider integrations (GitHub, Google) |
 //! | [`password`] | Argon2id password hashing and verification |
 //! | [`otp`]      | Numeric one-time password generation and verification |
@@ -40,7 +40,6 @@
 pub mod apikey;
 pub mod backup;
 pub mod guard;
-pub mod jwt;
 pub mod otp;
 pub mod password;
 pub mod role;
@@ -48,6 +47,10 @@ pub mod session;
 pub mod totp;
 
 pub mod oauth;
+
+// Back-compat re-export — jwt now lives at `auth::session::jwt`.
+// This alias keeps `modo::auth::jwt::*` working without breakage.
+pub use crate::auth::session::jwt;
 
 // Convenience re-exports
 pub use password::PasswordConfig;

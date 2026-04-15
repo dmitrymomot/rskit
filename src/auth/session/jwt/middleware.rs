@@ -194,7 +194,7 @@ mod tests {
     use std::convert::Infallible;
     use tower::ServiceExt;
 
-    use crate::auth::jwt::{Claims, JwtConfig, JwtEncoder};
+    use crate::auth::session::jwt::{Claims, JwtConfig, JwtEncoder};
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     struct TestClaims {

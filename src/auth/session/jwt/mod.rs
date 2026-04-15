@@ -1,4 +1,4 @@
-//! # modo::auth::jwt
+//! # modo::auth::session::jwt
 //!
 //! JWT authentication — token encoding, decoding, middleware, and revocation.
 //!
@@ -36,7 +36,7 @@
 //! ## Quick start
 //!
 //! ```rust,ignore
-//! use modo::auth::jwt::{JwtConfig, JwtEncoder, JwtDecoder, JwtLayer, Claims};
+//! use modo::auth::session::jwt::{JwtConfig, JwtEncoder, JwtDecoder, JwtLayer, Claims};
 //! use serde::{Serialize, Deserialize};
 //!
 //! #[derive(Clone, Serialize, Deserialize)]

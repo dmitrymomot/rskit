@@ -65,7 +65,7 @@ Issue tokens with `JwtEncoder`; enforce auth on protected routes with
 
 ```rust,no_run
 use axum::{Router, routing::get};
-use modo::auth::jwt::{Claims, JwtConfig, JwtDecoder, JwtLayer};
+use modo::auth::session::jwt::{Claims, JwtConfig, JwtDecoder, JwtLayer};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -189,7 +189,7 @@ the extractor for handlers once the middleware is in place.
 `JwtConfig`, the encoder auto-fills `exp` when the caller does not set it.
 
 ```rust
-use modo::auth::jwt::{Claims, JwtConfig, JwtDecoder, JwtEncoder, JwtLayer};
+use modo::auth::session::jwt::{Claims, JwtConfig, JwtDecoder, JwtEncoder, JwtLayer};
 use serde::{Deserialize, Serialize};
 use axum::{Router, routing::get};
 
@@ -228,8 +228,8 @@ with any combination of `BearerSource`, `CookieSource`, `QuerySource`, or
 `HeaderSource`, or your own `TokenSource` implementation:
 
 ```rust
-use modo::auth::jwt::{JwtLayer, TokenSource};
-use modo::auth::jwt::{BearerSource, CookieSource};
+use modo::auth::session::jwt::{JwtLayer, TokenSource};
+use modo::auth::session::jwt::{BearerSource, CookieSource};
 use std::sync::Arc;
 
 let layer = JwtLayer::<MyClaims>::new(decoder)
@@ -247,7 +247,7 @@ request; tokens without `jti` are accepted without a revocation check.
 The middleware is fail-closed — a backend error rejects the request.
 
 ```rust
-use modo::auth::jwt::{JwtLayer, Revocation};
+use modo::auth::session::jwt::{JwtLayer, Revocation};
 use modo::Result;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -361,23 +361,23 @@ oauth:
 | `PasswordConfig`       | `modo::auth::password` | Argon2id parameters                                 |
 | `Totp`                 | `modo::auth::totp`     | TOTP authenticator instance                         |
 | `TotpConfig`           | `modo::auth::totp`     | TOTP algorithm parameters                           |
-| `JwtConfig`            | `modo::auth::jwt`      | JWT signing/validation config (also via crate root) |
-| `JwtEncoder`           | `modo::auth::jwt`      | Signs and produces JWT strings                      |
-| `JwtDecoder`           | `modo::auth::jwt`      | Verifies and parses JWT strings                     |
-| `JwtLayer<T>`          | `modo::auth::jwt`      | Tower middleware for axum routes                    |
-| `Claims<T>`            | `modo::auth::jwt`      | JWT claims struct; axum extractor                   |
-| `Bearer`               | `modo::auth::jwt`      | Axum extractor for the raw Bearer token string      |
-| `JwtError`             | `modo::auth::jwt`      | Typed JWT error enum with `code()` strings          |
-| `HmacSigner`           | `modo::auth::jwt`      | HMAC-SHA256 (HS256) signer/verifier                 |
-| `TokenSigner`          | `modo::auth::jwt`      | Trait for JWT signing (extends `TokenVerifier`)     |
-| `TokenVerifier`        | `modo::auth::jwt`      | Trait for JWT signature verification                |
-| `TokenSource`          | `modo::auth::jwt`      | Trait for pluggable token extraction                |
-| `BearerSource`         | `modo::auth::jwt`      | Extracts token from `Authorization: Bearer` header  |
-| `CookieSource`         | `modo::auth::jwt`      | Extracts token from a named cookie                  |
-| `QuerySource`          | `modo::auth::jwt`      | Extracts token from a query parameter               |
-| `HeaderSource`         | `modo::auth::jwt`      | Extracts token from a custom header                 |
-| `Revocation`           | `modo::auth::jwt`      | Trait for async token revocation checks             |
-| `ValidationConfig`     | `modo::auth::jwt`      | Runtime validation policy (leeway, iss, aud)        |
+| `JwtConfig`            | `modo::auth::session::jwt`      | JWT signing/validation config (also via crate root) |
+| `JwtEncoder`           | `modo::auth::session::jwt`      | Signs and produces JWT strings                      |
+| `JwtDecoder`           | `modo::auth::session::jwt`      | Verifies and parses JWT strings                     |
+| `JwtLayer<T>`          | `modo::auth::session::jwt`      | Tower middleware for axum routes                    |
+| `Claims<T>`            | `modo::auth::session::jwt`      | JWT claims struct; axum extractor                   |
+| `Bearer`               | `modo::auth::session::jwt`      | Axum extractor for the raw Bearer token string      |
+| `JwtError`             | `modo::auth::session::jwt`      | Typed JWT error enum with `code()` strings          |
+| `HmacSigner`           | `modo::auth::session::jwt`      | HMAC-SHA256 (HS256) signer/verifier                 |
+| `TokenSigner`          | `modo::auth::session::jwt`      | Trait for JWT signing (extends `TokenVerifier`)     |
+| `TokenVerifier`        | `modo::auth::session::jwt`      | Trait for JWT signature verification                |
+| `TokenSource`          | `modo::auth::session::jwt`      | Trait for pluggable token extraction                |
+| `BearerSource`         | `modo::auth::session::jwt`      | Extracts token from `Authorization: Bearer` header  |
+| `CookieSource`         | `modo::auth::session::jwt`      | Extracts token from a named cookie                  |
+| `QuerySource`          | `modo::auth::session::jwt`      | Extracts token from a query parameter               |
+| `HeaderSource`         | `modo::auth::session::jwt`      | Extracts token from a custom header                 |
+| `Revocation`           | `modo::auth::session::jwt`      | Trait for async token revocation checks             |
+| `ValidationConfig`     | `modo::auth::session::jwt`      | Runtime validation policy (leeway, iss, aud)        |
 | `OAuthProvider`        | `modo::auth::oauth`    | Trait for custom OAuth 2.0 providers                |
 | `Google`               | `modo::auth::oauth`    | Built-in Google OAuth 2.0 provider                  |
 | `GitHub`               | `modo::auth::oauth`    | Built-in GitHub OAuth 2.0 provider                  |

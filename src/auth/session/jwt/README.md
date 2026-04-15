@@ -1,4 +1,4 @@
-# modo::auth::jwt
+# modo::auth::session::jwt
 
 JWT authentication for the `modo` framework: token encoding, decoding, Tower middleware, pluggable token sources, and optional revocation.
 
@@ -38,7 +38,7 @@ jwt:
 Construct services from config:
 
 ```rust,ignore
-use modo::auth::jwt::{JwtConfig, JwtEncoder, JwtDecoder};
+use modo::auth::session::jwt::{JwtConfig, JwtEncoder, JwtDecoder};
 
 let mut config = JwtConfig::new("my-secret");
 config.default_expiry = Some(3600);
@@ -55,7 +55,7 @@ let decoder = JwtDecoder::from(&encoder);
 ```rust,ignore
 use std::time::Duration;
 use serde::{Serialize, Deserialize};
-use modo::auth::jwt::{Claims, JwtConfig, JwtEncoder};
+use modo::auth::session::jwt::{Claims, JwtConfig, JwtEncoder};
 use modo::id;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -77,7 +77,7 @@ let token: String = encoder.encode(&claims).unwrap();
 ### Decoding tokens
 
 ```rust,ignore
-use modo::auth::jwt::{Claims, JwtConfig, JwtDecoder};
+use modo::auth::session::jwt::{Claims, JwtConfig, JwtDecoder};
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct AppClaims { role: String }
@@ -95,7 +95,7 @@ println!("{}", claims.subject().unwrap_or("?"));
 
 ```rust,ignore
 use axum::{Router, routing::get};
-use modo::auth::jwt::{Claims, JwtConfig, JwtDecoder, JwtLayer};
+use modo::auth::session::jwt::{Claims, JwtConfig, JwtDecoder, JwtLayer};
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct AppClaims { role: String }
@@ -116,7 +116,7 @@ let app: Router = Router::new()
 ### Optional authentication
 
 ```rust,ignore
-use modo::auth::jwt::Claims;
+use modo::auth::session::jwt::Claims;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct AppClaims { role: String }
@@ -133,7 +133,7 @@ async fn feed_handler(claims: Option<Claims<AppClaims>>) -> String {
 
 ```rust,ignore
 use std::sync::Arc;
-use modo::auth::jwt::{
+use modo::auth::session::jwt::{
     JwtConfig, JwtDecoder, JwtLayer, BearerSource, QuerySource, CookieSource, TokenSource,
 };
 
@@ -157,7 +157,7 @@ let layer = JwtLayer::<AppClaims>::new(decoder)
 ```rust,ignore
 use std::pin::Pin;
 use std::sync::Arc;
-use modo::auth::jwt::{JwtConfig, JwtDecoder, JwtLayer, Revocation};
+use modo::auth::session::jwt::{JwtConfig, JwtDecoder, JwtLayer, Revocation};
 use modo::Result;
 
 struct MyRevocationStore;
@@ -185,7 +185,7 @@ A backend error causes a fail-closed `401`.
 ### Error identity in error handlers
 
 ```rust,ignore
-use modo::auth::jwt::JwtError;
+use modo::auth::session::jwt::JwtError;
 
 // Before IntoResponse (e.g. in a guard):
 // if let Some(&JwtError::Expired) = err.source_as::<JwtError>() { /* ... */ }

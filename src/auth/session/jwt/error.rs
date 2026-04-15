@@ -8,7 +8,7 @@ use std::fmt;
 /// # Error identity pattern
 ///
 /// ```rust,ignore
-/// use modo::auth::jwt::JwtError;
+/// use modo::auth::session::jwt::JwtError;
 ///
 /// let err = modo::Error::unauthorized("unauthorized")
 ///     .chain(JwtError::Expired)
