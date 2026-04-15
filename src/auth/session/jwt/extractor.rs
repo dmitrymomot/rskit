@@ -12,15 +12,15 @@ use super::error::JwtError;
 
 /// Standalone extractor for the raw Bearer token string.
 ///
-/// Reads the `Authorization` header and strips the `Bearer ` or `bearer ` prefix
-/// (those two exact capitalizations). Use this when you need the raw token string
-/// (e.g., to forward it or pass it to a revocation endpoint).
+/// Reads the `Authorization` header and strips the `Bearer` scheme prefix
+/// (case-insensitive per RFC 7235). Use this when you need the raw token
+/// string (e.g., to forward it or pass it to a revocation endpoint).
 ///
 /// This extractor is independent of `JwtLayer` — it does not decode or validate
 /// the token.
 ///
 /// Returns `401 Unauthorized` with `jwt:missing_token` when the header is absent,
-/// uses a scheme other than `Bearer`/`bearer`, or contains an empty token value.
+/// uses a scheme other than `Bearer`, or contains an empty token value.
 #[derive(Debug)]
 pub struct Bearer(pub String);
 
