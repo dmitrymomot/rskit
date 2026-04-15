@@ -8,6 +8,8 @@
 //!
 //! ## Quick start
 //!
+//! Add to `Cargo.toml`:
+//!
 //! ```toml
 //! [dependencies]
 //! modo = { package = "modo-rs", version = "0.8" }
@@ -16,11 +18,39 @@
 //! modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
 //! ```
 //!
+//! Minimal application:
+//!
+//! ```rust,no_run
+//! use modo::{Config, Result};
+//! use modo::axum::{Router, routing::get};
+//! use modo::runtime::Task;
+//!
+//! async fn hello() -> &'static str { "Hello, modo!" }
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     let config: Config = modo::config::load("config/")?;
+//!     let app = Router::new().route("/", get(hello));
+//!     let server = modo::server::http(app, &config.server).await?;
+//!     modo::run!(server).await
+//! }
+//! ```
+//!
 //! Inside a handler module, pull in the common handler-time types with:
 //!
 //! ```ignore
 //! use modo::prelude::*;
 //! ```
+//!
+//! ## Key crate-level exports
+//!
+//! These items are re-exported at the crate root for convenience:
+//!
+//! - [`Error`] — the framework error type (HTTP status + message + optional source/code)
+//! - [`Result`] — `std::result::Result<T, Error>` alias
+//! - [`Config`] — top-level application configuration
+//! - [`run!`](crate::run) — macro that waits for SIGTERM/SIGINT then shuts down each
+//!   supplied [`Task`](crate::runtime::Task) in declaration order
 //!
 //! ## Virtual flat-index modules
 //!
@@ -32,13 +62,18 @@
 //! - [`guards`] — every route-level gating layer applied via `.route_layer()`
 //!
 //! [`prelude`] bundles the extras a typical handler signature needs on top of
-//! those (`Error`, `Result`, `Json`, `State`, etc.).
+//! those (`Error`, `Result`, `AppState`, `Session`, `Role`, `Flash`, `ClientIp`,
+//! `Tenant`, `TenantId`, and the `Validate` trio).
 //!
 //! ## Features
 //!
 //! Every module is always compiled — no cargo features gate production code.
 //! The only feature flag is `test-helpers`, which exposes in-memory backends
 //! and test harnesses ([`testing`]); enable it in your `[dev-dependencies]`.
+//!
+//! | Feature | Purpose |
+//! |---------|---------|
+//! | `test-helpers` | Enables [`testing`] module with `TestDb`, `TestApp`, `TestSession`, and all in-memory/stub backends |
 //!
 //! ## Dependency re-exports
 //!
