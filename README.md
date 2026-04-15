@@ -71,17 +71,39 @@ db::migrate("migrations/", &pool).await?;
 
 ### Sessions with zero glue code
 
-Database-backed, signed cookies, sliding expiry, multi-device, fingerprinting. The middleware handles the full request/response lifecycle — you just call methods.
+Database-backed, sliding expiry, multi-device, fingerprinting. Two transports
+share one table and one `Session` data type — pick cookies for browsers, JWT for
+API clients.
 
-```rust
-async fn login(session: Session, JsonRequest(form): JsonRequest<LoginForm>) -> Result<()> {
-    // ... validate credentials ...
-    session.authenticate(user_id).await
+**Cookie sessions** — browser apps, same-site, CSRF-bound:
+
+```rust,ignore
+// Login: CookieSession mutates; Session reads.
+async fn login(cookie: CookieSession, Json(form): Json<LoginForm>) -> Result<()> {
+    // ... validate credentials, get user_id ...
+    cookie.authenticate(&user_id).await
 }
 
 async fn dashboard(session: Session) -> Result<String> {
-    let uid = session.user_id().ok_or(Error::unauthorized("not logged in"))?;
-    Ok(format!("Welcome, {uid}"))
+    Ok(format!("Welcome, {}", session.user_id))
+}
+```
+
+**JWT sessions** — mobile apps, SPAs, API clients:
+
+```rust,ignore
+// Login: returns an access + refresh token pair.
+async fn login(
+    State(svc): State<JwtSessionService>,
+    Json(form): Json<LoginForm>,
+) -> Result<Json<TokenPair>> {
+    // ... validate credentials, get user_id and build meta ...
+    Ok(Json(svc.authenticate(&user_id, &meta).await?))
+}
+
+// Refresh: rotate issues a new pair and invalidates the old refresh token.
+async fn refresh(jwt: JwtSession) -> Result<Json<TokenPair>> {
+    Ok(Json(jwt.rotate().await?))
 }
 ```
 
