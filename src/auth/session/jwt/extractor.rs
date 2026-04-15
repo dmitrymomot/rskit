@@ -7,29 +7,6 @@ use crate::Result;
 use crate::auth::session::Session;
 use crate::auth::session::meta::SessionMeta;
 
-/// Convert a raw [`store::SessionData`](crate::auth::session::store::SessionData) row into the
-/// transport-agnostic [`Session`](crate::auth::session::Session) type.
-///
-/// Used by [`super::service::JwtSessionService`] to unify the store row representation
-/// with the public session API.
-pub(crate) fn raw_to_session(
-    raw: crate::auth::session::store::SessionData,
-) -> crate::auth::session::Session {
-    crate::auth::session::Session {
-        id: raw.id,
-        user_id: raw.user_id,
-        ip_address: raw.ip_address,
-        user_agent: raw.user_agent,
-        device_name: raw.device_name,
-        device_type: raw.device_type,
-        fingerprint: raw.fingerprint,
-        data: raw.data,
-        created_at: raw.created_at,
-        last_active_at: raw.last_active_at,
-        expires_at: raw.expires_at,
-    }
-}
-
 use super::claims::Claims;
 use super::error::JwtError;
 
@@ -65,8 +42,12 @@ impl<S: Send + Sync> FromRequestParts<S> for Bearer {
             })?;
 
         let token = header
-            .strip_prefix("Bearer ")
-            .or_else(|| header.strip_prefix("bearer "))
+            .split_once(' ')
+            .and_then(|(scheme, rest)| {
+                scheme
+                    .eq_ignore_ascii_case("Bearer")
+                    .then(|| rest.trim_start())
+            })
             .ok_or_else(|| {
                 Error::unauthorized("unauthorized")
                     .chain(JwtError::MissingToken)
@@ -251,8 +232,11 @@ impl JwtSession {
                 .get(http::header::AUTHORIZATION)
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| {
-                    s.strip_prefix("Bearer ")
-                        .or_else(|| s.strip_prefix("bearer "))
+                    s.split_once(' ').and_then(|(scheme, rest)| {
+                        scheme
+                            .eq_ignore_ascii_case("Bearer")
+                            .then(|| rest.trim_start())
+                    })
                 })
                 .map(str::to_string)
                 .ok_or_else(|| {

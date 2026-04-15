@@ -9,6 +9,7 @@ use http::Request;
 use tower::{Layer, Service};
 
 use crate::Error;
+use crate::auth::session::Session;
 
 use super::claims::Claims;
 use super::decoder::JwtDecoder;
@@ -156,44 +157,51 @@ where
                 Err(e) => return Ok(e.into_response()),
             };
 
-            // Stateful validation: when backed by a JwtSessionService, hash the
-            // jti claim, load the session row, and insert the transport-agnostic
-            // Session into extensions. Returns 401 when the row is absent.
+            // Stateful validation: when backed by a JwtSessionService and
+            // stateful_validation is enabled, hash the jti claim, load the session
+            // row, and insert the transport-agnostic Session into extensions.
+            // Returns 401 when the row is absent; propagates DB errors as 5xx.
             if let Some(svc) = service {
-                let jti = match claims.jti.as_deref() {
-                    Some(j) => j,
-                    None => {
-                        let err =
-                            Error::unauthorized("unauthorized").with_code("auth:session_not_found");
-                        return Ok(err.into_response());
-                    }
-                };
+                // Fix #1: reject non-access audience tokens before any DB lookup.
+                if claims.aud.as_deref() != Some("access") {
+                    let err = Error::unauthorized("unauthorized").with_code("auth:aud_mismatch");
+                    return Ok(err.into_response());
+                }
 
-                let session_token = match SessionToken::from_raw(jti) {
-                    Some(t) => t,
-                    None => {
-                        let err =
-                            Error::unauthorized("unauthorized").with_code("auth:session_not_found");
-                        return Ok(err.into_response());
-                    }
-                };
+                // Fix #2: honor stateful_validation flag.
+                if svc.config().stateful_validation {
+                    let jti = match claims.jti.as_deref() {
+                        Some(j) => j,
+                        None => {
+                            let err = Error::unauthorized("unauthorized")
+                                .with_code("auth:session_not_found");
+                            return Ok(err.into_response());
+                        }
+                    };
 
-                let raw = match svc.store().read_by_token_hash(&session_token.hash()).await {
-                    Ok(Some(row)) => row,
-                    Ok(None) => {
-                        let err =
-                            Error::unauthorized("unauthorized").with_code("auth:session_not_found");
-                        return Ok(err.into_response());
-                    }
-                    Err(_) => {
-                        let err =
-                            Error::unauthorized("unauthorized").with_code("auth:session_not_found");
-                        return Ok(err.into_response());
-                    }
-                };
+                    let session_token = match SessionToken::from_raw(jti) {
+                        Some(t) => t,
+                        None => {
+                            let err = Error::unauthorized("unauthorized")
+                                .with_code("auth:session_not_found");
+                            return Ok(err.into_response());
+                        }
+                    };
 
-                let session_data = super::extractor::raw_to_session(raw);
-                parts.extensions.insert(session_data);
+                    // Fix #5: propagate DB errors as 5xx; 401 only for missing row.
+                    let lookup = svc.store().read_by_token_hash(&session_token.hash()).await;
+                    let raw = match lookup {
+                        Err(e) => return Ok(e.into_response()),
+                        Ok(None) => {
+                            let err = Error::unauthorized("unauthorized")
+                                .with_code("auth:session_not_found");
+                            return Ok(err.into_response());
+                        }
+                        Ok(Some(row)) => row,
+                    };
+
+                    parts.extensions.insert(Session::from(raw));
+                }
             }
 
             // Insert claims into extensions

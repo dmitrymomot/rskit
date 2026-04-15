@@ -13,7 +13,8 @@ use tower::{Layer, Service};
 use crate::ip::ClientIp;
 
 use super::CookieSessionService;
-use super::extractor::{SessionAction, SessionState, raw_to_session};
+use super::extractor::{SessionAction, SessionState};
+use crate::auth::session::data::Session;
 use crate::auth::session::meta::{SessionMeta, header_str};
 use crate::auth::session::token::SessionToken;
 use crate::cookie::{CookieConfig, Key};
@@ -154,7 +155,7 @@ where
 
             // 7. Insert Session data view for the data extractor
             if let Some(raw) = current_session.as_ref() {
-                let session_data = raw_to_session(raw.clone());
+                let session_data = Session::from(raw.clone());
                 request.extensions_mut().insert(session_data);
             }
 

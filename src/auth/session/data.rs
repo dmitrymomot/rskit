@@ -36,6 +36,26 @@ pub struct Session {
     pub expires_at: DateTime<Utc>,
 }
 
+use super::store::SessionData;
+
+impl From<SessionData> for Session {
+    fn from(raw: SessionData) -> Self {
+        Self {
+            id: raw.id,
+            user_id: raw.user_id,
+            ip_address: raw.ip_address,
+            user_agent: raw.user_agent,
+            device_name: raw.device_name,
+            device_type: raw.device_type,
+            fingerprint: raw.fingerprint,
+            data: raw.data,
+            created_at: raw.created_at,
+            last_active_at: raw.last_active_at,
+            expires_at: raw.expires_at,
+        }
+    }
+}
+
 use axum::extract::{FromRequestParts, OptionalFromRequestParts};
 use http::request::Parts;
 

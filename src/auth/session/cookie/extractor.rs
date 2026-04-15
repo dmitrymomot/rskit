@@ -71,7 +71,7 @@ impl CookieSession {
     /// Return the loaded session for this request, if authenticated.
     pub fn current(&self) -> Option<Session> {
         let guard = self.state.current.lock().expect("session mutex poisoned");
-        guard.as_ref().map(|raw| raw_to_session(raw.clone()))
+        guard.as_ref().map(|raw| Session::from(raw.clone()))
     }
 
     /// Return `true` when a valid, authenticated session exists for this request.
@@ -375,22 +375,5 @@ impl CookieSession {
     /// Revoke all sessions for `user_id` except `keep_id`.
     pub async fn revoke_all_except(&self, user_id: &str, keep_id: &str) -> crate::Result<()> {
         self.state.service.revoke_all_except(user_id, keep_id).await
-    }
-}
-
-/// Convert a store-internal [`SessionData`] into the public [`Session`] type.
-pub(crate) fn raw_to_session(raw: SessionData) -> Session {
-    Session {
-        id: raw.id,
-        user_id: raw.user_id,
-        ip_address: raw.ip_address,
-        user_agent: raw.user_agent,
-        device_name: raw.device_name,
-        device_type: raw.device_type,
-        fingerprint: raw.fingerprint,
-        data: raw.data,
-        created_at: raw.created_at,
-        last_active_at: raw.last_active_at,
-        expires_at: raw.expires_at,
     }
 }

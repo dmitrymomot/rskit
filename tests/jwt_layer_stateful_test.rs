@@ -67,3 +67,23 @@ async fn jwt_layer_rejects_after_logout() {
 
     assert_eq!(res.status(), 401);
 }
+
+#[tokio::test]
+async fn jwt_layer_rejects_refresh_token_with_401() {
+    let (_db, svc) = setup().await;
+    let pair = svc.authenticate("user_1", &meta()).await.unwrap();
+
+    let app = TestApp::builder()
+        .route("/me", get(whoami).route_layer(svc.layer()))
+        .build();
+
+    // Sending a refresh token to a protected route must return 401.
+    let bearer = format!("Bearer {}", pair.refresh_token);
+    let res = app
+        .get("/me")
+        .header("Authorization", bearer.as_str())
+        .send()
+        .await;
+
+    assert_eq!(res.status(), 401);
+}

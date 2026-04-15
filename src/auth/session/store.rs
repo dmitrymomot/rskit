@@ -345,6 +345,7 @@ impl SessionStore {
 
     /// Issue a new token for an existing session, invalidating the old one.
     ///
+    /// Updates `session_token_hash` and `last_active_at` in a single statement.
     /// Returns the new [`SessionToken`]. The middleware will write this token
     /// to the session cookie on the response.
     ///
@@ -354,11 +355,14 @@ impl SessionStore {
     pub async fn rotate_token(&self, id: &str) -> Result<SessionToken> {
         let new_token = SessionToken::generate();
         let new_hash = new_token.hash();
+        let now = Utc::now().to_rfc3339();
         self.db
             .conn()
             .execute_raw(
-                &format!("UPDATE {TABLE} SET session_token_hash = ?1 WHERE id = ?2"),
-                libsql::params![new_hash, id],
+                &format!(
+                    "UPDATE {TABLE} SET session_token_hash = ?1, last_active_at = ?2 WHERE id = ?3"
+                ),
+                libsql::params![new_hash, now, id],
             )
             .await
             .map_err(|e| Error::internal(format!("rotate token: {e}")))?;

@@ -171,7 +171,7 @@ impl JwtSessionService {
     /// cannot be signed.
     pub async fn authenticate(&self, user_id: &str, meta: &SessionMeta) -> Result<TokenPair> {
         let (raw, token) = self.inner.store.create(meta, user_id, None).await?;
-        self.mint_pair(&raw.user_id, &token.expose(), raw.expires_at)
+        self.mint_pair(&raw.user_id, &token.expose())
     }
 
     /// Rotate a refresh token, issuing a new [`TokenPair`].
@@ -216,14 +216,7 @@ impl JwtSessionService {
             .rotate_token_to(&raw.id, &new_token)
             .await?;
 
-        let updated = self
-            .inner
-            .store
-            .read(&raw.id)
-            .await?
-            .ok_or_else(|| Error::internal("session lost during rotate"))?;
-
-        self.mint_pair(&raw.user_id, &new_token.expose(), updated.expires_at)
+        self.mint_pair(&raw.user_id, &new_token.expose())
     }
 
     /// Revoke the session associated with an access token.
@@ -265,18 +258,28 @@ impl JwtSessionService {
     /// Returns an error if the database query fails.
     pub async fn list(&self, user_id: &str) -> Result<Vec<Session>> {
         let raws = self.inner.store.list_for_user(user_id).await?;
-        Ok(raws
-            .into_iter()
-            .map(super::extractor::raw_to_session)
-            .collect())
+        Ok(raws.into_iter().map(Session::from).collect())
     }
 
     /// Revoke a specific session by its ULID identifier.
     ///
+    /// Looks up the session row by `id`, verifies that it belongs to `user_id`,
+    /// and destroys it. Returns `404 auth:session_not_found` if the session does
+    /// not exist or belongs to a different user.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the database delete fails.
-    pub async fn revoke(&self, _user_id: &str, id: &str) -> Result<()> {
+    /// Returns `404 auth:session_not_found` on ownership mismatch, or an
+    /// internal error if the database operation fails.
+    pub async fn revoke(&self, user_id: &str, id: &str) -> Result<()> {
+        let row = self.inner.store.read(id).await?.ok_or_else(|| {
+            Error::not_found("session not found").with_code("auth:session_not_found")
+        })?;
+
+        if row.user_id != user_id {
+            return Err(Error::not_found("session not found").with_code("auth:session_not_found"));
+        }
+
         self.inner.store.destroy(id).await
     }
 
@@ -313,12 +316,9 @@ impl JwtSessionService {
     }
 
     /// Mint an access + refresh token pair for `user_id` with `jti` as the session token hex.
-    fn mint_pair(
-        &self,
-        user_id: &str,
-        jti: &str,
-        _expires_at: chrono::DateTime<chrono::Utc>,
-    ) -> Result<TokenPair> {
+    ///
+    /// TTLs are derived from `config.access_ttl_secs` and `config.refresh_ttl_secs`.
+    fn mint_pair(&self, user_id: &str, jti: &str) -> Result<TokenPair> {
         let now = now_secs();
         let access_exp = now + self.inner.config.access_ttl_secs;
         let refresh_exp = now + self.inner.config.refresh_ttl_secs;

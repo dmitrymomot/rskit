@@ -14,9 +14,8 @@ pub trait TokenSource: Send + Sync {
 
 /// Extracts a token from the `Authorization: Bearer <token>` header.
 ///
-/// Accepts the scheme written as `Bearer` or `bearer` (those two exact
-/// capitalizations, followed by a single space). Other capitalizations
-/// or auth schemes return `None`.
+/// The scheme comparison is case-insensitive per RFC 7235 — `Bearer`,
+/// `bearer`, `BEARER`, etc. are all accepted.
 pub struct BearerSource;
 
 impl TokenSource for BearerSource {
@@ -26,9 +25,11 @@ impl TokenSource for BearerSource {
             .get(http::header::AUTHORIZATION)?
             .to_str()
             .ok()?;
-        let token = value
-            .strip_prefix("Bearer ")
-            .or_else(|| value.strip_prefix("bearer "))?;
+        let (scheme, rest) = value.split_once(' ')?;
+        if !scheme.eq_ignore_ascii_case("Bearer") {
+            return None;
+        }
+        let token = rest.trim_start();
         if token.is_empty() {
             return None;
         }
@@ -229,6 +230,18 @@ mod tests {
     #[test]
     fn bearer_case_insensitive_prefix() {
         let parts = parts_with_header("Authorization", "bearer my-token");
+        assert_eq!(BearerSource.extract(&parts), Some("my-token".into()));
+    }
+
+    #[test]
+    fn bearer_uppercase_scheme_works() {
+        let parts = parts_with_header("Authorization", "BEARER my-token");
+        assert_eq!(BearerSource.extract(&parts), Some("my-token".into()));
+    }
+
+    #[test]
+    fn bearer_mixed_case_scheme_works() {
+        let parts = parts_with_header("Authorization", "BeArEr my-token");
         assert_eq!(BearerSource.extract(&parts), Some("my-token".into()));
     }
 
