@@ -1,7 +1,18 @@
-//! Server-Sent Events (SSE) support for modo.
+//! # modo::sse
 //!
-//! This module provides a streaming primitive for real-time event delivery
-//! over HTTP using the [SSE protocol](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events).
+//! Server-Sent Events (SSE) — keyed broadcast channels, event builders, and
+//! reconnection helpers for real-time streaming over HTTP.
+//!
+//! Provides:
+//! - [`Broadcaster`] — keyed broadcast channel registry; produces SSE responses
+//! - [`BroadcastStream`] — stream of values from a broadcast channel with configurable lag policy
+//! - [`LagPolicy`] — `End` or `Skip` behavior when a subscriber falls behind
+//! - [`Sender`] — imperative event sender for [`Broadcaster::channel()`] closures
+//! - [`SseStreamExt`] — `.cast_events()` combinator to map a stream to SSE events
+//! - [`Event`] — builder for a single SSE event (id, event name, data, retry)
+//! - [`LastEventId`] — axum extractor for the `Last-Event-ID` reconnection header
+//! - [`SseConfig`] — keep-alive interval configuration
+//! - [`replay()`] — converts a `Vec<T>` into a stream for missed-event replay on reconnect
 //!
 //! # Quick start
 //!
