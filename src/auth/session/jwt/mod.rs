@@ -13,6 +13,7 @@
 //! | [`JwtDecoder`] | Verifies signatures, validates claims, and deserializes into any `DeserializeOwned` |
 //! | [`JwtLayer`] | Tower middleware that enforces JWT auth on axum routes |
 //! | [`Bearer`] | Standalone axum extractor for the raw Bearer token string |
+//! | [`JwtSession`] | Request-scoped session manager extractor (rotate, logout, list) |
 //! | [`JwtError`] | Typed error enum with static `code()` strings |
 //! | [`ValidationConfig`] | Runtime validation policy (leeway, issuer, audience) |
 //!
@@ -98,7 +99,7 @@ pub use config::JwtSessionsConfig as JwtConfig;
 pub use decoder::JwtDecoder;
 pub use encoder::JwtEncoder;
 pub use error::JwtError;
-pub use extractor::Bearer;
+pub use extractor::{Bearer, JwtSession};
 pub use middleware::JwtLayer;
 pub use service::JwtSessionService;
 pub use signer::{HmacSigner, TokenSigner, TokenVerifier};

@@ -1,7 +1,11 @@
-use axum::extract::{FromRequestParts, OptionalFromRequestParts};
+use axum::body::to_bytes;
+use axum::extract::{FromRef, FromRequest, FromRequestParts, OptionalFromRequestParts, Request};
 use http::request::Parts;
 
 use crate::Error;
+use crate::Result;
+use crate::auth::session::Session;
+use crate::auth::session::meta::SessionMeta;
 
 /// Convert a raw [`store::SessionData`](crate::auth::session::store::SessionData) row into the
 /// transport-agnostic [`Session`](crate::auth::session::Session) type.
@@ -46,7 +50,10 @@ pub struct Bearer(pub String);
 impl<S: Send + Sync> FromRequestParts<S> for Bearer {
     type Rejection = Error;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> std::result::Result<Self, Self::Rejection> {
         let header = parts
             .headers
             .get(http::header::AUTHORIZATION)
@@ -85,7 +92,10 @@ impl<S: Send + Sync> FromRequestParts<S> for Bearer {
 impl<S: Send + Sync> FromRequestParts<S> for Claims {
     type Rejection = Error;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> std::result::Result<Self, Self::Rejection> {
         parts
             .extensions
             .get::<Claims>()
@@ -104,8 +114,246 @@ impl<S: Send + Sync> OptionalFromRequestParts<S> for Claims {
     async fn from_request_parts(
         parts: &mut Parts,
         _state: &S,
-    ) -> Result<Option<Self>, Self::Rejection> {
+    ) -> std::result::Result<Option<Self>, Self::Rejection> {
         Ok(parts.extensions.get::<Claims>().cloned())
+    }
+}
+
+use super::service::JwtSessionService;
+use super::source::TokenSourceConfig;
+use super::tokens::TokenPair;
+
+/// Request-scoped JWT session manager.
+///
+/// `JwtSession` is an axum [`FromRequest`] extractor that captures the
+/// `JwtSessionService` from router state and pre-reads any tokens it needs
+/// (including the body when `refresh_source = Body { field }`).
+///
+/// Handlers use it to call [`rotate`](JwtSession::rotate) or
+/// [`logout`](JwtSession::logout) without manually fishing tokens out of the
+/// request.
+///
+/// # Trade-off
+///
+/// Because this extractor may consume the request body (when the refresh
+/// source is `Body { field }`), handlers that also need a typed body extractor
+/// (e.g., a login handler that parses `LoginReq`) **cannot** combine
+/// `JwtSession` with another body extractor. Those handlers should inject
+/// [`State<JwtSessionService>`](axum::extract::State) directly instead.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// async fn refresh(jwt: JwtSession) -> Result<Json<TokenPair>> {
+///     Ok(Json(jwt.rotate().await?))
+/// }
+///
+/// async fn logout(jwt: JwtSession) -> Result<StatusCode> {
+///     jwt.logout().await?;
+///     Ok(StatusCode::NO_CONTENT)
+/// }
+/// ```
+pub struct JwtSession {
+    service: JwtSessionService,
+    parts: Parts,
+    body_refresh: Option<String>,
+}
+
+impl<S: Send + Sync> FromRequest<S> for JwtSession
+where
+    JwtSessionService: FromRef<S>,
+{
+    type Rejection = Error;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self> {
+        let service = JwtSessionService::from_ref(state);
+        let (parts, body) = req.into_parts();
+
+        let body_refresh =
+            if let TokenSourceConfig::Body { field } = &service.config().refresh_source {
+                if let Ok(bytes) = to_bytes(body, 1024 * 1024).await {
+                    if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                        v.get(field.as_str())
+                            .and_then(|x| x.as_str())
+                            .map(str::to_string)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+        Ok(Self {
+            service,
+            parts,
+            body_refresh,
+        })
+    }
+}
+
+impl JwtSession {
+    /// Returns the [`Session`] injected by `JwtLayer`, if present.
+    pub fn current(&self) -> Option<&Session> {
+        self.parts.extensions.get::<Session>()
+    }
+
+    /// Authenticate a user and issue a new [`TokenPair`].
+    ///
+    /// Delegates directly to [`JwtSessionService::authenticate`].
+    pub async fn authenticate(&self, user_id: &str, meta: &SessionMeta) -> Result<TokenPair> {
+        self.service.authenticate(user_id, meta).await
+    }
+
+    /// Rotate the refresh token and return a fresh [`TokenPair`].
+    ///
+    /// Finds the refresh token according to `refresh_source` in the config.
+    pub async fn rotate(&self) -> Result<TokenPair> {
+        let token = self.find_refresh_token()?;
+        self.service.rotate(&token).await
+    }
+
+    /// Revoke the session associated with the current access token.
+    ///
+    /// Finds the access token according to `access_source` in the config.
+    pub async fn logout(&self) -> Result<()> {
+        let token = self.find_access_token()?;
+        self.service.logout(&token).await
+    }
+
+    /// List all active sessions for the given user.
+    pub async fn list(&self, user_id: &str) -> Result<Vec<Session>> {
+        self.service.list(user_id).await
+    }
+
+    /// Revoke a specific session by its ULID identifier.
+    pub async fn revoke(&self, user_id: &str, id: &str) -> Result<()> {
+        self.service.revoke(user_id, id).await
+    }
+
+    /// Revoke all sessions for the given user.
+    pub async fn revoke_all(&self, user_id: &str) -> Result<()> {
+        self.service.revoke_all(user_id).await
+    }
+
+    /// Revoke all sessions for the given user except the session with `keep_id`.
+    pub async fn revoke_all_except(&self, user_id: &str, keep_id: &str) -> Result<()> {
+        self.service.revoke_all_except(user_id, keep_id).await
+    }
+
+    fn find_access_token(&self) -> Result<String> {
+        match &self.service.config().access_source {
+            TokenSourceConfig::Bearer => self
+                .parts
+                .headers
+                .get(http::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| {
+                    s.strip_prefix("Bearer ")
+                        .or_else(|| s.strip_prefix("bearer "))
+                })
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    Error::unauthorized("unauthorized").with_code("auth:access_missing")
+                }),
+            TokenSourceConfig::Cookie { name } => {
+                let cookie_header = self
+                    .parts
+                    .headers
+                    .get(http::header::COOKIE)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("");
+                for cookie in cookie_header.split(';') {
+                    let cookie = cookie.trim();
+                    if let Some((k, v)) = cookie.split_once('=')
+                        && k.trim() == name.as_str()
+                        && !v.is_empty()
+                    {
+                        return Ok(v.trim().to_string());
+                    }
+                }
+                Err(Error::unauthorized("unauthorized").with_code("auth:access_missing"))
+            }
+            TokenSourceConfig::Header { name } => self
+                .parts
+                .headers
+                .get(name.as_str())
+                .and_then(|v| v.to_str().ok())
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    Error::unauthorized("unauthorized").with_code("auth:access_missing")
+                }),
+            TokenSourceConfig::Query { name } => {
+                let query = self.parts.uri.query().unwrap_or("");
+                for pair in query.split('&') {
+                    if let Some((k, v)) = pair.split_once('=')
+                        && k == name.as_str()
+                        && !v.is_empty()
+                    {
+                        return Ok(v.to_string());
+                    }
+                }
+                Err(Error::unauthorized("unauthorized").with_code("auth:access_missing"))
+            }
+            TokenSourceConfig::Body { .. } => {
+                Err(Error::internal("access_source=Body is not supported"))
+            }
+        }
+    }
+
+    fn find_refresh_token(&self) -> Result<String> {
+        if let Some(t) = &self.body_refresh {
+            return Ok(t.clone());
+        }
+        match &self.service.config().refresh_source {
+            TokenSourceConfig::Body { .. } => {
+                Err(Error::bad_request("refresh token missing").with_code("auth:refresh_missing"))
+            }
+            TokenSourceConfig::Bearer => self.find_access_token(),
+            TokenSourceConfig::Cookie { name } => {
+                let cookie_header = self
+                    .parts
+                    .headers
+                    .get(http::header::COOKIE)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("");
+                for cookie in cookie_header.split(';') {
+                    let cookie = cookie.trim();
+                    if let Some((k, v)) = cookie.split_once('=')
+                        && k.trim() == name.as_str()
+                        && !v.is_empty()
+                    {
+                        return Ok(v.trim().to_string());
+                    }
+                }
+                Err(Error::unauthorized("unauthorized").with_code("auth:refresh_missing"))
+            }
+            TokenSourceConfig::Header { name } => self
+                .parts
+                .headers
+                .get(name.as_str())
+                .and_then(|v| v.to_str().ok())
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    Error::unauthorized("unauthorized").with_code("auth:refresh_missing")
+                }),
+            TokenSourceConfig::Query { name } => {
+                let query = self.parts.uri.query().unwrap_or("");
+                for pair in query.split('&') {
+                    if let Some((k, v)) = pair.split_once('=')
+                        && k == name.as_str()
+                        && !v.is_empty()
+                    {
+                        return Ok(v.to_string());
+                    }
+                }
+                Err(Error::unauthorized("unauthorized").with_code("auth:refresh_missing"))
+            }
+        }
     }
 }
 
