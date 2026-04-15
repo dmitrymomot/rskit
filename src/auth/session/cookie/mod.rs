@@ -4,10 +4,13 @@ mod config;
 mod extractor;
 mod middleware;
 
-pub use config::SessionConfig;
+pub use config::CookieSessionsConfig;
 pub use extractor::Session;
 pub(crate) use extractor::SessionState;
 pub use middleware::{SessionLayer, layer};
+
+// Back-compat alias: external callers using SessionConfig keep compiling.
+pub use config::CookieSessionsConfig as SessionConfig;
 
 // Temporary alias so external callers compile during the refactor.
 // Removed in Task 8 when the extractor is renamed to CookieSession.

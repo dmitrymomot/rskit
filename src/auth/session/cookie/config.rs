@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use crate::cookie::CookieConfig;
+
 fn deserialize_nonzero_usize<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -13,7 +15,7 @@ where
     Ok(value)
 }
 
-/// Configuration for the session middleware.
+/// Configuration for the cookie-backed session middleware.
 ///
 /// Deserialised from the `session` key in the application YAML config.
 /// All fields have defaults, so an empty `session:` block is valid.
@@ -27,11 +29,16 @@ where
 ///   validate_fingerprint: true
 ///   touch_interval_secs: 300    # 5 minutes
 ///   max_sessions_per_user: 10
+///   cookie:
+///     secret: "your-secret-here"
+///     secure: true
+///     http_only: true
+///     same_site: "lax"
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
-pub struct SessionConfig {
+pub struct CookieSessionsConfig {
     /// Session lifetime in seconds. Defaults to `2_592_000` (30 days).
     pub session_ttl_secs: u64,
     /// Name of the session cookie. Defaults to `"_session"`.
@@ -48,9 +55,11 @@ pub struct SessionConfig {
     /// Defaults to `10`.
     #[serde(deserialize_with = "deserialize_nonzero_usize")]
     pub max_sessions_per_user: usize,
+    /// Cookie security attributes (secret, secure flag, HttpOnly, SameSite).
+    pub cookie: CookieConfig,
 }
 
-impl Default for SessionConfig {
+impl Default for CookieSessionsConfig {
     fn default() -> Self {
         Self {
             session_ttl_secs: 2_592_000,
@@ -58,6 +67,7 @@ impl Default for SessionConfig {
             validate_fingerprint: true,
             touch_interval_secs: 300,
             max_sessions_per_user: 10,
+            cookie: CookieConfig::default(),
         }
     }
 }

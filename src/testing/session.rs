@@ -1,6 +1,6 @@
 use cookie::{Cookie, CookieJar};
 
-use crate::auth::session::SessionConfig;
+use crate::auth::session::CookieSessionsConfig;
 use crate::auth::session::meta::SessionMeta;
 use crate::auth::session::store::SessionStore;
 use crate::cookie::{CookieConfig, Key, key_from_config};
@@ -65,11 +65,11 @@ pub struct TestSession {
     store: SessionStore,
     cookie_config: CookieConfig,
     key: Key,
-    session_config: SessionConfig,
+    session_config: CookieSessionsConfig,
 }
 
 impl TestSession {
-    /// Create a `TestSession` with default [`SessionConfig`] and a
+    /// Create a `TestSession` with default [`CookieSessionsConfig`] and a
     /// test-suitable [`CookieConfig`] (insecure, lax same-site, 64-char secret).
     ///
     /// Creates the `authenticated_sessions` table and indexes on `db`.
@@ -85,10 +85,10 @@ impl TestSession {
             http_only: true,
             same_site: "lax".to_string(),
         };
-        Self::with_config(db, SessionConfig::default(), cookie_config).await
+        Self::with_config(db, CookieSessionsConfig::default(), cookie_config).await
     }
 
-    /// Create a `TestSession` with explicit [`SessionConfig`] and [`CookieConfig`].
+    /// Create a `TestSession` with explicit [`CookieSessionsConfig`] and [`CookieConfig`].
     ///
     /// Creates the `authenticated_sessions` table and indexes on `db`.
     ///
@@ -98,7 +98,7 @@ impl TestSession {
     /// cannot be derived.
     pub async fn with_config(
         db: &TestDb,
-        session_config: SessionConfig,
+        session_config: CookieSessionsConfig,
         cookie_config: CookieConfig,
     ) -> Self {
         use crate::db::ConnExt;

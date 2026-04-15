@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::db::{ColumnMap, ConnExt, ConnQueryExt, Database, FromRow};
 use crate::error::{Error, Result};
 
-use super::cookie::SessionConfig;
+use super::cookie::CookieSessionsConfig;
 use super::meta::SessionMeta;
 use super::token::SessionToken;
 
@@ -48,17 +48,17 @@ pub struct SessionData {
 #[derive(Clone)]
 pub struct SessionStore {
     db: Database,
-    config: SessionConfig,
+    config: CookieSessionsConfig,
 }
 
 impl SessionStore {
     /// Create a store from a [`Database`] handle and session configuration.
-    pub fn new(db: Database, config: SessionConfig) -> Self {
+    pub fn new(db: Database, config: CookieSessionsConfig) -> Self {
         Self { db, config }
     }
 
     /// Return the session configuration for this store.
-    pub fn config(&self) -> &SessionConfig {
+    pub fn config(&self) -> &CookieSessionsConfig {
         &self.config
     }
 

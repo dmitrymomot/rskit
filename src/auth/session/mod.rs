@@ -11,7 +11,7 @@
 //!
 //! # Provides
 //!
-//! - [`SessionConfig`] — deserialised session configuration (TTL, cookie name, limits).
+//! - [`CookieSessionsConfig`] — deserialised session configuration (TTL, cookie name, limits).
 //! - [`Session`] — axum extractor; primary API for handlers.
 //! - [`SessionData`] — snapshot of a session row returned from the database.
 //! - [`SessionToken`] — opaque 32-byte random token; redacted in `Debug`/`Display`.
@@ -36,7 +36,7 @@ pub use token::SessionToken;
 
 // Re-exports from cookie for back-compat during refactor.
 pub(crate) use cookie::SessionState;
-pub use cookie::{CookieSession as Session, SessionConfig, SessionLayer};
+pub use cookie::{CookieSession as Session, CookieSessionsConfig, SessionConfig, SessionLayer};
 
 // SessionStore and layer: pub(crate) in normal builds; exposed via test-helpers for integration tests.
 #[cfg(not(any(test, feature = "test-helpers")))]
