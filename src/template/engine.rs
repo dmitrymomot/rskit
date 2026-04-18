@@ -2,9 +2,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use super::config::TemplateConfig;
-use super::i18n::{TranslationStore, make_t_function};
-use super::locale::{self, LocaleResolver};
 use super::static_files;
+use crate::i18n::locale::{self, LocaleResolver};
+use crate::i18n::{I18nConfig, TranslationStore, make_t_function};
 
 struct EngineInner {
     env: std::sync::RwLock<minijinja::Environment<'static>>,
@@ -216,9 +216,19 @@ impl EngineBuilder {
             .map(|s| s.available_locales())
             .unwrap_or_default();
 
-        let locale_chain = self
-            .locale_resolvers
-            .unwrap_or_else(|| locale::default_chain(&config, &available_locales));
+        let locale_chain = self.locale_resolvers.unwrap_or_else(|| {
+            // TEMPORARY (Task 1): build an I18nConfig shim from the
+            // still-owned-by-template locale fields so the relocated
+            // default_chain can consume the new type. Task 2 removes these
+            // fields from TemplateConfig and deletes this shim.
+            let i18n_cfg = I18nConfig {
+                locales_path: config.locales_path.clone(),
+                default_locale: config.default_locale.clone(),
+                locale_cookie: config.locale_cookie.clone(),
+                locale_query_param: config.locale_query_param.clone(),
+            };
+            locale::default_chain(&i18n_cfg, &available_locales)
+        });
 
         let inner = EngineInner {
             env: std::sync::RwLock::new(env),

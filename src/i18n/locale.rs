@@ -1,17 +1,13 @@
 use http::request::Parts;
 use std::sync::Arc;
 
-use super::config::TemplateConfig;
+use super::config::I18nConfig;
 
 /// Trait for extracting the active locale from a request.
 ///
-/// Implementations are tried in order within the locale chain built by
-/// [`EngineBuilder::locale_resolvers`](super::EngineBuilder::locale_resolvers).
-/// The first resolver that returns `Some` wins; if all resolvers return `None`,
-/// [`TemplateConfig::default_locale`] is used.
-///
-/// The resolved locale is stored in the request's [`TemplateContext`](super::TemplateContext)
-/// under the key `"locale"` and is available in every template as `{{ locale }}`.
+/// Implementations are tried in order within the locale chain built by the
+/// i18n module. The first resolver that returns `Some` wins; if all resolvers
+/// return `None`, [`I18nConfig::default_locale`] is used.
 pub trait LocaleResolver: Send + Sync {
     /// Returns a locale string (e.g. `"en"`, `"uk"`) if this resolver can determine
     /// the locale from the request, or `None` to fall through to the next resolver.
@@ -183,7 +179,7 @@ impl LocaleResolver for AcceptLanguageResolver {
 // --- Chain helpers ---
 
 pub(crate) fn default_chain(
-    config: &TemplateConfig,
+    config: &I18nConfig,
     available_locales: &[String],
 ) -> Vec<Arc<dyn LocaleResolver>> {
     let mut chain: Vec<Arc<dyn LocaleResolver>> = vec![
@@ -368,7 +364,7 @@ mod tests {
 
     #[test]
     fn default_chain_builds_all_resolvers() {
-        let config = TemplateConfig::default();
+        let config = I18nConfig::default();
         let available = vec!["en".into(), "uk".into()];
         let chain = default_chain(&config, &available);
         assert_eq!(chain.len(), 4);

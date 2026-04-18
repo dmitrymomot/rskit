@@ -110,6 +110,7 @@ pub mod cron;
 pub mod job;
 
 pub mod email;
+pub mod i18n;
 pub mod qrcode;
 pub mod template;
 pub mod webhook;

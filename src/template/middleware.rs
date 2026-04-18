@@ -9,8 +9,8 @@ use tower::{Layer, Service};
 
 use super::context::TemplateContext;
 use super::engine::Engine;
-use super::locale;
 use crate::flash::state::FlashState;
+use crate::i18n::locale;
 
 // --- Layer ---
 
