@@ -35,6 +35,6 @@ pub use crate::tier::TierLayer as Tier;
 
 // Always-available middleware — free functions.
 pub use crate::middleware::{
-    catch_panic, compression, cors, csrf, error_handler, rate_limit, request_id, security_headers,
-    tracing,
+    catch_panic, compression, cors, csrf, default_error_handler, error_handler, rate_limit,
+    request_id, security_headers, tracing,
 };

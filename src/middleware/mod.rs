@@ -33,6 +33,7 @@
 //! | [`csrf`] / [`CsrfConfig`] | Double-submit signed-cookie CSRF protection |
 //! | [`CsrfToken`] | CSRF token in request/response extensions |
 //! | [`error_handler`] | Centralised error-response rendering |
+//! | [`default_error_handler`] | Ready-made responder that translates `locale_key` when a [`Translator`](crate::i18n::Translator) is available |
 //! | [`security_headers`] / [`SecurityHeadersConfig`] | Security response headers |
 //! | [`tracing`] | HTTP request/response lifecycle spans |
 //! | [`rate_limit`] / [`rate_limit_with`] | Token-bucket rate limiting |
@@ -76,7 +77,7 @@ pub use catch_panic::catch_panic;
 pub use compression::compression;
 pub use cors::{CorsConfig, cors, cors_with, subdomains, urls};
 pub use csrf::{CsrfConfig, CsrfToken, csrf};
-pub use error_handler::error_handler;
+pub use error_handler::{default_error_handler, error_handler};
 pub use rate_limit::{
     GlobalKeyExtractor, KeyExtractor, PeerIpKeyExtractor, RateLimitConfig, RateLimitLayer,
     rate_limit, rate_limit_with,

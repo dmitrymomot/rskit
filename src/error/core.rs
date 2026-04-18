@@ -15,6 +15,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// - an optional structured `details` payload (arbitrary JSON),
 /// - an optional boxed `source` error for causal chaining,
 /// - an optional static `error_code` string that survives the response pipeline,
+/// - an optional static `locale_key` that lets the default error handler translate
+///   the message at response-build time,
 /// - a `lagged` flag used by the SSE broadcaster to signal that a subscriber dropped messages.
 ///
 /// # Conversion to HTTP response
@@ -32,12 +34,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// # Clone behaviour
 ///
 /// Cloning an `Error` drops the `source` field because `Box<dyn Error>` is not `Clone`.
-/// The `error_code`, `details`, and all other fields are preserved.
+/// The `error_code`, `locale_key`, `details`, and all other fields are preserved.
 pub struct Error {
     status: StatusCode,
     message: String,
     source: Option<Box<dyn std::error::Error + Send + Sync>>,
     error_code: Option<&'static str>,
+    locale_key: Option<&'static str>,
     details: Option<serde_json::Value>,
     lagged: bool,
 }
@@ -50,6 +53,7 @@ impl Error {
             message: message.into(),
             source: None,
             error_code: None,
+            locale_key: None,
             details: None,
             lagged: false,
         }
@@ -68,6 +72,35 @@ impl Error {
             message: message.into(),
             source: Some(Box::new(source)),
             error_code: None,
+            locale_key: None,
+            details: None,
+            lagged: false,
+        }
+    }
+
+    /// Create an error whose message is a translation key.
+    ///
+    /// The `key` is stored in the `locale_key` slot and is also used as the raw
+    /// `message`. When the
+    /// [`default_error_handler`](crate::middleware::default_error_handler) runs
+    /// and a [`Translator`](crate::i18n::Translator) is present in the request
+    /// extensions (installed by
+    /// [`I18nLayer`](crate::i18n::I18nLayer)), it resolves `key` into the
+    /// user-facing string at response-build time. Without that middleware (or
+    /// without a `Translator`), the response falls back to the raw key — making
+    /// the behaviour predictable and easy to spot in logs.
+    ///
+    /// This constructor leaves `error_code`, `details`, and `source` unset;
+    /// chain [`with_code`](Error::with_code),
+    /// [`with_details`](Error::with_details), or [`chain`](Error::chain)
+    /// afterwards if needed.
+    pub fn localized(status: StatusCode, key: &'static str) -> Self {
+        Self {
+            status,
+            message: key.to_string(),
+            source: None,
+            error_code: None,
+            locale_key: Some(key),
             details: None,
             lagged: false,
         }
@@ -112,6 +145,26 @@ impl Error {
     /// Returns the error code, if one was set.
     pub fn error_code(&self) -> Option<&str> {
         self.error_code
+    }
+
+    /// Tag an existing error with a translation key (builder-style).
+    ///
+    /// Unlike [`Error::localized`], this preserves the current `message` — use
+    /// it when you already have a descriptive fallback string and want to add a
+    /// translation key alongside it. The
+    /// [`default_error_handler`](crate::middleware::default_error_handler) will
+    /// prefer the translated value whenever a
+    /// [`Translator`](crate::i18n::Translator) is available in the request
+    /// extensions, and otherwise keep the stored `message` untouched.
+    pub fn with_locale_key(mut self, key: &'static str) -> Self {
+        self.locale_key = Some(key);
+        self
+    }
+
+    /// Returns the translation key, if one was set via [`Error::localized`] or
+    /// [`Error::with_locale_key`].
+    pub fn locale_key(&self) -> Option<&'static str> {
+        self.locale_key
     }
 
     /// Downcast the source error to a concrete type.
@@ -186,6 +239,7 @@ impl Error {
             message: format!("SSE subscriber lagged, skipped {skipped} messages"),
             source: None,
             error_code: None,
+            locale_key: None,
             details: None,
             lagged: true,
         }
@@ -199,7 +253,8 @@ impl Error {
 
 /// Clones the error, dropping the `source` field (which is not `Clone`).
 ///
-/// All other fields — `status`, `message`, `error_code`, `details`, and `lagged` — are preserved.
+/// All other fields — `status`, `message`, `error_code`, `locale_key`, `details`, and
+/// `lagged` — are preserved.
 impl Clone for Error {
     fn clone(&self) -> Self {
         Self {
@@ -207,6 +262,7 @@ impl Clone for Error {
             message: self.message.clone(),
             source: None, // source (Box<dyn Error>) can't be cloned
             error_code: self.error_code,
+            locale_key: self.locale_key,
             details: self.details.clone(),
             lagged: self.lagged,
         }
@@ -226,6 +282,7 @@ impl fmt::Debug for Error {
             .field("message", &self.message)
             .field("source", &self.source)
             .field("error_code", &self.error_code)
+            .field("locale_key", &self.locale_key)
             .field("details", &self.details)
             .field("lagged", &self.lagged)
             .finish()
@@ -274,6 +331,7 @@ impl IntoResponse for Error {
             message,
             source: None, // source can't be cloned
             error_code: self.error_code,
+            locale_key: self.locale_key,
             details,
             lagged: self.lagged,
         };
@@ -387,5 +445,45 @@ mod tests {
         let err = Error::gateway_timeout("timed out");
         assert_eq!(err.status(), StatusCode::GATEWAY_TIMEOUT);
         assert_eq!(err.message(), "timed out");
+    }
+
+    #[test]
+    fn localized_sets_key_and_falls_back_to_key_as_message() {
+        let err = Error::localized(StatusCode::NOT_FOUND, "errors.user.not_found");
+        assert_eq!(err.status(), StatusCode::NOT_FOUND);
+        assert_eq!(err.locale_key(), Some("errors.user.not_found"));
+        // Fallback message equals the key itself so responses remain predictable
+        // when no error-handler middleware / Translator is installed.
+        assert_eq!(err.message(), "errors.user.not_found");
+        assert!(err.error_code().is_none());
+        assert!(err.details().is_none());
+    }
+
+    #[test]
+    fn with_locale_key_tags_existing_error() {
+        let err = Error::bad_request("boom").with_locale_key("errors.validation.generic");
+        // Builder must preserve the existing message, only attach the key.
+        assert_eq!(err.message(), "boom");
+        assert_eq!(err.locale_key(), Some("errors.validation.generic"));
+        assert_eq!(err.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn clone_preserves_locale_key() {
+        let err = Error::localized(StatusCode::CONFLICT, "errors.email.in_use");
+        let cloned = err.clone();
+        assert_eq!(cloned.locale_key(), Some("errors.email.in_use"));
+        assert_eq!(cloned.status(), StatusCode::CONFLICT);
+        assert_eq!(cloned.message(), "errors.email.in_use");
+    }
+
+    #[test]
+    fn response_extensions_clone_preserves_locale_key() {
+        use axum::response::IntoResponse;
+        let err = Error::localized(StatusCode::UNAUTHORIZED, "errors.auth.expired");
+        let response = err.into_response();
+        let ext_err = response.extensions().get::<Error>().unwrap();
+        assert_eq!(ext_err.locale_key(), Some("errors.auth.expired"));
+        assert_eq!(ext_err.status(), StatusCode::UNAUTHORIZED);
     }
 }
