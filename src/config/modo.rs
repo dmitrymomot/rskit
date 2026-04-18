@@ -51,6 +51,9 @@ pub struct Config {
     /// MiniJinja template engine settings.
     #[serde(default)]
     pub template: crate::template::TemplateConfig,
+    /// i18n locale resolver chain and translation store settings.
+    #[serde(default)]
+    pub i18n: crate::i18n::I18nConfig,
     /// MaxMind GeoIP database path and settings.
     #[serde(default)]
     pub geolocation: crate::geolocation::GeolocationConfig,

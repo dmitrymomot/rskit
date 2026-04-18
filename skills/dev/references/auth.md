@@ -1,7 +1,7 @@
 # Auth Reference (OAuth2, JWT, Password, TOTP, Role-Based Gating, Guards)
 
 All identity and access features live under `modo::auth` and are always
-available — there are no per-module feature flags in modo 0.8. The only
+available — there are no per-module feature flags. The only
 cargo feature is `test-helpers` (dev-only test scaffolding), which does
 not gate any of the modules below.
 
@@ -753,19 +753,19 @@ The JWT module follows this pattern consistently -- all `JwtError` variants prod
 - `OAuthProvider` is RPITIT (not object-safe). Never use `dyn OAuthProvider` or `Arc<dyn OAuthProvider>`.
 - `RoleExtractor` is RPITIT (not object-safe). Never use `dyn RoleExtractor`; pass concrete types into `modo::auth::role::middleware(...)`.
 - `TokenSource` and `TokenVerifier`/`TokenSigner` are object-safe -- use `Arc<dyn TokenSource>`, `Arc<dyn TokenVerifier>`, `Arc<dyn TokenSigner>`.
-- All auth modules are always compiled in modo 0.8 — only `test-helpers` exists as a cargo feature, and it gates none of these modules.
+- All auth modules are always compiled — only `test-helpers` exists as a cargo feature, and it gates none of these modules.
 - The role middleware must apply via `.layer()` on the outer router. `ApiKeyLayer` likewise applies via `.layer()`. Guards (`require_authenticated`, `require_role`, `require_scope`) must apply via `.route_layer()` after route matching.
 - `require_scope` returns **500** (not 401) when `ApiKeyLayer` is missing — missing middleware is a server wiring bug, not a client auth failure. The guard logs the misconfiguration via `tracing::error!`.
 - `Role` extractor returns **500** when `auth::role::middleware()` is not applied — same rationale (server wiring bug, not a client failure).
 - `JwtDecoder::decode()` always requires `exp` -- tokens without `exp` are rejected as expired (`jwt:expired`).
 - `OAuthState` extractor requires `Key` (from `axum_extra::extract::cookie`) registered in `AppState`. Missing-key returns `Error::internal`; missing/tampered cookie returns `Error::bad_request`.
-- `Claims` requires `JwtLayer` to be applied to the route -- the middleware inserts claims into extensions. For the extractor to work: no generic parameter required (`Claims` is non-generic in v0.8).
+- `Claims` requires `JwtLayer` to be applied to the route -- the middleware inserts claims into extensions. For the extractor to work: no generic parameter required (`Claims` is non-generic).
 - `Bearer` extractor is independent of `JwtLayer` -- it only reads the raw token string, no decode/validate.
 - `JwtEncoder`/`JwtDecoder` are cheap to clone (state behind `Arc`).
 - `JwtDecoder::from(&encoder)` shares the signing key and validation policy -- use when encoder and decoder come from the same `JwtSessionsConfig`.
 - `JwtConfig` is a back-compat alias for `JwtSessionsConfig`. Prefer `JwtSessionsConfig` in new code.
-- `Claims` is **non-generic** in v0.8. There is no `Claims<T>`. Custom payload fields: define your own struct and pass it to `encoder.encode(&my_payload)` / `decoder.decode::<MyPayload>(&token)`.
-- `JwtLayer` has no generic parameter in v0.8 (`JwtLayer`, not `JwtLayer<T>`). It always decodes into `Claims`.
+- `Claims` is **non-generic**. There is no `Claims<T>`. Custom payload fields: define your own struct and pass it to `encoder.encode(&my_payload)` / `decoder.decode::<MyPayload>(&token)`.
+- `JwtLayer` has no generic parameter (`JwtLayer`, not `JwtLayer<T>`). It always decodes into `Claims`.
 - The `Revocation` trait and `with_revocation()` no longer exist. Stateful row lookup in `JwtLayer::from_service` replaces revocation: the session row absent = revoked. The `Revoked` and `RevocationCheckFailed` `JwtError` variants no longer exist.
 - `PasswordConfig`, `TotpConfig`, `JwtSessionsConfig`, `ValidationConfig`, `OAuthConfig`, `OAuthProviderConfig`, `CallbackParams`, and `UserProfile` are all `#[non_exhaustive]` -- never construct with struct literals (no `..Default::default()` either). Use the provided constructors (`::new(...)`, `Default::default()`) and override fields by direct assignment.
 - `JwtSessionsConfig` and `OAuthConfig` have `#[serde(default)]` at struct level -- all fields are optional in YAML (fall back to defaults).

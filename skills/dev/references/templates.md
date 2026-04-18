@@ -29,8 +29,8 @@ middleware can copy the resolved locale into the template context.
 | `static_path`       | `String` | `"static"`    | Directory with static assets            |
 | `static_url_prefix` | `String` | `"/assets"`   | URL prefix for serving static files     |
 
-Locale knobs moved to `modo::i18n::I18nConfig` in v0.9 (`locales_path`,
-`default_locale`, `locale_cookie`, `locale_query_param`).
+Locale knobs live in `modo::i18n::I18nConfig` (the `i18n:` top-level YAML key):
+`locales_path`, `default_locale`, `locale_cookie`, `locale_query_param`.
 
 ---
 

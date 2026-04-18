@@ -298,13 +298,8 @@ Always available — no feature flag.
 
 ```rust
 // i18n handle (owns translation store + locale resolver chain).
-// Build an `I18nConfig` inline for now — a forthcoming task will wire this
-// into the top-level `config.modo.i18n` field so it can come from YAML.
-let i18n = modo::i18n::I18n::new(&modo::i18n::I18nConfig {
-    locales_path: "locales".into(),
-    default_locale: "en".into(),
-    ..modo::i18n::I18nConfig::default()
-})?;
+// Built from the top-level `config.modo.i18n` field (YAML key: `i18n`).
+let i18n = modo::i18n::I18n::new(&config.modo.i18n)?;
 
 // Template engine — wire the i18n handle so `{{ t(...) }}` is available
 let engine = modo::template::Engine::builder()
@@ -335,11 +330,13 @@ template:
   templates_path: templates
   static_path: assets/static
   static_url_prefix: /static
-```
 
-> Note: `I18nConfig` is currently built inline in `main.rs` (see the snippet
-> above). A forthcoming task will add an `i18n:` section to the top-level
-> config so locales can be configured via YAML.
+i18n:
+  locales_path: locales
+  default_locale: en
+  locale_cookie: lang
+  locale_query_param: lang
+```
 
 ### Config YAML (production)
 

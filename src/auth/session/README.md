@@ -2,7 +2,7 @@
 
 Transport-agnostic, database-backed session management.
 
-v0.8 splits sessions into two independent transports that share one SQLite table
+Sessions are split into two independent transports that share one SQLite table
 (`authenticated_sessions`) and one public data type (`Session`).
 
 ## Two transports, one data type

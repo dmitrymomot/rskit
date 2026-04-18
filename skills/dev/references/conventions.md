@@ -74,9 +74,9 @@ Flat aggregators: `modo::extractors`, `modo::middlewares`, `modo::guards`
 re-export every extractor / Tower Layer / route guard modo ships for ergonomic
 wiring.
 
-## Feature Flags (v0.8)
+## Feature Flags
 
-v0.8 has a single feature flag: **`test-helpers`**. Every production module is
+modo has a single feature flag: **`test-helpers`**. Every production module is
 unconditionally compiled — there are no feature-gated production modules.
 
 | Feature | Purpose |
@@ -87,7 +87,7 @@ Enable in dev-dependencies only:
 
 ```toml
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.9", features = ["test-helpers"] }
 ```
 
 ---
@@ -531,7 +531,7 @@ async fn handler(Service(pool): Service<Pool>) {
 ## IDs
 
 **Module:** `src/id/`
-Always available (no feature flag required — all production modules compile unconditionally in v0.8).
+Always available (no feature flag required — all production modules compile unconditionally).
 
 ### `id::ulid() -> String`
 

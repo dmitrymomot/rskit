@@ -106,11 +106,16 @@ chain continues.
 
 ## YAML config
 
+`I18nConfig` lives under the top-level `i18n:` key and is exposed on
+`modo::Config` as `config.i18n`. End-apps build the shared handle with
+`modo::i18n::I18n::new(&config.i18n)`.
+
 ```yaml
-locales_path: "locales"       # directory of locale subdirectories
-default_locale: "en"          # fallback when no resolver matches
-locale_cookie: "lang"         # cookie name read by CookieResolver
-locale_query_param: "lang"    # query param read by QueryParamResolver
+i18n:
+  locales_path: "locales"       # directory of locale subdirectories
+  default_locale: "en"          # fallback when no resolver matches
+  locale_cookie: "lang"         # cookie name read by CookieResolver
+  locale_query_param: "lang"    # query param read by QueryParamResolver
 ```
 
 All fields are optional and fall back to the defaults shown above.
