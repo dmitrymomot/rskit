@@ -13,6 +13,9 @@
 //! - [`MatchedHost`] — axum extractor for the subdomain captured by a wildcard
 //!   `HostRouter` pattern.
 //!
+//! Trailing slashes are stripped from request paths before routing, so `/app`
+//! and `/app/` resolve to the same handler (the root `/` is preserved).
+//!
 //! ## Quick start
 //!
 //! ```no_run

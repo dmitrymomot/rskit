@@ -71,3 +71,61 @@ fn test_server_config_custom_values() {
     assert_eq!(config.port, 9090);
     assert_eq!(config.shutdown_timeout_secs, 60);
 }
+
+#[tokio::test]
+async fn trailing_slash_is_always_normalized() {
+    use modo::runtime::Task;
+    use modo::service::{AppState, Registry};
+
+    // Reserve a free port: bind, read the address, drop. The window between
+    // drop and re-bind in `http()` is small and acceptable for a test.
+    let port = {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        port
+    };
+
+    let config = {
+        let mut c = modo::server::Config::default();
+        c.host = "127.0.0.1".to_string();
+        c.port = port;
+        c.shutdown_timeout_secs = 5;
+        c
+    };
+
+    let state: AppState = Registry::new().into_state();
+    let router = axum::Router::new()
+        .route("/", axum::routing::get(|| async { "root" }))
+        .route("/app", axum::routing::get(|| async { "app" }))
+        .with_state(state);
+
+    let handle = modo::server::http(router, &config).await.unwrap();
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let base = format!("http://127.0.0.1:{port}");
+
+    let resp = client.get(format!("{base}/app")).send().await.unwrap();
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.text().await.unwrap(), "app");
+
+    // Trailing slash on a registered path resolves to the same handler.
+    let resp = client.get(format!("{base}/app/")).send().await.unwrap();
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.text().await.unwrap(), "app");
+
+    // Root path is preserved (not stripped to empty).
+    let resp = client.get(format!("{base}/")).send().await.unwrap();
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.text().await.unwrap(), "root");
+
+    // Trailing slash on an unregistered path still 404s — normalization
+    // doesn't accidentally match arbitrary paths.
+    let resp = client.get(format!("{base}/missing/")).send().await.unwrap();
+    assert_eq!(resp.status(), 404);
+
+    handle.shutdown().await.unwrap();
+}

@@ -16,6 +16,13 @@ The module provides:
 - `MatchedHost` — axum extractor that provides the subdomain captured by a wildcard
   pattern match.
 
+## Path normalization
+
+Trailing slashes are stripped from request paths before routing, so `/app` and
+`/app/` resolve to the same handler. The root path `/` is preserved. This is
+implemented by wrapping the router with `tower_http::normalize_path::NormalizePathLayer::trim_trailing_slash()`
+inside `http()`; it cannot be disabled.
+
 ## Usage
 
 ### Minimal server

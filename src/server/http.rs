@@ -1,5 +1,8 @@
 use std::time::Duration;
 
+use tower::Layer;
+use tower_http::normalize_path::NormalizePathLayer;
+
 use super::Config;
 use crate::error::Result;
 use crate::runtime::Task;
@@ -88,8 +91,14 @@ pub async fn http(router: impl Into<axum::Router>, config: &Config) -> Result<Ht
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
+    // Wrap the router with NormalizePathLayer so trailing slashes are stripped
+    // before axum performs path matching. Applied here (not via Router::layer)
+    // because Router::layer runs *after* path matching.
+    let service = NormalizePathLayer::trim_trailing_slash().layer(router);
+    let make_service = axum::ServiceExt::<axum::extract::Request>::into_make_service(service);
+
     let handle = tokio::spawn(async move {
-        axum::serve(listener, router.into_make_service())
+        axum::serve(listener, make_service)
             .with_graceful_shutdown(async {
                 let _ = shutdown_rx.await;
             })

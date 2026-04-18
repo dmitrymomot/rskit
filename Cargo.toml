@@ -34,6 +34,7 @@ tower-http = { version = "0.6", features = [
   "set-header",
   "sensitive-headers",
   "fs",
+  "normalize-path",
 ] }
 
 axum-extra = { version = "0.12", features = ["cookie-signed", "cookie-private", "multipart"] }
