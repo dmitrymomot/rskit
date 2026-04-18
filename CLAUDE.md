@@ -9,9 +9,8 @@ modo — Rust web framework. Single crate, zero proc macros, plain `async fn` ha
 ## Commands
 
 - `cargo check` — type check
-- `cargo test` — run all tests
-- `cargo test --features X` — test feature-gated module
-- `cargo clippy --features X --tests -- -D warnings` — lint (plain `cargo clippy` skips test code)
+- `cargo test --features test-helpers` — run all tests
+- `cargo clippy --features test-helpers --tests -- -D warnings` — lint (plain `cargo clippy` skips test code)
 - `cargo fmt` / `cargo fmt --check` — format
 
 ## Workflow

@@ -1,7 +1,7 @@
 //! Flat index of every Tower Layer modo ships.
 //!
 //! Wiring-site ergonomics: `use modo::middlewares as mw;` then
-//! `.layer(mw::session(...))`, `.layer(mw::cors(...))`, etc.
+//! `.layer(mw::cors(cfg))`, `.layer(mw::role(extractor))`, `.layer(mw::Flash::new(cfg))`, etc.
 //!
 //! # Name shadowing with [`crate::prelude`]
 //!
@@ -24,8 +24,8 @@
 //! domain modules construct their layers:
 //!
 //! - **lower_case names are functions** — call them directly:
-//!   `mw::session(store, cookie_cfg, key)`, `mw::role(extractor)`,
-//!   `mw::tenant(strategy, resolver)`, `mw::cors(cors_cfg)`.
+//!   `mw::role(extractor)`, `mw::tenant(strategy, resolver)`,
+//!   `mw::cors(cors_cfg)`, `mw::csrf(csrf_cfg)`.
 //! - **PascalCase names are `Layer` structs** — call `::new(...)`:
 //!   `mw::Jwt::new(cfg)`, `mw::ApiKey::new(store)`,
 //!   `mw::Flash::new(cookie_cfg)`, `mw::ClientIp::new(trusted_proxies)`.
