@@ -297,9 +297,14 @@ Always available — no feature flag.
 ### Registry setup
 
 ```rust
-// Template engine
+// i18n handle (owns translation store + locale resolver chain).
+// Built from the top-level `config.modo.i18n` field (YAML key: `i18n`).
+let i18n = modo::i18n::I18n::new(&config.modo.i18n)?;
+
+// Template engine — wire the i18n handle so `{{ t(...) }}` is available
 let engine = modo::template::Engine::builder()
     .config(config.modo.template.clone())
+    .i18n(i18n.clone())
     .build()?;
 registry.add(engine.clone());
 ```
@@ -312,8 +317,10 @@ Insert these at the correct position in the middleware chain:
 // After routes, before error_handler — merge static file service
 .merge(engine.static_service())
 
-// After CSRF, before session layer
-.layer(modo::template::TemplateContextLayer::new(engine))
+// After CSRF, before session layer — inner template context
+.layer(modo::template::TemplateContextLayer::new())
+// Outer i18n layer — must run before TemplateContextLayer sees the request
+.layer(i18n.layer())
 ```
 
 ### Config YAML (development)
@@ -323,7 +330,12 @@ template:
   templates_path: templates
   static_path: assets/static
   static_url_prefix: /static
+
+i18n:
   locales_path: locales
+  default_locale: en
+  locale_cookie: lang
+  locale_query_param: lang
 ```
 
 ### Config YAML (production)

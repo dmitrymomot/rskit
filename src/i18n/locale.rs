@@ -1,17 +1,26 @@
 use http::request::Parts;
 use std::sync::Arc;
 
-use super::config::TemplateConfig;
+use super::config::I18nConfig;
 
 /// Trait for extracting the active locale from a request.
 ///
-/// Implementations are tried in order within the locale chain built by
-/// [`EngineBuilder::locale_resolvers`](super::EngineBuilder::locale_resolvers).
-/// The first resolver that returns `Some` wins; if all resolvers return `None`,
-/// [`TemplateConfig::default_locale`] is used.
+/// Implementations are tried in order within the locale chain built by the
+/// i18n module. The first resolver that returns `Some` wins; if all resolvers
+/// return `None`, [`I18nConfig::default_locale`] is used.
 ///
-/// The resolved locale is stored in the request's [`TemplateContext`](super::TemplateContext)
-/// under the key `"locale"` and is available in every template as `{{ locale }}`.
+/// # Empty-allowlist semantics
+///
+/// Built-in resolvers disagree on what an empty `available_locales` slice
+/// means, so pick the constructor inputs deliberately:
+///
+/// - [`QueryParamResolver`] and [`CookieResolver`] treat an empty allowlist as
+///   "accept any value" — whatever the caller supplied is returned verbatim.
+/// - [`AcceptLanguageResolver`] treats an empty allowlist as "match nothing"
+///   because it can only return locales that appear in the list.
+///
+/// [`default_chain`] hands every resolver the same `available_locales`, so
+/// the asymmetry only surfaces when wiring resolvers manually.
 pub trait LocaleResolver: Send + Sync {
     /// Returns a locale string (e.g. `"en"`, `"uk"`) if this resolver can determine
     /// the locale from the request, or `None` to fall through to the next resolver.
@@ -23,7 +32,9 @@ pub trait LocaleResolver: Send + Sync {
 /// Resolves the active locale from a URL query parameter.
 ///
 /// When `available_locales` is non-empty, only values present in that list are
-/// accepted. Pass an empty slice to accept any value.
+/// accepted. An empty slice means "accept any value" — the resolver returns
+/// whatever string the request carried. See [`LocaleResolver`] for how this
+/// differs from [`AcceptLanguageResolver`].
 pub struct QueryParamResolver {
     param_name: String,
     available_locales: Vec<String>,
@@ -63,7 +74,9 @@ impl LocaleResolver for QueryParamResolver {
 /// Resolves the active locale from a cookie.
 ///
 /// When `available_locales` is non-empty, only values present in that list are
-/// accepted.
+/// accepted. An empty slice means "accept any value" — the resolver returns
+/// whatever string the cookie carried. See [`LocaleResolver`] for how this
+/// differs from [`AcceptLanguageResolver`].
 pub struct CookieResolver {
     cookie_name: String,
     available_locales: Vec<String>,
@@ -132,7 +145,10 @@ impl LocaleResolver for SessionResolver {
 /// Resolves the active locale from the `Accept-Language` HTTP header.
 ///
 /// Parses quality values (`q=`), strips region subtags (`en-US` → `en`), and
-/// picks the highest-quality language that matches `available`.
+/// picks the highest-quality language that matches `available`. Unlike
+/// [`QueryParamResolver`] and [`CookieResolver`], an empty `available` list
+/// means "match nothing" — this resolver can only return values that appear
+/// in the list. See [`LocaleResolver`] for the full comparison.
 pub struct AcceptLanguageResolver {
     available: Vec<String>,
 }
@@ -182,8 +198,8 @@ impl LocaleResolver for AcceptLanguageResolver {
 
 // --- Chain helpers ---
 
-pub(crate) fn default_chain(
-    config: &TemplateConfig,
+pub(super) fn default_chain(
+    config: &I18nConfig,
     available_locales: &[String],
 ) -> Vec<Arc<dyn LocaleResolver>> {
     let mut chain: Vec<Arc<dyn LocaleResolver>> = vec![
@@ -206,7 +222,7 @@ pub(crate) fn default_chain(
     chain
 }
 
-pub(crate) fn resolve_locale(chain: &[Arc<dyn LocaleResolver>], parts: &Parts) -> Option<String> {
+pub(super) fn resolve_locale(chain: &[Arc<dyn LocaleResolver>], parts: &Parts) -> Option<String> {
     chain.iter().find_map(|r| r.resolve(parts))
 }
 
@@ -368,7 +384,7 @@ mod tests {
 
     #[test]
     fn default_chain_builds_all_resolvers() {
-        let config = TemplateConfig::default();
+        let config = I18nConfig::default();
         let available = vec!["en".into(), "uk".into()];
         let chain = default_chain(&config, &available);
         assert_eq!(chain.len(), 4);

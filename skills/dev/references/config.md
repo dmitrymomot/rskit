@@ -89,7 +89,7 @@ cookie:
 
 ## Config Struct
 
-`modo::Config` — top-level framework config (`#[non_exhaustive]`). All fields use `#[serde(default)]`, so any section can be omitted. Every sub-config is present on every build (modo 0.8 compiles every module unconditionally).
+`modo::Config` — top-level framework config (`#[non_exhaustive]`). All fields use `#[serde(default)]`, so any section can be omitted. Every sub-config is present on every build (modo compiles every module unconditionally).
 
 Source: `src/config/modo.rs`
 
@@ -120,6 +120,7 @@ cfg.server.port = 3000;
 | `oauth`            | `auth::oauth::OAuthConfig`                | `oauth`            | OAuth provider settings                                                     |
 | `email`            | `email::EmailConfig`                      | `email`            | SMTP / email delivery                                                       |
 | `template`         | `template::TemplateConfig`                | `template`         | MiniJinja template engine                                                   |
+| `i18n`             | `i18n::I18nConfig`                        | `i18n`             | Locale resolver chain and translation store                                 |
 | `geolocation`      | `geolocation::GeolocationConfig`          | `geolocation`      | MaxMind GeoIP database                                                      |
 | `storage`          | `storage::BucketConfig`                   | `storage`          | S3-compatible storage bucket                                                |
 | `dns`              | `dns::DnsConfig`                          | `dns`              | DNS verification                                                            |
@@ -294,15 +295,36 @@ cfg.cookie.secret = "a-64-character-or-longer-secret-for-signing-cookies..".to_s
 
 ### `template::TemplateConfig`
 
-| Field                | Type     | Default       | Description                       |
-| -------------------- | -------- | ------------- | --------------------------------- |
-| `templates_path`     | `String` | `"templates"` | MiniJinja template directory      |
-| `static_path`        | `String` | `"static"`    | Static asset directory            |
-| `static_url_prefix`  | `String` | `"/assets"`   | URL prefix for static assets      |
-| `locales_path`       | `String` | `"locales"`   | Locale YAML directory             |
-| `default_locale`     | `String` | `"en"`        | Fallback locale                   |
-| `locale_cookie`      | `String` | `"lang"`      | Cookie for locale resolution      |
-| `locale_query_param` | `String` | `"lang"`      | Query param for locale resolution |
+| Field               | Type     | Default       | Description                  |
+| ------------------- | -------- | ------------- | ---------------------------- |
+| `templates_path`    | `String` | `"templates"` | MiniJinja template directory |
+| `static_path`       | `String` | `"static"`    | Static asset directory       |
+| `static_url_prefix` | `String` | `"/assets"`   | URL prefix for static assets |
+
+### `i18n::I18nConfig`
+
+`#[non_exhaustive]`. YAML-deserializable configuration. The top-level YAML key is `i18n`.
+
+| Field                | Type     | Default     | Description                       |
+| -------------------- | -------- | ----------- | --------------------------------- |
+| `locales_path`       | `String` | `"locales"` | Locale YAML directory             |
+| `default_locale`     | `String` | `"en"`      | Fallback locale                   |
+| `locale_cookie`      | `String` | `"lang"`    | Cookie for locale resolution      |
+| `locale_query_param` | `String` | `"lang"`    | Query param for locale resolution |
+
+```yaml
+i18n:
+  locales_path: locales
+  default_locale: en
+  locale_cookie: lang
+  locale_query_param: lang
+```
+
+End-apps construct the shared `I18n` handle from this config:
+
+```rust,ignore
+let i18n = modo::i18n::I18n::new(&config.i18n)?;
+```
 
 ### `geolocation::GeolocationConfig`
 
@@ -386,14 +408,14 @@ jwt:
 
 ## Feature Flags
 
-modo 0.8 has exactly one cargo feature: `test-helpers`. Enable it only under `[dev-dependencies]` to gate the `modo::testing` module and all in-memory/stub backends:
+modo has exactly one cargo feature: `test-helpers`. Enable it only under `[dev-dependencies]` to gate the `modo::testing` module and all in-memory/stub backends:
 
 ```toml
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.9", features = ["test-helpers"] }
 ```
 
-Every framework module (`db`, `session`, `job`, `auth`, `email`, `template`, `storage`, `dns`, `geolocation`, `apikey`, `jwt`, `sentry`, `tier`, etc.) is compiled unconditionally. To disable a module, simply leave its YAML config section at defaults and skip wiring it into `main`.
+Every framework module (`db`, `session`, `job`, `auth`, `email`, `template`, `i18n`, `storage`, `dns`, `geolocation`, `apikey`, `jwt`, `sentry`, `tier`, etc.) is compiled unconditionally. To disable a module, simply leave its YAML config section at defaults and skip wiring it into `main`.
 
 ## Gotchas
 
@@ -409,7 +431,7 @@ Every framework module (`db`, `session`, `job`, `auth`, `email`, `template`, `st
 
 6. **`load()` is not async** — it reads the file synchronously with `std::fs::read_to_string`. Call it at startup before entering the async runtime's hot path.
 
-7. **All config sections are always present on `Config`** — modo 0.8 compiles every module unconditionally, so `database`, `session`, `job`, etc. are available on every build. Unknown YAML keys are silently ignored by serde.
+7. **All config sections are always present on `Config`** — modo compiles every module unconditionally, so `database`, `session`, `job`, etc. are available on every build. Unknown YAML keys are silently ignored by serde.
 
 8. **`max_sessions_per_user` must be > 0** — deserialization fails if set to `0` (custom deserializer rejects it to prevent locking out all users).
 

@@ -7,7 +7,7 @@ your crate's dev-dependencies:
 
 ```toml
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.9", features = ["test-helpers"] }
 ```
 
 Source: `src/testing/` module. Re-exported as `modo::testing`.
@@ -466,7 +466,7 @@ async fn test_full_app_with_db_and_session() {
 
 ## Running tests
 
-modo 0.8 ships two feature flags: `default` (empty) and `test-helpers`.
+modo ships two feature flags: `default` (empty) and `test-helpers`.
 `test-helpers` gates the in-memory/stub backends used by tests:
 
 ```bash

@@ -120,27 +120,28 @@ trusted_proxies:
 
 `Config` composes the sub-configs of every built-in module. All fields use
 `#[serde(default)]`, so any section omitted from the YAML file falls back to
-the type's own `Default` implementation. Every module is always compiled in
-v0.8+, so every field is always present.
+the type's own `Default` implementation. Every module is always compiled, so
+every field is always present.
 
-| Field              | Type                                |
-| ------------------ | ----------------------------------- |
-| `server`           | `server::Config`                    |
-| `database`         | `db::Config`                        |
-| `tracing`          | `tracing::Config`                   |
-| `cookie`           | `Option<cookie::CookieConfig>`      |
-| `security_headers` | `middleware::SecurityHeadersConfig` |
-| `cors`             | `middleware::CorsConfig`            |
-| `csrf`             | `middleware::CsrfConfig`            |
-| `rate_limit`       | `middleware::RateLimitConfig`       |
-| `session`          | `auth::session::SessionConfig`      |
-| `job`              | `job::JobConfig`                    |
-| `trusted_proxies`  | `Vec<String>`                       |
-| `oauth`            | `auth::oauth::OAuthConfig`          |
-| `email`            | `email::EmailConfig`                |
-| `template`         | `template::TemplateConfig`          |
-| `geolocation`      | `geolocation::GeolocationConfig`    |
-| `storage`          | `storage::BucketConfig`             |
-| `dns`              | `dns::DnsConfig`                    |
-| `apikey`           | `auth::apikey::ApiKeyConfig`        |
-| `jwt`              | `auth::session::jwt::JwtSessionsConfig`      |
+| Field              | Type                                    |
+| ------------------ | --------------------------------------- |
+| `server`           | `server::Config`                        |
+| `database`         | `db::Config`                            |
+| `tracing`          | `tracing::Config`                       |
+| `cookie`           | `Option<cookie::CookieConfig>`          |
+| `security_headers` | `middleware::SecurityHeadersConfig`     |
+| `cors`             | `middleware::CorsConfig`                |
+| `csrf`             | `middleware::CsrfConfig`                |
+| `rate_limit`       | `middleware::RateLimitConfig`           |
+| `session`          | `auth::session::SessionConfig`          |
+| `job`              | `job::JobConfig`                        |
+| `trusted_proxies`  | `Vec<String>`                           |
+| `oauth`            | `auth::oauth::OAuthConfig`              |
+| `email`            | `email::EmailConfig`                    |
+| `template`         | `template::TemplateConfig`              |
+| `i18n`             | `i18n::I18nConfig`                      |
+| `geolocation`      | `geolocation::GeolocationConfig`        |
+| `storage`          | `storage::BucketConfig`                 |
+| `dns`              | `dns::DnsConfig`                        |
+| `apikey`           | `auth::apikey::ApiKeyConfig`            |
+| `jwt`              | `auth::session::jwt::JwtSessionsConfig` |

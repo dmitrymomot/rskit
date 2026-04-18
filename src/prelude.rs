@@ -11,6 +11,7 @@
 //! - [`Flash`] — per-request flash messages.
 //! - [`ClientIp`] — resolved client IP extractor.
 //! - [`Tenant`], [`TenantId`] — multi-tenant extractor and identifier.
+//! - [`I18n`], [`Translator`] — i18n factory and per-request translator.
 //! - [`Validate`], [`ValidationError`], [`Validator`] — request-body
 //!   validation trait, error, and fluent helper.
 //!
@@ -26,6 +27,7 @@ pub use crate::auth::role::Role;
 pub use crate::auth::session::Session;
 
 pub use crate::flash::Flash;
+pub use crate::i18n::{I18n, Translator};
 pub use crate::ip::ClientIp;
 pub use crate::tenant::{Tenant, TenantId};
 pub use crate::validate::{Validate, ValidationError, Validator};

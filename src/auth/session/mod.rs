@@ -2,7 +2,7 @@
 //!
 //! Unified session management for cookie and JWT transports.
 //!
-//! v0.8 provides two independent transports that share one SQLite table
+//! Two independent transports share one SQLite table
 //! (`authenticated_sessions`) and one public data type ([`Session`]).
 //!
 //! ## Transports

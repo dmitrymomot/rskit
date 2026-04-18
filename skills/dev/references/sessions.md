@@ -2,7 +2,7 @@
 
 ## Overview
 
-modo provides database-backed HTTP sessions (libsql/SQLite via `authenticated_sessions` table), signed cookie utilities, and cookie-based flash messages. All three are always available in modo 0.8 — no feature flags required.
+modo provides database-backed HTTP sessions (libsql/SQLite via `authenticated_sessions` table), signed cookie utilities, and cookie-based flash messages. All three are always available — no feature flags required.
 
 Two transports are available: cookie-backed (`auth::session::cookie`) and JWT-backed (`auth::session::jwt`). Both share the same SQLite table and the transport-agnostic `Session` data extractor.
 
@@ -924,7 +924,7 @@ use modo::cookie::{CookieConfig, CookieJar, Key, PrivateCookieJar, SignedCookieJ
 
 1. **Raw `cookie::CookieJar`, not `axum_extra`**: The session and flash middleware use the raw `cookie` crate's `CookieJar` and `SignedJar` internally for cookie signing — not `axum_extra::extract::cookie::SignedCookieJar`. The `axum_extra` types are re-exported from `modo::cookie` for use in handlers, but the middleware does its own signing.
 
-2. **Session and cookie are always compiled**: No feature flags in modo 0.8. `auth::session` does require the `db` feature (included in `default`).
+2. **Session and cookie are always compiled**: No per-module feature flags. `auth::session` uses the database layer, which is always available.
 
 3. **`authenticated_sessions` table schema not shipped**: The table schema is not shipped as a migration — end-apps own their DB schema. Column `session_token_hash` (not `token_hash`).
 

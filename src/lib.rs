@@ -12,10 +12,10 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { package = "modo-rs", version = "0.8" }
+//! modo = { package = "modo-rs", version = "0.9" }
 //!
 //! [dev-dependencies]
-//! modo = { package = "modo-rs", version = "0.8", features = ["test-helpers"] }
+//! modo = { package = "modo-rs", version = "0.9", features = ["test-helpers"] }
 //! ```
 //!
 //! Minimal application:
@@ -63,7 +63,7 @@
 //!
 //! [`prelude`] bundles the extras a typical handler signature needs on top of
 //! those (`Error`, `Result`, `AppState`, `Session`, `Role`, `Flash`, `ClientIp`,
-//! `Tenant`, `TenantId`, and the `Validate` trio).
+//! `Tenant`, `TenantId`, `I18n`, `Translator`, and the `Validate` trio).
 //!
 //! ## Features
 //!
@@ -110,6 +110,7 @@ pub mod cron;
 pub mod job;
 
 pub mod email;
+pub mod i18n;
 pub mod qrcode;
 pub mod template;
 pub mod webhook;

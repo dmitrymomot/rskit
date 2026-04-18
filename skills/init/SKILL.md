@@ -131,7 +131,7 @@ These files depend on the selected components — generate each with `Write`. Re
 
 **Required dynamic files:**
 
-1. **`Cargo.toml`** — modo 0.8 ships every module unconditionally, so no per-module feature list is needed. See `references/files.md` for the template.
+1. **`Cargo.toml`** — modo ships every module unconditionally, so no per-module feature list is needed. See `references/files.md` for the template.
 
 2. **`src/main.rs`** — Assemble from component blocks in `references/components.md`:
    - Module declarations and imports
@@ -188,7 +188,7 @@ let app = routes::router(registry)
     .layer(modo::middleware::cors(&config.modo.cors))
     .layer(modo::middleware::csrf(&config.modo.csrf, &cookie_key))
     // Template context (if templates)
-    .layer(modo::template::TemplateContextLayer::new(engine))
+    .layer(modo::template::TemplateContextLayer::new())
     // Session
     .layer(session_svc.layer())
     // Flash

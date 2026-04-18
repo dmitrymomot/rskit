@@ -11,3 +11,4 @@ Cargo.lock
 .worktrees/
 .claire/
 experiments/
+*.lock

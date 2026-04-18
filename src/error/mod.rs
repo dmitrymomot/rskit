@@ -47,5 +47,6 @@ mod convert;
 mod core;
 mod http_error;
 
+pub(crate) use core::render_error_body;
 pub use core::{Error, Result};
 pub use http_error::HttpError;

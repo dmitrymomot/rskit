@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 
 use intl_pluralrules::{PluralCategory, PluralRuleType, PluralRules};
 use unic_langid::LanguageIdentifier;
 
 #[derive(Debug, Clone)]
-pub(crate) enum Entry {
+pub(super) enum Entry {
     Plain(String),
     Plural {
         zero: Option<String>,
@@ -17,27 +18,70 @@ pub(crate) enum Entry {
     },
 }
 
-#[derive(Clone)]
-pub(crate) struct TranslationStore {
+struct Inner {
     translations: HashMap<String, HashMap<String, Entry>>,
     default_locale: String,
     plural_rules: HashMap<String, PluralRules>,
+    /// English cardinal plural rules used as a fallback when the requested
+    /// locale has no loaded entry in `plural_rules`. Built once during
+    /// construction so `translate_plural` for unknown locales does not
+    /// allocate a new `PluralRules` on every call.
+    fallback_plural_rules: PluralRules,
+}
+
+/// In-memory store of translation entries loaded from YAML files on disk.
+///
+/// Cheaply cloneable — wraps an `Arc` internally. Created by [`TranslationStore::load`].
+/// Used by the [`Translator`](super::Translator) extractor and the template
+/// engine's `t()` function (registered by
+/// [`make_t_function`](super::make_t_function)).
+#[derive(Clone)]
+pub struct TranslationStore {
+    inner: Arc<Inner>,
 }
 
 impl std::fmt::Debug for TranslationStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TranslationStore")
-            .field("translations", &self.translations)
-            .field("default_locale", &self.default_locale)
+            .field("translations", &self.inner.translations)
+            .field("default_locale", &self.inner.default_locale)
             .field(
                 "plural_rules",
-                &self.plural_rules.keys().collect::<Vec<_>>(),
+                &self.inner.plural_rules.keys().collect::<Vec<_>>(),
             )
             .finish()
     }
 }
 
 impl TranslationStore {
+    /// Creates an empty store with no translations loaded.
+    ///
+    /// Translations fall back to the key itself when nothing is loaded. Plural
+    /// rules are populated lazily as translations are loaded, so an empty
+    /// store holds no plural-rule entries.
+    pub(super) fn empty(default_locale: &str) -> Self {
+        let en: LanguageIdentifier = "en".parse().expect("en is a valid language tag");
+        let fallback_plural_rules = PluralRules::create(en, PluralRuleType::CARDINAL)
+            .expect("en plural rules creation cannot fail");
+        Self {
+            inner: Arc::new(Inner {
+                translations: HashMap::new(),
+                default_locale: default_locale.to_string(),
+                plural_rules: HashMap::new(),
+                fallback_plural_rules,
+            }),
+        }
+    }
+
+    /// Loads translations from the given directory.
+    ///
+    /// Each subdirectory of `path` is treated as a locale. YAML/YML files inside
+    /// become namespaces whose keys are flattened with `.` separators.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`](crate::Error) if the directory is unreadable or a YAML
+    /// file cannot be parsed.
     pub fn load(path: &Path, default_locale: &str) -> crate::Result<Self> {
         let mut translations: HashMap<String, HashMap<String, Entry>> = HashMap::new();
 
@@ -57,34 +101,55 @@ impl TranslationStore {
                 continue;
             }
 
-            let locale = locale_path
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
+            let Some(locale) = locale_path.file_name().and_then(|n| n.to_str()) else {
+                tracing::warn!(
+                    path = %locale_path.display(),
+                    "skipping non-UTF-8 locale directory name"
+                );
+                continue;
+            };
 
             let locale_entries = load_locale_dir(&locale_path)?;
-            translations.insert(locale, locale_entries);
+            translations.insert(locale.to_string(), locale_entries);
         }
 
-        let en: LanguageIdentifier = "en".parse().unwrap();
-        let en_rules = PluralRules::create(en.clone(), PluralRuleType::CARDINAL).unwrap();
+        let en: LanguageIdentifier = "en".parse().expect("en is a valid language tag");
+        let en_rules = PluralRules::create(en, PluralRuleType::CARDINAL)
+            .expect("en plural rules creation cannot fail");
         let mut plural_rules = HashMap::new();
         for locale_str in translations.keys() {
-            let lang_id: LanguageIdentifier = locale_str.parse().unwrap_or_else(|_| en.clone());
-            let rules = PluralRules::create(lang_id, PluralRuleType::CARDINAL)
-                .unwrap_or_else(|_| en_rules.clone());
+            let Ok(lang_id) = locale_str.parse::<LanguageIdentifier>() else {
+                tracing::warn!(
+                    locale = %locale_str,
+                    "failed to parse locale as language identifier — plural rules will use English fallback"
+                );
+                continue;
+            };
+            let Ok(rules) = PluralRules::create(lang_id, PluralRuleType::CARDINAL) else {
+                tracing::warn!(
+                    locale = %locale_str,
+                    "failed to create plural rules for locale — plural rules will use English fallback"
+                );
+                continue;
+            };
             plural_rules.insert(locale_str.clone(), rules);
         }
 
         Ok(Self {
-            translations,
-            default_locale: default_locale.to_string(),
-            plural_rules,
+            inner: Arc::new(Inner {
+                translations,
+                default_locale: default_locale.to_string(),
+                plural_rules,
+                fallback_plural_rules: en_rules,
+            }),
         })
     }
 
+    /// Translates `key` for the given `locale`, interpolating any `{placeholder}`
+    /// values found in `kwargs`.
+    ///
+    /// Falls back to the default locale and finally to the key itself if no entry
+    /// is found.
     pub fn translate(
         &self,
         locale: &str,
@@ -97,8 +162,8 @@ impl TranslationStore {
         }
 
         // Fall back to default locale
-        if locale != self.default_locale
-            && let Some(entry) = self.lookup(&self.default_locale, key)
+        if locale != self.inner.default_locale
+            && let Some(entry) = self.lookup(&self.inner.default_locale, key)
         {
             return Ok(interpolate(entry_to_string(entry), kwargs));
         }
@@ -107,6 +172,18 @@ impl TranslationStore {
         Ok(key.to_string())
     }
 
+    /// Translates `key` with plural-rule selection based on `count`.
+    ///
+    /// `count` is also injected into `kwargs` under the name `count`.
+    ///
+    /// # Cross-locale fallback
+    ///
+    /// When an entry is missing in the requested locale, the default locale's
+    /// entry is used. Plural rule selection still uses the **requesting**
+    /// locale's rules (e.g., Ukrainian `FEW` / `MANY` categories applied
+    /// against English `one` / `other` forms map to `other`). This keeps
+    /// grammatical selection consistent with the user's language even though
+    /// the fallback copy is authored for a different one.
     pub fn translate_plural(
         &self,
         locale: &str,
@@ -115,8 +192,8 @@ impl TranslationStore {
         kwargs: &[(&str, &str)],
     ) -> crate::Result<String> {
         let entry = self.lookup(locale, key).or_else(|| {
-            if locale != self.default_locale {
-                self.lookup(&self.default_locale, key)
+            if locale != self.inner.default_locale {
+                self.lookup(&self.inner.default_locale, key)
             } else {
                 None
             }
@@ -156,39 +233,42 @@ impl TranslationStore {
         Ok(interpolate(template, &all_kwargs))
     }
 
+    /// Returns the list of locales discovered on disk (unordered).
     pub fn available_locales(&self) -> Vec<String> {
-        self.translations.keys().cloned().collect()
+        self.inner.translations.keys().cloned().collect()
     }
 
+    /// Returns the configured default locale.
     pub fn default_locale(&self) -> &str {
-        &self.default_locale
+        &self.inner.default_locale
     }
 
     fn lookup(&self, locale: &str, key: &str) -> Option<&Entry> {
-        self.translations.get(locale)?.get(key)
+        self.inner.translations.get(locale)?.get(key)
     }
 
     fn plural_category(&self, locale: &str, count: i64) -> PluralCategory {
         let abs_count = count.unsigned_abs() as usize;
-        if let Some(rules) = self.plural_rules.get(locale) {
+        if let Some(rules) = self.inner.plural_rules.get(locale) {
             rules.select(abs_count).unwrap_or(PluralCategory::OTHER)
         } else {
-            // Fallback to English rules for unknown locales
-            let en: LanguageIdentifier = "en".parse().unwrap();
-            let rules = PluralRules::create(en, PluralRuleType::CARDINAL).unwrap();
-            rules.select(abs_count).unwrap_or(PluralCategory::OTHER)
+            // Fallback to cached English rules for unknown locales.
+            self.inner
+                .fallback_plural_rules
+                .select(abs_count)
+                .unwrap_or(PluralCategory::OTHER)
         }
     }
 }
 
-fn entry_to_string(entry: &Entry) -> &str {
+pub(super) fn entry_to_string(entry: &Entry) -> &str {
     match entry {
         Entry::Plain(s) => s,
         Entry::Plural { other, .. } => other,
     }
 }
 
-pub(crate) fn interpolate(template: &str, kwargs: &[(&str, &str)]) -> String {
+pub(super) fn interpolate(template: &str, kwargs: &[(&str, &str)]) -> String {
     let mut result = String::with_capacity(template.len());
     let mut chars = template.chars().peekable();
 
@@ -227,7 +307,7 @@ pub(crate) fn interpolate(template: &str, kwargs: &[(&str, &str)]) -> String {
     result
 }
 
-fn load_locale_dir(locale_path: &Path) -> crate::Result<HashMap<String, Entry>> {
+pub(super) fn load_locale_dir(locale_path: &Path) -> crate::Result<HashMap<String, Entry>> {
     let mut entries = HashMap::new();
 
     let dir_entries = std::fs::read_dir(locale_path).map_err(|e| {
@@ -247,7 +327,14 @@ fn load_locale_dir(locale_path: &Path) -> crate::Result<HashMap<String, Entry>> 
             continue;
         }
 
-        let namespace = path.file_stem().unwrap().to_str().unwrap().to_string();
+        let Some(namespace) = path.file_stem().and_then(|n| n.to_str()) else {
+            tracing::warn!(
+                path = %path.display(),
+                "skipping non-UTF-8 translation file name"
+            );
+            continue;
+        };
+        let namespace = namespace.to_string();
 
         let content = std::fs::read_to_string(&path).map_err(|e| {
             crate::Error::internal(format!("Failed to read {}: {e}", path.display()))
@@ -263,7 +350,11 @@ fn load_locale_dir(locale_path: &Path) -> crate::Result<HashMap<String, Entry>> 
     Ok(entries)
 }
 
-fn flatten_yaml(prefix: &str, value: &serde_yaml_ng::Value, entries: &mut HashMap<String, Entry>) {
+pub(super) fn flatten_yaml(
+    prefix: &str,
+    value: &serde_yaml_ng::Value,
+    entries: &mut HashMap<String, Entry>,
+) {
     match value {
         serde_yaml_ng::Value::Mapping(map) => {
             // Check if this is a plural entry (has "other" key)
@@ -298,7 +389,13 @@ fn flatten_yaml(prefix: &str, value: &serde_yaml_ng::Value, entries: &mut HashMa
         serde_yaml_ng::Value::String(s) => {
             entries.insert(prefix.to_string(), Entry::Plain(s.clone()));
         }
-        _ => {}
+        other => {
+            tracing::warn!(
+                key = %prefix,
+                ?other,
+                "translation value is not a string or mapping — ignored"
+            );
+        }
     }
 }
 
@@ -322,7 +419,7 @@ fn get_str(map: &serde_yaml_ng::Mapping, key: &str) -> Option<String> {
 
 /// Creates a MiniJinja-compatible `t()` function that reads the `locale` variable
 /// from the template context and delegates to the `TranslationStore`.
-pub(crate) fn make_t_function(
+pub fn make_t_function(
     store: TranslationStore,
 ) -> impl Fn(
     &minijinja::State,
@@ -378,8 +475,12 @@ pub(crate) fn make_t_function(
             })?
         };
 
-        // Consume all kwargs to avoid "unexpected keyword argument" errors
-        kwargs.assert_all_used().ok();
+        // Consume all kwargs to avoid "unexpected keyword argument" errors.
+        // Surface unused kwargs via tracing so typos are visible during
+        // development without breaking template rendering.
+        if let Err(e) = kwargs.assert_all_used() {
+            tracing::warn!(key = %key, error = %e, "unused template kwargs in t() call");
+        }
 
         Ok(result)
     }

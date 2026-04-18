@@ -121,7 +121,7 @@ All middleware functions return Tower-compatible layers. Apply them with `.layer
     - `mw::TemplateContext::new(...)` (aliases `template::TemplateContextLayer`)
     - `mw::Tier::new(...)` (aliases `tier::TierLayer`)
 
-> **v0.8 note:** The `session` free function (`mw::session(...)`) was removed. Session middleware is now constructed via `CookieSessionService::layer()` -- see `modo::auth::session::cookie::CookieSessionService`. The session layer is not re-exported from `modo::middlewares`.
+> **Note:** The `session` free function (`mw::session(...)`) is not exposed. Session middleware is constructed via `CookieSessionService::layer()` -- see `modo::auth::session::cookie::CookieSessionService`. The session layer is not re-exported from `modo::middlewares`.
 
 The underlying `modo::middleware` module (singular) ships only the universal always-available layers (CORS, CSRF, compression, request-id, tracing, catch-panic, error-handler, security-headers, rate-limit) along with their configs and supporting types (`CorsConfig`, `CsrfConfig`, `CsrfToken`, `RateLimitConfig`, `RateLimitLayer`, `SecurityHeadersConfig`, `KeyExtractor`, `PeerIpKeyExtractor`, `GlobalKeyExtractor`, predicates `subdomains`/`urls`).
 

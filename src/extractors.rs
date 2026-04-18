@@ -19,6 +19,7 @@ pub use crate::auth::session::Session;
 pub use crate::auth::session::jwt::{Bearer, Claims};
 
 pub use crate::flash::Flash;
+pub use crate::i18n::Translator;
 pub use crate::ip::{ClientInfo, ClientIp};
 pub use crate::service::AppState;
 pub use crate::sse::LastEventId;
