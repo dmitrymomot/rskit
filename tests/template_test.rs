@@ -1,5 +1,6 @@
 use axum::{Router, body::Body, routing::get};
 use http::{Request, StatusCode};
+use modo::i18n::{I18n, I18nConfig};
 use modo::service::Registry;
 use modo::template::{Engine, Renderer, TemplateConfig, TemplateContextLayer, context};
 use tempfile::TempDir;
@@ -62,15 +63,27 @@ fn setup() -> (TempDir, Router) {
     std::fs::create_dir_all(&static_dir).unwrap();
     std::fs::write(static_dir.join("app.css"), "body { color: red; }").unwrap();
 
-    // Build engine
+    // Build I18n handle (owns translation store + locale resolver chain).
+    let i18n_config = {
+        let mut c = I18nConfig::default();
+        c.locales_path = dir.path().join("locales").to_str().unwrap().into();
+        c.default_locale = "en".into();
+        c
+    };
+    let i18n = I18n::new(&i18n_config).unwrap();
+
+    // Build engine; pass the I18n handle so `t()` is registered.
     let config = {
         let mut c = TemplateConfig::default();
         c.templates_path = tpl_dir.to_str().unwrap().into();
-        c.locales_path = dir.path().join("locales").to_str().unwrap().into();
         c.static_path = dir.path().join("static").to_str().unwrap().into();
         c
     };
-    let engine = Engine::builder().config(config).build().unwrap();
+    let engine = Engine::builder()
+        .config(config)
+        .i18n(i18n.clone())
+        .build()
+        .unwrap();
 
     // Build router — Engine is Clone (wraps Arc internally), no double-Arc needed
     let mut registry = Registry::new();
@@ -83,7 +96,8 @@ fn setup() -> (TempDir, Router) {
         .route("/string", get(string_handler))
         .route("/missing", get(missing_handler))
         .route("/assets", get(static_url_handler))
-        .layer(TemplateContextLayer::new(engine))
+        .layer(TemplateContextLayer::new())
+        .layer(i18n.layer())
         .with_state(registry.into_state());
 
     (dir, router)

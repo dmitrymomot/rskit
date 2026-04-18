@@ -28,6 +28,7 @@ pub use crate::auth::apikey::ApiKeyLayer as ApiKey;
 pub use crate::auth::session::jwt::JwtLayer as Jwt;
 pub use crate::flash::FlashLayer as Flash;
 pub use crate::geolocation::GeoLayer as Geo;
+pub use crate::i18n::I18nLayer as I18n;
 pub use crate::ip::ClientIpLayer as ClientIp;
 pub use crate::template::TemplateContextLayer as TemplateContext;
 pub use crate::tier::TierLayer as Tier;

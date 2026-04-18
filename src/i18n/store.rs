@@ -51,27 +51,15 @@ impl std::fmt::Debug for TranslationStore {
 impl TranslationStore {
     /// Creates an empty store with no translations loaded.
     ///
-    /// Translations fall back to the key itself when nothing is loaded.
-    /// Plural rules are initialised with the default locale plus English.
+    /// Translations fall back to the key itself when nothing is loaded. Plural
+    /// rules are populated lazily as translations are loaded, so an empty
+    /// store holds no plural-rule entries.
     pub(super) fn empty(default_locale: &str) -> Self {
-        let en: LanguageIdentifier = "en".parse().unwrap();
-        let en_rules = PluralRules::create(en.clone(), PluralRuleType::CARDINAL).unwrap();
-        let mut plural_rules = HashMap::new();
-        // Always register English rules as a fallback.
-        plural_rules.insert("en".to_string(), en_rules.clone());
-        // Also register rules for the configured default locale if different.
-        if default_locale != "en" {
-            let lang_id: LanguageIdentifier = default_locale.parse().unwrap_or_else(|_| en.clone());
-            let rules = PluralRules::create(lang_id, PluralRuleType::CARDINAL)
-                .unwrap_or_else(|_| en_rules.clone());
-            plural_rules.insert(default_locale.to_string(), rules);
-        }
-
         Self {
             inner: Arc::new(Inner {
                 translations: HashMap::new(),
                 default_locale: default_locale.to_string(),
-                plural_rules,
+                plural_rules: HashMap::new(),
             }),
         }
     }

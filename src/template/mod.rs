@@ -4,25 +4,24 @@
 //!
 //! This module provides an opinionated template layer built on top of
 //! [MiniJinja](https://docs.rs/minijinja). It covers engine construction,
-//! per-request context injection, HTMX-aware rendering, i18n with plural
-//! rules, and cache-busted static-asset URLs.
+//! per-request context injection, HTMX-aware rendering, and cache-busted
+//! static-asset URLs.
+//!
+//! For internationalization, see [`modo::i18n`](crate::i18n). Pass an
+//! [`I18n`](crate::i18n::I18n) handle to [`EngineBuilder::i18n`] to register
+//! the `t()` template function.
 //!
 //! ## Provides
 //!
 //! | Type / Trait                | Description |
 //! |-----------------------------|-------------|
-//! | [`Engine`] / [`EngineBuilder`] | Compile and cache templates from disk, register custom functions and filters, and override the locale resolver chain. |
-//! | [`TemplateConfig`]          | Configuration for template paths, static-asset prefix, locale defaults, and cookie/query-param names. |
+//! | [`Engine`] / [`EngineBuilder`] | Compile and cache templates from disk and register custom functions and filters. |
+//! | [`TemplateConfig`]          | Configuration for template paths and static-asset prefix. |
 //! | [`TemplateContext`]         | Per-request key-value map shared between middleware and handlers; handler values override middleware values on key conflicts. |
 //! | [`TemplateContextLayer`]    | Tower middleware that injects per-request data (`current_url`, `is_htmx`, `request_id`, `locale`, `csrf_token`, `flash_messages`, and `tier_*` entries) into every request's extensions. Also re-exported as [`modo::middlewares::TemplateContext`](crate::middlewares::TemplateContext). |
 //! | [`Renderer`]                | Axum extractor that gives handlers a ready-to-use render handle. |
 //! | [`HxRequest`]               | Infallible axum extractor that detects the `HX-Request: true` header. Also re-exported from [`modo::extractors`](crate::extractors). |
 //! | [`context`]                 | Re-export of [`minijinja::context!`] for building template data in handlers. |
-//! | [`LocaleResolver`]          | Trait for pluggable locale detection from a request. |
-//! | [`QueryParamResolver`]      | Resolves the active locale from a URL query parameter. |
-//! | [`CookieResolver`]          | Resolves the active locale from a cookie. |
-//! | [`AcceptLanguageResolver`]  | Resolves the active locale from the `Accept-Language` header. |
-//! | [`SessionResolver`]         | Resolves the active locale from the current session. |
 //!
 //! ## Quick start
 //!
@@ -39,7 +38,7 @@
 //! // `Engine` is cheaply cloneable (internal `Arc`).
 //! let router: axum::Router = axum::Router::new()
 //!     .merge(engine.static_service())
-//!     .layer(TemplateContextLayer::new(engine.clone()));
+//!     .layer(TemplateContextLayer::new());
 //! ```
 
 mod config;
@@ -50,9 +49,6 @@ mod middleware;
 mod renderer;
 mod static_files;
 
-pub use crate::i18n::{
-    AcceptLanguageResolver, CookieResolver, LocaleResolver, QueryParamResolver, SessionResolver,
-};
 pub use config::TemplateConfig;
 pub use context::TemplateContext;
 pub use engine::{Engine, EngineBuilder};

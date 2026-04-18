@@ -63,7 +63,7 @@
 //!
 //! [`prelude`] bundles the extras a typical handler signature needs on top of
 //! those (`Error`, `Result`, `AppState`, `Session`, `Role`, `Flash`, `ClientIp`,
-//! `Tenant`, `TenantId`, and the `Validate` trio).
+//! `Tenant`, `TenantId`, `I18n`, `Translator`, and the `Validate` trio).
 //!
 //! ## Features
 //!

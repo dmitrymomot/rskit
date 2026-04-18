@@ -1,4 +1,4 @@
-# Templates (MiniJinja, i18n, HTMX)
+# Templates (MiniJinja, HTMX)
 
 Always available — import directly from `modo::template`:
 
@@ -9,16 +9,14 @@ use modo::template::{
 };
 ```
 
-Locale resolvers are re-exported from `modo::template`:
-
-```rust
-use modo::template::locale::{
-    AcceptLanguageResolver, CookieResolver, LocaleResolver, QueryParamResolver,
-    SessionResolver,
-};
-```
-
 The `context!` macro from MiniJinja is also re-exported: `modo::template::context`.
+
+For internationalization (the `t()` template function, `Translator` extractor,
+locale resolvers), see `skills/dev/references/i18n.md` and
+`src/i18n/README.md`. Pass an `I18n` handle to `EngineBuilder::i18n(...)` to
+register `t()` on the engine; install `I18nLayer` upstream of
+`TemplateContextLayer` so the middleware can copy the resolved locale into
+the template context.
 
 ---
 
@@ -26,15 +24,14 @@ The `context!` macro from MiniJinja is also re-exported: `modo::template::contex
 
 `#[non_exhaustive]`. Derives `Debug`, `Clone`, `Deserialize`. Has `impl Default` (manual, not derive). YAML-deserializable configuration. All fields have defaults and support `#[serde(default)]`.
 
-| Field                | Type     | Default       | Purpose                                   |
-| -------------------- | -------- | ------------- | ----------------------------------------- |
-| `templates_path`     | `String` | `"templates"` | Directory with MiniJinja template files   |
-| `static_path`        | `String` | `"static"`    | Directory with static assets              |
-| `static_url_prefix`  | `String` | `"/assets"`   | URL prefix for serving static files       |
-| `locales_path`       | `String` | `"locales"`   | Directory with locale YAML subdirectories |
-| `default_locale`     | `String` | `"en"`        | Fallback BCP 47 language tag              |
-| `locale_cookie`      | `String` | `"lang"`      | Cookie name for `CookieResolver`          |
-| `locale_query_param` | `String` | `"lang"`      | Query param name for `QueryParamResolver` |
+| Field               | Type     | Default       | Purpose                                 |
+| ------------------- | -------- | ------------- | --------------------------------------- |
+| `templates_path`    | `String` | `"templates"` | Directory with MiniJinja template files |
+| `static_path`       | `String` | `"static"`    | Directory with static assets            |
+| `static_url_prefix` | `String` | `"/assets"`   | URL prefix for serving static files     |
+
+Locale knobs moved to `modo::i18n::I18nConfig` in v0.9 (`locales_path`,
+`default_locale`, `locale_cookie`, `locale_query_param`).
 
 ---
 
@@ -45,16 +42,25 @@ The `context!` macro from MiniJinja is also re-exported: `modo::template::contex
 ### Building
 
 ```rust
+use modo::i18n::{I18n, I18nConfig};
+use modo::template::{Engine, TemplateConfig};
+
+# fn example() -> modo::Result<()> {
+let i18n = I18n::new(&I18nConfig::default())?;
+
 let engine = Engine::builder()
-    .config(config)                           // TemplateConfig (optional, defaults used otherwise)
+    .config(TemplateConfig::default())
+    .i18n(i18n.clone())                       // optional — registers t() when supplied
     .function("greet", || -> Result<String, minijinja::Error> {
         Ok("Hi!".into())
     })
     .filter("shout", |val: String| -> Result<String, minijinja::Error> {
         Ok(val.to_uppercase())
     })
-    .locale_resolvers(vec![...])              // override default locale chain
     .build()?;
+# let _ = engine;
+# Ok(())
+# }
 ```
 
 `EngineBuilder` is `#[must_use]` and derives `Default`.
@@ -64,14 +70,14 @@ let engine = Engine::builder()
 - `config(TemplateConfig)` -- sets template config; defaults used if omitted.
 - `function(name, f)` -- registers a MiniJinja global function. `f` must implement `minijinja::functions::Function`.
 - `filter(name, f)` -- registers a MiniJinja filter. Same trait bounds as `function`.
-- `locale_resolvers(Vec<Arc<dyn LocaleResolver>>)` -- overrides the default locale resolver chain.
-- `build() -> modo::Result<Engine>` -- constructs the engine. Fails if the locales directory exists but cannot be read, a locale YAML file fails to parse, or static-file hashing hits an I/O error. Templates directory is not validated up front (errors surface on render).
+- `i18n(I18n)` -- provides a shared `modo::i18n::I18n` handle. When supplied, `build()` registers the `t()` template function backed by the handle's `TranslationStore`. Omit to skip `t()` registration.
+- `build() -> modo::Result<Engine>` -- constructs the engine. Fails if static-file hashing hits an I/O error. Templates directory is not validated up front (errors surface on render).
 
 ### What `build()` registers automatically
 
 - **Filesystem loader** from `config.templates_path`.
 - **minijinja-contrib** common filters and functions.
-- **`t()` function** for i18n (only if `locales_path` directory exists).
+- **`t()` function** for i18n (only when `.i18n(...)` was called).
 - **`static_url()` function** for cache-busted asset URLs (SHA-256, 8 hex chars).
 - User-registered functions and filters (applied last, can override built-ins).
 
@@ -79,8 +85,6 @@ let engine = Engine::builder()
 
 - `static_service() -> axum::Router` -- serves static files from `static_path` under `static_url_prefix`. Debug builds use `Cache-Control: no-cache`; release builds use `Cache-Control: public, max-age=31536000, immutable`.
 - `render()` is `pub(crate)` -- handlers use `Renderer` instead.
-- `locale_chain()` is `pub(crate)` -- returns `&[Arc<dyn LocaleResolver>]`.
-- `default_locale()` is `pub(crate)` -- returns `&str`.
 
 ### Hot-reload
 
@@ -130,26 +134,44 @@ Handlers do not manipulate `TemplateContext` directly. The `Renderer` extractor 
 
 ## TemplateContextLayer (middleware)
 
-Derives `Clone`. Tower middleware that populates `TemplateContext` and inserts it into request extensions. Also re-exported as `modo::middlewares::TemplateContext` for wiring sites that prefer the `mw::` prefix style.
+Derives `Clone`, `Default`. Tower middleware that populates `TemplateContext` and inserts it into request extensions. Also re-exported as `modo::middlewares::TemplateContext` for wiring sites that prefer the `mw::` prefix style.
 
 ```rust
+# fn example() -> modo::Result<()> {
+use modo::i18n::{I18n, I18nConfig};
+use modo::template::{Engine, TemplateConfig, TemplateContextLayer};
+
+let i18n = I18n::new(&I18nConfig::default())?;
+let engine = Engine::builder()
+    .config(TemplateConfig::default())
+    .i18n(i18n.clone())
+    .build()?;
+
 let router = axum::Router::new()
     .merge(engine.static_service())
-    .layer(TemplateContextLayer::new(engine.clone()));
+    .layer(TemplateContextLayer::new())
+    .layer(i18n.layer());
+# let _ = router;
+# Ok(())
+# }
 ```
+
+Install `I18nLayer` (from `i18n.layer()`) **as an outer layer** of
+`TemplateContextLayer` so the translator is set on the request before the
+template middleware reads it.
 
 ### Keys injected per request
 
-| Key              | Source                                                              |
-| ---------------- | ------------------------------------------------------------------- |
-| `current_url`    | `request.uri().to_string()`                                         |
-| `is_htmx`        | `HX-Request: true` header                                           |
-| `request_id`     | `X-Request-Id` header (if present)                                  |
-| `locale`         | Locale resolver chain, falls back to `default_locale`               |
-| `csrf_token`     | `CsrfToken` extension (if CSRF middleware installed)                |
-| `flash_messages` | Template function from `FlashState` (if flash middleware installed) |
-| `tier_name`      | Plan name string from `TierInfo` (if `tier` feature enabled and `TierInfo` in extensions) |
-| `tier_has`       | Template function: `tier_has('feature_name')` → `bool` (calls `TierInfo::has_feature`) |
+| Key              | Source                                                                                    |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| `current_url`    | `request.uri().to_string()`                                                               |
+| `is_htmx`        | `HX-Request: true` header                                                                 |
+| `request_id`     | `X-Request-Id` header (if present)                                                        |
+| `locale`         | `Translator::locale()` read from request extensions (absent when no `I18nLayer` upstream) |
+| `csrf_token`     | `CsrfToken` extension (if CSRF middleware installed)                                      |
+| `flash_messages` | Template function from `FlashState` (if flash middleware installed)                       |
+| `tier_name`      | Plan name string from `TierInfo` (if `TierInfo` in extensions)                            |
+| `tier_has`       | Template function: `tier_has('feature_name')` → `bool` (calls `TierInfo::has_feature`)    |
 | `tier_enabled`   | Template function: `tier_enabled('feature_name')` → `bool` (calls `TierInfo::is_enabled`) |
 | `tier_limit`     | Template function: `tier_limit('feature_name')` → `Option<u64>` (calls `TierInfo::limit`) |
 
@@ -170,72 +192,6 @@ async fn handler(hx: HxRequest) {
 ```
 
 `Renderer` also exposes `is_htmx()` and `html_partial()` for the common pattern of choosing between full page and partial template.
-
----
-
-## i18n (translations)
-
-### File structure
-
-```
-locales/
-  en/
-    common.yaml
-    auth.yaml
-  uk/
-    common.yaml
-```
-
-Each locale is a subdirectory. YAML files (`.yaml` or `.yml`) within are namespaced by filename. Keys are dot-separated: file `auth.yaml` with nested key `login.title` becomes `auth.login.title`.
-
-### `t()` template function
-
-Registered automatically when `locales_path` directory exists.
-
-```jinja
-{{ t('common.greeting') }}
-{{ t('greet.welcome', name="Dmytro", age="30") }}
-{{ t('items.count', count=5) }}
-```
-
-- Reads `locale` from template context (set by middleware).
-- Falls back to `default_locale` if key missing in requested locale.
-- Falls back to the key string itself if missing everywhere.
-- Supports `{placeholder}` interpolation with keyword arguments.
-- Supports pluralization via `count` kwarg.
-
-### Pluralization
-
-YAML format for plural entries (must have `other` key; allowed keys: `zero`, `one`, `two`, `few`, `many`, `other`):
-
-```yaml
-count:
-    one: "{count} item"
-    other: "{count} items"
-```
-
-Uses CLDR plural rules via `intl_pluralrules`. Correct for Slavic languages (Ukrainian `few`/`many` categories), English, and others.
-
-### Locale resolver chain
-
-Default order (first `Some` wins):
-
-1. `QueryParamResolver` -- reads `?lang=uk` from URL query string.
-2. `CookieResolver` -- reads `lang` cookie.
-3. `SessionResolver` -- reads `"locale"` key from session data (requires `SessionLayer`). Always in the chain; returns `None` silently when no session extension is present.
-4. `AcceptLanguageResolver` -- parses `Accept-Language` header, picks highest-quality match.
-
-All resolvers validate against available locales when `available_locales` is non-empty.
-
-Override with `EngineBuilder::locale_resolvers()`.
-
-### LocaleResolver trait
-
-```rust
-pub trait LocaleResolver: Send + Sync {
-    fn resolve(&self, parts: &Parts) -> Option<String>;
-}
-```
 
 ---
 
@@ -277,5 +233,4 @@ The return value uses `Value::from_safe_string()` so it is not HTML-escaped.
 - **Handler context must be a map**: Pass `context! { ... }` to render methods. Non-map values are silently ignored with a warning log.
 - **Hot-reload is debug-only**: Template cache is only cleared per-render in debug builds.
 - **`render()` is `pub(crate)`**: Handlers must use the `Renderer` extractor, not `Engine::render()` directly.
-- **Locale resolvers need `Arc`**: The resolver chain is `Vec<Arc<dyn LocaleResolver>>`, not boxed.
-- **SessionResolver needs SessionLayer**: If `SessionLayer` is not installed, `SessionResolver::resolve()` returns `None` silently.
+- **`t()` requires `I18nLayer` upstream**: The `t()` function reads `locale` from the template context. `TemplateContextLayer` only sets `locale` when `I18nLayer` has already injected a `Translator` into request extensions. Without upstream `I18nLayer`, `t()` falls back to the store's default locale.

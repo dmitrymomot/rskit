@@ -135,18 +135,14 @@ mod tests {
 
     fn setup_engine(dir: &std::path::Path) -> Engine {
         let tpl_dir = dir.join("templates");
-        let locales_dir = dir.join("locales/en");
         let static_dir = dir.join("static");
         std::fs::create_dir_all(&tpl_dir).unwrap();
-        std::fs::create_dir_all(&locales_dir).unwrap();
         std::fs::create_dir_all(&static_dir).unwrap();
         std::fs::write(tpl_dir.join("page.html"), "Hello, {{ name }}!").unwrap();
         std::fs::write(tpl_dir.join("partial.html"), "<div>{{ name }}</div>").unwrap();
-        std::fs::write(locales_dir.join("common.yaml"), "greeting: Hello").unwrap();
 
         let config = TemplateConfig {
             templates_path: tpl_dir.to_str().unwrap().into(),
-            locales_path: dir.join("locales").to_str().unwrap().into(),
             static_path: static_dir.to_str().unwrap().into(),
             ..TemplateConfig::default()
         };

@@ -294,15 +294,20 @@ cfg.cookie.secret = "a-64-character-or-longer-secret-for-signing-cookies..".to_s
 
 ### `template::TemplateConfig`
 
-| Field                | Type     | Default       | Description                       |
-| -------------------- | -------- | ------------- | --------------------------------- |
-| `templates_path`     | `String` | `"templates"` | MiniJinja template directory      |
-| `static_path`        | `String` | `"static"`    | Static asset directory            |
-| `static_url_prefix`  | `String` | `"/assets"`   | URL prefix for static assets      |
-| `locales_path`       | `String` | `"locales"`   | Locale YAML directory             |
-| `default_locale`     | `String` | `"en"`        | Fallback locale                   |
-| `locale_cookie`      | `String` | `"lang"`      | Cookie for locale resolution      |
-| `locale_query_param` | `String` | `"lang"`      | Query param for locale resolution |
+| Field               | Type     | Default       | Description                  |
+| ------------------- | -------- | ------------- | ---------------------------- |
+| `templates_path`    | `String` | `"templates"` | MiniJinja template directory |
+| `static_path`       | `String` | `"static"`    | Static asset directory       |
+| `static_url_prefix` | `String` | `"/assets"`   | URL prefix for static assets |
+
+### `i18n::I18nConfig`
+
+| Field                | Type     | Default     | Description                       |
+| -------------------- | -------- | ----------- | --------------------------------- |
+| `locales_path`       | `String` | `"locales"` | Locale YAML directory             |
+| `default_locale`     | `String` | `"en"`      | Fallback locale                   |
+| `locale_cookie`      | `String` | `"lang"`    | Cookie for locale resolution      |
+| `locale_query_param` | `String` | `"lang"`    | Query param for locale resolution |
 
 ### `geolocation::GeolocationConfig`
 

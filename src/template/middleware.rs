@@ -8,9 +8,8 @@ use http::{Request, Response};
 use tower::{Layer, Service};
 
 use super::context::TemplateContext;
-use super::engine::Engine;
 use crate::flash::state::FlashState;
-use crate::i18n::locale;
+use crate::i18n::Translator;
 
 // --- Layer ---
 
@@ -25,13 +24,19 @@ use crate::i18n::locale;
 /// | `current_url`     | `request.uri().to_string()`                                         |
 /// | `is_htmx`         | `HX-Request: true` header                                           |
 /// | `request_id`      | `X-Request-Id` header (if present)                                  |
-/// | `locale`          | Locale resolver chain (falls back to [`TemplateConfig::default_locale`](super::TemplateConfig::default_locale)) |
+/// | `locale`          | [`Translator`](crate::i18n::Translator) in extensions (present only when [`I18nLayer`](crate::i18n::I18nLayer) is installed upstream) |
 /// | `csrf_token`      | [`CsrfToken`](crate::middleware::CsrfToken) extension (if present)  |
 /// | `flash_messages`  | Callable returning flash entries; `FlashState` extension must be set by [`FlashLayer`](crate::flash::FlashLayer) |
 /// | `tier_name`       | `TierInfo::name` (when `TierInfo` extension is present)             |
 /// | `tier_has`        | Template function `tier_has(name) -> bool` (when `TierInfo` is present) |
 /// | `tier_enabled`    | Template function `tier_enabled(name) -> bool` (when `TierInfo` is present) |
 /// | `tier_limit`      | Template function `tier_limit(name) -> Option<u64>` (when `TierInfo` is present) |
+///
+/// This layer reads the current request's
+/// [`Translator`](crate::i18n::Translator) (installed by
+/// [`I18nLayer`](crate::i18n::I18nLayer)) and exposes `locale` to templates.
+/// If no `I18nLayer` is upstream, the `locale` variable is simply absent from
+/// the template context.
 ///
 /// This layer is also re-exported as
 /// [`modo::middlewares::TemplateContext`](crate::middlewares::TemplateContext)
@@ -40,23 +45,19 @@ use crate::i18n::locale;
 /// # Example
 ///
 /// ```rust,no_run
-/// use modo::template::{Engine, TemplateContextLayer};
+/// use modo::template::TemplateContextLayer;
 ///
-/// # fn example(engine: Engine) {
 /// let router: axum::Router = axum::Router::new()
 ///     // ... routes ...
-///     .layer(TemplateContextLayer::new(engine));
-/// # }
+///     .layer(TemplateContextLayer::new());
 /// ```
-#[derive(Clone)]
-pub struct TemplateContextLayer {
-    engine: Engine,
-}
+#[derive(Clone, Default)]
+pub struct TemplateContextLayer;
 
 impl TemplateContextLayer {
-    /// Creates a new layer backed by the given [`Engine`].
-    pub fn new(engine: Engine) -> Self {
-        Self { engine }
+    /// Creates a new [`TemplateContextLayer`].
+    pub fn new() -> Self {
+        Self
     }
 }
 
@@ -64,10 +65,7 @@ impl<S> Layer<S> for TemplateContextLayer {
     type Service = TemplateContextMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        TemplateContextMiddleware {
-            inner,
-            engine: self.engine.clone(),
-        }
+        TemplateContextMiddleware { inner }
     }
 }
 
@@ -80,7 +78,6 @@ impl<S> Layer<S> for TemplateContextLayer {
 #[derive(Clone)]
 pub struct TemplateContextMiddleware<S> {
     inner: S,
-    engine: Engine,
 }
 
 impl<S, ReqBody> Service<Request<ReqBody>> for TemplateContextMiddleware<S>
@@ -99,7 +96,6 @@ where
     }
 
     fn call(&mut self, mut request: Request<ReqBody>) -> Self::Future {
-        let engine = self.engine.clone();
         let mut inner = self.inner.clone();
         std::mem::swap(&mut self.inner, &mut inner);
 
@@ -130,16 +126,21 @@ where
                 ctx.set("request_id", minijinja::Value::from(req_id.to_string()));
             }
 
-            // locale resolution
+            // Read request extensions for locale, csrf, flash, tier.
             {
-                // We need to extract Parts temporarily for locale resolution
-                // Since we can't split the request here, read the values we need from headers
                 let (mut parts, body) = request.into_parts();
 
-                let resolved_locale = locale::resolve_locale(engine.locale_chain(), &parts);
-                let locale_value =
-                    resolved_locale.unwrap_or_else(|| engine.default_locale().to_string());
-                ctx.set("locale", minijinja::Value::from(locale_value));
+                // locale comes from the Translator installed upstream by I18nLayer.
+                // If no I18nLayer is installed, `locale` is simply absent from
+                // the template context — the template engine's MiniJinja state
+                // then sees `locale` as undefined, which is the correct signal
+                // that `t()` cannot be used.
+                if let Some(translator) = parts.extensions.get::<Translator>() {
+                    ctx.set(
+                        "locale",
+                        minijinja::Value::from(translator.locale().to_string()),
+                    );
+                }
 
                 // csrf_token (if present in extensions)
                 if let Some(csrf) = parts.extensions.get::<crate::middleware::CsrfToken>() {
@@ -205,36 +206,52 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{Router, routing::get};
+    use axum::{Router, body::Body, routing::get};
     use http::{Request, StatusCode};
     use tower::ServiceExt;
 
-    use crate::template::{TemplateConfig, TemplateContext};
+    use crate::i18n::{I18n, I18nConfig};
+    use crate::template::{Engine, TemplateConfig, TemplateContext};
 
     // Return TempDir alongside Engine so files persist for the test's lifetime
     fn test_engine() -> (tempfile::TempDir, Engine) {
         let dir = tempfile::tempdir().unwrap();
         let tpl_dir = dir.path().join("templates");
-        let locales_dir = dir.path().join("locales/en");
         let static_dir = dir.path().join("static");
         std::fs::create_dir_all(&tpl_dir).unwrap();
-        std::fs::create_dir_all(&locales_dir).unwrap();
         std::fs::create_dir_all(&static_dir).unwrap();
-        std::fs::write(locales_dir.join("common.yaml"), "greeting: Hello").unwrap();
-
-        let uk_locales_dir = dir.path().join("locales/uk");
-        std::fs::create_dir_all(&uk_locales_dir).unwrap();
-        std::fs::write(uk_locales_dir.join("common.yaml"), "greeting: Привіт").unwrap();
 
         let config = TemplateConfig {
             templates_path: tpl_dir.to_str().unwrap().into(),
-            locales_path: dir.path().join("locales").to_str().unwrap().into(),
             static_path: static_dir.to_str().unwrap().into(),
             ..TemplateConfig::default()
         };
 
         let engine = Engine::builder().config(config).build().unwrap();
         (dir, engine)
+    }
+
+    fn test_i18n(dir: &std::path::Path) -> I18n {
+        let locales_dir = dir.join("locales");
+        std::fs::create_dir_all(locales_dir.join("en")).unwrap();
+        std::fs::write(
+            locales_dir.join("en").join("common.yaml"),
+            "greeting: Hello",
+        )
+        .unwrap();
+        std::fs::create_dir_all(locales_dir.join("uk")).unwrap();
+        std::fs::write(
+            locales_dir.join("uk").join("common.yaml"),
+            "greeting: Привіт",
+        )
+        .unwrap();
+
+        let config = I18nConfig {
+            locales_path: locales_dir.to_str().unwrap().into(),
+            default_locale: "en".into(),
+            ..I18nConfig::default()
+        };
+        I18n::new(&config).unwrap()
     }
 
     // Handlers must be module-level async fn per CLAUDE.md gotcha
@@ -273,10 +290,10 @@ mod tests {
 
     #[tokio::test]
     async fn injects_current_url_value() {
-        let (_dir, engine) = test_engine();
+        let (_dir, _engine) = test_engine();
         let app = Router::new()
             .route("/test", get(extract_url))
-            .layer(TemplateContextLayer::new(engine));
+            .layer(TemplateContextLayer::new());
 
         let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
         let resp = app.oneshot(req).await.unwrap();
@@ -289,10 +306,10 @@ mod tests {
 
     #[tokio::test]
     async fn injects_is_htmx_false() {
-        let (_dir, engine) = test_engine();
+        let (_dir, _engine) = test_engine();
         let app = Router::new()
             .route("/test", get(extract_is_htmx))
-            .layer(TemplateContextLayer::new(engine));
+            .layer(TemplateContextLayer::new());
 
         let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
         let resp = app.oneshot(req).await.unwrap();
@@ -301,10 +318,10 @@ mod tests {
 
     #[tokio::test]
     async fn injects_is_htmx_true() {
-        let (_dir, engine) = test_engine();
+        let (_dir, _engine) = test_engine();
         let app = Router::new()
             .route("/test", get(extract_is_htmx))
-            .layer(TemplateContextLayer::new(engine));
+            .layer(TemplateContextLayer::new());
 
         let req = Request::builder()
             .uri("/test")
@@ -320,10 +337,14 @@ mod tests {
 
     #[tokio::test]
     async fn injects_locale_default() {
-        let (_dir, engine) = test_engine();
+        let (_dir, _engine) = test_engine();
+        let i18n = test_i18n(_dir.path());
+        // I18nLayer must run before TemplateContextLayer sees the request, so
+        // install I18nLayer as an outer layer (outer layers run first in axum).
         let app = Router::new()
             .route("/test", get(extract_locale))
-            .layer(TemplateContextLayer::new(engine));
+            .layer(TemplateContextLayer::new())
+            .layer(i18n.layer());
 
         let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
         let resp = app.oneshot(req).await.unwrap();
@@ -335,10 +356,12 @@ mod tests {
 
     #[tokio::test]
     async fn injects_locale_from_query() {
-        let (_dir, engine) = test_engine();
+        let (_dir, _engine) = test_engine();
+        let i18n = test_i18n(_dir.path());
         let app = Router::new()
             .route("/test", get(extract_locale))
-            .layer(TemplateContextLayer::new(engine));
+            .layer(TemplateContextLayer::new())
+            .layer(i18n.layer());
 
         let req = Request::builder()
             .uri("/test?lang=uk")
@@ -352,11 +375,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn no_i18n_layer_omits_locale() {
+        let (_dir, _engine) = test_engine();
+        // No I18nLayer installed.
+        let app = Router::new()
+            .route("/test", get(extract_locale))
+            .layer(TemplateContextLayer::new());
+
+        let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        // locale not set — returns empty string
+        assert_eq!(body, "");
+    }
+
+    #[tokio::test]
     async fn injects_request_id() {
-        let (_dir, engine) = test_engine();
+        let (_dir, _engine) = test_engine();
         let app = Router::new()
             .route("/test", get(extract_request_id))
-            .layer(TemplateContextLayer::new(engine));
+            .layer(TemplateContextLayer::new());
 
         let req = Request::builder()
             .uri("/test")
@@ -445,10 +485,10 @@ mod tests {
 
         #[tokio::test]
         async fn injects_tier_name() {
-            let (_dir, engine) = test_engine();
+            let (_dir, _engine) = test_engine();
             let app = Router::new()
                 .route("/test", get(extract_tier_name))
-                .layer(TemplateContextLayer::new(engine));
+                .layer(TemplateContextLayer::new());
 
             let mut req = Request::builder().uri("/test").body(Body::empty()).unwrap();
             req.extensions_mut().insert(test_tier());
@@ -536,10 +576,10 @@ mod tests {
 
         #[tokio::test]
         async fn no_tier_info_no_injection() {
-            let (_dir, engine) = test_engine();
+            let (_dir, _engine) = test_engine();
             let app = Router::new()
                 .route("/test", get(extract_tier_name))
-                .layer(TemplateContextLayer::new(engine));
+                .layer(TemplateContextLayer::new());
 
             let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
             let resp = app.oneshot(req).await.unwrap();

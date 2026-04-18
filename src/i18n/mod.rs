@@ -24,12 +24,11 @@
 //! # }
 //! ```
 
-pub(crate) mod locale;
-
 mod config;
 mod extractor;
 mod factory;
 mod layer;
+mod locale;
 mod store;
 
 pub use config::I18nConfig;

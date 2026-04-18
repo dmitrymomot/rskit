@@ -2,28 +2,26 @@
 
 MiniJinja-based template rendering for the modo web framework.
 
-Filesystem template loading with debug-mode hot-reload, built-in `t()` i18n
-function with plural rules, `static_url()` for cache-busted asset paths, a
-Tower middleware that injects per-request template context, and a `Renderer`
-axum extractor for ergonomic HTML responses (including HTMX partial rendering).
+Filesystem template loading with debug-mode hot-reload, `static_url()` for
+cache-busted asset paths, a Tower middleware that injects per-request template
+context, and a `Renderer` axum extractor for ergonomic HTML responses
+(including HTMX partial rendering).
+
+For internationalization (including the `t()` template function), see
+[`modo::i18n`](../i18n/README.md).
 
 ## Key types
 
-| Type / Trait             | Purpose                                                                    |
-| ------------------------ | -------------------------------------------------------------------------- |
-| `Engine`                 | Holds the MiniJinja environment; cheaply cloneable (internal `Arc`)        |
-| `EngineBuilder`          | Fluent builder for `Engine` — obtain via `Engine::builder()`               |
-| `TemplateConfig`         | Configuration for paths, static URL prefix, and locale knobs               |
-| `TemplateContext`        | Per-request key-value map shared by middleware and handlers                |
-| `TemplateContextLayer`   | Tower middleware that populates `TemplateContext` (also `modo::middlewares::TemplateContext`) |
-| `Renderer`               | axum extractor with `html`, `html_partial`, `string` render methods        |
-| `HxRequest`              | Infallible extractor for `HX-Request: true` (also in `modo::extractors`)   |
-| `context!` (macro)       | Re-export of `minijinja::context!` for building template data              |
-| `LocaleResolver` (trait) | Pluggable interface for per-request locale detection                       |
-| `QueryParamResolver`     | Resolves locale from a URL query parameter                                 |
-| `CookieResolver`         | Resolves locale from a cookie                                              |
-| `SessionResolver`        | Resolves locale from the current session                                   |
-| `AcceptLanguageResolver` | Resolves locale from `Accept-Language` header                              |
+| Type / Trait           | Purpose                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------- |
+| `Engine`               | Holds the MiniJinja environment; cheaply cloneable (internal `Arc`)                           |
+| `EngineBuilder`        | Fluent builder for `Engine` — obtain via `Engine::builder()`                                  |
+| `TemplateConfig`       | Configuration for template path, static path, and static URL prefix                           |
+| `TemplateContext`      | Per-request key-value map shared by middleware and handlers                                   |
+| `TemplateContextLayer` | Tower middleware that populates `TemplateContext` (also `modo::middlewares::TemplateContext`) |
+| `Renderer`             | axum extractor with `html`, `html_partial`, `string` render methods                           |
+| `HxRequest`            | Infallible extractor for `HX-Request: true` (also in `modo::extractors`)                      |
+| `context!` (macro)     | Re-export of `minijinja::context!` for building template data                                 |
 
 ## Engine setup
 
@@ -40,7 +38,8 @@ let engine = Engine::builder()
 
 - `.config(TemplateConfig)` — override defaults.
 - `.function(name, f)` / `.filter(name, f)` — register custom globals.
-- `.locale_resolvers(Vec<Arc<dyn LocaleResolver>>)` — replace the default chain.
+- `.i18n(I18n)` — enable the `t()` template function backed by the supplied
+  `modo::i18n::I18n` handle. Omit to skip `t()` registration.
 
 ### Custom functions and filters
 
@@ -62,14 +61,23 @@ let engine = Engine::builder()
 ## Wiring into the router
 
 ```rust,no_run
-use modo::template::{Engine, TemplateContextLayer};
+use modo::i18n::{I18n, I18nConfig};
+use modo::template::{Engine, TemplateConfig, TemplateContextLayer};
 
-fn build_router(engine: Engine) -> axum::Router {
-    axum::Router::new()
-        .merge(engine.static_service())            // serves `static_url_prefix`
-        // ... routes ...
-        .layer(TemplateContextLayer::new(engine))  // inject per-request context
-}
+# fn example() -> modo::Result<()> {
+let i18n = I18n::new(&I18nConfig::default())?;
+let engine = Engine::builder()
+    .config(TemplateConfig::default())
+    .i18n(i18n.clone())
+    .build()?;
+
+let router: axum::Router = axum::Router::new()
+    .merge(engine.static_service())           // serves `static_url_prefix`
+    // ... routes ...
+    .layer(TemplateContextLayer::new())       // inject per-request context
+    .layer(i18n.layer());                     // resolve locale -> Translator
+# Ok(())
+# }
 ```
 
 `Engine::static_service()` returns an `axum::Router` that serves
@@ -141,46 +149,12 @@ async fn handler(hx: HxRequest) {
 }
 ```
 
-## Locales
-
-Place YAML files under `locales/<lang>/<namespace>.yaml` (`.yml` also accepted):
-
-```yaml
-# locales/en/common.yaml
-greeting: "Hello, {name}!"
-items:
-    one: "{count} item"
-    other: "{count} items"
-```
-
-Templates call `t(key, ...)`:
-
-```jinja
-{{ t("common.greeting", name="World") }}
-{{ t("common.items", count=5) }}
-```
-
-The built-in locale chain runs in order: `QueryParamResolver` →
-`CookieResolver` → `SessionResolver` → `AcceptLanguageResolver`, falling
-back to `TemplateConfig::default_locale`. Each resolver only accepts
-locales that were discovered on disk. Override the chain with
-`EngineBuilder::locale_resolvers(...)`.
-
-Plural rules come from [`intl_pluralrules`](https://docs.rs/intl-pluralrules)
-and cover CLDR categories (`zero`, `one`, `two`, `few`, `many`, `other`).
-Missing categories fall back to `other`. Placeholders use `{name}` syntax
-(unmatched placeholders are left in place).
-
 ## Configuration
 
 ```yaml
 templates_path: "templates"   # MiniJinja template files
 static_path: "static"          # static assets (CSS, JS, images)
 static_url_prefix: "/assets"   # URL prefix for static files
-locales_path: "locales"        # locale YAML files
-default_locale: "en"           # fallback locale
-locale_cookie: "lang"          # cookie name read by CookieResolver
-locale_query_param: "lang"     # query param read by QueryParamResolver
 ```
 
 All fields are optional and fall back to the defaults shown above.
@@ -192,7 +166,7 @@ All fields are optional and fall back to the defaults shown above.
 | `current_url`    | Full request URI string                                                |
 | `is_htmx`        | `true` when `HX-Request: true`                                         |
 | `request_id`     | Value of `X-Request-Id` header (if present)                            |
-| `locale`         | Resolved locale string (e.g. `"en"`)                                   |
+| `locale`         | Resolved locale from the `Translator` in request extensions (absent when no `I18nLayer` upstream) |
 | `csrf_token`     | CSRF token string (when `csrf()` middleware is active)                 |
 | `flash_messages` | Callable returning flash entries (when `FlashLayer` is installed)      |
 | `tier_name`      | Name of the active tier (when `TierInfo` extension is present)         |

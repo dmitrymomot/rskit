@@ -188,7 +188,7 @@ let app = routes::router(registry)
     .layer(modo::middleware::cors(&config.modo.cors))
     .layer(modo::middleware::csrf(&config.modo.csrf, &cookie_key))
     // Template context (if templates)
-    .layer(modo::template::TemplateContextLayer::new(engine))
+    .layer(modo::template::TemplateContextLayer::new())
     // Session
     .layer(session_svc.layer())
     // Flash
