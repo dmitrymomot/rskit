@@ -162,9 +162,16 @@ async fn translator_extractor_without_layer_returns_500() {
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
 
+    // Check the stable error code via response extensions — avoids coupling
+    // the test to the English error message text.
+    let err = resp
+        .extensions()
+        .get::<modo::Error>()
+        .expect("Error is stored in response extensions");
+    assert_eq!(err.error_code(), Some("i18n:layer_missing"));
+
     let body = body_json(resp).await;
     assert_eq!(body["error"]["status"], 500);
-    assert_eq!(body["error"]["message"], "I18nLayer not installed");
 }
 
 #[tokio::test]

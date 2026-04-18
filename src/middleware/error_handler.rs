@@ -59,15 +59,26 @@ where
 /// response `message`. Otherwise the error's stored `message` is used
 /// unchanged.
 ///
+/// # Layer ordering
+///
+/// When pairing with [`I18nLayer`](crate::i18n::I18nLayer), install `I18nLayer`
+/// **outside** [`error_handler`] (apply `i18n.layer()` *after* `error_handler`
+/// in `.layer(...)` calls) so the [`Translator`](crate::i18n::Translator) is
+/// inserted into the request extensions before `error_handler` clones the
+/// request parts. Reversed ordering silently falls back to the raw key.
+///
 /// # Example
 ///
 /// ```rust,no_run
 /// use axum::{Router, routing::get};
 /// use modo::middleware::{default_error_handler, error_handler};
 ///
+/// # fn wire(i18n: modo::i18n::I18n) {
 /// let app: Router = Router::new()
 ///     .route("/", get(|| async { "ok" }))
-///     .layer(error_handler(default_error_handler));
+///     .layer(error_handler(default_error_handler))
+///     .layer(i18n.layer());  // outer — must run before error_handler
+/// # }
 /// ```
 pub async fn default_error_handler(err: crate::error::Error, parts: Parts) -> Response {
     let status = err.status();

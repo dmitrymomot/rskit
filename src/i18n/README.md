@@ -87,6 +87,26 @@ let router: axum::Router = axum::Router::new()
 does not exist the store is initialised empty (useful in scaffolds / tests);
 only an unreadable directory or malformed YAML surfaces as an error.
 
+### Layer ordering with `error_handler`
+
+When combining `I18nLayer` with
+[`modo::middleware::error_handler`](../middleware/error_handler.rs) (e.g. for
+translating `Error::localized(...)` messages in error responses), install
+`I18nLayer` **outside** `error_handler` so the `Translator` is inserted into
+request extensions *before* `error_handler` clones the request parts:
+
+```rust,ignore
+let router = axum::Router::new()
+    // routes ...
+    .layer(modo::middleware::error_handler(
+        modo::middleware::default_error_handler,
+    ))          // inner
+    .layer(i18n.layer()); // outer — must run before error_handler
+```
+
+Reversing the order silently falls back to the raw translation key because
+`error_handler`'s cloned parts never see the `Translator`.
+
 ## Locale resolution chain
 
 By default the chain runs in order:

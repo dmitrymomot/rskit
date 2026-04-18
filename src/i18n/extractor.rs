@@ -63,7 +63,9 @@ impl<S: Send + Sync> FromRequestParts<S> for Translator {
             .extensions
             .get::<Translator>()
             .cloned()
-            .ok_or_else(|| crate::Error::internal("I18nLayer not installed"))
+            .ok_or_else(|| {
+                crate::Error::internal("I18nLayer not installed").with_code("i18n:layer_missing")
+            })
     }
 }
 

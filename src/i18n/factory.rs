@@ -21,6 +21,7 @@ struct I18nInner {
 /// outside the request lifecycle (jobs, CLI commands, tests).
 ///
 /// `I18n` is cheaply cloneable — it wraps an `Arc` internally.
+#[derive(Clone)]
 pub struct I18n {
     inner: Arc<I18nInner>,
 }
@@ -83,14 +84,6 @@ impl I18n {
     /// Returns the configured default locale.
     pub fn default_locale(&self) -> &str {
         &self.inner.default_locale
-    }
-}
-
-impl Clone for I18n {
-    fn clone(&self) -> Self {
-        Self {
-            inner: Arc::clone(&self.inner),
-        }
     }
 }
 

@@ -198,7 +198,7 @@ impl LocaleResolver for AcceptLanguageResolver {
 
 // --- Chain helpers ---
 
-pub(crate) fn default_chain(
+pub(super) fn default_chain(
     config: &I18nConfig,
     available_locales: &[String],
 ) -> Vec<Arc<dyn LocaleResolver>> {
@@ -222,7 +222,7 @@ pub(crate) fn default_chain(
     chain
 }
 
-pub(crate) fn resolve_locale(chain: &[Arc<dyn LocaleResolver>], parts: &Parts) -> Option<String> {
+pub(super) fn resolve_locale(chain: &[Arc<dyn LocaleResolver>], parts: &Parts) -> Option<String> {
     chain.iter().find_map(|r| r.resolve(parts))
 }
 
