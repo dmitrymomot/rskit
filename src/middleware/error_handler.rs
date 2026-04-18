@@ -6,6 +6,8 @@ use axum::response::{IntoResponse, Response};
 use http::request::Parts;
 use tower::{Layer, Service};
 
+use crate::error::render_error_body;
+
 /// Creates an error-handler layer that intercepts responses containing a
 /// [`crate::error::Error`] in their extensions and rewrites them through
 /// the supplied handler function.
@@ -67,34 +69,20 @@ where
 ///     .route("/", get(|| async { "ok" }))
 ///     .layer(error_handler(default_error_handler));
 /// ```
-pub fn default_error_handler(
-    err: crate::error::Error,
-    parts: Parts,
-) -> Pin<Box<dyn Future<Output = Response> + Send>> {
-    Box::pin(async move {
-        let status = err.status();
-        let details = err.details().cloned();
+pub async fn default_error_handler(err: crate::error::Error, parts: Parts) -> Response {
+    let status = err.status();
+    let details = err.details().cloned();
 
-        let message = match (
-            err.locale_key(),
-            parts.extensions.get::<crate::i18n::Translator>(),
-        ) {
-            (Some(key), Some(tr)) => tr.t(key, &[]),
-            _ => err.message().to_string(),
-        };
+    let message = match (
+        err.locale_key(),
+        parts.extensions.get::<crate::i18n::Translator>(),
+    ) {
+        (Some(key), Some(tr)) => tr.t(key, &[]),
+        _ => err.message().to_string(),
+    };
 
-        let mut body = serde_json::json!({
-            "error": {
-                "status": status.as_u16(),
-                "message": message,
-            }
-        });
-        if let Some(d) = details {
-            body["error"]["details"] = d;
-        }
-
-        (status, axum::Json(body)).into_response()
-    })
+    let body = render_error_body(status, &message, details.as_ref());
+    (status, axum::Json(body)).into_response()
 }
 
 /// Tower [`Layer`] produced by [`error_handler`].

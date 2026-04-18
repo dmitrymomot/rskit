@@ -9,7 +9,7 @@ use super::store::TranslationStore;
 
 struct I18nInner {
     store: TranslationStore,
-    chain: Vec<Arc<dyn LocaleResolver>>,
+    chain: Arc<[Arc<dyn LocaleResolver>]>,
     default_locale: String,
 }
 
@@ -45,7 +45,8 @@ impl I18n {
         };
 
         let available_locales = store.available_locales();
-        let chain = locale::default_chain(config, &available_locales);
+        let chain: Arc<[Arc<dyn LocaleResolver>]> =
+            locale::default_chain(config, &available_locales).into();
 
         Ok(Self {
             inner: Arc::new(I18nInner {
@@ -60,7 +61,7 @@ impl I18n {
     /// [`Translator`] into the request extensions.
     pub fn layer(&self) -> I18nLayer {
         I18nLayer::new(
-            self.inner.chain.clone(),
+            Arc::clone(&self.inner.chain),
             self.inner.store.clone(),
             self.inner.default_locale.clone(),
         )

@@ -8,6 +8,19 @@ use super::config::I18nConfig;
 /// Implementations are tried in order within the locale chain built by the
 /// i18n module. The first resolver that returns `Some` wins; if all resolvers
 /// return `None`, [`I18nConfig::default_locale`] is used.
+///
+/// # Empty-allowlist semantics
+///
+/// Built-in resolvers disagree on what an empty `available_locales` slice
+/// means, so pick the constructor inputs deliberately:
+///
+/// - [`QueryParamResolver`] and [`CookieResolver`] treat an empty allowlist as
+///   "accept any value" — whatever the caller supplied is returned verbatim.
+/// - [`AcceptLanguageResolver`] treats an empty allowlist as "match nothing"
+///   because it can only return locales that appear in the list.
+///
+/// [`default_chain`] hands every resolver the same `available_locales`, so
+/// the asymmetry only surfaces when wiring resolvers manually.
 pub trait LocaleResolver: Send + Sync {
     /// Returns a locale string (e.g. `"en"`, `"uk"`) if this resolver can determine
     /// the locale from the request, or `None` to fall through to the next resolver.
@@ -19,7 +32,9 @@ pub trait LocaleResolver: Send + Sync {
 /// Resolves the active locale from a URL query parameter.
 ///
 /// When `available_locales` is non-empty, only values present in that list are
-/// accepted. Pass an empty slice to accept any value.
+/// accepted. An empty slice means "accept any value" — the resolver returns
+/// whatever string the request carried. See [`LocaleResolver`] for how this
+/// differs from [`AcceptLanguageResolver`].
 pub struct QueryParamResolver {
     param_name: String,
     available_locales: Vec<String>,
@@ -59,7 +74,9 @@ impl LocaleResolver for QueryParamResolver {
 /// Resolves the active locale from a cookie.
 ///
 /// When `available_locales` is non-empty, only values present in that list are
-/// accepted.
+/// accepted. An empty slice means "accept any value" — the resolver returns
+/// whatever string the cookie carried. See [`LocaleResolver`] for how this
+/// differs from [`AcceptLanguageResolver`].
 pub struct CookieResolver {
     cookie_name: String,
     available_locales: Vec<String>,
@@ -128,7 +145,10 @@ impl LocaleResolver for SessionResolver {
 /// Resolves the active locale from the `Accept-Language` HTTP header.
 ///
 /// Parses quality values (`q=`), strips region subtags (`en-US` → `en`), and
-/// picks the highest-quality language that matches `available`.
+/// picks the highest-quality language that matches `available`. Unlike
+/// [`QueryParamResolver`] and [`CookieResolver`], an empty `available` list
+/// means "match nothing" — this resolver can only return values that appear
+/// in the list. See [`LocaleResolver`] for the full comparison.
 pub struct AcceptLanguageResolver {
     available: Vec<String>,
 }

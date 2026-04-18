@@ -21,14 +21,14 @@ use super::store::TranslationStore;
 /// request extensions for handlers to extract.
 #[derive(Clone)]
 pub struct I18nLayer {
-    chain: Vec<Arc<dyn LocaleResolver>>,
+    chain: Arc<[Arc<dyn LocaleResolver>]>,
     store: TranslationStore,
     default_locale: String,
 }
 
 impl I18nLayer {
     pub(super) fn new(
-        chain: Vec<Arc<dyn LocaleResolver>>,
+        chain: Arc<[Arc<dyn LocaleResolver>]>,
         store: TranslationStore,
         default_locale: String,
     ) -> Self {
@@ -46,7 +46,7 @@ impl<S> Layer<S> for I18nLayer {
     fn layer(&self, inner: S) -> Self::Service {
         I18nMiddleware {
             inner,
-            chain: self.chain.clone(),
+            chain: Arc::clone(&self.chain),
             store: self.store.clone(),
             default_locale: self.default_locale.clone(),
         }
@@ -58,7 +58,7 @@ impl<S> Layer<S> for I18nLayer {
 /// Tower [`Service`] produced by [`I18nLayer`].
 pub struct I18nMiddleware<S> {
     inner: S,
-    chain: Vec<Arc<dyn LocaleResolver>>,
+    chain: Arc<[Arc<dyn LocaleResolver>]>,
     store: TranslationStore,
     default_locale: String,
 }
@@ -67,7 +67,7 @@ impl<S: Clone> Clone for I18nMiddleware<S> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            chain: self.chain.clone(),
+            chain: Arc::clone(&self.chain),
             store: self.store.clone(),
             default_locale: self.default_locale.clone(),
         }
@@ -90,7 +90,7 @@ where
     }
 
     fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
-        let chain = self.chain.clone();
+        let chain = Arc::clone(&self.chain);
         let store = self.store.clone();
         let default_locale = self.default_locale.clone();
         let mut inner = self.inner.clone();

@@ -8,7 +8,7 @@
 //! the pieces together.
 //!
 //! The same [`TranslationStore`] powers the MiniJinja `t()` function registered
-//! by [`modo::template`](crate::template) via
+//! by [`crate::template`] via
 //! [`make_t_function`](self::make_t_function).
 //!
 //! ## Quick start

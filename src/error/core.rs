@@ -94,6 +94,21 @@ impl Error {
     /// chain [`with_code`](Error::with_code),
     /// [`with_details`](Error::with_details), or [`chain`](Error::chain)
     /// afterwards if needed.
+    ///
+    /// # Kwargs and logging
+    ///
+    /// Translation kwargs (`{count}`, `{name}`, etc.) are not yet supported at
+    /// the `Error` level — the default handler calls `tr.t(key, &[])` with no
+    /// arguments. When you need interpolation, attach a descriptive fallback
+    /// message via [`Error::with_locale_key`] and run translation (with kwargs)
+    /// inside a custom handler passed to
+    /// [`error_handler`](crate::middleware::error_handler).
+    ///
+    /// Also note that [`Debug`] and [`Display`] print the raw key (because the
+    /// fallback message _is_ the key), which makes structured logs look like
+    /// `errors.user.not_found` rather than human text. Prefer
+    /// [`Error::with_locale_key`] when you want log-friendly output alongside
+    /// the translation tag.
     pub fn localized(status: StatusCode, key: &'static str) -> Self {
         Self {
             status,
@@ -137,13 +152,17 @@ impl Error {
     ///
     /// The error code is included in the copy stored in response extensions and can be retrieved
     /// after `into_response()` via [`Error::error_code`].
+    ///
+    /// This is a builder method: the existing `message`, `status`, `locale_key`,
+    /// `details`, and `source` fields are preserved — only `error_code` is
+    /// replaced.
     pub fn with_code(mut self, code: &'static str) -> Self {
         self.error_code = Some(code);
         self
     }
 
     /// Returns the error code, if one was set.
-    pub fn error_code(&self) -> Option<&str> {
+    pub fn error_code(&self) -> Option<&'static str> {
         self.error_code
     }
 
@@ -156,6 +175,10 @@ impl Error {
     /// prefer the translated value whenever a
     /// [`Translator`](crate::i18n::Translator) is available in the request
     /// extensions, and otherwise keep the stored `message` untouched.
+    ///
+    /// This is a builder method: the existing `message`, `status`, `error_code`,
+    /// `details`, and `source` fields are preserved — only `locale_key` is
+    /// replaced.
     pub fn with_locale_key(mut self, key: &'static str) -> Self {
         self.locale_key = Some(key);
         self
@@ -297,6 +320,29 @@ impl std::error::Error for Error {
     }
 }
 
+/// Builds the JSON body shared by [`Error::into_response`] and
+/// [`default_error_handler`](crate::middleware::default_error_handler).
+///
+/// Produces `{"error": {"status", "message"}}`, with a nested
+/// `"details"` key only when `details` is `Some`. Keeping this in one place
+/// ensures the two code paths stay byte-identical.
+pub(crate) fn render_error_body(
+    status: StatusCode,
+    message: &str,
+    details: Option<&serde_json::Value>,
+) -> serde_json::Value {
+    let mut body = serde_json::json!({
+        "error": {
+            "status": status.as_u16(),
+            "message": message,
+        }
+    });
+    if let Some(d) = details {
+        body["error"]["details"] = d.clone();
+    }
+    body
+}
+
 /// Converts `Error` into an axum [`Response`].
 ///
 /// Produces a JSON body of the form:
@@ -315,15 +361,7 @@ impl IntoResponse for Error {
         let message = self.message.clone();
         let details = self.details.clone();
 
-        let mut body = serde_json::json!({
-            "error": {
-                "status": status.as_u16(),
-                "message": &message
-            }
-        });
-        if let Some(ref d) = details {
-            body["error"]["details"] = d.clone();
-        }
+        let body = render_error_body(status, &message, details.as_ref());
 
         // Store a copy in extensions so error_handler middleware can read it
         let ext_error = Error {
@@ -485,5 +523,35 @@ mod tests {
         let ext_err = response.extensions().get::<Error>().unwrap();
         assert_eq!(ext_err.locale_key(), Some("errors.auth.expired"));
         assert_eq!(ext_err.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn render_error_body_without_details() {
+        let body = render_error_body(StatusCode::NOT_FOUND, "user not found", None);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "error": {
+                    "status": 404,
+                    "message": "user not found",
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn render_error_body_with_details() {
+        let details = serde_json::json!({"field": "email"});
+        let body = render_error_body(StatusCode::UNPROCESSABLE_ENTITY, "invalid", Some(&details));
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "error": {
+                    "status": 422,
+                    "message": "invalid",
+                    "details": {"field": "email"},
+                }
+            })
+        );
     }
 }

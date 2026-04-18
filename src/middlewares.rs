@@ -3,6 +3,23 @@
 //! Wiring-site ergonomics: `use modo::middlewares as mw;` then
 //! `.layer(mw::session(...))`, `.layer(mw::cors(...))`, etc.
 //!
+//! # Name shadowing with [`crate::prelude`]
+//!
+//! Some layer names in this module deliberately re-export a type under the
+//! same name used by a factory in [`crate::prelude`]. For example,
+//! [`crate::prelude::I18n`] is the factory ([`crate::i18n::I18n`]) while
+//! [`I18n`] in this module is the Tower layer ([`crate::i18n::I18nLayer`]).
+//! [`Flash`] has the same split ([`crate::flash::Flash`] vs
+//! [`crate::flash::FlashLayer`]).
+//!
+//! A file that does both `use modo::prelude::*;` and
+//! `use modo::middlewares::*;` at once will silently shadow one with the
+//! other — whichever `use` came second wins, with no compiler warning. The
+//! recommended convention is `use modo::middlewares as mw;` so layer names
+//! sit behind the `mw::` prefix and never collide with prelude items.
+//!
+//! # Calling conventions
+//!
 //! Two calling conventions are exported, matching how the underlying
 //! domain modules construct their layers:
 //!

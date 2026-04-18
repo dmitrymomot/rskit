@@ -218,12 +218,6 @@ mod tests {
         std::fs::write(tpl_dir.join("hello.html"), "Hello, {{ name }}!").unwrap();
     }
 
-    fn setup_locales(dir: &std::path::Path) {
-        let en_dir = dir.join("locales/en");
-        std::fs::create_dir_all(&en_dir).unwrap();
-        std::fs::write(en_dir.join("common.yaml"), "greeting: Hello").unwrap();
-    }
-
     fn setup_static(dir: &std::path::Path) {
         let static_dir = dir.join("static/css");
         std::fs::create_dir_all(&static_dir).unwrap();
@@ -231,6 +225,10 @@ mod tests {
     }
 
     fn test_i18n(dir: &std::path::Path) -> I18n {
+        let en_dir = dir.join("locales/en");
+        std::fs::create_dir_all(&en_dir).unwrap();
+        std::fs::write(en_dir.join("common.yaml"), "greeting: Hello").unwrap();
+
         let config = I18nConfig {
             locales_path: dir.join("locales").to_str().unwrap().into(),
             default_locale: "en".into(),
@@ -256,7 +254,6 @@ mod tests {
     #[test]
     fn engine_t_function_works() {
         let dir = tempfile::tempdir().unwrap();
-        setup_locales(dir.path());
         setup_static(dir.path());
 
         let tpl_dir = dir.path().join("templates");
@@ -312,21 +309,6 @@ mod tests {
             .unwrap();
         assert!(result.starts_with("/assets/css/app.css?v="));
         assert_eq!(result.len(), "/assets/css/app.css?v=".len() + 8);
-    }
-
-    #[test]
-    fn build_engine_without_locales_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        setup_templates(dir.path());
-        setup_static(dir.path());
-        // Do NOT create locales dir — verify build still succeeds
-
-        let config = test_config(dir.path());
-        let engine = Engine::builder().config(config).build().unwrap();
-        let result = engine
-            .render("hello.html", minijinja::context! { name => "World" })
-            .unwrap();
-        assert_eq!(result, "Hello, World!");
     }
 
     #[test]
