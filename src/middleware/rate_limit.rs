@@ -355,15 +355,16 @@ where
                             headers.insert("x-ratelimit-remaining", remaining.into());
                         }
                         if !headers.contains_key("x-ratelimit-reset") {
-                            let reset_secs = if per_second > 0 {
-                                let now = std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_secs();
-                                now + (burst_size as u64 / per_second)
-                            } else {
-                                0
-                            };
+                            let reset_secs =
+                                (burst_size as u64)
+                                    .checked_div(per_second)
+                                    .map_or(0, |delta| {
+                                        let now = std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .unwrap()
+                                            .as_secs();
+                                        now + delta
+                                    });
                             headers.insert("x-ratelimit-reset", reset_secs.into());
                         }
                     }

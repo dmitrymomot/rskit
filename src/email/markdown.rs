@@ -124,10 +124,8 @@ pub fn markdown_to_text(markdown: &str) -> String {
             Event::Start(Tag::Item) => {
                 text.push_str("- ");
             }
-            Event::End(TagEnd::Item) => {
-                if !text.ends_with('\n') {
-                    text.push('\n');
-                }
+            Event::End(TagEnd::Item) if !text.ends_with('\n') => {
+                text.push('\n');
             }
             Event::Start(Tag::Paragraph) => {}
             Event::End(TagEnd::Paragraph) => {
