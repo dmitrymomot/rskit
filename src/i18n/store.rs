@@ -114,13 +114,24 @@ impl TranslationStore {
         }
 
         let en: LanguageIdentifier = "en".parse().expect("en is a valid language tag");
-        let en_rules = PluralRules::create(en.clone(), PluralRuleType::CARDINAL)
+        let en_rules = PluralRules::create(en, PluralRuleType::CARDINAL)
             .expect("en plural rules creation cannot fail");
         let mut plural_rules = HashMap::new();
         for locale_str in translations.keys() {
-            let lang_id: LanguageIdentifier = locale_str.parse().unwrap_or_else(|_| en.clone());
-            let rules = PluralRules::create(lang_id, PluralRuleType::CARDINAL)
-                .unwrap_or_else(|_| en_rules.clone());
+            let Ok(lang_id) = locale_str.parse::<LanguageIdentifier>() else {
+                tracing::warn!(
+                    locale = %locale_str,
+                    "failed to parse locale as language identifier — plural rules will use English fallback"
+                );
+                continue;
+            };
+            let Ok(rules) = PluralRules::create(lang_id, PluralRuleType::CARDINAL) else {
+                tracing::warn!(
+                    locale = %locale_str,
+                    "failed to create plural rules for locale — plural rules will use English fallback"
+                );
+                continue;
+            };
             plural_rules.insert(locale_str.clone(), rules);
         }
 
