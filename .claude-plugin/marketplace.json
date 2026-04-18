@@ -11,7 +11,7 @@
       "name": "modo",
       "source": "./",
       "description": "Development reference and project scaffolding for modo v2",
-      "version": "0.8.0",
+      "version": "0.8.1",
       "author": { "name": "Dmytro Momot" },
       "repository": "https://github.com/dmitrymomot/modo",
       "license": "Apache-2.0",
