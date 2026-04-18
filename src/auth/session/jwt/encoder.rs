@@ -76,14 +76,12 @@ impl JwtEncoder {
     /// [`JwtError::SigningFailed`](super::JwtError::SigningFailed) if the HMAC signing
     /// operation fails.
     pub fn encode<T: Serialize>(&self, claims: &T) -> Result<String> {
-        // Auto-fill exp if missing and default_expiry is configured
         let claims_json = if let Some(default_exp) = self.inner.default_expiry {
             let mut value = serde_json::to_value(claims).map_err(|_| {
                 Error::internal("failed to serialize token")
                     .chain(JwtError::SerializationFailed)
                     .with_code(JwtError::SerializationFailed.code())
             })?;
-            // Only inject exp when the payload has no exp field already
             if value.get("exp").is_none() {
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)

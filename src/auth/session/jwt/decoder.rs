@@ -24,12 +24,18 @@ struct JwtDecoderInner {
     validation: ValidationConfig,
 }
 
-fn jwt_err(kind: JwtError) -> Error {
+pub(super) fn jwt_err(kind: JwtError) -> Error {
     let status_fn = match kind {
         JwtError::SigningFailed | JwtError::SerializationFailed => Error::internal,
         _ => Error::unauthorized,
     };
     status_fn("unauthorized").chain(kind).with_code(kind.code())
+}
+
+/// Build an `Error::unauthorized` carrying a stable error code string.
+/// Used by middleware/extractors for `auth:*` codes that don't have a typed source.
+pub(super) fn auth_err(code: &'static str) -> Error {
+    Error::unauthorized("unauthorized").with_code(code)
 }
 
 impl JwtDecoder {
@@ -103,14 +109,13 @@ impl JwtDecoder {
     /// expired tokens, not-yet-valid tokens, issuer mismatch, or audience mismatch.
     /// Missing `exp` is treated as expired.
     pub fn decode<T: DeserializeOwned>(&self, token: &str) -> Result<T> {
-        let parts: Vec<&str> = token.splitn(4, '.').collect();
-        if parts.len() != 3 {
+        let mut iter = token.splitn(4, '.');
+        let (Some(header_b64), Some(payload_b64), Some(signature_b64), None) =
+            (iter.next(), iter.next(), iter.next(), iter.next())
+        else {
             return Err(jwt_err(JwtError::MalformedToken));
-        }
+        };
 
-        let (header_b64, payload_b64, signature_b64) = (parts[0], parts[1], parts[2]);
-
-        // Decode and verify header
         let header_bytes =
             base64url::decode(header_b64).map_err(|_| jwt_err(JwtError::InvalidHeader))?;
         let header: serde_json::Value =
@@ -123,21 +128,19 @@ impl JwtDecoder {
             return Err(jwt_err(JwtError::AlgorithmMismatch));
         }
 
-        // Verify signature
         let signature =
             base64url::decode(signature_b64).map_err(|_| jwt_err(JwtError::MalformedToken))?;
-        let header_payload = format!("{header_b64}.{payload_b64}");
-        self.inner
-            .verifier
-            .verify(header_payload.as_bytes(), &signature)?;
+        let mut header_payload = Vec::with_capacity(header_b64.len() + 1 + payload_b64.len());
+        header_payload.extend_from_slice(header_b64.as_bytes());
+        header_payload.push(b'.');
+        header_payload.extend_from_slice(payload_b64.as_bytes());
+        self.inner.verifier.verify(&header_payload, &signature)?;
 
-        // Decode payload into a JSON value for validation
         let payload_bytes =
             base64url::decode(payload_b64).map_err(|_| jwt_err(JwtError::MalformedToken))?;
         let payload: serde_json::Value = serde_json::from_slice(&payload_bytes)
             .map_err(|_| jwt_err(JwtError::DeserializationFailed))?;
 
-        // Validate exp (always required)
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock before UNIX epoch")
@@ -152,14 +155,12 @@ impl JwtDecoder {
             return Err(jwt_err(JwtError::Expired));
         }
 
-        // Validate nbf (if present)
         if let Some(nbf) = payload.get("nbf").and_then(|v| v.as_u64())
             && now + leeway < nbf
         {
             return Err(jwt_err(JwtError::NotYetValid));
         }
 
-        // Validate iss (if policy requires it)
         if let Some(ref required_iss) = self.inner.validation.require_issuer {
             match payload.get("iss").and_then(|v| v.as_str()) {
                 Some(iss) if iss == required_iss => {}
@@ -167,7 +168,6 @@ impl JwtDecoder {
             }
         }
 
-        // Validate aud (if policy requires it)
         if let Some(ref required_aud) = self.inner.validation.require_audience {
             match payload.get("aud").and_then(|v| v.as_str()) {
                 Some(aud) if aud == required_aud => {}
@@ -175,7 +175,6 @@ impl JwtDecoder {
             }
         }
 
-        // Deserialize into the requested type
         serde_json::from_value(payload).map_err(|_| jwt_err(JwtError::DeserializationFailed))
     }
 }

@@ -55,6 +55,8 @@ pub mod totp;
 
 pub mod oauth;
 
+mod internal;
+
 // Back-compat re-export — jwt now lives at `auth::session::jwt`.
 // This alias keeps `modo::auth::jwt::*` working without breakage.
 pub use crate::auth::session::jwt;

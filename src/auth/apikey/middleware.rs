@@ -115,19 +115,16 @@ where
         Box::pin(async move {
             let (mut parts, body) = request.into_parts();
 
-            // Extract raw token from header
             let raw_token = match extract_token(&parts, &header) {
                 Ok(token) => token,
                 Err(e) => return Ok(e.into_response()),
             };
 
-            // Verify
             let meta = match store.verify(raw_token).await {
                 Ok(m) => m,
                 Err(e) => return Ok(e.into_response()),
             };
 
-            // Insert into extensions
             parts.extensions.insert(meta);
 
             let request = Request::from_parts(parts, body);
