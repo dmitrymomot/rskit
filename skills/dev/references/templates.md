@@ -12,11 +12,10 @@ use modo::template::{
 The `context!` macro from MiniJinja is also re-exported: `modo::template::context`.
 
 For internationalization (the `t()` template function, `Translator` extractor,
-locale resolvers), see `skills/dev/references/i18n.md` and
-`src/i18n/README.md`. Pass an `I18n` handle to `EngineBuilder::i18n(...)` to
-register `t()` on the engine; install `I18nLayer` upstream of
-`TemplateContextLayer` so the middleware can copy the resolved locale into
-the template context.
+locale resolvers), see the `modo::i18n` rustdocs and `src/i18n/README.md`.
+Pass an `I18n` handle to `EngineBuilder::i18n(...)` to register `t()` on the
+engine; install `I18nLayer` upstream of `TemplateContextLayer` so the
+middleware can copy the resolved locale into the template context.
 
 ---
 
