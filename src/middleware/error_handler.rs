@@ -144,6 +144,11 @@ where
         // Clone parts before consuming the request so the error handler can
         // inspect method, URI, headers, etc.
         let (parts, body) = req.into_parts();
+        // NOTE: parts are cloned on every request so the handler callback can
+        // read headers / extensions on the error path. For 2xx responses this
+        // clone is unused — if this becomes a hot-path bottleneck, wrap parts
+        // in an Arc (copy-on-write) or redesign the handler to take only the
+        // extensions slice that default_error_handler actually reads.
         let saved_parts = parts.clone();
         let req = http::Request::from_parts(parts, body);
 

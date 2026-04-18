@@ -22,6 +22,11 @@ struct Inner {
     translations: HashMap<String, HashMap<String, Entry>>,
     default_locale: String,
     plural_rules: HashMap<String, PluralRules>,
+    /// English cardinal plural rules used as a fallback when the requested
+    /// locale has no loaded entry in `plural_rules`. Built once during
+    /// construction so `translate_plural` for unknown locales does not
+    /// allocate a new `PluralRules` on every call.
+    fallback_plural_rules: PluralRules,
 }
 
 /// In-memory store of translation entries loaded from YAML files on disk.
@@ -55,11 +60,15 @@ impl TranslationStore {
     /// rules are populated lazily as translations are loaded, so an empty
     /// store holds no plural-rule entries.
     pub(super) fn empty(default_locale: &str) -> Self {
+        let en: LanguageIdentifier = "en".parse().expect("en is a valid language tag");
+        let fallback_plural_rules = PluralRules::create(en, PluralRuleType::CARDINAL)
+            .expect("en plural rules creation cannot fail");
         Self {
             inner: Arc::new(Inner {
                 translations: HashMap::new(),
                 default_locale: default_locale.to_string(),
                 plural_rules: HashMap::new(),
+                fallback_plural_rules,
             }),
         }
     }
@@ -92,19 +101,21 @@ impl TranslationStore {
                 continue;
             }
 
-            let locale = locale_path
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
+            let Some(locale) = locale_path.file_name().and_then(|n| n.to_str()) else {
+                tracing::warn!(
+                    path = %locale_path.display(),
+                    "skipping non-UTF-8 locale directory name"
+                );
+                continue;
+            };
 
             let locale_entries = load_locale_dir(&locale_path)?;
-            translations.insert(locale, locale_entries);
+            translations.insert(locale.to_string(), locale_entries);
         }
 
-        let en: LanguageIdentifier = "en".parse().unwrap();
-        let en_rules = PluralRules::create(en.clone(), PluralRuleType::CARDINAL).unwrap();
+        let en: LanguageIdentifier = "en".parse().expect("en is a valid language tag");
+        let en_rules = PluralRules::create(en.clone(), PluralRuleType::CARDINAL)
+            .expect("en plural rules creation cannot fail");
         let mut plural_rules = HashMap::new();
         for locale_str in translations.keys() {
             let lang_id: LanguageIdentifier = locale_str.parse().unwrap_or_else(|_| en.clone());
@@ -118,6 +129,7 @@ impl TranslationStore {
                 translations,
                 default_locale: default_locale.to_string(),
                 plural_rules,
+                fallback_plural_rules: en_rules,
             }),
         })
     }
@@ -152,6 +164,15 @@ impl TranslationStore {
     /// Translates `key` with plural-rule selection based on `count`.
     ///
     /// `count` is also injected into `kwargs` under the name `count`.
+    ///
+    /// # Cross-locale fallback
+    ///
+    /// When an entry is missing in the requested locale, the default locale's
+    /// entry is used. Plural rule selection still uses the **requesting**
+    /// locale's rules (e.g., Ukrainian `FEW` / `MANY` categories applied
+    /// against English `one` / `other` forms map to `other`). This keeps
+    /// grammatical selection consistent with the user's language even though
+    /// the fallback copy is authored for a different one.
     pub fn translate_plural(
         &self,
         locale: &str,
@@ -220,10 +241,11 @@ impl TranslationStore {
         if let Some(rules) = self.inner.plural_rules.get(locale) {
             rules.select(abs_count).unwrap_or(PluralCategory::OTHER)
         } else {
-            // Fallback to English rules for unknown locales
-            let en: LanguageIdentifier = "en".parse().unwrap();
-            let rules = PluralRules::create(en, PluralRuleType::CARDINAL).unwrap();
-            rules.select(abs_count).unwrap_or(PluralCategory::OTHER)
+            // Fallback to cached English rules for unknown locales.
+            self.inner
+                .fallback_plural_rules
+                .select(abs_count)
+                .unwrap_or(PluralCategory::OTHER)
         }
     }
 }
@@ -294,7 +316,14 @@ pub(super) fn load_locale_dir(locale_path: &Path) -> crate::Result<HashMap<Strin
             continue;
         }
 
-        let namespace = path.file_stem().unwrap().to_str().unwrap().to_string();
+        let Some(namespace) = path.file_stem().and_then(|n| n.to_str()) else {
+            tracing::warn!(
+                path = %path.display(),
+                "skipping non-UTF-8 translation file name"
+            );
+            continue;
+        };
+        let namespace = namespace.to_string();
 
         let content = std::fs::read_to_string(&path).map_err(|e| {
             crate::Error::internal(format!("Failed to read {}: {e}", path.display()))
@@ -349,7 +378,13 @@ pub(super) fn flatten_yaml(
         serde_yaml_ng::Value::String(s) => {
             entries.insert(prefix.to_string(), Entry::Plain(s.clone()));
         }
-        _ => {}
+        other => {
+            tracing::warn!(
+                key = %prefix,
+                ?other,
+                "translation value is not a string or mapping — ignored"
+            );
+        }
     }
 }
 
@@ -429,8 +464,12 @@ pub fn make_t_function(
             })?
         };
 
-        // Consume all kwargs to avoid "unexpected keyword argument" errors
-        kwargs.assert_all_used().ok();
+        // Consume all kwargs to avoid "unexpected keyword argument" errors.
+        // Surface unused kwargs via tracing so typos are visible during
+        // development without breaking template rendering.
+        if let Err(e) = kwargs.assert_all_used() {
+            tracing::warn!(key = %key, error = %e, "unused template kwargs in t() call");
+        }
 
         Ok(result)
     }
