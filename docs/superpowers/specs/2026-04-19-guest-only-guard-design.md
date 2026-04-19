@@ -155,8 +155,8 @@ No version bump implied by this change alone. If bundled with other version-bump
 
 After the implementation and tests land:
 
-- Run the `rust-doc` skill to audit doc comments and generate/update any README entries for affected modules.
-- Run the skill-sync pass (exact skill name TBD — user mentioned `sync-skill`, which is not in the current skills list; likely refers to updating `skills/dev/references/auth.md` and related references to match the new framework behavior).
+- Run the `rust-doc` skill (global) to audit doc comments and generate/update any README entries for affected modules.
+- Run the `sync-skill` skill (modo local skill) to update `skills/dev/references/auth.md` and related skill references to match the new framework behavior.
 
 These run in the implementation session, not in the planning step.
 
