@@ -340,6 +340,7 @@ mod tests {
             default_locale: "en".into(),
             cache_templates: false,
             template_cache_size: 10,
+            inline_css: true,
             smtp,
         }
     }
