@@ -23,7 +23,6 @@
 //! ```rust,no_run
 //! use modo::{Config, Result};
 //! use modo::axum::{Router, routing::get};
-//! use modo::runtime::Task;
 //!
 //! async fn hello() -> &'static str { "Hello, modo!" }
 //!

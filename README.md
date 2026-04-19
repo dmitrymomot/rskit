@@ -21,10 +21,9 @@ Built on [axum 0.8](https://github.com/tokio-rs/axum), so you keep full access t
 
 ## Quick look
 
-```rust
+```rust,no_run
 use modo::{Config, Result};
 use modo::axum::{Router, routing::get};
-use modo::runtime::Task;
 
 async fn hello() -> &'static str {
     "Hello, modo!"
@@ -34,8 +33,7 @@ async fn hello() -> &'static str {
 async fn main() -> Result<()> {
     let config: Config = modo::config::load("config/")?;
 
-    let app = Router::new()
-        .route("/", get(hello));
+    let app = Router::new().route("/", get(hello));
 
     let server = modo::server::http(app, &config.server).await?;
     modo::run!(server).await
@@ -56,17 +54,17 @@ database:
   url: ${DATABASE_URL}
 ```
 
-```rust
-let config: Config = modo::config::load("config/")?;
+```rust,ignore
+let config: modo::Config = modo::config::load("config/")?;
 ```
 
 ### Database without an ORM
 
 SQLite via libsql. A single `Database` handle wraps an `Arc`-ed connection — clone-friendly, no pool complexity.
 
-```rust
-let pool = db::connect(&config.database).await?;
-db::migrate("migrations/", &pool).await?;
+```rust,ignore
+let db = modo::db::connect(&config.database).await?;
+modo::db::migrate(db.conn(), "migrations").await?;
 ```
 
 ### Sessions with zero glue code
@@ -111,9 +109,9 @@ async fn refresh(jwt: JwtSession) -> Result<Json<TokenPair>> {
 
 Password hashing (Argon2id), TOTP (Google Authenticator compatible), one-time codes, backup codes, JWT with middleware, OAuth2 (GitHub, Google) — all plain functions and types, no annotations.
 
-```rust
-let hash = auth::password::hash(password, &PasswordConfig::default()).await?;
-let valid = auth::password::verify(password, &hash).await?;
+```rust,ignore
+let hash = modo::auth::password::hash(password, &PasswordConfig::default()).await?;
+let valid = modo::auth::password::verify(password, &hash).await?;
 
 let totp = Totp::from_base32(secret, &TotpConfig::default())?;
 let ok = totp.verify(user_code);
@@ -123,7 +121,7 @@ let ok = totp.verify(user_code);
 
 SQLite-backed queue with retries, exponential backoff, timeouts, scheduled execution, and idempotent enqueue. Handlers use the same extraction pattern as HTTP routes.
 
-```rust
+```rust,ignore
 async fn send_email(Payload(p): Payload<Email>, Service(mailer): Service<Mailer>) -> Result<()> {
     mailer.send(&p.to, &p.body).await
 }
@@ -132,14 +130,14 @@ let worker = Worker::builder(&config.job, &registry)
     .register("send_email", send_email)
     .start().await;
 
-Enqueuer::new(&pool).enqueue("send_email", &payload).await?;
+Enqueuer::new(db.clone()).enqueue("send_email", &payload).await?;
 ```
 
 ### Graceful shutdown in one line
 
 The `run!` macro waits for SIGTERM/SIGINT, then shuts down each component in declaration order. No cancellation tokens, no orchestration code.
 
-```rust
+```rust,ignore
 modo::run!(worker, server).await
 ```
 
@@ -147,13 +145,15 @@ modo::run!(worker, server).await
 
 `Registry` is a typed map. `.add()` at startup, `Service<T>` in handlers. No `#[inject]`, no container config, no runtime reflection.
 
-```rust
+```rust,ignore
+use modo::service::{Registry, Service};
+
 let mut registry = Registry::new();
-registry.add(pool);
-registry.add(mailer);
+registry.add(db);      // modo::db::Database
+registry.add(mailer);  // your mailer type
 
 // In any handler:
-async fn list_users(Service(pool): Service<Pool>) -> Result<Json<Vec<User>>> { ... }
+async fn list_users(Service(db): Service<Database>) -> Result<Json<Vec<User>>> { /* ... */ }
 ```
 
 ### Request extraction with auto-sanitization
@@ -206,13 +206,14 @@ modo = { package = "modo-rs", version = "0.10", features = ["test-helpers"] }
 
 For handler-time imports, prefer the prelude:
 
-```rust
+```rust,ignore
 use modo::prelude::*;
 ```
 
-The prelude brings in the ambient extractors, error/result types, and tracing
-macros that handlers reach for. Module-specific items (`modo::auth::session::Store`,
-`modo::job::Worker`, etc.) are reached through their module path.
+The prelude brings in the ambient extractors, error/result types, and
+validation traits that handlers reach for. Module-specific items
+(`modo::auth::session::CookieSessionService`, `modo::job::Worker`, etc.) are
+reached through their module path.
 
 ## Re-exports
 
