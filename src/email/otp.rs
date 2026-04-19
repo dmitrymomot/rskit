@@ -24,7 +24,6 @@ pub fn render_otp_html(code: &str) -> String {
 ///
 /// Returns a string with leading and trailing `\n\n` so it sits as its own
 /// block in surrounding paragraph flow.
-#[allow(dead_code)] // wired up in markdown_to_text (Task 5)
 pub fn render_otp_text(code: &str) -> String {
     format!("\n\n{code}\n\n")
 }

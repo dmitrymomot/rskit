@@ -10,7 +10,7 @@ enum ScanCtx {
     Text,
     /// Inside a single- or multi-backtick code span; `ticks` is the run length.
     CodeSpan { ticks: usize },
-    /// Inside a fenced code block; `fence` is the opening fence character (`\`` or `~`).
+    /// Inside a fenced code block; `fence_char` is the opening fence character (`\`` or `~`).
     Fence { fence_char: u8 },
 }
 
@@ -235,7 +235,8 @@ pub fn markdown_to_html(markdown: &str, brand_color: Option<&str>) -> String {
 
 /// Convert markdown to plain text.
 pub fn markdown_to_text(markdown: &str) -> String {
-    let parser = Parser::new_ext(markdown, Options::all());
+    let preprocessed = transform_otp(markdown, otp::render_otp_text);
+    let parser = Parser::new_ext(&preprocessed, Options::all());
     let mut text = String::new();
     let mut in_link: Option<String> = None; // holds URL
     let mut link_text = String::new();
@@ -399,6 +400,10 @@ mod tests {
         assert!(html.contains(">123456<"));
         assert!(html.contains("Your code is"));
         assert!(html.contains("enter it"));
+        assert!(
+            html.contains("—"),
+            "em dash must survive scanner (UTF-8 regression guard)"
+        );
     }
 
     #[test]
@@ -455,5 +460,26 @@ mod tests {
         let html = markdown_to_html("[otp|111] and [otp|222]", None);
         assert!(html.contains(">111<"));
         assert!(html.contains(">222<"));
+    }
+
+    #[test]
+    fn text_otp_basic() {
+        let text = markdown_to_text("Your code is [otp|123456] — enter it.");
+        assert!(text.contains("123456"));
+        // Code appears on its own line (blank line before and after)
+        let idx = text.find("123456").unwrap();
+        assert!(text[..idx].ends_with("\n\n") || text[..idx].ends_with('\n'));
+    }
+
+    #[test]
+    fn text_otp_in_code_span_literal() {
+        let text = markdown_to_text("Use `[otp|123]` syntax");
+        assert!(text.contains("[otp|123]"));
+    }
+
+    #[test]
+    fn text_otp_escaped_literal() {
+        let text = markdown_to_text(r"\[otp|123]");
+        assert!(text.contains("[otp|123]"));
     }
 }
