@@ -268,6 +268,114 @@ where
     }
 }
 
+// --- require_unauthenticated ---
+
+/// Creates a guard layer that redirects requests *with* a [`Session`] in
+/// extensions to `redirect_to`. Use it on guest-only routes (login, signup,
+/// magic-link entry) so an already-signed-in caller doesn't see the login
+/// form.
+///
+/// # Response behavior
+///
+/// When a session is present:
+/// - **htmx** (`hx-request: true`) — `200 OK` with `HX-Redirect: <redirect_to>`
+/// - **non-htmx** — `303 See Other` with `Location: <redirect_to>`
+///
+/// When a session is absent, the request is forwarded to the inner service.
+///
+/// # Wiring
+///
+/// Apply with `.route_layer()` so the guard runs after route matching.
+/// The session middleware ([`CookieSessionLayer`](crate::auth::session::CookieSessionLayer)
+/// or the JWT session middleware) must run earlier via `.layer()` so that
+/// [`Session`] is in extensions when this guard runs.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # fn example() {
+/// use axum::Router;
+/// use axum::routing::get;
+/// use modo::auth::guard::require_unauthenticated;
+///
+/// let app: Router = Router::new()
+///     .route("/auth", get(|| async { "login page" }))
+///     .route_layer(require_unauthenticated("/app"));
+/// # }
+/// ```
+pub fn require_unauthenticated(redirect_to: impl Into<String>) -> RequireUnauthenticatedLayer {
+    RequireUnauthenticatedLayer {
+        redirect_to: Arc::new(redirect_to.into()),
+    }
+}
+
+/// Tower layer produced by [`require_unauthenticated()`].
+pub struct RequireUnauthenticatedLayer {
+    redirect_to: Arc<String>,
+}
+
+impl Clone for RequireUnauthenticatedLayer {
+    fn clone(&self) -> Self {
+        Self {
+            redirect_to: self.redirect_to.clone(),
+        }
+    }
+}
+
+impl<S> Layer<S> for RequireUnauthenticatedLayer {
+    type Service = RequireUnauthenticatedService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        RequireUnauthenticatedService {
+            inner,
+            redirect_to: self.redirect_to.clone(),
+        }
+    }
+}
+
+/// Tower service produced by [`RequireUnauthenticatedLayer`].
+pub struct RequireUnauthenticatedService<S> {
+    inner: S,
+    redirect_to: Arc<String>,
+}
+
+impl<S: Clone> Clone for RequireUnauthenticatedService<S> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            redirect_to: self.redirect_to.clone(),
+        }
+    }
+}
+
+impl<S> Service<Request<Body>> for RequireUnauthenticatedService<S>
+where
+    S: Service<Request<Body>, Response = http::Response<Body>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send + 'static,
+{
+    type Response = http::Response<Body>;
+    type Error = S::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: Request<Body>) -> Self::Future {
+        let redirect_to = self.redirect_to.clone();
+        let mut inner = self.inner.clone();
+        std::mem::swap(&mut self.inner, &mut inner);
+
+        Box::pin(async move {
+            if request.extensions().get::<Session>().is_some() {
+                return Ok(redirect_response(&redirect_to, request.headers()));
+            }
+            inner.call(request).await
+        })
+    }
+}
+
 // --- require_scope ---
 
 /// Creates a guard layer that rejects requests unless the verified API
@@ -587,6 +695,68 @@ mod tests {
         }));
 
         let req = Request::builder().body(Body::empty()).unwrap();
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+        assert!(!called.load(Ordering::SeqCst));
+    }
+
+    // --- require_unauthenticated tests ---
+
+    #[tokio::test]
+    async fn require_unauthenticated_passes_when_session_absent() {
+        let layer = require_unauthenticated("/app");
+        let svc = layer.layer(tower::service_fn(ok_handler));
+
+        let req = Request::builder().body(Body::empty()).unwrap();
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn require_unauthenticated_redirects_non_htmx_when_session_present() {
+        let layer = require_unauthenticated("/app");
+        let svc = layer.layer(tower::service_fn(ok_handler));
+
+        let mut req = Request::builder().body(Body::empty()).unwrap();
+        req.extensions_mut().insert(test_session());
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+        assert_eq!(resp.headers().get(http::header::LOCATION).unwrap(), "/app");
+    }
+
+    #[tokio::test]
+    async fn require_unauthenticated_redirects_htmx_when_session_present() {
+        let layer = require_unauthenticated("/app");
+        let svc = layer.layer(tower::service_fn(ok_handler));
+
+        let mut req = Request::builder()
+            .header("hx-request", "true")
+            .body(Body::empty())
+            .unwrap();
+        req.extensions_mut().insert(test_session());
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.headers().get("hx-redirect").unwrap(), "/app");
+    }
+
+    #[tokio::test]
+    async fn require_unauthenticated_does_not_call_inner_on_reject() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let called = Arc::new(AtomicBool::new(false));
+        let called_clone = called.clone();
+
+        let layer = require_unauthenticated("/app");
+        let svc = layer.layer(tower::service_fn(move |_req: Request<Body>| {
+            let called = called_clone.clone();
+            async move {
+                called.store(true, Ordering::SeqCst);
+                Ok::<_, Infallible>(Response::new(Body::from("should not reach")))
+            }
+        }));
+
+        let mut req = Request::builder().body(Body::empty()).unwrap();
+        req.extensions_mut().insert(test_session());
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::SEE_OTHER);
         assert!(!called.load(Ordering::SeqCst));
