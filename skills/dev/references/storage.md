@@ -223,7 +223,7 @@ let key = storage.put_from_url_with(&input, PutOptions {
 - **Signing**: AWS SigV4 signing implemented in `signing.rs`. All S3 requests are signed with HMAC-SHA256.
 - **Presigning**: `presign.rs` generates presigned GET URLs with configurable expiry.
 - **Backend enum**: `BackendKind::Remote(Box<RemoteBackend>)` for real S3, `BackendKind::Memory(MemoryBackend)` for tests.
-- **HTTP client**: Uses `reqwest::Client`. `Storage::new()` creates its own client; `Storage::with_client()` accepts a shared client for connection pooling across multiple `Storage` instances.
+- **HTTP client**: Uses `reqwest::Client`. `Storage::new()` creates its own client; `Storage::with_client()` accepts a shared client for connection pooling across multiple `Storage` instances. The shared client is used only for S3 operations (PUT, DELETE, HEAD, LIST). URL fetching (`put_from_url`) always uses a separate internal client with redirects disabled.
 - **XML parsing**: Hand-parsed `<Key>` and `<IsTruncated>` tags from ListObjectsV2 responses.
 - **Bridge**: `PutInput::from_upload()` bridges the multipart `UploadedFile` extractor to storage input.
 

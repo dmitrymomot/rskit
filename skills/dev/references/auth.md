@@ -621,8 +621,9 @@ pub trait RoleExtractor: Send + Sync + 'static {
 }
 ```
 
-RPITIT -- **not object-safe**. Use as a concrete type parameter on
-`modo::auth::role::middleware(...)`; never `dyn RoleExtractor`.
+RPITIT -- **not object-safe**. Always use it as a generic parameter bound
+on `modo::auth::role::middleware(...)`; never `dyn RoleExtractor` or
+`Box<dyn ...>`.
 
 Takes `&mut Parts` so it can call axum extractors (e.g.,
 `modo::auth::session::Session`, `modo::auth::Bearer`) internally. Return

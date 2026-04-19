@@ -68,7 +68,8 @@ pub use tokio;
 All other types live under their module path. `modo::prelude::*` brings in the
 ambient extractors reached for in almost every handler
 (`Error`, `Result`, `AppState`, `Role`, `Session`, `Flash`, `ClientIp`,
-`Tenant`, `TenantId`, `Validate`, `ValidationError`, `Validator`).
+`Tenant`, `TenantId`, `I18n`, `Translator`, `Validate`, `ValidationError`,
+`Validator`).
 
 Flat aggregators: `modo::extractors`, `modo::middlewares`, `modo::guards`
 re-export every extractor / Tower Layer / route guard modo ships for ergonomic
@@ -105,6 +106,7 @@ pub struct Error {
     message: String,
     source: Option<Box<dyn std::error::Error + Send + Sync>>,
     error_code: Option<&'static str>,
+    locale_key: Option<&'static str>,
     details: Option<serde_json::Value>,
     lagged: bool,
 }
@@ -116,6 +118,7 @@ pub struct Error {
 // Generic
 Error::new(status: StatusCode, message: impl Into<String>) -> Self
 Error::with_source(status: StatusCode, message: impl Into<String>, source: impl Error + Send + Sync + 'static) -> Self
+Error::localized(status: StatusCode, key: &'static str) -> Self  // message = key, locale_key = Some(key)
 
 // Named status codes
 Error::bad_request(msg: impl Into<String>) -> Self       // 400
@@ -138,6 +141,7 @@ Error::lagged(skipped: u64) -> Self                      // 500, SSE-specific
 fn chain(self, source: impl Error + Send + Sync + 'static) -> Self  // attach source error
 fn with_code(self, code: &'static str) -> Self                       // attach error identity code
 fn with_details(self, details: serde_json::Value) -> Self            // attach structured JSON payload
+fn with_locale_key(self, key: &'static str) -> Self                  // tag with translation key, preserve message
 ```
 
 **Accessors:**
@@ -146,7 +150,8 @@ fn with_details(self, details: serde_json::Value) -> Self            // attach s
 fn status(&self) -> StatusCode
 fn message(&self) -> &str
 fn details(&self) -> Option<&serde_json::Value>
-fn error_code(&self) -> Option<&str>
+fn error_code(&self) -> Option<&'static str>
+fn locale_key(&self) -> Option<&'static str>
 fn source_as<T: Error + 'static>(&self) -> Option<&T>  // downcast source
 fn is_lagged(&self) -> bool
 ```
@@ -190,8 +195,9 @@ Error::unauthorized("unauthorized")
 ### Gotchas
 
 - `with_source(status, msg, source)` is a 3-arg constructor. The builder method is `chain(source)` (1 arg). Do not confuse them.
-- `Clone` drops `source` (can't clone `Box<dyn Error>`). `error_code`, `details`, and all other fields are preserved.
+- `Clone` drops `source` (can't clone `Box<dyn Error>`). `error_code`, `locale_key`, `details`, and all other fields are preserved.
 - `IntoResponse` also drops `source`. Use `error_code` to preserve identity through the response pipeline.
+- `Error::localized(status, key)` sets `message = key` and `locale_key = Some(key)` — the default error handler resolves the key via the request's `Translator` at response-build time and falls back to the key string when none is installed. Use `Error::with_locale_key(key)` on an existing error to attach a translation key while keeping a descriptive `message` for logs.
 - Adding fields to `Error` requires updating ALL struct literal sites (including `IntoResponse` and `Clone` impls).
 - Guard/middleware errors must use `Error::into_response()` -- never construct raw HTTP responses.
 

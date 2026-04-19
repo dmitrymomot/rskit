@@ -2,7 +2,7 @@
 
 Lightweight libsql (SQLite) database layer. Single connection per handle, no ORM. Optional `DatabasePool` for multi-database sharding. One module: `src/db/`.
 
-Feature flag: `db` (default). Dependencies: `libsql`, `urlencoding`.
+Always compiled — no feature flag. Dependencies: `libsql`, `urlencoding`.
 
 Re-exports `libsql` crate for direct access to `libsql::params!`, `libsql::Value`, `libsql::Connection`, `libsql::Transaction`.
 

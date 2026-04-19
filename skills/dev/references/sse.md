@@ -62,7 +62,7 @@ fn config(&self) -> &SseConfig
 fn response<S>(&self, stream: S) -> Response
 
 // Create an SSE response with an imperative sender (spawns a tokio task).
-// Closure must return Result<(), Error> and be Send + 'static.
+// F: FnOnce(Sender) -> Fut + Send + 'static, Fut: Future<Output = Result<(), Error>> + Send.
 fn channel<F, Fut>(&self, f: F) -> Response
 ```
 
@@ -74,7 +74,7 @@ fn channel<F, Fut>(&self, f: F) -> Response
 
 ## BroadcastStream
 
-`BroadcastStream<T>` implements `Stream<Item = Result<T, Error>>` and `Drop` (cleanup closure). It yields raw `T` values, not `Event`s. Convert downstream with `SseStreamExt::cast_events()`. Requires `T: Clone + Send + 'static`.
+`BroadcastStream<T>` implements `Stream<Item = Result<T, Error>>` and `Drop` (cleanup closure). It yields raw `T` values, not `Event`s. Convert downstream with `SseStreamExt::cast_events()`. Methods on this type require `T: Clone + Send + 'static`.
 
 ### Construction
 

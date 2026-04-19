@@ -307,12 +307,16 @@ let session = TestSession::with_config(&db, session_config, cookie_config).await
 | `INDEXES_SQL` | `&'static [&'static str]` | Slice of `CREATE INDEX` statements for the sessions table.       |
 
 These constants let integration tests create the schema without going through
-`TestSession::new`:
+`TestSession::new`. Because `TestDb::exec` consumes `self`, chain the calls or
+use `ConnExt::execute_raw` directly:
 
 ```rust
-db.exec(TestSession::SCHEMA_SQL).await;
+use modo::db::ConnExt;
+
+let db = TestDb::new().await;
+db.db().conn().execute_raw(TestSession::SCHEMA_SQL, ()).await.unwrap();
 for sql in TestSession::INDEXES_SQL {
-    db.exec(sql).await;
+    db.db().conn().execute_raw(*sql, ()).await.unwrap();
 }
 ```
 

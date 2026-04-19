@@ -117,7 +117,7 @@ Errors at step 1 or 2 short-circuit -- the inner service is never called and the
 pub struct Tenant<T>(/* Arc<T> */);
 ```
 
-Implements `FromRequestParts`, `OptionalFromRequestParts`, `Deref<Target = T>`, `Clone`, and `Debug` (when `T: Debug`).
+Implements `FromRequestParts`, `OptionalFromRequestParts`, `Deref<Target = T>`, `Clone`, and `Debug` (when `T: Debug`). Both extractor impls require `T: HasTenantId + Send + Sync + Clone + 'static`.
 
 - `Tenant<T>` -- returns 500 if middleware is not applied (developer error).
 - `Option<Tenant<T>>` -- returns `None` if no tenant in extensions.
@@ -294,6 +294,7 @@ pub enum FeatureAccess {
 ### `modo::tier::TierInfo`
 
 ```rust
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TierInfo {
     pub name: String,
     pub features: HashMap<String, FeatureAccess>,

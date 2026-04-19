@@ -1,4 +1,4 @@
-# Templates (MiniJinja, HTMX)
+# Templates (MiniJinja, HTMX) and i18n
 
 Always available — import directly from `modo::template`:
 
@@ -11,11 +11,20 @@ use modo::template::{
 
 The `context!` macro from MiniJinja is also re-exported: `modo::template::context`.
 
-For internationalization (the `t()` template function, `Translator` extractor,
-locale resolvers), see the `modo::i18n` rustdocs and `src/i18n/README.md`.
+Internationalization lives in a sibling module — import from `modo::i18n`:
+
+```rust
+use modo::i18n::{
+    AcceptLanguageResolver, CookieResolver, I18n, I18nConfig, I18nLayer,
+    LocaleResolver, QueryParamResolver, SessionResolver, TranslationStore,
+    Translator, make_t_function,
+};
+```
+
 Pass an `I18n` handle to `EngineBuilder::i18n(...)` to register `t()` on the
 engine; install `I18nLayer` upstream of `TemplateContextLayer` so the
-middleware can copy the resolved locale into the template context.
+middleware can copy the resolved locale into the template context. See the
+[i18n](#i18n-modoi18n) section below.
 
 ---
 
@@ -233,3 +242,237 @@ The return value uses `Value::from_safe_string()` so it is not HTML-escaped.
 - **Hot-reload is debug-only**: Template cache is only cleared per-render in debug builds.
 - **`render()` is `pub(crate)`**: Handlers must use the `Renderer` extractor, not `Engine::render()` directly.
 - **`t()` requires `I18nLayer` upstream**: The `t()` function reads `locale` from the template context. `TemplateContextLayer` only sets `locale` when `I18nLayer` has already injected a `Translator` into request extensions. Without upstream `I18nLayer`, `t()` falls back to the store's default locale.
+
+---
+
+## i18n (`modo::i18n`)
+
+YAML-backed translations with request-scoped locale resolution. Loads
+translations from disk, resolves the active locale from the request via a
+chain of resolvers, and exposes a `Translator` extractor plus a
+MiniJinja-compatible `t()` function for the template engine.
+
+### I18nConfig
+
+`#[non_exhaustive]`. Derives `Debug`, `Clone`, `Deserialize`. Has `impl Default` (manual, not derive). YAML-deserializable. All fields have defaults and support `#[serde(default)]`.
+
+| Field                | Type     | Default     | Purpose                                                       |
+| -------------------- | -------- | ----------- | ------------------------------------------------------------- |
+| `locales_path`       | `String` | `"locales"` | Directory containing per-locale subdirectories of YAML files. |
+| `default_locale`     | `String` | `"en"`      | BCP 47 tag used when no resolver matches.                     |
+| `locale_cookie`      | `String` | `"lang"`    | Cookie name read by `CookieResolver`.                         |
+| `locale_query_param` | `String` | `"lang"`    | Query-string parameter read by `QueryParamResolver`.          |
+
+Construct with `I18nConfig::default()` and field assignment (the type is
+`#[non_exhaustive]`).
+
+---
+
+### I18n (factory)
+
+`I18n` derives `Clone`. Wraps an `Arc<I18nInner>` — cheaply cloneable.
+
+```rust
+use modo::i18n::{I18n, I18nConfig};
+
+# fn example() -> modo::Result<()> {
+let i18n = I18n::new(&I18nConfig::default())?;
+
+let router: axum::Router = axum::Router::new()
+    .layer(i18n.layer());
+# let _ = router;
+# Ok(())
+# }
+```
+
+#### Methods
+
+- `new(&I18nConfig) -> modo::Result<Self>` — loads translations from
+  `config.locales_path`. If the directory does not exist, the store is
+  initialised empty and translations fall back to the key itself. Returns an
+  error if the directory exists but is unreadable, or if any locale YAML file
+  cannot be parsed.
+- `layer() -> I18nLayer` — returns a fresh Tower layer that resolves the
+  request locale and injects a `Translator` into request extensions.
+- `translator(locale) -> Translator` — builds a `Translator` for the given
+  locale outside the request lifecycle (background jobs, CLI, tests).
+- `store() -> &TranslationStore` — borrowed handle to the shared store. Pass
+  this to `make_t_function` if you need to wire `t()` manually.
+- `default_locale() -> &str` — configured default locale.
+
+---
+
+### I18nLayer (middleware)
+
+Tower middleware produced by `I18n::layer()`. Derives `Clone`. Runs the
+locale-resolver chain against each request, falls back to the configured
+default locale if nothing matches, and inserts the resulting `Translator`
+into request extensions.
+
+Install `I18nLayer` **outer** of `TemplateContextLayer` (outer layers run
+first in axum) so the template middleware can copy `locale` into the
+template context.
+
+---
+
+### Translator (axum extractor)
+
+Derives `Debug`, `Clone`. Per-request translator handle holding the resolved
+locale and a handle to the shared `TranslationStore`. Cheaply cloneable.
+
+```rust
+use modo::i18n::Translator;
+
+async fn handler(translator: Translator) -> String {
+    translator.t("common.greeting", &[])
+}
+```
+
+The extractor's `Rejection` is `modo::Error::internal("I18nLayer not installed")`
+with `error_code = "i18n:layer_missing"` when the request extension is
+missing.
+
+#### Methods
+
+- `t(key, kwargs) -> String` — translates `key`, interpolating `{placeholder}`
+  values from `kwargs: &[(&str, &str)]`. Falls back to the default locale and
+  finally to the key itself. Never panics.
+- `t_plural(key, count, kwargs) -> String` — plural-rule selection based on
+  `count: i64`. `count` is automatically appended to `kwargs` under the name
+  `count`.
+- `locale() -> &str` — resolved locale for this request.
+- `store() -> &TranslationStore` — shared store handle.
+
+---
+
+### TranslationStore
+
+In-memory store of translation entries. Derives `Clone` and a manual `Debug`
+impl that omits the inner `PluralRules`. Wraps `Arc<Inner>` — cheaply
+cloneable.
+
+Construction is internal — obtain via `I18n::store()`. Public methods:
+
+- `translate(locale, key, kwargs) -> modo::Result<String>` — looks up
+  `key` for `locale`, falls back to the default locale, then to the key
+  itself.
+- `translate_plural(locale, key, count, kwargs) -> modo::Result<String>` —
+  same fallback rules, with plural-category selection. When the requested
+  locale is missing the entry, the **default locale's** copy is used but
+  plural-rule selection still uses the **requesting** locale's rules.
+- `available_locales() -> Vec<String>` — locales discovered on disk
+  (unordered).
+- `default_locale() -> &str` — configured default locale.
+
+#### YAML layout
+
+Each subdirectory of `locales_path` is a locale. Each `.yaml` / `.yml` file
+inside is a namespace. Nested keys are flattened with `.`:
+
+```yaml
+# locales/en/common.yaml
+greeting: Hello
+auth:
+  login:
+    title: Log In
+```
+
+Resulting keys: `common.greeting`, `common.auth.login.title`.
+
+A mapping whose keys are exclusively a subset of `zero | one | two | few |
+many | other` (and that contains `other`) is treated as a **plural entry**:
+
+```yaml
+# locales/en/items.yaml
+count:
+  one: "{count} item"
+  other: "{count} items"
+```
+
+`{placeholder}` segments are replaced by `kwargs`; unmatched placeholders are
+left as-is.
+
+---
+
+### LocaleResolver trait + built-in resolvers
+
+```rust
+pub trait LocaleResolver: Send + Sync {
+    fn resolve(&self, parts: &http::request::Parts) -> Option<String>;
+}
+```
+
+Object-safe — used through `Arc<dyn LocaleResolver>`. The first resolver in
+the chain that returns `Some` wins; if all return `None`, the configured
+default locale is used.
+
+Built-in resolvers:
+
+- **`QueryParamResolver::new(param_name, available_locales: &[String])`** —
+  reads `?<param_name>=<locale>` from the query string. Empty
+  `available_locales` means "accept any value verbatim".
+- **`CookieResolver::new(cookie_name, available_locales: &[String])`** —
+  reads `<cookie_name>` from the `Cookie` header. Empty `available_locales`
+  means "accept any value verbatim".
+- **`SessionResolver`** (unit struct) — reads the `"locale"` key from the
+  session JSON data. Requires `auth::session::SessionLayer` upstream.
+- **`AcceptLanguageResolver::new(available: &[&str])`** — parses the
+  `Accept-Language` header (with `q=` quality values, region tags stripped
+  to `en-US` → `en`) and returns the highest-quality language present in
+  `available`. Empty `available` means "match nothing" — the resolver can
+  only return values that appear in the list.
+
+#### Default chain
+
+`I18n::new` builds the following chain (each resolver receives the same
+`available_locales` list discovered on disk):
+
+1. `QueryParamResolver`
+2. `CookieResolver`
+3. `SessionResolver`
+4. `AcceptLanguageResolver`
+
+---
+
+### make_t_function
+
+```rust
+pub fn make_t_function(
+    store: TranslationStore,
+) -> impl Fn(&minijinja::State, &[minijinja::Value], minijinja::value::Kwargs)
+    -> Result<String, minijinja::Error>
++ Send + Sync + 'static
+```
+
+Builds the MiniJinja `t()` function used by the template engine. Reads the
+`locale` variable from the template state (falls back to the store's default
+locale when `locale` is missing or empty). A `count` kwarg switches to
+plural lookup. All other kwargs are forwarded to `{placeholder}`
+interpolation.
+
+Called automatically by `EngineBuilder::build()` whenever
+`EngineBuilder::i18n(handle)` was supplied. Use it directly only if you are
+constructing a MiniJinja `Environment` outside of `Engine`.
+
+---
+
+### i18n gotchas
+
+- **Empty allowlist asymmetry**: `QueryParamResolver` and `CookieResolver`
+  treat `&[]` as "accept any value". `AcceptLanguageResolver` treats `&[]` as
+  "match nothing". The default chain hands every resolver the same on-disk
+  locale list, so this only matters when wiring resolvers manually.
+- **Plural-rule fallback uses requesting locale**: when the entry is missing
+  in the requested locale, the default locale's copy is used but the
+  requesting locale's plural rules still drive category selection. Slavic
+  `FEW`/`MANY` matched against English `one`/`other` therefore collapses to
+  `other`.
+- **`Translator` extractor rejection**: missing `I18nLayer` returns
+  `Error::internal` with `error_code = "i18n:layer_missing"` (HTTP 500).
+- **`SessionResolver` needs the session layer**: it reads
+  `Arc<auth::session::SessionState>` from request extensions. Without
+  `SessionLayer` upstream it always returns `None`.
+- **`make_t_function` consumes all kwargs**: `kwargs.assert_all_used()` is
+  called after lookup to silence MiniJinja's "unexpected keyword argument"
+  errors. Unused kwargs are surfaced as `tracing::warn!` so typos remain
+  visible during development without breaking renders.

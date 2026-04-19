@@ -164,7 +164,7 @@ session:
     same_site: "lax"
 ```
 
-Back-compat alias: `SessionConfig = CookieSessionsConfig`.
+Back-compat aliases at `modo::auth::session::*`: `SessionConfig = CookieSessionsConfig`, `SessionData = Session`.
 
 ---
 
@@ -226,7 +226,7 @@ pub fn layer(service: CookieSessionService) -> CookieSessionLayer
 
 Back-compat alias: `SessionLayer = CookieSessionLayer`.
 
-The `layer()` free function and `CookieSessionService::layer()` method are equivalent. `layer()` is exposed only under `test-helpers`.
+The `layer()` free function and `CookieSessionService::layer()` method are equivalent. `modo::auth::session::cookie::layer` is always public; the re-export at `modo::auth::session::layer` is gated behind `test-helpers`.
 
 The middleware lifecycle per request:
 1. Extracts client IP from `ClientIp` extension (falls back to `ConnectInfo`)

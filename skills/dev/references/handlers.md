@@ -57,6 +57,7 @@ Handler-time prelude: `use modo::prelude::*;` brings in the ambient types reache
 - `Flash` -- per-request flash messages
 - `ClientIp` -- resolved client IP extractor
 - `Tenant`, `TenantId` -- multi-tenant extractor and identifier
+- `I18n`, `Translator` -- i18n factory and per-request translator
 - `Validate`, `ValidationError`, `Validator` -- request-body validation trait, error, fluent helper
 
 Less-universal extractors (JWT claims, OAuth providers, API keys, mailer, templates, jobs, storage, SSE, etc.) are intentionally NOT preluded -- import explicitly from `modo::extractors::*` or the feature module where used.
@@ -70,6 +71,7 @@ Flat index of every axum extractor modo ships. Re-exports (for `use modo::extrac
 - `Bearer`, `Claims` (from `auth::session::jwt`)
 - `Role`, `Session` (from `auth::role`, `auth::session`)
 - `Flash` (from `flash`)
+- `Translator` (from `i18n`)
 - `ClientInfo`, `ClientIp` (from `ip`)
 - `AppState` (from `service`)
 - `LastEventId` (from `sse`)
@@ -111,19 +113,22 @@ All middleware functions return Tower-compatible layers. Apply them with `.layer
 - **lower_case names are free functions** -- call directly:
     - `mw::role(extractor)` (from `auth::role::middleware`)
     - `mw::tenant(strategy, resolver)` (from `tenant::middleware`)
-    - Always-available universals: `mw::catch_panic()`, `mw::compression()`, `mw::cors(&cfg)`, `mw::csrf(&cfg, &key)`, `mw::error_handler(f)`, `mw::rate_limit(&cfg, cancel)`, `mw::request_id()`, `mw::security_headers(&cfg)?`, `mw::tracing()`
-- **PascalCase names are `Layer` structs** -- call `::new(...)`:
+    - Always-available universals: `mw::catch_panic()`, `mw::compression()`, `mw::cors(&cfg)`, `mw::csrf(&cfg, &key)`, `mw::default_error_handler`, `mw::error_handler(f)`, `mw::rate_limit(&cfg, cancel)`, `mw::request_id()`, `mw::security_headers(&cfg)?`, `mw::tracing()`
+- **PascalCase names are `Layer` structs** -- call `::new(...)` (or use the domain-module factory's `.layer()` method, where applicable):
     - `mw::Jwt::new(cfg)` (aliases `auth::session::jwt::JwtLayer`)
     - `mw::ApiKey::new(store)` (aliases `auth::apikey::ApiKeyLayer`)
     - `mw::Flash::new(cookie_cfg)` (aliases `flash::FlashLayer`)
     - `mw::Geo::new(...)` (aliases `geolocation::GeoLayer`)
+    - `mw::I18n` (aliases `i18n::I18nLayer`) -- typically constructed via `i18n.layer()` on a built `I18n` factory, not by calling `I18n::new` directly
     - `mw::ClientIp::new(trusted_proxies)` (aliases `ip::ClientIpLayer`)
     - `mw::TemplateContext::new(...)` (aliases `template::TemplateContextLayer`)
     - `mw::Tier::new(...)` (aliases `tier::TierLayer`)
 
+> **Name-shadow warning:** `mw::I18n` and `mw::Flash` collide with `prelude::I18n` (the factory) and `prelude::Flash` (the extractor). A file that does both `use modo::prelude::*;` and `use modo::middlewares::*;` will silently shadow whichever was imported first. The recommended convention is `use modo::middlewares as mw;` so layer names sit behind the `mw::` prefix.
+
 > **Note:** The `session` free function (`mw::session(...)`) is not exposed. Session middleware is constructed via `CookieSessionService::layer()` -- see `modo::auth::session::cookie::CookieSessionService`. The session layer is not re-exported from `modo::middlewares`.
 
-The underlying `modo::middleware` module (singular) ships only the universal always-available layers (CORS, CSRF, compression, request-id, tracing, catch-panic, error-handler, security-headers, rate-limit) along with their configs and supporting types (`CorsConfig`, `CsrfConfig`, `CsrfToken`, `RateLimitConfig`, `RateLimitLayer`, `SecurityHeadersConfig`, `KeyExtractor`, `PeerIpKeyExtractor`, `GlobalKeyExtractor`, predicates `subdomains`/`urls`).
+The underlying `modo::middleware` module (singular) ships only the universal always-available layers (CORS, CSRF, compression, request-id, tracing, catch-panic, error-handler, security-headers, rate-limit) along with their configs and supporting types (`CorsConfig`, `CsrfConfig`, `CsrfToken`, `RateLimitConfig`, `RateLimitLayer`, `SecurityHeadersConfig`, `KeyExtractor`, `PeerIpKeyExtractor`, `GlobalKeyExtractor`, `default_error_handler`, predicates `subdomains`/`urls`).
 
 ### Recommended Layer Order
 
@@ -305,7 +310,15 @@ async fn render_error(err: modo::Error, parts: http::request::Parts) -> axum::re
 let layer = error_handler(render_error);
 ```
 
-The handler receives the error and the original request `Parts` (method, URI, headers, extensions).
+The handler receives the error and the original request `Parts` (method, URI, headers, extensions). The `S::Error` of the inner service must satisfy `Into<std::convert::Infallible>`.
+
+**`default_error_handler`** -- a ready-made responder is provided that renders `{ "error": { "status": ..., "message": ... } }` JSON. When the error carries a translation key (via `Error::localized` / `Error::with_locale_key`) **and** a `Translator` is present in request extensions (typically inserted by `I18nLayer`), the key is resolved before the response is built. When pairing with `I18nLayer`, install `i18n.layer()` *outside* `error_handler` so the `Translator` is already attached when the handler clones the request parts.
+
+```rust
+use modo::middleware::{default_error_handler, error_handler};
+
+let layer = error_handler(default_error_handler);
+```
 
 ### Security Headers
 
@@ -460,7 +473,7 @@ server:
 
 ### Starting the Server
 
-`modo::server::http()` binds a TCP listener and returns an `HttpServer` (a public struct) that implements `Task`. Accepts `impl Into<axum::Router>`, so both a plain `axum::Router` and a `HostRouter` can be passed directly:
+`modo::server::http()` binds a TCP listener, spawns the server on a background Tokio task, and returns an `HttpServer` (a public struct) that implements `Task`. Accepts `impl Into<axum::Router>`, so both a plain `axum::Router` and a `HostRouter` can be passed directly. The router is wrapped in a `NormalizePathLayer` so trailing slashes are stripped before path matching (`/app` and `/app/` resolve to the same handler; root `/` is preserved):
 
 ```rust
 use modo::server::{Config, http};

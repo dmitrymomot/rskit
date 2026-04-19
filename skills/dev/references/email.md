@@ -6,11 +6,19 @@ Source: `src/email/`.
 
 ## Overview
 
-Markdown-based transactional email with SMTP delivery. Templates use YAML frontmatter for metadata, `{{var}}` placeholders for substitution, and a custom `[button|Label](url)` syntax for call-to-action buttons. Rendering produces both HTML (with layout) and plain-text (auto-derived) bodies, sent as `multipart/alternative`.
+Markdown-based transactional email with SMTP delivery. Templates use YAML frontmatter for metadata, `{{var}}` placeholders for substitution, and two custom inline elements: `[button|Label](url)` for call-to-action buttons and `[otp|CODE]` for one-time-code pills. Rendering produces both HTML (with layout, optionally CSS-inlined) and plain-text (auto-derived) bodies, sent as `multipart/alternative`.
 
 ## Configuration
 
 `EmailConfig` is `#[non_exhaustive]`. Derives `Debug`, `Clone`, `Deserialize`. Has `impl Default` (manual). Deserializes from YAML under the `email` key. All fields have defaults.
+
+Because `EmailConfig` is `#[non_exhaustive]`, build it via `EmailConfig::default()` plus field assignment when constructing in Rust:
+
+```rust
+let mut config = EmailConfig::default();
+config.default_from_email = "noreply@example.com".into();
+config.smtp.host = "smtp.example.com".into();
+```
 
 ```yaml
 email:
@@ -22,6 +30,7 @@ email:
     default_locale: en
     cache_templates: true
     template_cache_size: 100
+    inline_css: true # CSS inliner pass over rendered HTML
     smtp:
         host: smtp.example.com # default: "localhost"
         port: 587
@@ -31,6 +40,10 @@ email:
 ```
 
 `SmtpConfig` is `#[non_exhaustive]`. Derives `Debug`, `Clone`, `Deserialize`. Has `impl Default` (manual, defaults: host `"localhost"`, port `587`, no credentials, `StartTls` security).
+
+### `inline_css`
+
+When `true` (default), rendered HTML is passed through a CSS inliner that resolves rules from `<style>` blocks into per-element `style=""` attributes. The `<style>` block is retained so `@media` rules (dark mode, mobile) still apply on clients that honour them. Existing inline `style=""` on an element wins over rules from `<style>` per standard CSS specificity. Set to `false` to skip the inliner pass — the supported opt-out when a custom layout cannot be parsed by the inliner.
 
 ### `SmtpSecurity` variants
 
@@ -91,25 +104,40 @@ HTML output uses a table-based layout for Outlook compatibility. Plain-text outp
 
 Unrecognized button types (e.g., `[button:unknown|X](url)`) render as a normal link.
 
+### OTP code syntax
+
+Use `[otp|CODE]` to render a styled one-time-code pill. The code body must match `[A-Za-z0-9-]{1,32}` -- spaces, punctuation, empty bodies, or codes longer than 32 chars fall through as literal text.
+
+```text
+Your code is [otp|123456]
+[otp|ABCD-1234]
+```
+
+HTML output is a monospaced, letter-spaced, rounded-background table cell with fully inline styles. Plain-text output places the code on its own block (blank line before and after).
+
+OTP rendering is suppressed inside fenced code blocks, code spans, and after a backslash escape (`\[otp|123]`). The same rules apply to button syntax via the standard Markdown parser.
+
 ## Layouts
 
 The built-in `base` layout provides:
 
-- 600px max-width, responsive (mobile collapses to full width)
+- 600px max-width, responsive (mobile collapses to full width below 620px)
 - Dark mode support (`prefers-color-scheme: dark`)
 - System font stack
 - MSO conditional comments for Outlook
+- XHTML 1.0 Transitional shell with inline light-theme styles for clients that strip `<style>`
 
 ### Conditional sections
 
 These template variables activate optional layout sections:
 
 - `logo_url` -- renders a centered logo image above the content card
+- `app_url` -- when paired with `logo_url`, wraps the logo in a link to `app_url`
 - `footer_text` -- renders a footer row below the content card
 
 ### Custom layouts
 
-Place `.html` files in the `layouts_path` directory. The file stem becomes the layout name (e.g., `marketing.html` -> `layout: marketing`). Custom layouts must contain a `{{content}}` placeholder and can use any `{{var}}` placeholders.
+Place `.html` files in the `layouts_path` directory. The file stem becomes the layout name (e.g., `marketing.html` -> `layout: marketing`). Custom layouts must contain a `{{content}}` placeholder and can use any `{{var}}` placeholders. If `layouts_path` does not exist, no custom layouts are loaded (no error). Non-`.html` files in the directory are silently ignored.
 
 ## Template Source
 
@@ -128,7 +156,7 @@ Constructor: `FileSource::new(templates_path: impl Into<PathBuf>) -> Self`.
 Loads `.md` files from disk with locale fallback chain:
 
 1. `{templates_path}/{locale}/{name}.md`
-2. `{templates_path}/{default_locale}/{name}.md`
+2. `{templates_path}/{default_locale}/{name}.md` (skipped when `locale == default_locale`)
 3. `{templates_path}/{name}.md`
 4. Error
 
@@ -145,7 +173,7 @@ LRU-cached wrapper around any `TemplateSource`. Implements `TemplateSource`. Cac
 ### Construction
 
 ```rust
-// Default file source (optionally cached based on config)
+// Default file source (wrapped in CachedSource when config.cache_templates is true)
 let mailer = Mailer::new(&email_config)?;
 
 // Custom source
@@ -156,6 +184,8 @@ let mailer = Mailer::with_source(&email_config, source)?;
 let stub = lettre::transport::stub::AsyncStubTransport::new_ok();
 let mailer = Mailer::with_stub_transport(&email_config, stub)?;
 ```
+
+All three constructors validate SMTP credentials (when applicable), build the SMTP/stub transport, and preload custom layouts from `layouts_path`. They return an error if the SMTP transport cannot be built (invalid host, mismatched credentials) or if the layouts directory exists but cannot be read.
 
 ### Rendering without sending
 
@@ -179,6 +209,7 @@ let email = SendEmail::new("welcome", "user@example.com")
     .var("name", "Dmytro")
     .var("brand_color", "#7c3aed")
     .var("logo_url", "https://example.com/logo.png")
+    .var("app_url", "https://example.com")
     .var("footer_text", "Copyright 2026 Modo Inc.")
     .sender(SenderProfile {
         from_name: "Support".into(),
@@ -198,9 +229,10 @@ Errors: empty recipient list, malformed addresses, SMTP delivery failures.
 1. **Load** -- `TemplateSource::load()` fetches raw template with locale fallback
 2. **Substitute** -- `{{var}}` placeholders replaced in the entire template string
 3. **Parse frontmatter** -- YAML block extracted, `subject` and `layout` read
-4. **Markdown to HTML** -- `pulldown-cmark` converts body; button syntax intercepted and rendered as table-based HTML
+4. **Markdown to HTML** -- `pulldown-cmark` converts body; `[otp|CODE]` is preprocessed into an inline pill, button syntax in links is intercepted and rendered as table-based HTML
 5. **Apply layout** -- Layout HTML wraps the rendered body; `{{content}}`, `{{logo_section}}`, `{{footer_section}}`, and any `{{var}}` placeholders resolved
-6. **Plain text** -- Markdown converted to plain text (links become `text (url)`, buttons become `Label: url`)
+6. **Inline CSS** (when `inline_css: true`) -- `<style>` rules copied onto element `style=""` attributes; `<style>` block retained for `@media` rules
+7. **Plain text** -- Markdown converted to plain text (links become `text (url)`, buttons become `Label: url`, OTP pills become the bare code on its own block)
 
 ## Public API Summary
 
@@ -210,8 +242,8 @@ Errors: empty recipient list, malformed addresses, SMTP delivery failures.
 | `SendEmail`                       | Builder for composing an email to send                                                                 |
 | `RenderedEmail`                   | Result of rendering: `subject`, `html`, `text`                                                         |
 | `SenderProfile`                   | Per-email From/Reply-To override                                                                       |
-| `EmailConfig`                     | Top-level config (templates, defaults, SMTP)                                                           |
-| `SmtpConfig`                      | SMTP host, port, credentials, security mode                                                            |
+| `EmailConfig`                     | Top-level config (templates, defaults, SMTP, CSS inliner). `#[non_exhaustive]`                          |
+| `SmtpConfig`                      | SMTP host, port, credentials, security mode. `#[non_exhaustive]`                                        |
 | `SmtpSecurity`                    | `StartTls` / `Tls` / `None`                                                                            |
 | `TemplateSource`                  | Trait for loading raw templates                                                                        |
 | `FileSource`                      | Filesystem template source with locale fallback                                                        |
@@ -222,3 +254,4 @@ Errors: empty recipient list, malformed addresses, SMTP delivery failures.
 
 - `lettre` 0.11 -- SMTP transport and message building (with `tokio1-rustls` TLS)
 - `pulldown-cmark` 0.13 -- Markdown to HTML conversion
+- `css-inline` -- CSS inliner pass (when `inline_css: true`)

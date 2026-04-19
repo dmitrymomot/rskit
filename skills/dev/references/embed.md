@@ -363,4 +363,4 @@ let floats = from_f32_blob(&blob)?;
 - **Gemini uses header auth** — unlike OpenAI and Mistral (Bearer token), the Gemini provider passes the API key via the `x-goog-api-key` header.
 - **`OpenAIConfig::base_url`** — supports Azure OpenAI or compatible proxies. Trailing slashes are stripped automatically.
 - **No new crate deps** — the embed module reuses `reqwest`, `serde_json`, and `serde` — no dependencies beyond what other features already pull in.
-- **`test-helpers` gate** — `InMemoryBackend` is gated by `#[cfg(any(test, feature = "test-helpers"))]`. Integration test files that use it need `#![cfg(feature = "test-helpers")]` as the first attribute.
+- **`test-helpers` gate** — `InMemoryBackend` is gated by `#[cfg(any(test, feature = "test-helpers"))]`. Run tests with `cargo test --features test-helpers`.

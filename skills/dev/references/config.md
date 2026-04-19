@@ -398,6 +398,8 @@ jwt:
     field: refresh_token
 ```
 
+`JwtSessionsConfig::new(signing_secret: impl Into<String>)` builds an instance with all other fields at their defaults.
+
 ### `auth::apikey::ApiKeyConfig`
 
 | Field                  | Type    | Default  | Description                                                      |
