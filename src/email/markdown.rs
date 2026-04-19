@@ -132,7 +132,20 @@ where
                     let line = &src[i..];
                     let trimmed = line.trim_start_matches(' ');
                     let run_len = trimmed.bytes().take_while(|&b| b == fence_char).count();
-                    if run_len >= opening_len {
+                    // Per CommonMark §4.5, a closing fence must match the
+                    // opening character, have run_len >= opening_len, and
+                    // be followed only by spaces until the newline. An
+                    // info-string-like tail (e.g., ```` ``` trailing ````)
+                    // is legal on the opening fence but NOT the close.
+                    let tail_is_spaces_only = {
+                        let after_fence = &trimmed.as_bytes()[run_len..];
+                        let tail_end = after_fence
+                            .iter()
+                            .position(|&b| b == b'\n')
+                            .unwrap_or(after_fence.len());
+                        after_fence[..tail_end].iter().all(|&b| b == b' ')
+                    };
+                    if run_len >= opening_len && tail_is_spaces_only {
                         let nl = line.find('\n').map_or(line.len(), |n| n + 1);
                         out.push_str(&line[..nl]);
                         i += nl;
@@ -431,6 +444,25 @@ mod tests {
     fn html_otp_in_fenced_block_is_literal() {
         let html = markdown_to_html("```\n[otp|123]\n```", None);
         assert!(html.contains("[otp|123]"));
+        assert!(!html.contains("font-family:ui-monospace"));
+    }
+
+    #[test]
+    fn html_otp_in_fence_not_closed_by_line_with_trailing_content() {
+        // Per CommonMark §4.5, a closing fence must be followed only by
+        // spaces — any non-space trailing content disqualifies the line as
+        // a close. The OTP after the pseudo-close must stay literal.
+        let src = "```\n[otp|123]\n``` trailing info\n[otp|456]\n```";
+        let html = markdown_to_html(src, None);
+        assert!(
+            html.contains("[otp|123]"),
+            "first OTP must stay literal: {html}"
+        );
+        assert!(
+            html.contains("[otp|456]"),
+            "second OTP must stay literal — pseudo-close with trailing content \
+             is not a real close: {html}"
+        );
         assert!(!html.contains("font-family:ui-monospace"));
     }
 
