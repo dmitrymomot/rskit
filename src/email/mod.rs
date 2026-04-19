@@ -60,6 +60,7 @@ mod layout;
 mod mailer;
 mod markdown;
 mod message;
+mod otp;
 mod render;
 mod source;
 
