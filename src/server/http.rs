@@ -24,7 +24,13 @@ impl Task for HttpServer {
     /// in-flight requests to drain.
     ///
     /// If the drain does not complete within `shutdown_timeout_secs` (from
-    /// [`Config`]), a warning is logged and the function returns `Ok(())`.
+    /// [`Config`]), a warning is logged and the function still returns
+    /// `Ok(())` — shutdown is best-effort.
+    ///
+    /// # Errors
+    ///
+    /// This implementation is infallible and always returns `Ok(())`; the
+    /// [`Result`] signature comes from the [`Task`] trait.
     async fn shutdown(self) -> Result<()> {
         let _ = self.shutdown_tx.send(());
         if tokio::time::timeout(self.shutdown_timeout, self.handle)
@@ -39,17 +45,24 @@ impl Task for HttpServer {
 
 /// Bind a TCP listener and start serving `router`.
 ///
+/// `router` may be any value that implements `Into<axum::Router>`, including
+/// [`axum::Router`] itself and [`HostRouter`](super::HostRouter). The router
+/// is wrapped in a `NormalizePathLayer` so trailing slashes are trimmed before
+/// path matching (root `/` is preserved).
+///
 /// Returns an [`HttpServer`] handle immediately; the server runs on a
 /// background Tokio task. Pass the handle to [`crate::run!`] so it is
 /// shut down gracefully when a signal arrives.
 ///
 /// # Errors
 ///
-/// Returns [`crate::Error`] if the TCP port cannot be bound.
+/// Returns [`crate::Error::internal`] if the TCP port cannot be bound
+/// (address already in use, permission denied, malformed host) or if the
+/// bound socket's local address cannot be read.
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```rust,no_run
 /// use modo::server::{Config, http};
 ///
 /// #[tokio::main]
@@ -63,7 +76,7 @@ impl Task for HttpServer {
 ///
 /// With a [`HostRouter`](super::HostRouter):
 ///
-/// ```no_run
+/// ```rust,no_run
 /// use modo::server::{self, Config, HostRouter};
 ///
 /// #[tokio::main]

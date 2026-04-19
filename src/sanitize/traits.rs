@@ -3,9 +3,12 @@
 /// Implement this on request/input structs to normalize data
 /// (trim whitespace, lowercase emails, etc.) before validation.
 ///
-/// The `JsonRequest`, `FormRequest`, `Query`, and `MultipartRequest` extractors
-/// call [`Sanitize::sanitize`] automatically after deserialization, so every bound on
-/// those extractors requires `T: Sanitize`.
+/// The [`JsonRequest`](crate::extractor::JsonRequest),
+/// [`FormRequest`](crate::extractor::FormRequest),
+/// [`Query`](crate::extractor::Query), and
+/// [`MultipartRequest`](crate::extractor::MultipartRequest) extractors call
+/// [`Sanitize::sanitize`] automatically after deserialization, so every bound
+/// on those extractors requires `T: Sanitize`.
 pub trait Sanitize {
     /// Normalize the fields of `self` in place.
     ///

@@ -19,9 +19,31 @@ impl MakeRequestId for ModoRequestId {
 
 /// Returns a layer that sets and propagates an `x-request-id` header.
 ///
-/// If the incoming request already has an `x-request-id` header, it is preserved.
-/// Otherwise, a new ULID is generated and set on the request. The response always
-/// includes the `x-request-id` header.
+/// If the incoming request already has an `x-request-id` header, it is
+/// preserved — allowing an upstream proxy to correlate requests across
+/// services. Otherwise a new ULID (26 chars, via [`crate::id::ulid`]) is
+/// generated and set on the request. The response always carries the
+/// `x-request-id` header.
+///
+/// # Layer ordering
+///
+/// Install `request_id()` **outside** handler-facing layers so the ID is
+/// attached before any handler or authorization layer runs, and **inside**
+/// [`tracing`](super::tracing) so the span can record it. The
+/// returned [`tower::ServiceBuilder`] bundles `SetRequestIdLayer` +
+/// `PropagateRequestIdLayer`, so a single `.layer(request_id())` call
+/// installs both halves.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use axum::{Router, routing::get};
+/// use modo::middleware::request_id;
+///
+/// let app: Router = Router::new()
+///     .route("/", get(|| async { "ok" }))
+///     .layer(request_id());
+/// ```
 pub fn request_id() -> tower::ServiceBuilder<
     Stack<PropagateRequestIdLayer, Stack<SetRequestIdLayer<ModoRequestId>, Identity>>,
 > {

@@ -57,22 +57,24 @@ impl ShardedMap {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
-/// use modo::db::{self, ConnExt, ConnQueryExt, DatabasePool};
+/// ```rust,no_run
+/// use modo::db::{self, ConnExt, DatabasePool};
 ///
+/// # async fn example() -> modo::Result<()> {
+/// let config = db::Config {
+///     pool: Some(db::PoolConfig::default()),
+///     ..Default::default()
+/// };
 /// let pool = DatabasePool::new(&config).await?;
 ///
-/// // Default database:
-/// let user: User = pool.conn(None).await?
-///     .conn()
-///     .query_one("SELECT id, name FROM users WHERE id = ?1", libsql::params!["u1"])
-///     .await?;
+/// // Default database (no shard).
+/// let default_db = pool.conn(None).await?;
+/// default_db.conn().execute_raw("SELECT 1", ()).await?;
 ///
-/// // Tenant shard (lazy open + cache):
-/// let user: User = pool.conn(tenant.db_shard.as_deref()).await?
-///     .conn()
-///     .query_one("SELECT id, name FROM users WHERE id = ?1", libsql::params!["u1"])
-///     .await?;
+/// // Tenant shard (lazy open + cache).
+/// let tenant_db = pool.conn(Some("tenant_abc")).await?;
+/// tenant_db.conn().execute_raw("SELECT 1", ()).await?;
+/// # Ok(()) }
 /// ```
 #[derive(Clone)]
 pub struct DatabasePool {

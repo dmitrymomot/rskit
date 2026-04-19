@@ -34,7 +34,7 @@ pub fn collapse_whitespace(s: &mut String) {
 /// Strips all HTML tags and decodes common entities, leaving only plain text.
 ///
 /// Script and style element content (including their tags) is discarded
-/// entirely.  Whitespace is collapsed and trimmed in the resulting plain text.
+/// entirely. Whitespace is collapsed and trimmed in the resulting plain text.
 pub fn strip_html(s: &mut String) {
     *s = super::html::html_to_text(s);
 }

@@ -1,33 +1,45 @@
 //! # modo::storage
 //!
-//! S3-compatible object storage.
+//! S3-compatible object storage (AWS S3, RustFS, MinIO, or any S3-API provider).
 //!
-//! This module provides [`Storage`], a thin facade over S3-compatible backends
-//! (AWS S3, RustFS, MinIO, etc.). Features include upload from bytes or URL,
-//! presigned URLs, configurable ACLs, and file-size limits.
+//! Provides:
+//! - [`Storage`] — single-bucket handle: upload, delete, public URL, presigned URL,
+//!   existence check, prefix deletion
+//! - [`Buckets`] — named collection of [`Storage`] instances for multi-bucket apps
+//! - [`PutInput`] / [`PutFromUrlInput`] — inputs for byte uploads and
+//!   fetch-and-upload operations
+//! - [`PutOptions`] / [`Acl`] — optional headers (`Content-Disposition`,
+//!   `Cache-Control`, content-type override) and `x-amz-acl` override
+//! - [`BucketConfig`] — deserialisable per-bucket configuration
+//! - [`kb()`] / [`mb()`] / [`gb()`] — size-unit helpers returning `usize` bytes
 //!
-//! ## Provides
+//! Backends:
+//! - Remote S3-compatible backend (default) — used by [`Storage::new`] and
+//!   [`Storage::with_client`]. Signs every request with AWS Signature Version 4
+//!   and supports both path-style (`https://endpoint/bucket/key`) and
+//!   virtual-hosted-style (`https://bucket.endpoint/key`) URLs via
+//!   [`BucketConfig::path_style`].
+//! - In-memory backend — available via `Storage::memory()` and
+//!   `Buckets::memory()` under `#[cfg(test)]` or the `test-helpers` feature.
+//!   Does not support [`Storage::put_from_url`].
 //!
-//! | Type | Purpose |
-//! |------|---------|
-//! | [`Storage`] | Single-bucket handle — upload, delete, public URL, presigned URL |
-//! | [`Buckets`] | Named collection of `Storage` instances for multi-bucket apps |
-//! | [`PutInput`] | Input for [`Storage::put()`] / [`Storage::put_with()`] |
-//! | [`PutFromUrlInput`] | Input for [`Storage::put_from_url()`] / [`Storage::put_from_url_with()`] |
-//! | [`PutOptions`] | Optional headers and ACL override for uploads |
-//! | [`Acl`] | Access control: `Private` (default) or `PublicRead` |
-//! | [`BucketConfig`] | Deserialisable configuration for one bucket |
-//! | [`kb()`] / [`mb()`] / [`gb()`] | Size-unit helpers (bytes conversion) |
+//! ## Key encoding
 //!
-//! Use [`Storage::with_client()`] to share a [`reqwest::Client`] connection pool
-//! across multiple `Storage` instances or other modules.
+//! All operations that route a key into an HTTP request (PUT, DELETE, HEAD,
+//! presigned GET) URI-encode the key with AWS rules
+//! (`uri_encode(key, encode_slash = false)`) — slashes are preserved so nested
+//! prefixes stay as path segments, but every other reserved byte is
+//! percent-encoded. Pass raw (unencoded) keys to [`Storage`] methods; do not
+//! pre-encode. Keys are validated before signing: empty strings, leading `/`,
+//! `..` path segments, and ASCII control characters are rejected with
+//! [`Error::bad_request`](crate::Error::bad_request).
 //!
 //! ## Quick start
 //!
 //! ```rust,no_run
-//! use modo::storage::{BucketConfig, Storage, PutInput};
+//! use modo::storage::{BucketConfig, PutInput, Storage};
 //!
-//! # fn example() -> modo::Result<()> {
+//! # async fn example() -> modo::Result<()> {
 //! let mut config = BucketConfig::default();
 //! config.bucket = "my-bucket".into();
 //! config.endpoint = "https://s3.amazonaws.com".into();
@@ -36,17 +48,25 @@
 //! config.region = Some("us-east-1".into());
 //! config.public_url = Some("https://cdn.example.com".into());
 //! config.max_file_size = Some("10mb".into());
+//!
 //! let storage = Storage::new(&config)?;
+//!
+//! let mut input = PutInput::new(
+//!     bytes::Bytes::from_static(b"file contents"),
+//!     "avatars/",
+//!     "image/jpeg",
+//! );
+//! input.filename = Some("photo.jpg".into());
+//!
+//! let key = storage.put(&input).await?;
+//! let public = storage.url(&key)?;
+//! # let _ = public;
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! ## Request signing
-//!
-//! All requests are signed with AWS Signature Version 4. Both path-style
-//! (`https://endpoint/bucket/key`) and virtual-hosted-style
-//! (`https://bucket.endpoint/key`) URLs are supported via the
-//! `path_style` field in [`BucketConfig`].
+//! Use [`Storage::with_client`] to share a [`reqwest::Client`] connection pool
+//! across multiple [`Storage`] instances or other modules.
 
 mod backend;
 mod bridge;

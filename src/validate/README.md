@@ -14,7 +14,9 @@ that validate themselves. `ValidationError` converts automatically into
 | `Validator`       | Fluent builder that collects errors for multiple fields and returns them all at once |
 | `ValidationError` | Per-field error collection; converts into `Error` (HTTP 422)                         |
 | `Validate`        | Trait for types that know how to validate themselves                                 |
-| `FieldValidator`  | Per-field rule chain; obtained inside the `Validator::field` closure (not re-exported) |
+
+`FieldValidator` is the per-field rule chain — it is handed to you inside the
+`Validator::field` closure and is never constructed directly.
 
 Rules are applied through a `FieldValidator` obtained inside the `Validator::field` closure.
 String rules require `T: AsRef<str>`; numeric rules require `T: PartialOrd + Display`.

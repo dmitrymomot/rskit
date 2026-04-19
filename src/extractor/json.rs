@@ -6,13 +6,17 @@ use crate::sanitize::Sanitize;
 
 /// Axum extractor that deserializes a JSON request body into `T` and then sanitizes it.
 ///
-/// Returns a 400 Bad Request error if the body is not valid JSON or cannot be
-/// deserialized. `T` must implement both [`serde::de::DeserializeOwned`] and
-/// [`crate::sanitize::Sanitize`].
+/// `T` must implement both [`serde::de::DeserializeOwned`] and [`crate::sanitize::Sanitize`].
+///
+/// # Errors
+///
+/// The [`FromRequest::Rejection`] is [`crate::Error`]. A `400 Bad Request` is returned if
+/// the body is missing, has a wrong content-type, is not valid JSON, or cannot be
+/// deserialized into `T`. The error renders via [`crate::Error::into_response`].
 ///
 /// # Example
 ///
-/// ```
+/// ```rust,no_run
 /// use modo::extractor::JsonRequest;
 /// use modo::sanitize::Sanitize;
 /// use serde::Deserialize;

@@ -81,7 +81,16 @@ let resolved = substitute_env_vars(yaml).unwrap();
 ## Config file format
 
 Files use standard YAML. Any scalar value may contain a `${VAR}` or `${VAR:default}`
-placeholder:
+placeholder.
+
+Two conventions worth flagging:
+
+- **`trusted_proxies` is a top-level field** on `Config` (peer of `server`, `database`,
+  etc.), not nested under `server`. It lists CIDR ranges of reverse proxies whose
+  `X-Forwarded-For` / `Forwarded` headers the `ClientIpLayer` will trust.
+- **Durations use `_secs: u64` fields**, not `std::time::Duration` — e.g.
+  `session.session_ttl_secs`, `session.touch_interval_secs`,
+  `server.shutdown_timeout_secs`.
 
 ```yaml
 server:

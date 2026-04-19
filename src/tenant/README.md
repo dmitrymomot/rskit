@@ -37,7 +37,7 @@ via the `Tenant<T>` axum extractor.
 
 ### Define the tenant type
 
-```rust
+```rust,no_run
 use modo::tenant::HasTenantId;
 
 #[derive(Clone)]
@@ -55,7 +55,11 @@ impl HasTenantId for MyTenant {
 
 ### Implement a resolver
 
-```rust
+Because `TenantResolver` uses return-position `impl Trait` in trait
+methods (RPITIT), it is **not** object-safe — pass it as a concrete
+type, never behind `dyn`/`Box<dyn>`.
+
+```rust,no_run
 use modo::tenant::{HasTenantId, TenantId, TenantResolver};
 use modo::Result;
 
@@ -76,7 +80,7 @@ impl TenantResolver for MyResolver {
 
 ### Wire into the router
 
-```rust
+```rust,no_run
 use axum::{Router, routing::get};
 use modo::tenant::{Tenant, middleware, subdomain};
 
@@ -91,7 +95,7 @@ let app = Router::new()
 
 ### Use `Option<Tenant<T>>` for optional tenant routes
 
-```rust
+```rust,no_run
 use axum::routing::get;
 use modo::tenant::Tenant;
 
@@ -109,7 +113,7 @@ async fn public_or_tenant(tenant: Option<Tenant<MyTenant>>) -> String {
 with `.route_layer()` (not `.layer()`), because path parameters are only
 available after route matching.
 
-```rust
+```rust,no_run
 use axum::{Router, routing::get};
 use modo::tenant::{Tenant, middleware, path_param};
 
@@ -124,7 +128,7 @@ let app = Router::new()
 the request reaches handlers, so routes do not need to include the tenant
 segment.
 
-```rust
+```rust,no_run
 use axum::{Router, routing::get};
 use modo::tenant::{Tenant, middleware, path_prefix};
 
@@ -154,7 +158,7 @@ using `modo::middleware::tracing()`, which creates `http_request` spans with
 For custom spans (e.g., background tasks or `#[tracing::instrument]`), you
 must declare the field explicitly:
 
-```rust
+```rust,no_run
 #[tracing::instrument(fields(tenant_id = tracing::field::Empty))]
 async fn my_handler() { /* ... */ }
 ```
@@ -199,7 +203,7 @@ of registration or it is marked as failed.
 
 ### Domain usage
 
-```rust
+```rust,no_run
 use modo::tenant::domain::DomainService;
 use modo::db::Database;
 use modo::dns::DomainVerifier;

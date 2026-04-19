@@ -5,17 +5,17 @@ Liveness and readiness probe endpoints for Kubernetes and container orchestratio
 Registers two routes on an axum `Router`:
 
 - `GET /_live` — always returns `200 OK`; signals the process is running.
-- `GET /_ready` — runs all registered [`HealthCheck`] implementations concurrently; returns `200 OK` if every check passes, `503 Service Unavailable` if any fail.
+- `GET /_ready` — runs all registered `HealthCheck` implementations concurrently; returns `200 OK` if every check passes, `503 Service Unavailable` if any fail. When no checks are registered, responds `200 OK`.
 
 ## Key types
 
 | Item | Description |
 |---|---|
-| `health::HealthCheck` | Trait for types that can verify their own readiness |
-| `health::HealthChecks` | Fluent builder that collects named checks; registered in the service registry |
-| `health::router()` | Returns a `Router<AppState>` with `/_live` and `/_ready` mounted |
+| `health::HealthCheck` | Trait for types that can verify their own readiness. |
+| `health::HealthChecks` | Fluent builder that collects named checks; placed in the service `Registry` for the readiness handler to extract. |
+| `health::router()` | Returns a `Router<AppState>` with `/_live` and `/_ready` mounted. |
 
-`db::Database` implements `HealthCheck` out of the box — it verifies health by executing a simple `SELECT 1` on the connection.
+`db::Database` implements `HealthCheck` out of the box — it verifies health by executing `SELECT 1` on the connection.
 
 ## Usage
 

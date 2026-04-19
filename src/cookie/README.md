@@ -1,23 +1,30 @@
 # modo::cookie
 
-Cookie utilities for the `modo` web framework: configuration, HMAC key
-derivation, and re-exports of the `axum_extra` cookie jar types used by the
-session and flash middleware.
+Cookie configuration, HMAC signing-key derivation, and cookie-jar re-exports
+for the `modo` web framework (v0.10). The `CookieConfig` struct and
+`key_from_config` helper are consumed by the session and flash middleware;
+the re-exported `axum_extra` jar types are provided for handler-level use.
 
 ## Key Types
 
 | Symbol             | Kind      | Description                                                        |
 | ------------------ | --------- | ------------------------------------------------------------------ |
-| `CookieConfig`     | struct    | Cookie security attributes loaded from YAML config                 |
-| `key_from_config`  | fn        | Derives an HMAC signing `Key` from a `CookieConfig`                |
+| `CookieConfig`     | struct    | Cookie security attributes deserialized from the YAML `cookie` section |
+| `key_from_config`  | fn        | Derives an HMAC signing `Key` from a `CookieConfig` (errors if secret < 64 chars) |
 | `Key`              | re-export | `axum_extra::extract::cookie::Key` — HMAC signing/verification key |
-| `CookieJar`        | re-export | Plain (unsigned) cookie jar                                        |
-| `SignedCookieJar`  | re-export | HMAC-signed cookie jar                                             |
-| `PrivateCookieJar` | re-export | Encrypted (private) cookie jar                                     |
+| `CookieJar`        | re-export | Plain (unsigned) `axum_extra` cookie-jar extractor                 |
+| `SignedCookieJar`  | re-export | HMAC-signed `axum_extra` cookie-jar extractor                      |
+| `PrivateCookieJar` | re-export | Encrypted (private) `axum_extra` cookie-jar extractor              |
+
+modo's own session, flash, CSRF, and OAuth-state middleware uses the raw
+`cookie::CookieJar` (the `cookie` crate), not the `axum_extra` signed or
+private jar. The signed/private re-exports here are for handlers that want
+to opt in to those extractors directly.
 
 ## Configuration
 
-The `cookie` section maps to `Option<CookieConfig>` in `modo::Config`.
+The `cookie` section on the root `modo::Config` deserializes into
+`Option<CookieConfig>`. All fields except `secret` have defaults.
 
 ```yaml
 cookie:
@@ -38,7 +45,7 @@ let cfg = CookieConfig::new("s".repeat(64));
 let key = key_from_config(&cfg).expect("secret must be at least 64 characters");
 ```
 
-### Load config and derive key
+### Load config and derive the key
 
 ```rust,no_run
 use modo::config::load;
@@ -48,35 +55,39 @@ use modo::cookie::key_from_config;
 let config: Config = load("config/").unwrap();
 if let Some(cookie_cfg) = &config.cookie {
     let key = key_from_config(cookie_cfg).expect("invalid cookie secret");
-    // pass `key` to FlashLayer, session::layer, etc.
+    // pass `key` to `FlashLayer::new`, etc.
+    let _ = key;
 }
 ```
 
-### Wire with flash and session layers
+### Wire flash and cookie-session layers
+
+`CookieSessionService::new` derives its own signing key internally from
+`config.cookie.secret`, so callers only need a standalone `Key` for
+`FlashLayer`.
 
 ```rust,no_run
+use modo::auth::session::cookie::{CookieSessionService, CookieSessionsConfig};
 use modo::cookie::{CookieConfig, key_from_config};
-use modo::flash::FlashLayer;
-use modo::auth::session::{CookieSessionService, SessionConfig};
 use modo::db::Database;
+use modo::flash::FlashLayer;
 
 # async fn example(
 #     router: axum::Router,
 #     cookie_cfg: CookieConfig,
 #     db: Database,
 # ) -> modo::Result<()> {
-// CookieSessionService derives its own key internally from config.cookie.secret.
-let session_cfg = SessionConfig {
+let session_cfg = CookieSessionsConfig {
     cookie: cookie_cfg.clone(),
-    ..SessionConfig::default()
+    ..CookieSessionsConfig::default()
 };
 let svc = CookieSessionService::new(db, session_cfg)?;
 
-// FlashLayer still needs its own key reference.
 let key = key_from_config(&cookie_cfg)?;
 let router = router
     .layer(FlashLayer::new(&cookie_cfg, &key))
     .layer(svc.layer());
+# let _ = router;
 # Ok(())
 # }
 ```

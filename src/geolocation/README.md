@@ -50,9 +50,8 @@ geolocation:
 use modo::geolocation::{GeoLocator, GeolocationConfig};
 
 fn build_locator() -> modo::Result<GeoLocator> {
-    let config = GeolocationConfig {
-        mmdb_path: "data/GeoLite2-City.mmdb".to_string(),
-    };
+    let mut config = GeolocationConfig::default();
+    config.mmdb_path = "data/GeoLite2-City.mmdb".to_string();
     GeoLocator::from_config(&config)
 }
 ```

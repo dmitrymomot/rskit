@@ -49,20 +49,40 @@ See also the virtual [`modo::middlewares`](../middlewares.rs) flat index, which 
 
 ## Usage
 
-### Compression, request IDs, and tracing
+### Layer composition
+
+axum applies `.layer(...)` in reverse declaration order — the last layer added wraps everything before it and runs first on the inbound path. The idiomatic stack for this module is, from outer to inner:
+
+1. `tracing()` — outermost, so every request is observed inside `http_request`.
+2. `catch_panic()` — converts panics to 500s that `error_handler` can still re-render.
+3. `request_id()` — sets `x-request-id` on every response, including errors.
+4. `compression()` — close to the handler so compressed bytes flow through the fewest layers.
+5. `error_handler(handler)` — innermost cross-cutting layer; rewrites any response carrying a `modo::Error` in its extensions.
 
 ```rust,ignore
-use axum::Router;
-use axum::routing::get;
-use modo::middleware::{catch_panic, compression, request_id, tracing};
+use axum::{Router, routing::get};
+use axum::response::IntoResponse;
+use http::request::Parts;
+use modo::middleware::{catch_panic, compression, error_handler, request_id, tracing};
 
-let app = Router::new()
+async fn render_error(err: modo::Error, _parts: Parts) -> axum::response::Response {
+    (err.status(), err.message().to_string()).into_response()
+}
+
+let app: Router = Router::new()
     .route("/", get(|| async { "hello" }))
+    .layer(error_handler(render_error))  // innermost
     .layer(compression())
     .layer(request_id())
     .layer(catch_panic())
-    .layer(tracing());
+    .layer(tracing());                    // outermost
 ```
+
+### `.layer` vs `.route_layer`
+
+Use `Router::layer(...)` for middleware that should run for every request the router sees, including 404s synthesized by axum. Use `Router::route_layer(...)` when the middleware must only see requests that matched a real route — for example, authorization guards that otherwise would rewrite a 404 into a 401. All middleware in this module is designed for `.layer(...)`; domain guards from `auth`, `tier`, etc. typically want `.route_layer`.
+
+The `Router::layer` bounds require the wrapped `L` and `L::Service` to be `+ Sync`, with errors convertible `Into<Infallible>`. All middleware constructors in this module satisfy those bounds.
 
 ### CORS
 

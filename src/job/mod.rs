@@ -7,10 +7,19 @@
 //! database, dispatches jobs to handlers, retries failures with exponential
 //! backoff, and reaps stale jobs.
 //!
+//! ## Priority model
+//!
+//! Job priority is expressed via **separate named queues** with independent
+//! concurrency limits — there is no numeric priority field. Declare multiple
+//! [`QueueConfig`] entries (e.g. `"critical"`, `"default"`, `"low"`) and
+//! enqueue jobs onto the queue that matches their urgency. Workers drain every
+//! configured queue on every poll tick, so a busy low-priority queue cannot
+//! starve high-priority queues.
+//!
 //! ## Capabilities
 //!
 //! - Named jobs with JSON payloads serialized via `serde`
-//! - Per-queue concurrency limits
+//! - Priority via separate named queues, each with its own concurrency limit
 //! - Automatic retries with exponential backoff
 //! - Scheduled execution via [`EnqueueOptions::run_at`]
 //! - Idempotent enqueueing via [`Enqueuer::enqueue_unique`]

@@ -261,8 +261,76 @@ let session = TestSession::with_config(&db, CookieSessionsConfig::default(), coo
 
 ## Feature flag
 
-Guard integration test files with:
+`test-helpers` is the only runtime feature modo ships. It gates this entire
+module along with the in-memory and stub backends used by tests. Guard
+integration test files that import from `modo::testing` with:
 
-```rust
+```rust,ignore
 #![cfg(feature = "test-helpers")]
 ```
+
+Run the test suite with:
+
+```sh
+cargo test --features test-helpers
+```
+
+## Gotchas
+
+### Types without `Debug`
+
+`Database` and `Storage` / `Buckets` intentionally do not implement `Debug`, so
+`.unwrap_err()` will not compile on a `Result` that contains them. Use
+`.err().unwrap()` instead:
+
+```rust,ignore
+use modo::testing::TestDb;
+use modo::db::ConnExt;
+
+let db = TestDb::new().await;
+
+// BAD: `.unwrap_err()` requires `T: Debug`, and `Database` has no `Debug` impl.
+// let err = something_returning_result_database().err().unwrap();
+
+// OK: extract the error with `.err().unwrap()`.
+let err = db
+    .db()
+    .conn()
+    .execute_raw("NOT VALID SQL", ())
+    .await
+    .err()
+    .unwrap();
+let _ = err;
+```
+
+### Env-var tests must be serial
+
+Tests that set or unset environment variables must use
+[`serial_test`](https://docs.rs/serial_test) so they do not race other tests,
+and must clean up variables **before** asserting — a failed assertion would
+otherwise leave the process environment dirty for subsequent tests:
+
+```rust,ignore
+use serial_test::serial;
+
+#[tokio::test]
+#[serial]
+async fn reads_env_var() {
+    // SAFETY: Rust 2024 makes set_var / remove_var `unsafe`.
+    unsafe { std::env::set_var("MY_FLAG", "1"); }
+
+    let observed = std::env::var("MY_FLAG").unwrap();
+
+    // Clean up BEFORE asserting so a failed assert doesn't poison env state.
+    unsafe { std::env::remove_var("MY_FLAG"); }
+
+    assert_eq!(observed, "1");
+}
+```
+
+### Test fixtures
+
+- `tests/fixtures/migrations/` — directory of `.sql` files consumed by
+  [`TestDb::migrate`].
+- `tests/fixtures/GeoIP2-City-Test.mmdb` — MaxMind test database used by
+  geolocation tests.

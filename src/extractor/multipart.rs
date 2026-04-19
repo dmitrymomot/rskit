@@ -141,16 +141,20 @@ impl Files {
 /// Splits the multipart body into text fields (deserialized and sanitized into `T`) and
 /// file fields (collected into a [`Files`] map). The inner tuple is `(T, Files)`.
 ///
-/// Text fields are URL-encoded and deserialized via `serde_urlencoded` before
-/// [`Sanitize::sanitize`] is called on the result. File fields are collected into memory
-/// as [`UploadedFile`] values.
+/// Text fields are re-encoded as `application/x-www-form-urlencoded` and deserialized
+/// via `serde_urlencoded` before [`Sanitize::sanitize`] is called on the result. File
+/// fields are fully buffered into memory as [`UploadedFile`] values.
 ///
-/// Returns a 400 Bad Request error if the request is not valid multipart data or a field
-/// cannot be read.
+/// # Errors
+///
+/// The [`FromRequest::Rejection`] is [`crate::Error`]. A `400 Bad Request` is returned
+/// if the request is not a valid `multipart/form-data` body, a field cannot be read,
+/// or the collected text fields cannot be deserialized into `T`. The error renders via
+/// [`crate::Error::into_response`].
 ///
 /// # Example
 ///
-/// ```
+/// ```rust,no_run
 /// use modo::extractor::{MultipartRequest, Files};
 /// use modo::sanitize::Sanitize;
 /// use serde::Deserialize;

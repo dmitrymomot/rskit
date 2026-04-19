@@ -6,6 +6,10 @@ The module exposes two functions covering the most common ID use cases — a
 full-length ULID for primary keys and a compact short ID for user-visible
 codes.
 
+> **No UUID.** modo does not use UUIDs. Use `ulid()` for database primary
+> keys and globally unique identifiers, and `short()` for anything the end
+> user will see. Both are time-sortable and allocation-friendly.
+
 ## Key Functions
 
 | Function            | Length   | Alphabet                     | Sortable | Use case                |

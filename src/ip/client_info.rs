@@ -69,6 +69,16 @@ impl ClientInfo {
 impl<S: Send + Sync> FromRequestParts<S> for ClientInfo {
     type Rejection = Error;
 
+    /// Builds [`ClientInfo`] from request extensions and headers.
+    ///
+    /// Reads the IP from the [`ClientIp`] extension (inserted by
+    /// [`ClientIpLayer`](crate::ip::ClientIpLayer)), the `User-Agent` header,
+    /// and the `X-Fingerprint` header. Any field that cannot be read is `None`.
+    ///
+    /// # Errors
+    ///
+    /// This extractor never fails — the `Result` type is required by
+    /// [`FromRequestParts`] but the implementation always returns `Ok`.
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let ip = parts.extensions.get::<ClientIp>().map(|c| c.0.to_string());
 

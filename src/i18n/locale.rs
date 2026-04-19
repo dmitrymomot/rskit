@@ -19,8 +19,9 @@ use super::config::I18nConfig;
 /// - [`AcceptLanguageResolver`] treats an empty allowlist as "match nothing"
 ///   because it can only return locales that appear in the list.
 ///
-/// [`default_chain`] hands every resolver the same `available_locales`, so
-/// the asymmetry only surfaces when wiring resolvers manually.
+/// The default chain built by [`I18n::new`](super::I18n::new) hands every
+/// resolver the same `available_locales`, so the asymmetry only surfaces when
+/// wiring resolvers manually.
 pub trait LocaleResolver: Send + Sync {
     /// Returns a locale string (e.g. `"en"`, `"uk"`) if this resolver can determine
     /// the locale from the request, or `None` to fall through to the next resolver.

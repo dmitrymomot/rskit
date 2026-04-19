@@ -6,13 +6,17 @@ use crate::sanitize::Sanitize;
 
 /// Axum extractor that deserializes a URL-encoded form body into `T` and then sanitizes it.
 ///
-/// Returns a 400 Bad Request error if the body is not valid URL-encoded data or cannot be
-/// deserialized. `T` must implement both [`serde::de::DeserializeOwned`] and
-/// [`crate::sanitize::Sanitize`].
+/// `T` must implement both [`serde::de::DeserializeOwned`] and [`crate::sanitize::Sanitize`].
+///
+/// # Errors
+///
+/// The [`FromRequest::Rejection`] is [`crate::Error`]. A `400 Bad Request` is returned if
+/// the body is not valid `application/x-www-form-urlencoded` data or cannot be deserialized
+/// into `T`. The error renders via [`crate::Error::into_response`].
 ///
 /// # Example
 ///
-/// ```
+/// ```rust,no_run
 /// use modo::extractor::FormRequest;
 /// use modo::sanitize::Sanitize;
 /// use serde::Deserialize;

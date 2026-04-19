@@ -92,9 +92,21 @@ pub(crate) struct StorageInner {
 
 /// S3-compatible file storage.
 ///
-/// Cheaply cloneable (wraps `Arc`). Use `Storage::new()` to create a production
-/// instance from a `BucketConfig`. `Storage::memory()` is available inside
+/// Cheaply cloneable (wraps `Arc`). Use [`Storage::new`] to create a production
+/// instance from a [`BucketConfig`]. [`Storage::memory`] is available inside
 /// `#[cfg(test)]` blocks and when the `test-helpers` feature is enabled.
+///
+/// # Key encoding
+///
+/// Pass raw (unencoded) keys to every method. Each key is validated
+/// (no empty string, no leading `/`, no `..` segment, no control characters)
+/// and then URI-encoded with `uri_encode(key, encode_slash = false)` before
+/// it is placed in the signed HTTP request, so `/` is preserved as a path
+/// separator and every other reserved byte is percent-encoded. The key
+/// returned by [`Storage::put`] / [`Storage::put_with`] /
+/// [`Storage::put_from_url`] / [`Storage::put_from_url_with`] is the raw
+/// key (no encoding applied) and should be fed back into other methods
+/// as-is.
 pub struct Storage {
     pub(crate) inner: Arc<StorageInner>,
 }

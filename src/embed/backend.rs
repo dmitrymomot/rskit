@@ -14,6 +14,11 @@ pub trait EmbeddingBackend: Send + Sync {
     /// Embed a single text string.
     ///
     /// Returns a little-endian f32 byte blob of length `dimensions() * 4`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying provider API call fails, the
+    /// response cannot be parsed, or the provider returns no embedding data.
     fn embed(&self, input: &str) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + '_>>;
 
     /// Number of dimensions this provider/model produces.

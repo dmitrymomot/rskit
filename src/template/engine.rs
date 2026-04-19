@@ -36,6 +36,9 @@ pub struct Engine {
 
 impl Engine {
     /// Returns a new [`EngineBuilder`] with default settings.
+    ///
+    /// This is the only way to construct an [`Engine`]. Set options on the
+    /// builder and call [`EngineBuilder::build`] to finalize.
     pub fn builder() -> EngineBuilder {
         EngineBuilder::default()
     }
@@ -150,10 +153,15 @@ impl EngineBuilder {
 
     /// Builds and returns the [`Engine`].
     ///
+    /// The static-assets directory at [`TemplateConfig::static_path`] is walked
+    /// once to compute SHA-256 content hashes used by the `static_url()`
+    /// template function for cache busting. If the directory does not exist, an
+    /// empty hash map is used and `static_url()` falls back to unversioned URLs.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the static-assets directory cannot be
-    /// hashed.
+    /// Returns [`Error`](crate::Error) if any file under the static-assets
+    /// directory cannot be read while computing content hashes.
     pub fn build(self) -> crate::Result<Engine> {
         let config = self.config.unwrap_or_default();
 

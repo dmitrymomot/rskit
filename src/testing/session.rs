@@ -30,10 +30,11 @@ const SESSIONS_INDEXES_SQL: &[&str] = &[
 
 /// Session infrastructure for integration tests.
 ///
-/// `TestSession` sets up an in-memory `sessions` table on the provided
-/// [`TestDb`], derives a signing key, and exposes helpers for authenticating
-/// test users and building the [`CookieSessionLayer`](crate::auth::session::CookieSessionLayer)
-/// needed by [`super::TestApp`].
+/// `TestSession` sets up an in-memory `authenticated_sessions` table on the
+/// provided [`TestDb`], derives a signing key, and exposes helpers for
+/// authenticating test users and building the
+/// [`CookieSessionLayer`](crate::auth::session::CookieSessionLayer) needed by
+/// [`super::TestApp`].
 ///
 /// # Example
 ///

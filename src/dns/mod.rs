@@ -1,14 +1,14 @@
 //! # modo::dns
 //!
-//! DNS-based domain ownership verification.
+//! DNS-based domain ownership verification via raw UDP TXT and CNAME lookups.
 //!
-//! Checks TXT record ownership and CNAME routing via raw UDP DNS queries.
 //! Intended for custom-domain flows where a user must prove they control a
-//! domain before activating it.
+//! domain before activating it. Queries are sent directly to a configured
+//! nameserver, bypassing the system resolver.
 //!
-//! # Provides
-//!
-//! - [`DnsConfig`] — nameserver address, TXT prefix, and timeout.
+//! Provides:
+//! - [`DnsConfig`] — nameserver address, TXT prefix, and timeout
+//!   (deserializes from YAML).
 //! - [`DomainVerifier`] — performs TXT and CNAME lookups; `Arc`-backed, cheap
 //!   to clone.
 //! - [`DomainStatus`] — result of [`DomainVerifier::verify_domain`] with

@@ -18,7 +18,7 @@
 //!
 //! ## Stream from a broadcast channel
 //!
-//! ```
+//! ```rust,no_run
 //! use modo::sse::{Broadcaster, Event, LagPolicy, SseConfig, SseStreamExt};
 //! use modo::service::Service;
 //!
@@ -46,7 +46,7 @@
 //!
 //! ## Imperative channel (monitoring)
 //!
-//! ```
+//! ```rust,no_run
 //! use modo::sse::{Broadcaster, Event};
 //! use modo::service::Service;
 //! use std::time::Duration;
@@ -69,7 +69,7 @@
 //!
 //! ## HTML partials (HTMX)
 //!
-//! ```
+//! ```rust,no_run
 //! use modo::sse::{Broadcaster, Event, LagPolicy, SseStreamExt};
 //! use modo::service::Service;
 //! # use axum::extract::Path;

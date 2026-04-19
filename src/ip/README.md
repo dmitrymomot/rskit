@@ -140,18 +140,14 @@ trusted_proxies:
 
 ## Ordering with other layers
 
-`ClientIpLayer` must be applied **before** `SessionLayer`. The session
-middleware reads the `ClientIp` extension for fingerprint validation.
+`ClientIpLayer` must run **before** any middleware that depends on the
+resolved IP — notably the cookie session layer, which reads `ClientIp` for
+fingerprint validation. In axum, the outermost layer runs first, so
+`ClientIpLayer` must be the last `.layer(..)` call on the router.
 
-```no_run
-use axum::Router;
-use modo::auth::session::SessionLayer;
-use modo::ip::ClientIpLayer;
-
-// ClientIpLayer must wrap SessionLayer so IP resolution happens first.
-// Apply layers in reverse order: the last .layer() call is the outermost.
-let app: Router = Router::new()
-    // ...routes...
-    .layer(session_layer)         // inner — runs after ClientIpLayer
-    .layer(ClientIpLayer::new()); // outer — resolves IP first
+```text
+Router::new()
+    .route(..)
+    .layer(session_layer)          // inner — sees ClientIp
+    .layer(ClientIpLayer::new());  // outer — resolves IP first
 ```

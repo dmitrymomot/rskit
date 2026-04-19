@@ -28,8 +28,29 @@ impl tower_http::catch_panic::ResponseForPanic for ModoPanicHandler {
 
 /// Returns a layer that catches panics in handlers and returns a 500 response.
 ///
-/// The response includes a `modo::Error` in its extensions for downstream
-/// middleware (such as [`error_handler`](super::error_handler)) to inspect.
+/// The response is a bare `500 Internal Server Error` with a
+/// [`crate::Error::internal`] value in its extensions, so
+/// [`error_handler`](super::error_handler) can rewrite the body through
+/// the application's chosen responder.
+///
+/// # Layer ordering
+///
+/// Install `catch_panic()` **outside** the handler (so it sees handler
+/// panics) but **inside** [`tracing`](super::tracing) so the panic is
+/// still observed in a span. If installed *inside* `error_handler` the
+/// 500 response is re-rendered by the handler; if installed *outside* it
+/// the raw 500 bypasses the handler.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use axum::{Router, routing::get};
+/// use modo::middleware::catch_panic;
+///
+/// let app: Router = Router::new()
+///     .route("/", get(|| async { "ok" }))
+///     .layer(catch_panic());
+/// ```
 pub fn catch_panic() -> CatchPanicLayer<ModoPanicHandler> {
     CatchPanicLayer::custom(ModoPanicHandler)
 }

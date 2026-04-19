@@ -81,10 +81,10 @@ Calling `messages()` multiple times within the same request returns the same dat
 
 ## Templates Integration
 
-When the `templates` feature is enabled, `TemplateContextLayer` automatically
-registers a `flash_messages()` callable in the MiniJinja template context. It
-marks the messages as consumed and clears the cookie, equivalent to calling
-`Flash::messages()` from a handler.
+When `TemplateContextLayer` from the `modo::template` module is applied, a
+`flash_messages()` callable is automatically registered in the MiniJinja
+template context. It marks the messages as consumed and clears the cookie,
+equivalent to calling `Flash::messages()` from a handler.
 
 Each entry in the returned list is a map with one key (the severity level) mapped
 to the message text:

@@ -1,15 +1,18 @@
 //! # modo::i18n
 //!
-//! Internationalization primitives for modo.
+//! YAML-backed internationalization with request-scoped locale resolution.
 //!
-//! Provides a [`TranslationStore`] loaded from YAML files on disk, a pluggable
-//! [`LocaleResolver`] chain, a Tower [`I18nLayer`] that injects a per-request
-//! [`Translator`] into request extensions, and an [`I18n`] factory that ties
-//! the pieces together.
-//!
-//! The same [`TranslationStore`] powers the MiniJinja `t()` function registered
-//! by [`crate::template`] via
-//! [`make_t_function`](self::make_t_function).
+//! Provides:
+//! - [`I18n`] — factory that loads translations and builds the Tower layer.
+//! - [`I18nConfig`] — serde-deserialised configuration with sensible defaults.
+//! - [`I18nLayer`] — Tower middleware that resolves the locale and injects a
+//!   [`Translator`] into request extensions.
+//! - [`Translator`] — axum extractor with `t()` / `t_plural()` helpers.
+//! - [`TranslationStore`] — `Arc`-wrapped in-memory store of loaded entries.
+//! - [`LocaleResolver`] trait plus built-in resolvers [`QueryParamResolver`],
+//!   [`CookieResolver`], [`SessionResolver`], and [`AcceptLanguageResolver`].
+//! - [`make_t_function`] — builds the MiniJinja `t()` function wired up by
+//!   [`crate::template`].
 //!
 //! ## Quick start
 //!

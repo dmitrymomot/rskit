@@ -9,16 +9,17 @@ clean shutdown.
 
 ## Schedule formats
 
-Three formats are accepted wherever a schedule string is required:
+The following formats are accepted wherever a schedule string is required:
 
 | Format                                   | Examples                                                                        |
 | ---------------------------------------- | ------------------------------------------------------------------------------- |
-| Standard cron (5-field)                  | `"*/5 * * * *"`, `"0 9 * * 1"`                                                 |
-| Standard cron (6-field, leading seconds) | `"0 30 9 * * *"`, `"0 0 0 * * *"`                                              |
+| Standard cron (5-field)                  | `"*/5 * * * *"`, `"0 9 * * 1"`                                                  |
+| Standard cron (6-field, leading seconds) | `"0 30 9 * * *"`, `"0 0 0 * * *"`                                               |
 | Named alias                              | `@yearly`, `@annually`, `@monthly`, `@weekly`, `@daily`, `@midnight`, `@hourly` |
-| Interval                                 | `@every 5m`, `@every 1h30m`, `@every 30s`                                      |
+| Interval                                 | `@every 5m`, `@every 1h30m`, `@every 30s`                                       |
 
-Invalid expressions or durations return an error at builder time.
+Invalid expressions or durations return an error at builder time (from
+`SchedulerBuilder::job` / `SchedulerBuilder::job_with`).
 
 ## Key types
 

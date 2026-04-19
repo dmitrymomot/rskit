@@ -24,8 +24,30 @@ impl<B> MakeSpan<B> for ModoMakeSpan {
 
 /// Returns a tracing layer configured for HTTP request/response lifecycle logging.
 ///
-/// The span includes a `tenant_id` field (initially empty) that the tenant
-/// middleware fills in after resolution.
+/// The span name is `http_request` and the initial fields are `method`,
+/// `uri`, `version`, and `tenant_id` (empty — filled in by the tenant
+/// middleware via [`tracing::Span::record`] after tenant resolution).
+/// Any middleware that needs to record a span field must add it to
+/// [`ModoMakeSpan`] first; fields not pre-declared are dropped by
+/// `tracing`.
+///
+/// # Layer ordering
+///
+/// Install `tracing()` **outermost** (the last `.layer(...)` call in your
+/// chain) so every inbound request — including those rejected by
+/// [`csrf`](super::csrf) / [`rate_limit`](super::rate_limit) — is
+/// observed inside the span.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use axum::{Router, routing::get};
+/// use modo::middleware::tracing;
+///
+/// let app: Router = Router::new()
+///     .route("/", get(|| async { "ok" }))
+///     .layer(tracing());
+/// ```
 pub fn tracing() -> TraceLayer<SharedClassifier<ServerErrorsAsFailures>, ModoMakeSpan> {
     TraceLayer::new_for_http().make_span_with(ModoMakeSpan)
 }

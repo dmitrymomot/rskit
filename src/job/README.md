@@ -10,6 +10,15 @@ jobs to handlers, retries failures with exponential backoff, and reaps stale job
 
 End-applications own the `jobs` table migration — this module ships none.
 
+## Priority via separate queues
+
+There is **no numeric priority** field. Priority is expressed by declaring
+multiple named queues in `JobConfig::queues` (for example `critical`, `default`,
+`low`) and enqueueing each job onto the queue that matches its urgency. Every
+queue has its own `concurrency` limit and its own semaphore. On each poll tick
+the worker drains every configured queue, so a burst on a low-priority queue
+cannot starve a high-priority queue.
+
 ## Key types
 
 | Type             | Role                                                                         |
@@ -119,7 +128,7 @@ async fn enqueue_jobs(db: Database) {
         user_id: "usr_02".into(),
     }, run_at).await.unwrap();
 
-    // Named queue with full options
+    // Route to a higher-priority queue by name — no numeric priority field.
     enqueuer.enqueue_with("send_welcome_email", &WelcomePayload {
         user_id: "usr_03".into(),
     }, EnqueueOptions { queue: "critical".into(), run_at: None }).await.unwrap();

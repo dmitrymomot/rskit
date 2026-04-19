@@ -3,6 +3,28 @@
 //! Lightweight libsql (SQLite) database layer with typed row mapping,
 //! composable query building, filtering, and pagination.
 //!
+//! Provides:
+//!
+//! - A single-connection [`Database`] handle (cheap-to-clone `Arc<Inner>`
+//!   over one `libsql::Connection`).
+//! - [`connect`] — opens **one** connection, applies PRAGMAs, runs migrations.
+//! - [`ConnExt`] — low-level `query_raw`/`execute_raw` on `libsql::Connection`
+//!   and `libsql::Transaction`.
+//! - [`ConnQueryExt`] — typed helpers (`query_one`, `query_optional`,
+//!   `query_all` and their `_map` closure variants), blanket-implemented on
+//!   every `ConnExt`.
+//! - [`SelectBuilder`] for composable `WHERE`/`ORDER BY`/pagination.
+//! - [`Filter`] / [`FilterSchema`] / [`ValidatedFilter`] — schema-checked
+//!   filtering from query strings.
+//! - Offset ([`Page`] / [`PageRequest`]) and cursor ([`CursorPage`] /
+//!   [`CursorRequest`]) pagination.
+//! - [`FromRow`] / [`FromValue`] / [`ColumnMap`] for row mapping.
+//! - [`DatabasePool`] — lazy multi-database pool for tenant sharding.
+//! - Maintenance: [`DbHealth`], [`run_vacuum`], [`vacuum_if_needed`],
+//!   [`vacuum_handler`].
+//! - [`migrate`] — idempotent SQL migration runner with checksum tracking.
+//! - [`ManagedDatabase`] / [`ManagedDatabasePool`] for graceful shutdown.
+//!
 //! ## Core types
 //!
 //! | Type | Purpose |
@@ -80,25 +102,46 @@
 //!
 //! ## Quick start
 //!
-//! ```rust,ignore
-//! use modo::db::{self, ConnExt, ConnQueryExt};
+//! ```rust,no_run
+//! use modo::db::{self, ConnExt, ConnQueryExt, ColumnMap, FromRow};
 //!
-//! // Connect with defaults (data/app.db, WAL mode, FK on)
+//! struct User {
+//!     id: String,
+//!     name: String,
+//! }
+//!
+//! impl FromRow for User {
+//!     fn from_row(row: &libsql::Row) -> modo::Result<Self> {
+//!         let cols = ColumnMap::from_row(row);
+//!         Ok(Self {
+//!             id: cols.get(row, "id")?,
+//!             name: cols.get(row, "name")?,
+//!         })
+//!     }
+//! }
+//!
+//! # async fn example() -> modo::Result<()> {
+//! // Connect with defaults (data/app.db, WAL mode, FK on) — opens ONE
+//! // underlying libsql::Connection wrapped in an Arc.
 //! let db = db::connect(&db::Config::default()).await?;
 //!
-//! // Use query helpers via ConnQueryExt
-//! let user: User = db.conn().query_one(
-//!     "SELECT id, name FROM users WHERE id = ?1",
-//!     libsql::params!["user_abc"],
-//! ).await?;
-//!
-//! // Or use the SelectBuilder for filtered, paginated queries
-//! let page = db.conn()
-//!     .select("SELECT id, name FROM users")
-//!     .filter(validated_filter)
-//!     .order_by("\"created_at\" DESC")
-//!     .page::<User>(page_request)
+//! // Use typed helpers via ConnQueryExt (blanket-implemented on ConnExt).
+//! let user: User = db
+//!     .conn()
+//!     .query_one(
+//!         "SELECT id, name FROM users WHERE id = ?1",
+//!         libsql::params!["user_abc"],
+//!     )
 //!     .await?;
+//!
+//! // Or use the SelectBuilder for filtered, ordered, paginated queries.
+//! let users: Vec<User> = db
+//!     .conn()
+//!     .select("SELECT id, name FROM users")
+//!     .order_by("\"name\" ASC")
+//!     .fetch_all()
+//!     .await?;
+//! # Ok(()) }
 //! ```
 
 mod error;

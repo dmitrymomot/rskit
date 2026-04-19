@@ -4,12 +4,18 @@ use std::net::{IpAddr, Ipv4Addr};
 /// Resolve the real client IP from headers and connection info.
 ///
 /// Resolution order:
-/// 1. If `trusted_proxies` is non-empty and `connect_ip` is NOT in any trusted range
-///    → return `connect_ip` (direct client, ignore proxy headers)
-/// 2. `X-Forwarded-For` → first valid IP
-/// 3. `X-Real-IP` → valid IP
-/// 4. `connect_ip` as fallback
-/// 5. `127.0.0.1` if nothing available
+/// 1. If `trusted_proxies` is non-empty, `connect_ip` is `Some`, and
+///    `connect_ip` is NOT contained in any trusted range → return `connect_ip`
+///    (the peer connected directly, so proxy headers must be ignored to avoid
+///    spoofing).
+/// 2. `X-Forwarded-For` → leftmost entry that parses as an [`IpAddr`].
+/// 3. `X-Real-IP` → value parsed as an [`IpAddr`].
+/// 4. `connect_ip` if provided.
+/// 5. `127.0.0.1` as final fallback.
+///
+/// This is the low-level primitive used by [`ClientIpLayer`](crate::ip::ClientIpLayer);
+/// prefer the layer in HTTP handlers and call this directly only when you
+/// already have a [`HeaderMap`] without a Tower stack.
 pub fn extract_client_ip(
     headers: &HeaderMap,
     trusted_proxies: &[ipnet::IpNet],

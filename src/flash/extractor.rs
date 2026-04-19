@@ -10,7 +10,12 @@ use super::state::{FlashEntry, FlashState};
 /// Axum extractor for reading and writing flash messages within a request.
 ///
 /// Requires [`FlashLayer`](crate::flash::FlashLayer) to be applied to the router.
-/// Extraction fails with `500 Internal Server Error` if the middleware is absent.
+///
+/// # Errors
+///
+/// Extraction fails with [`Error::internal`](crate::Error::internal)
+/// (`500 Internal Server Error`) if [`FlashLayer`](crate::flash::FlashLayer) has
+/// not been applied to the router.
 pub struct Flash {
     state: Arc<FlashState>,
 }

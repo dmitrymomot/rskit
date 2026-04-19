@@ -7,8 +7,16 @@ use crate::service::AppState;
 
 /// Axum extractor that retrieves a service `T` from the application's service registry.
 ///
-/// The inner value is an `Arc<T>`, so cloning the extractor is cheap.
-/// Returns a 500 Internal Server Error if `T` was not registered before the server started.
+/// The inner value is an `Arc<T>`, so cloning the extractor is cheap. `T` must have
+/// been registered on the [`Registry`](super::Registry) before [`Registry::into_state`]
+/// was called.
+///
+/// [`Registry::into_state`]: super::Registry::into_state
+///
+/// # Errors
+///
+/// Rejects with [`crate::Error::internal`] (HTTP `500 Internal Server Error`) when `T`
+/// was not registered. The error message includes the full type name of `T`.
 ///
 /// # Example
 ///

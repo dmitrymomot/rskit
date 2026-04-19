@@ -6,12 +6,23 @@ use crate::sanitize::Sanitize;
 
 /// Axum extractor that deserializes URL query parameters into `T` and then sanitizes it.
 ///
-/// Returns a 400 Bad Request error if the query string cannot be deserialized into `T`.
 /// `T` must implement both [`serde::de::DeserializeOwned`] and [`crate::sanitize::Sanitize`].
+///
+/// Because this extractor implements [`FromRequestParts`] rather than `FromRequest`, it
+/// can be combined with body extractors on the same handler. To make `Query` optional
+/// (i.e. `Option<Query<T>>`), axum 0.8 requires an explicit `OptionalFromRequestParts`
+/// impl — this crate does not provide one, so use a type whose fields are `Option<_>`
+/// instead.
+///
+/// # Errors
+///
+/// The [`FromRequestParts::Rejection`] is [`crate::Error`]. A `400 Bad Request` is
+/// returned if the query string cannot be deserialized into `T`. The error renders via
+/// [`crate::Error::into_response`].
 ///
 /// # Example
 ///
-/// ```
+/// ```rust,no_run
 /// use modo::extractor::Query;
 /// use modo::sanitize::Sanitize;
 /// use serde::Deserialize;

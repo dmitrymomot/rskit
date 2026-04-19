@@ -15,12 +15,17 @@ pub struct TemplateContext {
 }
 
 impl TemplateContext {
-    /// Inserts or replaces a value in the context.
+    /// Inserts or replaces the value stored under `key`.
+    ///
+    /// Used by [`TemplateContextLayer`](super::TemplateContextLayer) to populate
+    /// request-scoped data, and available to custom middleware that wants to
+    /// expose values to templates.
     pub fn set(&mut self, key: impl Into<String>, value: minijinja::Value) {
         self.values.insert(key.into(), value);
     }
 
-    /// Returns a reference to a value by key, or `None` if the key is absent.
+    /// Returns a reference to the value stored under `key`, or `None` if the
+    /// key is absent.
     pub fn get(&self, key: &str) -> Option<&minijinja::Value> {
         self.values.get(key)
     }

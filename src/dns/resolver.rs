@@ -12,7 +12,13 @@ use crate::error::{Error, Result};
 use super::error::DnsError;
 use super::protocol::{self, RecordType};
 
-/// Internal trait for DNS resolution. Object-safe via `Pin<Box<dyn Future>>`.
+/// Internal trait for DNS resolution.
+///
+/// Object-safe: both methods return `Pin<Box<dyn Future + Send>>` rather than
+/// `impl Future` (RPITIT), because the trait is held as `Arc<dyn DnsResolver>`
+/// inside [`super::verifier::DomainVerifier`] and RPITIT traits are not
+/// object-safe. This is the pattern documented in `CLAUDE.md` for all traits
+/// stored behind `Arc<dyn Trait>`.
 ///
 /// Not part of the public API. Implemented by [`UdpDnsResolver`] for
 /// production use and by mock types in tests.

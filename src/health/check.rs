@@ -9,8 +9,8 @@ use crate::Result;
 /// database pools, cache connections). The check should be fast and
 /// non-destructive.
 ///
-/// When the `db` feature is enabled, [`crate::db::Database`] implements this
-/// trait automatically.
+/// [`crate::db::Database`] implements this trait automatically, verifying
+/// health by executing `SELECT 1` on the connection.
 pub trait HealthCheck: Send + Sync + 'static {
     /// Run the health check.
     ///
@@ -53,20 +53,24 @@ pub struct HealthChecks {
 }
 
 impl HealthChecks {
-    /// Creates an empty collection.
+    /// Creates an empty collection with no registered checks.
     pub fn new() -> Self {
         Self { checks: Vec::new() }
     }
 
-    /// Register a named [`HealthCheck`] implementation under the given name.
+    /// Registers a [`HealthCheck`] implementation under the given name.
+    ///
+    /// The name is used in error logs when the check fails.
     pub fn check(mut self, name: &str, c: impl HealthCheck) -> Self {
         self.checks.push((name.to_owned(), Arc::new(c)));
         self
     }
 
-    /// Register a named health check from an async closure.
+    /// Registers a named health check from an async closure.
     ///
-    /// The closure must return [`crate::Result<()>`].
+    /// The closure must return [`crate::Result<()>`] — `Ok(())` means healthy,
+    /// any `Err` marks the service unhealthy and causes `/_ready` to return
+    /// `503`.
     pub fn check_fn<F, Fut>(mut self, name: &str, f: F) -> Self
     where
         F: Fn() -> Fut + Send + Sync + 'static,
@@ -83,8 +87,8 @@ impl HealthChecks {
     }
 }
 
-/// Returns an empty [`HealthChecks`] collection.
 impl Default for HealthChecks {
+    /// Returns an empty [`HealthChecks`] collection.
     fn default() -> Self {
         Self::new()
     }

@@ -222,11 +222,59 @@ let cursor_page = db.conn()
 // cursor_page.next_cursor contains the cursor for the next page
 ```
 
+### Uniqueness (INSERT vs ON CONFLICT)
+
+SQLite's `ON CONFLICT` / `INSERT OR IGNORE` clauses **do not compose with
+partial unique indexes** (e.g. `CREATE UNIQUE INDEX ... WHERE ...`). The
+correct pattern in modo is "try `INSERT`, and if it fails with a unique
+violation, fall back to a `SELECT`":
+
+```rust,no_run
+use modo::db::{self, ConnExt};
+
+# async fn example(db: &db::Database) -> modo::Result<()> {
+let result = db.conn()
+    .execute_raw(
+        "INSERT INTO users (id, email) VALUES (?1, ?2)",
+        libsql::params!["user_abc", "alice@example.com"],
+    )
+    .await;
+
+match result {
+    Ok(_) => { /* new row */ }
+    Err(ref e) if matches!(e, libsql::Error::SqliteFailure(2067 | 1555, _)) => {
+        // Unique (2067) or primary-key (1555) constraint violation —
+        // a row already exists; look it up instead.
+    }
+    Err(e) => return Err(e.into()),
+}
+# Ok(()) }
+```
+
+If you don't need to recover from the error, the `From<libsql::Error> for
+modo::Error` conversion already maps unique/primary-key violations to
+`409 Conflict`, foreign-key violations to `400 Bad Request`, and
+`QueryReturnedNoRows` to `404 Not Found`, so propagating `?` usually does
+the right thing.
+
+**Bind parameter limit:** SQLite allows at most 999 bind parameters per
+statement. For bulk inserts past that limit, chunk the work across
+multiple statements (ideally inside one transaction).
+
 ### Migrations
+
+Migrations are just `*.sql` files in a directory. modo runs them in
+filename order and records each one in a `_migrations` table with an
+FNV-1a checksum, so every migration runs at most once. Modifying a file
+after it has been applied produces a checksum-mismatch error.
+
+Each migration is applied inside a transaction so the schema change and
+the `_migrations` bookkeeping commit atomically.
 
 ```rust,no_run
 use modo::db;
 
+# async fn example() -> modo::Result<()> {
 // Migrations run automatically if Config::migrations is set:
 let config = db::Config {
     migrations: Some("migrations".to_string()),
@@ -236,11 +284,14 @@ let db = db::connect(&config).await?;
 
 // Or run manually against a connection:
 db::migrate(db.conn(), "migrations").await?;
+# Ok(()) }
 ```
 
-Migration files are `*.sql` files in the directory, sorted by filename.
-Each migration is tracked in a `_migrations` table with a checksum.
-Modified files after application produce an error.
+> **DB-backed modules don't ship migrations.** Modules in the modo crate
+> that need tables (sessions, jobs, cron, auth, tenants, etc.) do **not**
+> bundle `.sql` files — end applications own the schema and are free to
+> shape it to their own needs. Consult each module's README for its
+> required columns.
 
 ### Database maintenance (VACUUM)
 

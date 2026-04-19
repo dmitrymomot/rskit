@@ -19,5 +19,14 @@ pub trait Task: Send + 'static {
     /// Called once by [`run!`](crate::run) after the process receives a
     /// shutdown signal. The future must be `Send` because it may be awaited on
     /// any Tokio thread.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`modo::Error`](crate::Error) only when teardown encounters a
+    /// genuinely unexpected failure (for example, a worker panic surfaced via a
+    /// join handle). Normal, clean shutdown — including cases where a resource
+    /// is already closed — should return `Ok(())`. An error from one task does
+    /// not abort the remaining shutdown sequence in [`run!`](crate::run); it is
+    /// logged at `error` level and the next task is still invoked.
     fn shutdown(self) -> impl std::future::Future<Output = Result<()>> + Send;
 }

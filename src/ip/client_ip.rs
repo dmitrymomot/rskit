@@ -23,6 +23,12 @@ pub struct ClientIp(pub IpAddr);
 impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
     type Rejection = Error;
 
+    /// Extracts [`ClientIp`] from request extensions.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::internal`] when the extension is missing, which happens
+    /// if [`ClientIpLayer`](super::ClientIpLayer) is not applied to the router.
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         parts.extensions.get::<ClientIp>().copied().ok_or_else(|| {
             Error::internal("ClientIp not found in request extensions — is ClientIpLayer applied?")

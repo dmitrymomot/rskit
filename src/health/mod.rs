@@ -3,19 +3,21 @@
 //! Liveness and readiness probe endpoints for Kubernetes and container orchestration.
 //!
 //! Provides:
-//! - [`router()`] — returns a `Router<AppState>` with `/_live` and `/_ready` mounted.
+//! - [`router`] — returns a `Router<AppState>` with `GET /_live` and `GET /_ready` mounted.
 //! - [`HealthCheck`] — trait for types that can verify their own readiness.
-//! - [`HealthChecks`] — fluent builder that collects named checks; registered in
-//!   the service registry.
+//! - [`HealthChecks`] — fluent builder that collects named checks and is placed
+//!   in the service [`Registry`](crate::service::Registry) for the readiness
+//!   handler to extract.
 //!
 //! [`crate::db::Database`] implements [`HealthCheck`] automatically, verifying
 //! health by executing `SELECT 1` on the connection.
 //!
 //! # Endpoints
 //!
-//! - `/_live` — always returns 200 OK (liveness probe)
-//! - `/_ready` — runs registered health checks concurrently, returns 200 if
-//!   all pass, 503 if any fail (readiness probe)
+//! - `GET /_live` — always returns `200 OK` (liveness probe).
+//! - `GET /_ready` — runs registered checks concurrently, returns `200 OK`
+//!   if all pass or `503 Service Unavailable` if any fail; failures are
+//!   logged at `ERROR` level. When no checks are registered, responds `200`.
 //!
 //! # Example
 //!

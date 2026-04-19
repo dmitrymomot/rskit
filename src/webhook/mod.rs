@@ -6,7 +6,7 @@
 //! Provides signed outbound HTTP POST requests using HMAC-SHA256,
 //! plus verification helpers for incoming webhook requests.
 //!
-//! # Provides
+//! ## Provides
 //!
 //! | Type | Purpose |
 //! |------|---------|
@@ -19,9 +19,9 @@
 //! | [`sign_headers()`] | Build the three Standard Webhooks headers from id, timestamp, body, and secrets. |
 //! | [`verify_headers()`] | Verify incoming Standard Webhooks headers with replay-attack protection. |
 //!
-//! # Quick start
+//! ## Quick start
 //!
-//! ```
+//! ```no_run
 //! use modo::webhook::{WebhookSender, WebhookSecret};
 //!
 //! # async fn example() -> modo::Result<()> {

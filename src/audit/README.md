@@ -86,7 +86,7 @@ let entry = AuditEntry::new("user_123", "user.login", "session", "sess_abc")
 ### Querying records
 
 ```rust,no_run
-use modo::audit::{AuditRepo, AuditRecord};
+use modo::audit::AuditRepo;
 use modo::db::{CursorRequest, Database};
 
 async fn list_events(db: Database) -> modo::Result<()> {

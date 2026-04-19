@@ -34,7 +34,7 @@ struct MyTierBackend { /* db handle, cache, etc. */ }
 impl TierBackend for MyTierBackend {
     fn resolve(
         &self,
-        owner_id: &str,
+        _owner_id: &str,
     ) -> Pin<Box<dyn Future<Output = Result<TierInfo>> + Send + '_>> {
         Box::pin(async move {
             Ok(TierInfo {
@@ -68,7 +68,7 @@ fn app(resolver: TierResolver) -> Router {
 
         // Usage-limit gate: reject when current usage >= ceiling.
         .route("/api/widgets", get(widgets_handler))
-        .route_layer(require_limit("api_calls", |parts| async {
+        .route_layer(require_limit("api_calls", |_parts| async {
             // Return current usage count (e.g., from a counter in extensions).
             Ok(0u64)
         }))

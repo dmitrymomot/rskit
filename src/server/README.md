@@ -1,6 +1,6 @@
 # modo::server
 
-HTTP server startup, host-based routing, and graceful shutdown.
+HTTP server startup, host-based routing, and graceful shutdown for modo v0.10.
 
 ## Overview
 
@@ -8,13 +8,14 @@ The module provides:
 
 - `Config` — bind address and shutdown timeout, loaded from the `server` YAML section.
 - `http(router, config)` — binds a TCP port, starts serving on a background task, and
-  returns an `HttpServer` handle.
+  returns an `HttpServer` handle. Accepts any `impl Into<axum::Router>`.
 - `HttpServer` — opaque handle to the running server; implements the `Task` trait, so it
   integrates directly with the `modo::run!` macro for coordinated, signal-driven shutdown.
 - `HostRouter` — routes requests to different axum routers based on the `Host` header,
-  supporting exact matches and single-level wildcard subdomains.
-- `MatchedHost` — axum extractor that provides the subdomain captured by a wildcard
-  pattern match.
+  supporting exact matches and single-level wildcard subdomains with an optional fallback.
+  Implements `Into<axum::Router>` so it can be passed directly to `http()`.
+- `MatchedHost` — axum extractor that provides the subdomain (and pattern) captured by a
+  wildcard pattern match; available as `MatchedHost` or `Option<MatchedHost>`.
 
 ## Path normalization
 
@@ -25,7 +26,28 @@ inside `http()`; it cannot be disabled.
 
 ## Usage
 
-### Minimal server
+### Minimal server with loaded config
+
+Matches the `lib.rs` quick-start. `modo::config::load()` reads
+`config/development.yaml` (or whichever file matches `APP_ENV`), and
+`config.server` is the `modo::server::Config` consumed by `http()`.
+
+```rust,no_run
+use modo::{Config, Result};
+use modo::axum::{Router, routing::get};
+
+async fn hello() -> &'static str { "Hello, modo!" }
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let config: Config = modo::config::load("config/")?;
+    let app = Router::new().route("/", get(hello));
+    let server = modo::server::http(app, &config.server).await?;
+    modo::run!(server).await
+}
+```
+
+### Standalone with explicit defaults
 
 ```rust,no_run
 use modo::server::{Config, http};
@@ -70,27 +92,34 @@ When a request matches a wildcard pattern, `MatchedHost` is available as an axum
 extractor. Use `Option<MatchedHost>` for handlers that serve both exact and wildcard
 routes.
 
-```rust,ignore
+```rust,no_run
 use modo::server::MatchedHost;
-use axum::response::IntoResponse;
 
-async fn handler(matched: MatchedHost) -> impl IntoResponse {
+async fn handler(matched: MatchedHost) -> String {
     // For a request to "tenant1.acme.com" matching "*.acme.com":
     //   matched.subdomain == "tenant1"
     //   matched.pattern   == "*.acme.com"
     format!("Hello, {}!", matched.subdomain)
 }
+
+async fn optional_handler(matched: Option<MatchedHost>) -> String {
+    match matched {
+        Some(m) => format!("tenant: {}", m.subdomain),
+        None => "apex host".to_string(),
+    }
+}
 ```
 
 ### Loading config from YAML
 
-```rust,ignore
-use modo::config::load;
-
-// Reads config/development.yaml (or the file named after APP_ENV)
-let config: modo::Config = load("config/").unwrap();
-// config.server is a modo::server::Config
-let _ = config.server;
+```rust,no_run
+fn main() -> modo::Result<()> {
+    // Reads config/development.yaml (or the file named after APP_ENV)
+    let config: modo::Config = modo::config::load("config/")?;
+    // config.server is a modo::server::Config
+    let _server_cfg: &modo::server::Config = &config.server;
+    Ok(())
+}
 ```
 
 ### Coordinated shutdown with multiple services
@@ -132,15 +161,15 @@ server:
   shutdown_timeout_secs: 30
 ```
 
-## Public API
+## Key types
 
-| Item          | Kind      | Description                                                                        |
-| ------------- | --------- | ---------------------------------------------------------------------------------- |
-| `Config`      | struct    | Server bind address and shutdown timeout; deserializes from YAML                   |
-| `HttpServer`  | struct    | Opaque handle to the running server; implements `Task` for graceful shutdown       |
-| `http`        | async fn  | Binds a TCP listener and starts serving; accepts `impl Into<axum::Router>`         |
-| `HostRouter`  | struct    | Routes requests to different routers by `Host` header; exact and wildcard matching |
-| `MatchedHost` | struct    | Axum extractor providing the subdomain captured by a wildcard `HostRouter` pattern |
+| Item          | Kind     | Description                                                                        |
+| ------------- | -------- | ---------------------------------------------------------------------------------- |
+| `Config`      | struct   | Server bind address and shutdown timeout; deserializes from YAML                   |
+| `HttpServer`  | struct   | Opaque handle to the running server; implements `Task` for graceful shutdown       |
+| `http`        | async fn | Binds a TCP listener and starts serving; accepts `impl Into<axum::Router>`         |
+| `HostRouter`  | struct   | Routes requests to different routers by `Host` header; exact and wildcard matching |
+| `MatchedHost` | struct   | Axum extractor providing the subdomain captured by a wildcard `HostRouter` pattern |
 
 ## Host resolution
 

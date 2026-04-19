@@ -1,30 +1,26 @@
 //! # modo::extractor
 //!
-//! Request extractors for the modo web framework.
+//! Sanitizing axum extractors for request bodies, query strings, and multipart uploads.
 //!
-//! All sanitizing extractors call [`crate::sanitize::Sanitize::sanitize`] on
-//! the deserialized value before returning it, so whitespace trimming and other
-//! normalization happen automatically.
+//! Every sanitizing extractor calls [`crate::sanitize::Sanitize::sanitize`] on the
+//! deserialized value before returning it, so whitespace trimming and other
+//! normalization happen automatically. Rejections are [`crate::Error`] values with
+//! `400 Bad Request` status, which render through [`crate::Error::into_response`].
 //!
-//! [`Path`] is re-exported directly from axum and behaves identically.
+//! Provides:
 //!
-//! ## Extractors
-//!
-//! | Extractor | Source | Trait bound |
-//! |---|---|---|
-//! | [`JsonRequest<T>`] | JSON body | `T: DeserializeOwned + Sanitize` |
-//! | [`FormRequest<T>`] | URL-encoded form body | `T: DeserializeOwned + Sanitize` |
-//! | [`Query<T>`] | URL query string | `T: DeserializeOwned + Sanitize` |
-//! | [`MultipartRequest<T>`] | `multipart/form-data` body | `T: DeserializeOwned + Sanitize` |
-//! | [`Path`] | URL path parameters | `T: DeserializeOwned` |
-//!
-//! ## Multipart helpers
-//!
-//! | Type | Purpose |
-//! |---|---|
-//! | [`UploadedFile`] | Single file extracted from a multipart field; also constructable via [`UploadedFile::from_field`] for advanced use |
-//! | [`Files`] | Map of field names to uploaded files; constructable via [`Files::from_map`] for testing or pre-built maps |
-//! | [`UploadValidator`] | Fluent size/content-type validator for [`UploadedFile`] |
+//! - [`JsonRequest<T>`] — JSON body (`T: DeserializeOwned + Sanitize`)
+//! - [`FormRequest<T>`] — URL-encoded form body (`T: DeserializeOwned + Sanitize`)
+//! - [`Query<T>`] — URL query string (`T: DeserializeOwned + Sanitize`)
+//! - [`MultipartRequest<T>`] — `multipart/form-data` body split into text fields
+//!   and a [`Files`] map (`T: DeserializeOwned + Sanitize`)
+//! - [`Path`] — URL path parameters, re-exported from axum unchanged
+//!   (`T: DeserializeOwned`, no sanitization)
+//! - [`UploadedFile`] — single file from a multipart field (also directly constructable
+//!   via [`UploadedFile::from_field`])
+//! - [`Files`] — map of field names to uploaded files (also constructable via
+//!   [`Files::from_map`] for tests)
+//! - [`UploadValidator`] — fluent size/content-type validator for [`UploadedFile`]
 
 mod form;
 mod json;

@@ -19,7 +19,12 @@ use crate::Error;
 ///
 /// Supports exact host matches (`acme.com`, `app.acme.com`) and single-level
 /// wildcard subdomains (`*.acme.com`). Both use `HashMap` lookups for O(1)
-/// matching.
+/// matching. The effective host is resolved from the `Forwarded` (RFC 7239),
+/// `X-Forwarded-Host`, or `Host` header, in that order; the value is
+/// lowercased and any trailing `:port` is stripped before matching.
+///
+/// `HostRouter` implements `Into<axum::Router>` and can therefore be passed
+/// directly to [`http()`](super::http()).
 ///
 /// # Panics
 ///
@@ -29,9 +34,11 @@ use crate::Error;
 /// or cloning it.
 ///
 /// The [`host`](Self::host) method also panics on:
+/// - Empty host patterns
 /// - Duplicate exact host patterns
 /// - Duplicate wildcard suffixes
-/// - Invalid wildcard patterns (suffix must contain at least one dot)
+/// - Malformed wildcard patterns (must be `*.suffix` where the suffix
+///   contains at least one dot; a bare `*` or `*.com` is rejected)
 ///
 /// # Example
 ///
@@ -111,13 +118,17 @@ impl HostRouter {
     ///
     /// Exact patterns (e.g. `"acme.com"`, `"app.acme.com"`) match the host
     /// literally. Wildcard patterns (e.g. `"*.acme.com"`) match any single
-    /// subdomain level.
+    /// subdomain level. The pattern is trimmed, lowercased, and stripped of
+    /// any `:port` suffix before registration.
     ///
     /// # Panics
     ///
+    /// - If `self` has already been cloned or converted to an [`axum::Router`].
+    /// - If the pattern is empty after trimming.
+    /// - If a bare `*` or a leading `*` not followed by `.` is supplied.
     /// - If an exact host is registered twice.
     /// - If a wildcard suffix is registered twice.
-    /// - If a wildcard suffix contains no dot (e.g. `"*.com"`).
+    /// - If a wildcard suffix is empty or contains no dot (e.g. `"*.com"`).
     pub fn host(mut self, pattern: &str, router: Router) -> Self {
         let inner = Arc::get_mut(&mut self.inner).expect("HostRouter::host called after clone");
         let pattern = strip_port(pattern.trim()).to_lowercase();
@@ -159,6 +170,11 @@ impl HostRouter {
     /// Set a fallback router for requests whose host doesn't match any pattern.
     ///
     /// If no fallback is set, unmatched hosts receive a 404 response.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` has already been cloned or converted to an
+    /// [`axum::Router`].
     pub fn fallback(mut self, router: Router) -> Self {
         let inner = Arc::get_mut(&mut self.inner).expect("HostRouter::fallback called after clone");
         inner.fallback = Some(router);
@@ -197,12 +213,14 @@ impl HostRouterInner {
 /// pattern (e.g. `*.acme.com`). Not present for exact or fallback matches.
 ///
 /// Use `Option<MatchedHost>` for handlers that serve both exact and wildcard
-/// routes.
+/// routes; the required [`OptionalFromRequestParts`] impl is provided.
 ///
 /// # Example
 ///
-/// ```rust,ignore
-/// async fn handler(matched: MatchedHost) -> impl IntoResponse {
+/// ```rust,no_run
+/// use modo::server::MatchedHost;
+///
+/// async fn handler(matched: MatchedHost) -> String {
 ///     format!("subdomain: {}", matched.subdomain)
 /// }
 /// ```

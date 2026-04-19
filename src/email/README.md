@@ -207,3 +207,5 @@ email:
 | SMTP transport error | 500 Internal | Failed to build or connect to the SMTP server |
 | SMTP delivery error | 500 Internal | Server accepted connection but rejected the message |
 | Frontmatter parse error | 500 Internal | YAML in frontmatter is syntactically invalid |
+| CSS inline failure | 500 Internal | `inline_css: true` and the rendered HTML cannot be parsed by the inliner (usually a malformed custom layout) |
+| Layouts directory unreadable | 500 Internal | `layouts_path` exists but cannot be enumerated, or a `.html` file inside cannot be read |

@@ -1,39 +1,44 @@
 //! # modo::testing
 //!
-//! Test helpers for building and exercising modo applications in-process.
+//! In-process test harness for modo applications.
 //!
-//! **Requires feature `test-helpers`** — the only feature flag modo ships.
-//! Enable it in your `Cargo.toml` dev-dependency:
+//! **Requires feature `test-helpers`.** This is the only runtime feature modo
+//! ships — it gates every item in this module along with the in-memory /
+//! stub backends that tests rely on. Enable it as a dev-dependency:
 //!
 //! ```toml
 //! [dev-dependencies]
 //! modo = { package = "modo-rs", version = "0.10", features = ["test-helpers"] }
 //! ```
 //!
-//! Integration test files that use these helpers should also guard their
-//! entire contents:
+//! Integration test files that import from `modo::testing` should guard
+//! their contents:
 //!
 //! ```rust,ignore
 //! #![cfg(feature = "test-helpers")]
 //! ```
 //!
-//! Lightweight utilities for integration-testing axum-based handlers without
-//! spinning up a real HTTP server. Everything runs in-process using Tower's
-//! [`oneshot`](tower::ServiceExt::oneshot) transport.
+//! The helpers dispatch requests in-process through Tower's
+//! [`oneshot`](tower::ServiceExt::oneshot), so no sockets are opened and no
+//! runtime server is spawned.
 //!
 //! # Provides
 //!
-//! - [`TestApp`] / [`TestAppBuilder`] — assemble a test application with routes,
-//!   services, and middleware; send requests via HTTP-method helpers.
-//! - [`TestDb`] — in-memory libsql database with chainable `exec` / `migrate`
-//!   setup; exposes a [`Database`](crate::db::Database) handle via [`db()`](TestDb::db).
-//! - [`TestPool`] — in-memory [`DatabasePool`](crate::db::DatabasePool) with chainable
-//!   `exec` setup; both default and shard databases use `:memory:`.
-//! - [`TestRequestBuilder`] — fluent builder for a single in-process HTTP request
-//!   with JSON, form, and raw-body support.
-//! - [`TestResponse`] — captured response with status, header, and body accessors.
-//! - [`TestSession`] — session infrastructure for integration tests: creates the
-//!   `authenticated_sessions` table (see [`TestSession::SCHEMA_SQL`] and
+//! - [`TestApp`] / [`TestAppBuilder`] — assemble a test application with
+//!   routes, services, and middleware; dispatch requests via HTTP-method
+//!   helpers (`get`, `post`, `put`, `patch`, `delete`, `options`, `request`).
+//! - [`TestDb`] — in-memory libsql database with chainable [`exec`](TestDb::exec)
+//!   / [`migrate`](TestDb::migrate) setup; exposes a
+//!   [`Database`](crate::db::Database) handle via [`db()`](TestDb::db).
+//! - [`TestPool`] — in-memory [`DatabasePool`](crate::db::DatabasePool) with
+//!   chainable [`exec`](TestPool::exec) setup; both the default database and
+//!   all shards use `:memory:`.
+//! - [`TestRequestBuilder`] — fluent builder for a single in-process HTTP
+//!   request with JSON, form, raw-body, and header helpers.
+//! - [`TestResponse`] — captured response with status, header, text, JSON,
+//!   and raw-bytes accessors.
+//! - [`TestSession`] — session infrastructure for integration tests: creates
+//!   the `authenticated_sessions` table (see [`TestSession::SCHEMA_SQL`] and
 //!   [`TestSession::INDEXES_SQL`]), signs cookies, and builds a
 //!   [`CookieSessionLayer`](crate::auth::session::CookieSessionLayer).
 //!

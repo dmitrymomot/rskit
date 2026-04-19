@@ -1,23 +1,35 @@
 # modo::extractor
 
-Request extractors for the modo web framework.
+Sanitizing axum extractors for request bodies, query strings, and multipart uploads
+(modo 0.10).
 
 All sanitizing extractors call [`Sanitize::sanitize`](../sanitize/index.html) on the
 deserialized value before returning it, so whitespace trimming and other normalization
-happen automatically.
+happen automatically. Every rejection is a `modo::Error` that renders through
+`Error::into_response()` — handlers never see raw HTTP responses.
 
-## Key Types
+## Extractors
 
-| Type                  | Source                               | Trait bound on `T`            |
-| --------------------- | ------------------------------------ | ----------------------------- |
-| `JsonRequest<T>`      | JSON request body                    | `DeserializeOwned + Sanitize` |
-| `FormRequest<T>`      | URL-encoded form body                | `DeserializeOwned + Sanitize` |
-| `Query<T>`            | URL query string                     | `DeserializeOwned + Sanitize` |
-| `MultipartRequest<T>` | `multipart/form-data` body           | `DeserializeOwned + Sanitize` |
-| `Path<T>`             | URL path parameters (axum re-export) | `DeserializeOwned`            |
-| `UploadedFile`        | Single file from a multipart upload  | —                             |
-| `Files`               | Map of field names to uploaded files | —                             |
-| `UploadValidator<'_>` | Fluent file validator                | —                             |
+| Type                  | Extracts                               | Trait impl          | Rejection (`modo::Error`)                                                                                |
+| --------------------- | -------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------- |
+| `JsonRequest<T>`      | JSON request body                      | `FromRequest`       | `400 Bad Request` — missing/invalid content-type, malformed JSON, deserialization into `T` failed        |
+| `FormRequest<T>`      | URL-encoded form body                  | `FromRequest`       | `400 Bad Request` — body is not valid `application/x-www-form-urlencoded` or cannot deserialize into `T` |
+| `Query<T>`            | URL query string                       | `FromRequestParts`  | `400 Bad Request` — query string cannot deserialize into `T`                                             |
+| `MultipartRequest<T>` | `multipart/form-data` body → `(T, Files)` | `FromRequest`    | `400 Bad Request` — not valid multipart, a field cannot be read, or text fields cannot deserialize into `T` |
+| `Path<T>`             | URL path parameters (axum re-export)   | `FromRequestParts`  | axum's `PathRejection` — no sanitization                                                                 |
+| `UploadedFile`        | Single file from a multipart field     | value type          | —                                                                                                        |
+| `Files`               | Map of field names to uploaded files   | value type          | —                                                                                                        |
+| `UploadValidator<'_>` | Fluent size/content-type validator     | value type          | `.check()` returns `422 Unprocessable Entity` with a `details` payload listing violations                |
+
+`T: DeserializeOwned + Sanitize` applies to every extractor except `Path<T>` (only
+`DeserializeOwned`).
+
+### Optional extractors
+
+In axum 0.8, `Option<MyExtractor>` requires an explicit `OptionalFromRequestParts`
+impl — none is provided for the modo extractors above. Instead, make the wrapped
+type tolerant: use `#[serde(default)]` or `Option<_>` fields on the deserialized
+struct (e.g. `SearchParams { q: Option<String>, page: Option<u32> }`).
 
 ## Usage
 

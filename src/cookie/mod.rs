@@ -1,23 +1,24 @@
 //! # modo::cookie
 //!
-//! Cookie utilities: configuration, key derivation, and re-exports of
-//! `axum_extra` cookie jar types.
+//! Cookie configuration, HMAC key derivation, and cookie-jar re-exports.
 //!
 //! Provides:
 //!
-//! - [`CookieConfig`] — cookie security attributes loaded from YAML config.
-//! - [`key_from_config`] — derives an HMAC signing [`Key`] from a [`CookieConfig`].
-//! - [`Key`] — re-export of `axum_extra::extract::cookie::Key`.
-//! - [`CookieJar`] — re-export of the plain (unsigned) cookie jar.
-//! - [`SignedCookieJar`] — re-export of the HMAC-signed cookie jar.
-//! - [`PrivateCookieJar`] — re-export of the encrypted (private) cookie jar.
+//! - [`CookieConfig`] — cookie security attributes (`secret`, `secure`,
+//!   `http_only`, `same_site`) loaded from the `cookie` section of the
+//!   application YAML config.
+//! - [`key_from_config`] — derives an HMAC signing [`Key`] from a
+//!   [`CookieConfig`], validating the secret length at startup.
+//! - [`Key`] — re-export of [`axum_extra::extract::cookie::Key`]; used by
+//!   `FlashLayer` and the internal session middleware for signing cookies.
+//! - [`CookieJar`], [`SignedCookieJar`], [`PrivateCookieJar`] — re-exports of
+//!   the `axum_extra` jar extractors, provided for handler-level use.
 //!
-//! The primary entry points are [`CookieConfig`] (loaded from YAML) and
-//! [`key_from_config`] (derives an HMAC [`Key`] at startup). The re-exported
-//! jar types are used by the session and flash middleware and can be used
-//! directly in handlers.
+//! modo's built-in middleware (session, flash, CSRF, OAuth state) works
+//! directly with the raw [`cookie::CookieJar`](::cookie::CookieJar) type and
+//! does not use the signed or private jar extractors.
 //!
-//! This module is always available; no feature flag is required.
+//! This module is always compiled; no feature flag is required.
 
 mod config;
 mod key;

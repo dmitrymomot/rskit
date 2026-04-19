@@ -4,28 +4,34 @@
 //!
 //! Provides:
 //!
-//! - [`Config`] — bind address and shutdown timeout, loaded from YAML.
-//! - [`http()`] — binds a TCP listener and returns an [`HttpServer`] handle.
+//! - [`Config`] — bind address and shutdown timeout, deserialized from the
+//!   `server` YAML section.
+//! - [`http()`] — binds a TCP listener, spawns the server on a background task,
+//!   and returns an [`HttpServer`] handle.
 //! - [`HttpServer`] — opaque server handle that implements
-//!   [`crate::runtime::Task`] for use with the [`crate::run!`] macro.
+//!   [`crate::runtime::Task`] so it composes with the [`crate::run!`] macro for
+//!   coordinated graceful shutdown.
 //! - [`HostRouter`] — routes requests to different axum routers by `Host` header;
-//!   supports exact matches and single-level wildcard subdomains.
-//! - [`MatchedHost`] — axum extractor for the subdomain captured by a wildcard
-//!   `HostRouter` pattern.
+//!   supports exact matches and single-level wildcard subdomains with an
+//!   optional fallback. Implements `Into<axum::Router>` so it plugs directly
+//!   into [`http()`].
+//! - [`MatchedHost`] — axum extractor that exposes the subdomain captured by a
+//!   wildcard `HostRouter` pattern (plus the pattern itself).
 //!
 //! Trailing slashes are stripped from request paths before routing, so `/app`
 //! and `/app/` resolve to the same handler (the root `/` is preserved).
 //!
 //! ## Quick start
 //!
-//! ```no_run
-//! use modo::server::{Config, http};
+//! ```rust,no_run
+//! use modo::{Config, Result};
+//! use modo::axum::Router;
 //!
 //! #[tokio::main]
-//! async fn main() -> modo::Result<()> {
-//!     let config = Config::default();
-//!     let router = modo::axum::Router::new();
-//!     let server = http(router, &config).await?;
+//! async fn main() -> Result<()> {
+//!     let config: Config = modo::config::load("config/")?;
+//!     let app = Router::new();
+//!     let server = modo::server::http(app, &config.server).await?;
 //!     modo::run!(server).await
 //! }
 //! ```

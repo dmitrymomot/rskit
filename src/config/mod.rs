@@ -24,12 +24,17 @@
 //! ## Quick start
 //!
 //! ```no_run
-//! use modo::config::load;
 //! use modo::Config;
 //!
-//! // Reads config/development.yaml (or whatever APP_ENV resolves to)
-//! let config: Config = load("config/").unwrap();
+//! // Reads config/development.yaml (or whatever APP_ENV resolves to).
+//! // Set `APP_ENV=production` to load config/production.yaml instead.
+//! let config: Config = modo::config::load("config/").unwrap();
 //! ```
+//!
+//! Note that `trusted_proxies` is a top-level field on [`Config`], not nested
+//! under `server`. Time-based settings use `_secs: u64` fields — for example
+//! `session.session_ttl_secs`, `session.touch_interval_secs`, and
+//! `server.shutdown_timeout_secs`.
 
 mod env;
 mod load;

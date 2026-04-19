@@ -22,6 +22,9 @@ pub enum TenantId {
 
 impl TenantId {
     /// Returns the inner string regardless of variant.
+    ///
+    /// For [`Self::ApiKey`] this returns the **raw, unredacted** secret —
+    /// use it only for resolver lookups, never for logging or display.
     pub fn as_str(&self) -> &str {
         match self {
             Self::Slug(s) | Self::Domain(s) | Self::Id(s) | Self::ApiKey(s) => s,
