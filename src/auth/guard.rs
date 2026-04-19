@@ -27,7 +27,6 @@ use crate::auth::role::Role;
 /// For htmx requests (`hx-request: true`), returns `200 OK` with the
 /// `HX-Redirect: <path>` header so htmx performs the client-side navigation.
 /// For all other requests, returns `303 See Other` with `Location: <path>`.
-#[allow(dead_code)] // Used by Tasks 2/3 guards (require_authenticated rewrite, require_guest_only).
 fn redirect_response(path: &str, headers: &http::HeaderMap) -> http::Response<Body> {
     let is_htmx = headers.get("hx-request").and_then(|v| v.to_str().ok()) == Some("true");
 
@@ -162,20 +161,25 @@ where
 
 // --- require_authenticated ---
 
-/// Creates a guard layer that rejects requests unless a [`Role`] is
-/// present in extensions. The role's value is not inspected — any
-/// resolved role is accepted.
+/// Creates a guard layer that redirects requests without a [`Session`] in
+/// extensions to `redirect_to`. The session's contents are not inspected —
+/// any present session passes the check.
 ///
-/// # Status codes
+/// # Response behavior
 ///
-/// - **401 Unauthorized** — no [`Role`] in request extensions.
+/// When a session is absent:
+/// - **htmx** (`hx-request: true`) — `200 OK` with `HX-Redirect: <redirect_to>`
+/// - **non-htmx** — `303 See Other` with `Location: <redirect_to>`
+///
+/// When a session is present, the request is forwarded to the inner service.
 ///
 /// # Wiring
 ///
 /// Apply with `.route_layer()` so the guard runs after route matching.
-/// A role-resolving middleware (e.g. from [`crate::auth::role`]) must run
-/// earlier via `.layer()` so that [`Role`] is in extensions when this
-/// guard runs.
+/// The session middleware ([`CookieSessionLayer`](crate::auth::session::CookieSessionLayer)
+/// or the JWT session middleware) must run earlier via `.layer()` so that
+/// [`Session`] is in extensions when this guard runs. No role middleware is
+/// required.
 ///
 /// # Example
 ///
@@ -186,20 +190,26 @@ where
 /// use modo::auth::guard::require_authenticated;
 ///
 /// let app: Router = Router::new()
-///     .route("/me", get(|| async { "profile" }))
-///     .route_layer(require_authenticated());
+///     .route("/app", get(|| async { "dashboard" }))
+///     .route_layer(require_authenticated("/auth"));
 /// # }
 /// ```
-pub fn require_authenticated() -> RequireAuthenticatedLayer {
-    RequireAuthenticatedLayer
+pub fn require_authenticated(redirect_to: impl Into<String>) -> RequireAuthenticatedLayer {
+    RequireAuthenticatedLayer {
+        redirect_to: Arc::new(redirect_to.into()),
+    }
 }
 
 /// Tower layer produced by [`require_authenticated()`].
-pub struct RequireAuthenticatedLayer;
+pub struct RequireAuthenticatedLayer {
+    redirect_to: Arc<String>,
+}
 
 impl Clone for RequireAuthenticatedLayer {
     fn clone(&self) -> Self {
-        Self
+        Self {
+            redirect_to: self.redirect_to.clone(),
+        }
     }
 }
 
@@ -207,19 +217,24 @@ impl<S> Layer<S> for RequireAuthenticatedLayer {
     type Service = RequireAuthenticatedService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        RequireAuthenticatedService { inner }
+        RequireAuthenticatedService {
+            inner,
+            redirect_to: self.redirect_to.clone(),
+        }
     }
 }
 
 /// Tower service produced by [`RequireAuthenticatedLayer`].
 pub struct RequireAuthenticatedService<S> {
     inner: S,
+    redirect_to: Arc<String>,
 }
 
 impl<S: Clone> Clone for RequireAuthenticatedService<S> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
+            redirect_to: self.redirect_to.clone(),
         }
     }
 }
@@ -239,14 +254,18 @@ where
     }
 
     fn call(&mut self, request: Request<Body>) -> Self::Future {
+        let redirect_to = self.redirect_to.clone();
         let mut inner = self.inner.clone();
         std::mem::swap(&mut self.inner, &mut inner);
 
         Box::pin(async move {
-            if request.extensions().get::<Role>().is_none() {
-                return Ok(Error::unauthorized("authentication required").into_response());
+            if request
+                .extensions()
+                .get::<crate::auth::session::Session>()
+                .is_none()
+            {
+                return Ok(redirect_response(&redirect_to, request.headers()));
             }
-
             inner.call(request).await
         })
     }
@@ -370,6 +389,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::session::Session;
+    use chrono::Utc;
     use http::{Response, StatusCode};
     use std::convert::Infallible;
     use tower::ServiceExt;
@@ -486,27 +507,71 @@ mod tests {
         assert!(!called.load(Ordering::SeqCst));
     }
 
-    // --- require_authenticated tests ---
+    // --- require_authenticated tests (session-based) ---
+
+    fn test_session() -> Session {
+        let now = Utc::now();
+        Session {
+            id: "sess-1".into(),
+            user_id: "user-1".into(),
+            ip_address: "127.0.0.1".into(),
+            user_agent: "test".into(),
+            device_name: "test".into(),
+            device_type: "other".into(),
+            fingerprint: "fp".into(),
+            data: serde_json::json!({}),
+            created_at: now,
+            last_active_at: now,
+            expires_at: now + chrono::Duration::hours(1),
+        }
+    }
 
     #[tokio::test]
-    async fn require_authenticated_passes_when_role_present() {
-        let layer = require_authenticated();
+    async fn require_authenticated_passes_when_session_present() {
+        let layer = require_authenticated("/auth");
         let svc = layer.layer(tower::service_fn(ok_handler));
 
         let mut req = Request::builder().body(Body::empty()).unwrap();
-        req.extensions_mut().insert(Role("viewer".into()));
+        req.extensions_mut().insert(test_session());
         let resp = svc.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
     }
 
     #[tokio::test]
-    async fn require_authenticated_401_when_role_missing() {
-        let layer = require_authenticated();
+    async fn require_authenticated_redirects_non_htmx_when_session_missing() {
+        let layer = require_authenticated("/auth");
         let svc = layer.layer(tower::service_fn(ok_handler));
 
         let req = Request::builder().body(Body::empty()).unwrap();
         let resp = svc.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+        assert_eq!(resp.headers().get(http::header::LOCATION).unwrap(), "/auth");
+    }
+
+    #[tokio::test]
+    async fn require_authenticated_redirects_htmx_when_session_missing() {
+        let layer = require_authenticated("/auth");
+        let svc = layer.layer(tower::service_fn(ok_handler));
+
+        let req = Request::builder()
+            .header("hx-request", "true")
+            .body(Body::empty())
+            .unwrap();
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.headers().get("hx-redirect").unwrap(), "/auth");
+    }
+
+    #[tokio::test]
+    async fn require_authenticated_role_without_session_still_redirects() {
+        let layer = require_authenticated("/auth");
+        let svc = layer.layer(tower::service_fn(ok_handler));
+
+        let mut req = Request::builder().body(Body::empty()).unwrap();
+        req.extensions_mut().insert(Role("admin".into()));
+        let resp = svc.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+        assert_eq!(resp.headers().get(http::header::LOCATION).unwrap(), "/auth");
     }
 
     #[tokio::test]
@@ -516,7 +581,7 @@ mod tests {
         let called = Arc::new(AtomicBool::new(false));
         let called_clone = called.clone();
 
-        let layer = require_authenticated();
+        let layer = require_authenticated("/auth");
         let svc = layer.layer(tower::service_fn(move |_req: Request<Body>| {
             let called = called_clone.clone();
             async move {
@@ -527,7 +592,7 @@ mod tests {
 
         let req = Request::builder().body(Body::empty()).unwrap();
         let resp = svc.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
         assert!(!called.load(Ordering::SeqCst));
     }
 
