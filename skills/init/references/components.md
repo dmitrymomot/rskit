@@ -1094,7 +1094,7 @@ use modo::Result;
 ///   .layer(modo::auth::role::middleware(AppRoleExtractor))
 ///
 /// Then protect routes with guards:
-///   .route_layer(modo::auth::guard::require_authenticated())
+///   .route_layer(modo::auth::guard::require_authenticated("/auth"))
 ///   .route_layer(modo::auth::guard::require_role(["admin"]))
 pub struct AppRoleExtractor;
 

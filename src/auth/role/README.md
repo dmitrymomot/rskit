@@ -4,8 +4,9 @@ Role-based gating for axum applications.
 
 This module is roles-only. Permission checks beyond "does this role match?" belong in handler logic.
 
-The module exposes the role extractor and middleware; the route-level guard
-layers (`require_role`, `require_authenticated`) live in [`modo::auth::guard`].
+The module exposes the role extractor and middleware; the role-based guard
+`require_role` lives in [`modo::auth::guard`].
+(`require_authenticated` also lives there but checks `Session`, not `Role`.)
 
 | Item                          | Kind   | Purpose                                                              |
 | ----------------------------- | ------ | -------------------------------------------------------------------- |
@@ -13,7 +14,6 @@ layers (`require_role`, `require_authenticated`) live in [`modo::auth::guard`].
 | `auth::role::middleware()`    | fn     | Tower layer that runs the extractor and stores `Role` in extensions  |
 | `auth::role::Role`            | struct | Newtype over `String`; axum extractor available in handlers          |
 | `auth::guard::require_role()` | fn     | Guard layer — rejects requests whose role is not in the allowed list |
-| `auth::guard::require_authenticated()` | fn | Guard layer — rejects requests with no role at all                |
 
 ## Usage
 
@@ -124,9 +124,8 @@ async fn handler(role: Option<Role>) -> String {
 
 The Tower `Layer` / `Service` types (`RoleLayer`, `RoleMiddleware`) are
 returned by `auth::role::middleware()` but you don't construct them directly.
-The route-level guard layers (`RequireRoleLayer`, `RequireAuthenticatedLayer`)
-live in `auth::guard` and are built via
-`auth::guard::require_role()` and `auth::guard::require_authenticated()`.
+The route-level role guard layer (`RequireRoleLayer`) lives in `auth::guard`
+and is built via `auth::guard::require_role()`.
 
 Both `Role` and `RoleExtractor` are also reachable as `modo::extractors::Role`
 and `modo::auth::role::RoleExtractor`; `Role` is additionally re-exported from
@@ -140,5 +139,4 @@ and `modo::auth::role::RoleExtractor`; `Role` is additionally re-exported from
 | Extractor returns any other `Error`                | status from that error |
 | Role present, not in allowed list                  | 403                    |
 | Role absent, `require_role` guard applied          | 401                    |
-| Role absent, `require_authenticated` guard applied | 401                    |
 | `Role` extractor used without middleware           | 500                    |

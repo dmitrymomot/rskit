@@ -15,7 +15,7 @@ for contributors.
 | [`prelude.rs`](prelude.rs) | Handler-time prelude. `use modo::prelude::*;` brings in `Error`, `Result`, `AppState`, `Session`, `Role`, `Flash`, `ClientIp`, `Tenant`, `TenantId`, plus the `Validate` trio. |
 | [`extractors.rs`](extractors.rs) | Flat virtual index re-exporting every public axum extractor across the crate. |
 | [`middlewares.rs`](middlewares.rs) | Flat virtual index of every Tower `Layer` constructor — both per-domain layers and always-on universal middleware. Two calling conventions: `lower_case` = free function, `PascalCase` = `Layer` struct (`::new(...)`). |
-| [`guards.rs`](guards.rs) | Flat virtual index of route-level gating layers (`require_authenticated`, `require_role`, `require_scope`, `require_feature`, `require_limit`). |
+| [`guards.rs`](guards.rs) | Flat virtual index of route-level gating layers (`require_authenticated`, `require_unauthenticated`, `require_role`, `require_scope`, `require_feature`, `require_limit`). |
 
 ## Modules by group
 
@@ -54,7 +54,7 @@ The groupings below mirror the order in `lib.rs`.
 
 | Module | Purpose |
 |--------|---------|
-| [`auth/`](auth/) | Umbrella for identity. Submodules: [`session/`](auth/session/), [`apikey/`](auth/apikey/), [`role/`](auth/role/), [`jwt/`](auth/jwt/), [`oauth/`](auth/oauth/), and the `guard.rs` file (`require_authenticated`, `require_role`, `require_scope`). |
+| [`auth/`](auth/) | Umbrella for identity. Submodules: [`session/`](auth/session/), [`apikey/`](auth/apikey/), [`role/`](auth/role/), [`jwt/`](auth/jwt/), [`oauth/`](auth/oauth/), and the `guard.rs` file (`require_authenticated`, `require_unauthenticated`, `require_role`, `require_scope`). |
 | [`tenant/`](tenant/) | Multi-tenant `Tenant`/`TenantId`, resolver strategies, tracing field integration. |
 | [`tier/`](tier/) | Per-tenant tier resolution with `require_feature` / `require_limit` guards. |
 

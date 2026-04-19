@@ -5,7 +5,8 @@
 //! This is the umbrella module for everything related to authenticating callers
 //! and gating routes. Each capability lives in its own submodule; the
 //! [`guard`] submodule houses the route-level layers (`require_authenticated`,
-//! `require_role`, `require_scope`) that compose with the rest.
+//! `require_unauthenticated`, `require_role`, `require_scope`) that compose
+//! with the rest.
 //!
 //! Always available — no feature flag required.
 //!
@@ -16,7 +17,7 @@
 //! | [`session`]      | Database-backed HTTP session management (cookie and JWT sessions) |
 //! | [`apikey`]       | Prefixed API key issuance, verification, and lifecycle |
 //! | [`role`]         | Role-based gating (extractor + middleware) |
-//! | [`guard`]        | Route-level gating layers (`require_authenticated`, `require_role`, `require_scope`) |
+//! | [`guard`]        | Route-level gating layers (`require_authenticated`, `require_unauthenticated`, `require_role`, `require_scope`) |
 //! | [`jwt`]          | JWT encoding, decoding, signing, and axum Tower middleware (alias for [`session::jwt`]) |
 //! | [`oauth`]        | OAuth 2.0 provider integrations (GitHub, Google) |
 //! | [`password`]     | Argon2id password hashing and verification |

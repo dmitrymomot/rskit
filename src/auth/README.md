@@ -9,7 +9,7 @@ Identity and access — session, JWT, OAuth, API keys, roles, and gating guards.
 | `session`  | Database-backed HTTP session management                              |
 | `apikey`   | Prefixed API key issuance, verification, and lifecycle               |
 | `role`     | Role-based gating (extractor + middleware)                           |
-| `guard`    | Route-level layers (`require_authenticated`, `require_role`, `require_scope`) |
+| `guard`    | Route-level layers (`require_authenticated`, `require_unauthenticated`, `require_role`, `require_scope`) |
 | `jwt`      | JWT encoding, decoding, signing, and axum Tower middleware           |
 | `oauth`    | OAuth 2.0 provider integrations (GitHub, Google)                     |
 | `password` | Argon2id password hashing and verification                           |
@@ -23,7 +23,9 @@ Identity and access — session, JWT, OAuth, API keys, roles, and gating guards.
 
 Resolve the current user's role via a [`RoleExtractor`](role/README.md), apply
 `role::middleware` on the outer router, and gate specific routes with
-`guard::require_role` (or `guard::require_authenticated` for any-role access).
+`guard::require_role` (or `guard::require_authenticated("/auth")` to require any
+authenticated session). `guard::require_unauthenticated("/app")` is the inverse
+for guest-only routes such as login and signup.
 
 ```rust,no_run
 use axum::{Router, routing::get};
@@ -41,9 +43,9 @@ impl RoleExtractor for MyExtractor {
 
 let app: Router = Router::new()
     .route("/me", get(|| async { "profile" }))
-    .route_layer(guard::require_authenticated())       // any role
+    .route_layer(guard::require_authenticated("/auth")) // any authenticated session
     .route("/admin", get(|| async { "admin" }))
-    .route_layer(guard::require_role(["admin"]))       // specific roles
+    .route_layer(guard::require_role(["admin"]))        // specific roles
     .layer(role::middleware(MyExtractor));
 ```
 
