@@ -291,3 +291,80 @@ async fn mailer_is_clone() {
     let msgs = stub.messages().await;
     assert_eq!(msgs.len(), 2);
 }
+
+#[test]
+fn render_full_pipeline_inlines_headings_and_keeps_media_queries() {
+    let dir = tempfile::tempdir().unwrap();
+    write_template(
+        dir.path(),
+        "en",
+        "full",
+        r#"---
+subject: "Your code"
+---
+# Welcome
+
+Here is your one-time code:
+
+[otp|123456]
+
+[button|Continue](https://example.com/continue)
+"#,
+    );
+
+    let config = test_config(dir.path());
+    let stub = lettre::transport::stub::AsyncStubTransport::new_ok();
+    let mailer = Mailer::with_stub_transport(&config, stub).unwrap();
+
+    let email = SendEmail::new("full", "user@example.com")
+        .var("logo_url", "https://cdn.example.com/logo.png")
+        .var("app_url", "https://example.com");
+
+    let rendered = mailer.render(&email).unwrap();
+
+    // OTP pill rendered.
+    assert!(
+        rendered.html.contains(">123456<"),
+        "OTP code missing: {}",
+        rendered.html
+    );
+    assert!(
+        rendered.html.contains("font-family:ui-monospace")
+            || rendered.html.contains("font-family: ui-monospace"),
+        "OTP monospace font missing: {}",
+        rendered.html
+    );
+    // Button rendered (unchanged behaviour).
+    assert!(rendered.html.contains(">Continue</a>"));
+    // <style> retained with @media queries.
+    assert!(rendered.html.contains("prefers-color-scheme: dark"));
+    assert!(
+        rendered.html.contains("max-width: 620px") || rendered.html.contains("max-width:620px"),
+        "mobile media query missing: {}",
+        rendered.html
+    );
+    // Logo wrapped in a link because app_url is present.
+    assert!(rendered.html.contains("href=\"https://example.com\""));
+    // Plain text has OTP on its own line.
+    assert!(rendered.text.contains("123456"));
+}
+
+#[test]
+fn render_with_inline_css_disabled_keeps_style_tag() {
+    let dir = tempfile::tempdir().unwrap();
+    write_template(
+        dir.path(),
+        "en",
+        "simple",
+        "---\nsubject: T\n---\n# Heading\n",
+    );
+
+    let mut config = test_config(dir.path());
+    config.inline_css = false;
+    let stub = lettre::transport::stub::AsyncStubTransport::new_ok();
+    let mailer = Mailer::with_stub_transport(&config, stub).unwrap();
+
+    let email = SendEmail::new("simple", "user@example.com");
+    let rendered = mailer.render(&email).unwrap();
+    assert!(rendered.html.contains("prefers-color-scheme: dark"));
+}
