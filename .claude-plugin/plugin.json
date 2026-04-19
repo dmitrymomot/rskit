@@ -1,7 +1,7 @@
 {
   "name": "modo",
   "description": "Skills for building applications with the modo Rust web framework",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "author": { "name": "Dmytro Momot" },
   "repository": "https://github.com/dmitrymomot/modo",
   "license": "Apache-2.0",
