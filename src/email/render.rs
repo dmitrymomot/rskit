@@ -62,7 +62,7 @@ pub(crate) fn escape_html(input: &str) -> String {
 pub fn inline_css_pass(html: &str) -> Result<String> {
     CSS_INLINER
         .inline(html)
-        .map_err(|e| Error::internal(format!("css inline failed: {e}")))
+        .map_err(|e| Error::internal(format!("css inline failed: {e}")).chain(e))
 }
 
 /// Split a template string into frontmatter and body.
@@ -271,7 +271,20 @@ mod tests {
     fn inline_css_inline_attr_wins_over_style() {
         let html = r#"<html><head><style>p { color: red; }</style></head><body><p style="color: blue;">x</p></body></html>"#;
         let inlined = inline_css_pass(html).unwrap();
-        // Inline `blue` must still be present; `red` must not override it.
+        // Inline `blue` must still be present; `red` must NOT appear as an applied color.
         assert!(inlined.contains("color: blue") || inlined.contains("color:blue"));
+        // The inliner should not emit `red` in the element's style attribute.
+        // Note: `red` remains inside the <style> block (that's fine), so we check
+        // only the portion after </style>.
+        let style_end = inlined.find("</style>").expect("style retained");
+        let after_style = &inlined[style_end..];
+        assert!(
+            !after_style.contains("color: red"),
+            "red leaked into element style, got: {after_style:.500}"
+        );
+        assert!(
+            !after_style.contains("color:red"),
+            "red leaked into element style (no space), got: {after_style:.500}"
+        );
     }
 }

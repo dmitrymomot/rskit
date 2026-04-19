@@ -420,8 +420,18 @@ mod tests {
         });
         let mailer = Mailer::with_source(&config, Arc::new(Src)).unwrap();
         let rendered = mailer.render(&SendEmail::new("x", "a@b.c")).unwrap();
-        // Key assertion: original <style> is retained (dark-mode lives there).
+        // Style block retained (dark-mode lives there).
         assert!(rendered.html.contains("prefers-color-scheme: dark"));
+        // Inliner ran: `-webkit-text-size-adjust` from the <style> block was
+        // copied as an inline style attribute on elements it targets (e.g. <body>).
+        // We detect this by looking for the property *outside* the <style> block —
+        // i.e. in an inline style="" attribute.
+        let style_end = rendered.html.find("</style>").expect("has <style>");
+        let after_style = &rendered.html[style_end..];
+        assert!(
+            after_style.contains("-webkit-text-size-adjust"),
+            "inliner should copy -webkit-text-size-adjust into inline style, got: {after_style:.500}"
+        );
     }
 
     #[test]
@@ -444,5 +454,13 @@ mod tests {
         let rendered = mailer.render(&SendEmail::new("x", "a@b.c")).unwrap();
         assert!(!rendered.html.is_empty());
         assert!(rendered.html.contains("prefers-color-scheme: dark"));
+        // Inliner was NOT run: -webkit-text-size-adjust appears ONLY inside <style>,
+        // not in inline attributes anywhere past </style>.
+        let style_end = rendered.html.find("</style>").expect("has <style>");
+        let after_style = &rendered.html[style_end..];
+        assert!(
+            !after_style.contains("-webkit-text-size-adjust"),
+            "inliner should not run when disabled, got: {after_style:.500}"
+        );
     }
 }
