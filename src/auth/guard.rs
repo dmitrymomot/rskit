@@ -19,6 +19,7 @@ use tower::{Layer, Service};
 use crate::Error;
 use crate::auth::apikey::ApiKeyMeta;
 use crate::auth::role::Role;
+use crate::auth::session::Session;
 
 // --- shared redirect helper ---
 
@@ -259,11 +260,7 @@ where
         std::mem::swap(&mut self.inner, &mut inner);
 
         Box::pin(async move {
-            if request
-                .extensions()
-                .get::<crate::auth::session::Session>()
-                .is_none()
-            {
+            if request.extensions().get::<Session>().is_none() {
                 return Ok(redirect_response(&redirect_to, request.headers()));
             }
             inner.call(request).await
@@ -389,7 +386,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::session::Session;
     use chrono::Utc;
     use http::{Response, StatusCode};
     use std::convert::Infallible;
