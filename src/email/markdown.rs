@@ -1,6 +1,155 @@
 use pulldown_cmark::{CowStr, Event, Options, Parser, Tag, TagEnd};
 
 use crate::email::button;
+use crate::email::otp;
+
+/// State of the source scanner used by the OTP pre-pass.
+#[derive(Copy, Clone)]
+enum ScanCtx {
+    /// Normal markdown text.
+    Text,
+    /// Inside a single- or multi-backtick code span; `ticks` is the run length.
+    CodeSpan { ticks: usize },
+    /// Inside a fenced code block; `fence` is the opening fence character (`\`` or `~`).
+    Fence { fence_char: u8 },
+}
+
+/// Walk `src` and, outside code spans / fenced blocks / escapes, replace
+/// `[otp|CODE]` with `replace(CODE)`.
+///
+/// Non-ASCII bytes are pushed as full UTF-8 chars to avoid corruption.
+fn transform_otp<F>(src: &str, mut replace: F) -> String
+where
+    F: FnMut(&str) -> String,
+{
+    let bytes = src.as_bytes();
+    let mut out = String::with_capacity(src.len() + 64);
+    let mut i = 0;
+    let mut ctx = ScanCtx::Text;
+    let mut at_line_start = true;
+
+    while i < bytes.len() {
+        match ctx {
+            ScanCtx::Text => {
+                // Fenced block open: line-leading ``` or ~~~
+                if at_line_start {
+                    let line = &src[i..];
+                    let trimmed = line.trim_start_matches(' ');
+                    let ch = trimmed.as_bytes().first().copied().unwrap_or(0);
+                    if ch == b'`' || ch == b'~' {
+                        let run_len = trimmed.bytes().take_while(|&b| b == ch).count();
+                        if run_len >= 3 {
+                            let nl = line.find('\n').map_or(line.len(), |n| n + 1);
+                            out.push_str(&line[..nl]);
+                            i += nl;
+                            at_line_start = true;
+                            ctx = ScanCtx::Fence { fence_char: ch };
+                            continue;
+                        }
+                    }
+                }
+
+                let b = bytes[i];
+
+                // Backslash-escaped bracket: pass through literally
+                if b == b'\\' && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
+                    out.push('\\');
+                    out.push('[');
+                    i += 2;
+                    at_line_start = false;
+                    continue;
+                }
+
+                // Backtick opens a code span
+                if b == b'`' {
+                    let ticks = bytes[i..].iter().take_while(|&&c| c == b'`').count();
+                    out.push_str(&src[i..i + ticks]);
+                    i += ticks;
+                    at_line_start = false;
+                    ctx = ScanCtx::CodeSpan { ticks };
+                    continue;
+                }
+
+                // OTP pattern
+                if b == b'[' && src[i..].starts_with("[otp|") {
+                    let rest = &src[i + 5..];
+                    if let Some(end) = rest.find(']') {
+                        let code = &rest[..end];
+                        if otp::is_valid_code(code) {
+                            out.push_str(&replace(code));
+                            i += 5 + end + 1;
+                            at_line_start = false;
+                            continue;
+                        }
+                    }
+                }
+
+                // Push character correctly: ASCII fast path, UTF-8 for non-ASCII
+                if b.is_ascii() {
+                    out.push(b as char);
+                    at_line_start = b == b'\n';
+                    i += 1;
+                } else {
+                    // Decode the full UTF-8 char at position i
+                    let ch = src[i..].chars().next().expect("valid utf-8");
+                    out.push(ch);
+                    at_line_start = false;
+                    i += ch.len_utf8();
+                }
+            }
+            ScanCtx::CodeSpan { ticks } => {
+                let b = bytes[i];
+                if b == b'`' {
+                    let run = bytes[i..].iter().take_while(|&&c| c == b'`').count();
+                    out.push_str(&src[i..i + run]);
+                    i += run;
+                    if run == ticks {
+                        ctx = ScanCtx::Text;
+                    }
+                    continue;
+                }
+                if b.is_ascii() {
+                    out.push(b as char);
+                    at_line_start = b == b'\n';
+                    i += 1;
+                } else {
+                    let ch = src[i..].chars().next().expect("valid utf-8");
+                    out.push(ch);
+                    at_line_start = false;
+                    i += ch.len_utf8();
+                }
+            }
+            ScanCtx::Fence { fence_char } => {
+                if at_line_start {
+                    let line = &src[i..];
+                    let trimmed = line.trim_start_matches(' ');
+                    let run_len = trimmed.bytes().take_while(|&b| b == fence_char).count();
+                    if run_len >= 3 {
+                        let nl = line.find('\n').map_or(line.len(), |n| n + 1);
+                        out.push_str(&line[..nl]);
+                        i += nl;
+                        at_line_start = true;
+                        ctx = ScanCtx::Text;
+                        continue;
+                    }
+                }
+                let b = bytes[i];
+                if b.is_ascii() {
+                    out.push(b as char);
+                    at_line_start = b == b'\n';
+                    i += 1;
+                } else {
+                    let ch = src[i..].chars().next().expect("valid utf-8");
+                    out.push(ch);
+                    at_line_start = false;
+                    i += ch.len_utf8();
+                }
+            }
+        }
+    }
+
+    out
+}
 
 /// Convert markdown to HTML, intercepting button syntax in links.
 ///
@@ -9,7 +158,8 @@ use crate::email::button;
 /// If yes, emit a table-based button. If no, flush all buffered events
 /// as a normal link through `push_html`.
 pub fn markdown_to_html(markdown: &str, brand_color: Option<&str>) -> String {
-    let parser = Parser::new_ext(markdown, Options::all());
+    let preprocessed = transform_otp(markdown, otp::render_otp_html);
+    let parser = Parser::new_ext(&preprocessed, Options::all());
     let mut html = String::new();
 
     // Link buffering state
@@ -240,5 +390,70 @@ mod tests {
     fn text_code_inside_link() {
         let text = markdown_to_text("[`code`](https://example.com)");
         assert_eq!(text, "code (https://example.com)");
+    }
+
+    #[test]
+    fn html_otp_basic() {
+        let html = markdown_to_html("Your code is [otp|123456] — enter it.", None);
+        assert!(html.contains("font-family:ui-monospace"));
+        assert!(html.contains(">123456<"));
+        assert!(html.contains("Your code is"));
+        assert!(html.contains("enter it"));
+    }
+
+    #[test]
+    fn html_otp_alphanumeric_with_hyphen() {
+        let html = markdown_to_html("[otp|ABCD-1234]", None);
+        assert!(html.contains(">ABCD-1234<"));
+    }
+
+    #[test]
+    fn html_otp_in_code_span_is_literal() {
+        let html = markdown_to_html("Syntax: `[otp|123]`.", None);
+        assert!(html.contains("<code>[otp|123]</code>"));
+        assert!(!html.contains("font-family:ui-monospace"));
+    }
+
+    #[test]
+    fn html_otp_in_fenced_block_is_literal() {
+        let html = markdown_to_html("```\n[otp|123]\n```", None);
+        assert!(html.contains("[otp|123]"));
+        assert!(!html.contains("font-family:ui-monospace"));
+    }
+
+    #[test]
+    fn html_otp_escaped_is_literal() {
+        let html = markdown_to_html(r"\[otp|123]", None);
+        assert!(html.contains("[otp|123]"));
+        assert!(!html.contains("font-family:ui-monospace"));
+    }
+
+    #[test]
+    fn html_otp_empty_code_is_literal() {
+        let html = markdown_to_html("[otp|]", None);
+        assert!(html.contains("[otp|]"));
+        assert!(!html.contains("font-family:ui-monospace"));
+    }
+
+    #[test]
+    fn html_otp_with_space_is_literal() {
+        let html = markdown_to_html("[otp|12 34]", None);
+        assert!(html.contains("[otp|12 34]"));
+        assert!(!html.contains("font-family:ui-monospace"));
+    }
+
+    #[test]
+    fn html_otp_too_long_is_literal() {
+        let long = "A".repeat(33);
+        let src = format!("[otp|{long}]");
+        let html = markdown_to_html(&src, None);
+        assert!(!html.contains("font-family:ui-monospace"));
+    }
+
+    #[test]
+    fn html_otp_multiple_instances() {
+        let html = markdown_to_html("[otp|111] and [otp|222]", None);
+        assert!(html.contains(">111<"));
+        assert!(html.contains(">222<"));
     }
 }
