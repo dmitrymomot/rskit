@@ -47,6 +47,21 @@ pub struct Error {
 
 impl Error {
     /// Create a new error with the given HTTP status code and message.
+    ///
+    /// Prefer one of the named status-code constructors
+    /// ([`Error::not_found`], [`Error::bad_request`], [`Error::internal`], …)
+    /// when they match. Use `new` only for statuses without a dedicated
+    /// constructor.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use modo::error::Error;
+    /// use modo::axum::http::StatusCode;
+    ///
+    /// let err = Error::new(StatusCode::IM_A_TEAPOT, "no coffee here");
+    /// assert_eq!(err.status(), StatusCode::IM_A_TEAPOT);
+    /// ```
     pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
         Self {
             status,
@@ -61,7 +76,22 @@ impl Error {
 
     /// Create a new error with a status code, message, and a boxed source error.
     ///
-    /// Use [`chain`](Error::chain) instead when constructing errors with the builder pattern.
+    /// `with_source` is a **constructor**, not a builder method — it wraps an
+    /// underlying error at construction time. When you already have an
+    /// [`Error`] and want to attach a cause, use the [`chain`](Error::chain)
+    /// builder instead.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use modo::error::Error;
+    /// use modo::axum::http::StatusCode;
+    /// use std::io;
+    ///
+    /// let io_err = io::Error::new(io::ErrorKind::NotFound, "missing");
+    /// let err = Error::with_source(StatusCode::INTERNAL_SERVER_ERROR, "read failed", io_err);
+    /// assert!(err.source_as::<io::Error>().is_some());
+    /// ```
     pub fn with_source(
         status: StatusCode,
         message: impl Into<String>,
@@ -137,12 +167,44 @@ impl Error {
     }
 
     /// Attach a structured JSON details payload (builder-style).
+    ///
+    /// The payload is rendered under the `"error.details"` key in the JSON
+    /// response body produced by [`Error::into_response`].
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use modo::error::Error;
+    /// use modo::serde_json::json;
+    ///
+    /// let err = Error::unprocessable_entity("validation failed")
+    ///     .with_details(json!({ "field": "email", "reason": "invalid format" }));
+    /// assert!(err.details().is_some());
+    /// ```
     pub fn with_details(mut self, details: serde_json::Value) -> Self {
         self.details = Some(details);
         self
     }
 
     /// Attach a source error (builder-style).
+    ///
+    /// The source is stored in a `Box<dyn std::error::Error + Send + Sync>`
+    /// and can be downcast with [`Error::source_as`] while you still own the
+    /// [`Error`]. Note: the source is **dropped on [`Clone`] and on
+    /// [`IntoResponse::into_response`]** — pair `.chain(src)` with
+    /// [`.with_code(code)`](Error::with_code) when you need identity that
+    /// survives the response boundary.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use modo::error::Error;
+    /// use std::io;
+    ///
+    /// let err = Error::internal("disk write failed")
+    ///     .chain(io::Error::other("no space"));
+    /// assert!(err.source_as::<io::Error>().is_some());
+    /// ```
     pub fn chain(mut self, source: impl std::error::Error + Send + Sync + 'static) -> Self {
         self.source = Some(Box::new(source));
         self
@@ -150,12 +212,27 @@ impl Error {
 
     /// Attach a static error code to preserve error identity through the response pipeline.
     ///
-    /// The error code is included in the copy stored in response extensions and can be retrieved
-    /// after `into_response()` via [`Error::error_code`].
+    /// The `source` field is dropped on [`Clone`] and on
+    /// [`Error::into_response`], so downstream middleware reading the error
+    /// copy from response extensions cannot recover the original cause. A
+    /// static `error_code` survives both boundaries and is the canonical way
+    /// to identify an error post-response.
     ///
     /// This is a builder method: the existing `message`, `status`, `locale_key`,
     /// `details`, and `source` fields are preserved — only `error_code` is
     /// replaced.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use modo::error::Error;
+    /// use axum::response::IntoResponse;
+    ///
+    /// let err = Error::unauthorized("token expired").with_code("jwt:expired");
+    /// let resp = err.into_response();
+    /// let ext = resp.extensions().get::<Error>().unwrap();
+    /// assert_eq!(ext.error_code(), Some("jwt:expired"));
+    /// ```
     pub fn with_code(mut self, code: &'static str) -> Self {
         self.error_code = Some(code);
         self
