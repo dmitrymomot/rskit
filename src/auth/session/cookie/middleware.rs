@@ -39,6 +39,10 @@ pub struct CookieSessionLayer {
 }
 
 /// Create a [`CookieSessionLayer`] from a [`CookieSessionService`].
+///
+/// Prefer [`CookieSessionService::layer`] in application code — this free
+/// function exists so integration tests and advanced callers can assemble the
+/// layer without borrowing the service.
 pub fn layer(service: CookieSessionService) -> CookieSessionLayer {
     CookieSessionLayer { service }
 }

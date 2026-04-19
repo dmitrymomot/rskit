@@ -1,9 +1,12 @@
 //! # modo::auth::session
 //!
-//! Unified session management for cookie and JWT transports.
+//! Unified session management for cookie and JWT transports, backed by a single
+//! `authenticated_sessions` SQLite table and one shared [`Session`] data type.
 //!
-//! Two independent transports share one SQLite table
-//! (`authenticated_sessions`) and one public data type ([`Session`]).
+//! Two independent transports live side-by-side and populate the same
+//! transport-agnostic [`Session`] into request extensions. Handlers read
+//! session data the same way regardless of which transport authenticated
+//! the request.
 //!
 //! ## Transports
 //!
@@ -14,14 +17,41 @@
 //!
 //! ## Provides
 //!
-//! - [`Session`] — transport-agnostic session data extractor (read-only snapshot).
-//! - [`SessionToken`] — opaque 32-byte random token; redacted in `Debug`/`Display`.
-//! - [`cookie`] — cookie-backed session transport ([`cookie::CookieSession`], [`cookie::CookieSessionService`], [`cookie::CookieSessionLayer`], [`cookie::CookieSessionsConfig`]).
-//! - [`jwt`] — JWT-backed session transport ([`jwt::JwtSession`], [`jwt::JwtSessionService`], [`jwt::JwtLayer`], [`jwt::JwtSessionsConfig`]).
-//! - [`device`] — user-agent parsing helpers for device classification.
+//! Submodules:
+//!
+//! - [`cookie`] — cookie-backed session transport ([`cookie::CookieSession`],
+//!   [`cookie::CookieSessionService`], [`cookie::CookieSessionLayer`],
+//!   [`cookie::CookieSessionsConfig`]).
+//! - [`jwt`] — JWT-backed session transport ([`jwt::JwtSession`],
+//!   [`jwt::JwtSessionService`], [`jwt::JwtLayer`], [`jwt::JwtSessionsConfig`]).
+//! - [`device`] — `User-Agent` parsing helpers for device classification.
 //! - [`fingerprint`] — browser fingerprinting for session hijacking detection.
-//! - [`meta`] — request metadata ([`meta::SessionMeta`]) and [`meta::header_str`] helper.
-//! - [`token`] — [`SessionToken`] type (also re-exported at this level).
+//! - [`meta`] — request metadata ([`meta::SessionMeta`]) and the
+//!   [`meta::header_str`] helper.
+//! - [`token`] — [`SessionToken`] implementation (also re-exported here).
+//!
+//! Direct re-exports:
+//!
+//! - [`Session`] — transport-agnostic session data extractor (read-only
+//!   snapshot). Populated into request extensions by either transport's layer.
+//! - [`SessionToken`] — opaque 32-byte random token; redacted in
+//!   `Debug`/`Display`.
+//! - [`CookieSession`], [`CookieSessionService`], [`CookieSessionLayer`],
+//!   [`CookieSessionsConfig`] — cookie transport types re-exported for
+//!   convenience.
+//!
+//! Back-compat aliases:
+//!
+//! - `SessionData` — alias for [`Session`].
+//! - `SessionExtractor` — alias for [`cookie::CookieSession`].
+//! - `SessionConfig` — alias for [`cookie::CookieSessionsConfig`].
+//! - `SessionLayer` — alias for [`cookie::CookieSessionLayer`].
+//!
+//! ## Configuration
+//!
+//! Durations are `u64` seconds — see [`cookie::CookieSessionsConfig`]
+//! (`session_ttl_secs`, `touch_interval_secs`, `max_sessions_per_user`) and
+//! [`jwt::JwtSessionsConfig`] for the JWT transport.
 
 mod data;
 pub(crate) mod store;

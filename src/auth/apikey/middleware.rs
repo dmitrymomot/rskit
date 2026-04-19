@@ -14,11 +14,15 @@ use super::store::ApiKeyStore;
 /// Tower [`Layer`] that verifies API keys on incoming requests.
 ///
 /// Reads the raw token from the `Authorization: Bearer <token>` header
-/// (or a custom header), calls [`ApiKeyStore::verify`], and inserts
-/// [`super::ApiKeyMeta`] into request extensions on success.
+/// (or a custom header configured via [`ApiKeyLayer::from_header`]),
+/// calls [`ApiKeyStore::verify`], and inserts [`super::ApiKeyMeta`] into
+/// request extensions on success.
 ///
-/// Errors are returned as [`crate::Error`] -- the app's error handler
-/// decides rendering.
+/// On failure the middleware short-circuits and returns
+/// `401 Unauthorized` (via [`crate::Error::into_response`]) — the inner
+/// service is not called. Downstream handlers may then obtain
+/// [`super::ApiKeyMeta`] either via its axum extractor or directly from
+/// `Request::extensions()`.
 pub struct ApiKeyLayer {
     store: ApiKeyStore,
     header: HeaderSource,

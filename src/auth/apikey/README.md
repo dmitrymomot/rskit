@@ -34,7 +34,7 @@ apply it as a `route_layer` after `ApiKeyLayer`.
 
 | Type | Purpose |
 |------|---------|
-| `test::InMemoryBackend` | In-memory backend for unit tests (requires `test-helpers` feature) |
+| `test::InMemoryBackend` | In-memory backend intended for unit tests (enable the `test-helpers` feature when used from integration tests) |
 
 ## Usage
 

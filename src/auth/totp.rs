@@ -33,8 +33,6 @@ impl Default for TotpConfig {
 
 /// TOTP authenticator compatible with RFC 6238 and authenticator apps
 /// (Google Authenticator, Authy, etc.).
-///
-/// Requires feature `"auth"`.
 pub struct Totp {
     secret: Vec<u8>,
     config: TotpConfig,

@@ -2,7 +2,12 @@
 
 Role-based gating for axum applications.
 
-This module is roles-only. Permission checks beyond "does this role match?" belong in handler logic.
+This module is **roles-only**. modo resolves a single role string per
+request and lets a guard compare it against an allow-list — nothing more.
+Permission checks (can this user edit *this* post? does this plan include
+SSO?) belong in your handler code. There is no `Permission` type, no
+policy DSL, and no RBAC matrix; that is an intentional design decision so
+your authorization stays close to the domain logic that owns it.
 
 The module exposes the role extractor and middleware; the role-based guard
 `require_role` lives in [`modo::auth::guard`].
@@ -113,6 +118,36 @@ async fn handler(role: Option<Role>) -> String {
     }
 }
 ```
+
+### Permission checks belong in handlers
+
+Because modo models only roles, any finer-grained authorization is ordinary
+handler code. A typical pattern branches on the role string and returns
+`Error::forbidden` when the check fails:
+
+```rust
+use modo::auth::role::Role;
+use modo::{Error, Result};
+
+struct Post { author_id: String }
+
+async fn delete_post(role: Role, actor_id: String, post: Post) -> Result<()> {
+    // Owners can delete anything; authors can only delete their own posts.
+    let allowed = match role.as_str() {
+        "owner" | "admin" => true,
+        "author" => post.author_id == actor_id,
+        _ => false,
+    };
+    if !allowed {
+        return Err(Error::forbidden("cannot delete this post"));
+    }
+    // ... perform the delete
+    Ok(())
+}
+```
+
+Keep the role extractor narrow (resolve the role, nothing else) and encode
+resource-level rules next to the data they guard.
 
 ## Key Types
 

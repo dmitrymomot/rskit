@@ -90,9 +90,33 @@ The module does not ship migrations — end applications own their schemas.
 
 | Module | Purpose |
 |--------|---------|
+| `cookie` | Cookie-backed session transport (`CookieSessionService`, `CookieSessionLayer`, `CookieSession`, `CookieSessionsConfig`). See [cookie/README.md](cookie/README.md). |
+| `jwt` | JWT-backed session transport (`JwtSessionService`, `JwtLayer`, `JwtSession`, `JwtSessionsConfig`). See [jwt/README.md](jwt/README.md). |
 | `device` | User-agent parsing helpers (`parse_device_name`, `parse_device_type`) |
 | `fingerprint` | Browser fingerprinting for session hijacking detection (`compute_fingerprint`) |
 | `meta` | Request metadata (`SessionMeta`, `header_str`) derived from headers |
+| `token` | `SessionToken` — opaque 32-byte cryptographic token, redacted in `Debug`/`Display` |
+
+## Configuration
+
+Durations are expressed as `u64` seconds, matching the rest of the modo
+framework (no `std::time::Duration` in public config):
+
+```yaml
+auth:
+  sessions:
+    cookie:
+      session_ttl_secs: 2592000     # 30 days — session lifetime
+      touch_interval_secs: 300      # 5 minutes — minimum interval between `last_active_at` updates
+      max_sessions_per_user: 10     # oldest sessions are evicted on overflow
+    jwt:
+      access_ttl_secs: 900          # 15 minutes — access token lifetime
+      refresh_ttl_secs: 2592000     # 30 days — refresh token lifetime
+      touch_interval_secs: 300      # 5 minutes — minimum interval between `last_active_at` updates
+```
+
+See [`cookie::CookieSessionsConfig`](cookie/README.md) and
+[`jwt::JwtSessionsConfig`](jwt/README.md) for the full field list.
 
 ---
 

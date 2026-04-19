@@ -16,10 +16,10 @@ use super::CookieSessionsConfig;
 
 /// Long-lived service for cookie-backed sessions.
 ///
-/// `CookieSessionService` wraps a [`SessionStore`], a cookie signing [`Key`],
-/// and the full [`CookieSessionsConfig`]. It is constructed once at startup,
-/// held in application state, and used by the session middleware and by
-/// cross-transport management endpoints.
+/// `CookieSessionService` wraps the internal session store, a cookie signing
+/// [`Key`], and the full [`CookieSessionsConfig`]. It is constructed once at
+/// startup, held in application state, and used by the session middleware and
+/// by cross-transport management endpoints.
 ///
 /// # Construction
 ///

@@ -10,8 +10,6 @@ const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
 /// once. Verify a submitted code with [`verify`].
 ///
 /// Uses rejection sampling over `OsRng` to avoid modulo bias.
-///
-/// Requires feature `"auth"`.
 pub fn generate(count: usize) -> Vec<(String, String)> {
     (0..count).map(|_| generate_one()).collect()
 }
@@ -21,8 +19,6 @@ pub fn generate(count: usize) -> Vec<(String, String)> {
 /// Normalizes `code` before hashing (strips hyphens, lowercases) so that
 /// users can submit codes with or without the separator. Comparison is
 /// constant-time to prevent timing attacks.
-///
-/// Requires feature `"auth"`.
 pub fn verify(code: &str, hash: &str) -> bool {
     verify_sha256_hex(normalize(code), hash)
 }

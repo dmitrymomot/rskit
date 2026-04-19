@@ -15,6 +15,8 @@ use crate::Result;
 pub trait RoleExtractor: Send + Sync + 'static {
     /// Extracts the role string for the current request.
     ///
+    /// # Errors
+    ///
     /// Return an [`Error`](crate::Error) (for example
     /// [`Error::unauthorized`](crate::Error::unauthorized) or
     /// [`Error::forbidden`](crate::Error::forbidden)) to short-circuit the

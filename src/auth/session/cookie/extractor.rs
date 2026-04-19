@@ -358,21 +358,45 @@ impl CookieSession {
     // --- Cross-transport operations (delegated to service) ---
 
     /// List all active sessions for `user_id`.
+    ///
+    /// Unlike [`list_my_sessions`](Self::list_my_sessions), this method does
+    /// not require an authenticated current session — use it from admin
+    /// endpoints or after resolving the target user through another channel.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub async fn list(&self, user_id: &str) -> crate::Result<Vec<Session>> {
         self.state.service.list(user_id).await
     }
 
-    /// Revoke a specific session by user and ID (no ownership check).
+    /// Revoke a specific session belonging to `user_id` by its ULID.
+    ///
+    /// Returns `404 auth:session_not_found` when `id` does not exist or
+    /// belongs to a different user.
+    ///
+    /// # Errors
+    ///
+    /// Returns `404 auth:session_not_found` on ownership mismatch, or an
+    /// internal error if the database operation fails.
     pub async fn revoke_by_id(&self, user_id: &str, id: &str) -> crate::Result<()> {
         self.state.service.revoke(user_id, id).await
     }
 
     /// Revoke all sessions for `user_id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database delete fails.
     pub async fn revoke_all(&self, user_id: &str) -> crate::Result<()> {
         self.state.service.revoke_all(user_id).await
     }
 
-    /// Revoke all sessions for `user_id` except `keep_id`.
+    /// Revoke all sessions for `user_id` except the one with `keep_id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database delete fails.
     pub async fn revoke_all_except(&self, user_id: &str, keep_id: &str) -> crate::Result<()> {
         self.state.service.revoke_all_except(user_id, keep_id).await
     }

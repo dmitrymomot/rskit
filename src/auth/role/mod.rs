@@ -2,16 +2,24 @@
 //!
 //! Role-based gating for axum applications.
 //!
-//! Roles-only — permission checks beyond "does this role match?" belong
-//! in handler logic.
+//! This module is **roles-only**: it resolves a single role string per request
+//! and makes it available to handlers and to the route-level `require_role`
+//! guard. Any richer authorization (per-resource permissions, scopes,
+//! ownership checks, ABAC rules) belongs in your handler code — modo does not
+//! model permissions.
 //!
 //! Provides:
 //!
-//! - [`RoleExtractor`] — trait to resolve the current user's role from a request.
-//! - [`middleware()`] — Tower layer that calls your extractor and stores [`Role`] in extensions.
-//! - [`Role`] — newtype extractor over `String`; pull the resolved role into handlers.
+//! - [`RoleExtractor`] — trait you implement to resolve the caller's role from
+//!   a request (session lookup, JWT claim, API key metadata, etc.).
+//! - [`middleware()`] — Tower layer that runs the extractor and stores the
+//!   resulting [`Role`] in request extensions.
+//! - [`Role`] — newtype over `String` implementing axum's
+//!   `FromRequestParts` and `OptionalFromRequestParts`; pull it into handlers
+//!   as `Role` or `Option<Role>`.
 //!
-//! Route-level gating layers (`require_role`, `require_authenticated`) live in
+//! Route-level gating layers (`require_role`, `require_authenticated`,
+//! `require_unauthenticated`, `require_scope`) live in
 //! [`crate::auth::guard`]. This module only resolves the role; `auth::guard`
 //! compares it against an allow-list.
 //!
