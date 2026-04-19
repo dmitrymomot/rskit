@@ -77,6 +77,24 @@ Locale fallback: `{locale}/{name}.md` -> `{default_locale}/{name}.md` -> `{name}
 | `[button:info\|Label](url)`    | Cyan                                |
 | `[button:success\|Label](url)` | Green                               |
 
+### OTP element
+
+Render a styled one-time-code pill in both HTML and plain-text output:
+
+```text
+Your verification code:
+
+[otp|123456]
+```
+
+- Syntax: `[otp|CODE]` where `CODE` matches `[A-Za-z0-9-]{1,32}`.
+- HTML: monospace pill with letter-spacing, rounded background — fully inline styles.
+- Plain text: the code on its own line, surrounded by blank lines.
+- Respects code spans (`` `[otp|…]` `` stays literal), fenced blocks, and
+  backslash escapes (`\[otp|…]` stays literal).
+- Invalid codes (empty, too long, containing spaces or punctuation outside
+  `-`) are left as literal text.
+
 ### Custom sender per message
 
 ```rust,no_run
@@ -120,6 +138,42 @@ fn build(config: &EmailConfig) -> Result<Mailer> {
 }
 ```
 
+### CSS inlining
+
+When `email.inline_css` is `true` (the default), the rendered HTML is
+passed through a CSS inliner that:
+
+- Copies declarations from `<style>` blocks onto matching elements as
+  inline `style=""` attributes (so clients that strip `<style>` still
+  render correctly).
+- Preserves the original `<style>` block, so `@media` rules — the dark
+  mode and mobile padding overrides in the default layout — still apply
+  on clients that honour them.
+- Never fetches external stylesheets.
+
+Existing inline `style=""` on an element wins over rules from `<style>`,
+per standard CSS specificity.
+
+Disable with:
+
+```yaml
+email:
+  inline_css: false
+```
+
+### Layout variables
+
+These placeholders are available in custom layout (`.html`) files:
+
+| Variable | Role |
+| --- | --- |
+| `{{content}}` | Rendered Markdown body (injected automatically) |
+| `{{logo_section}}` | Logo row — rendered when `logo_url` is set |
+| `{{footer_section}}` | Footer row — rendered when `footer_text` is set |
+| `{{logo_url}}` | Logo image URL |
+| `{{app_url}}` | Optional. When set alongside `logo_url`, wraps the `<img>` in `<a href="{{app_url}}">` |
+| `{{footer_text}}` | Footer text content |
+
 ## Configuration
 
 ```yaml
@@ -129,6 +183,7 @@ email:
     default_from_name: My App
     default_from_email: noreply@example.com
     default_locale: en
+    inline_css: true
     cache_templates: true
     template_cache_size: 100
     smtp:

@@ -4,21 +4,37 @@ use std::path::Path;
 
 use crate::email::render;
 
-/// Built-in responsive base email layout.
-/// Features: 600px max-width, dark mode, system font, inline styles.
-pub const BASE_LAYOUT: &str = r##"<!DOCTYPE html>
-<html lang="en">
+/// Built-in responsive table-based base email layout.
+///
+/// Shell is XHTML 1.0 Transitional (for Outlook's Word rendering engine).
+/// Light-theme colours are inline on every structural element so clients
+/// that strip `<style>` (Gmail mobile webmail) still render correctly.
+/// The retained `<style>` block provides:
+/// - Dark-mode overrides via `@media (prefers-color-scheme: dark)` for
+///   clients that honour it (Apple Mail, desktop Gmail).
+/// - Mobile padding overrides via `@media only screen and (max-width: 620px)`.
+/// - MSO / WebKit text-size-adjust resets.
+///
+/// Card max-width is 600px. Content width is fluid below that.
+pub const BASE_LAYOUT: &str = r##"<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="light dark">
-<meta name="supported-color-schemes" content="light dark">
-<style>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="color-scheme" content="light dark" />
+<meta name="supported-color-schemes" content="light dark" />
+<style type="text/css">
+body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+img { -ms-interpolation-mode: bicubic; max-width: 100%; }
+body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
 @media (prefers-color-scheme: dark) {
-  body { background-color: #1a1a1a !important; }
+  .email-body { background-color: #1a1a1a !important; }
   .email-card { background-color: #2a2a2a !important; }
-  .email-card * { color: #e4e4e7 !important; }
+  .email-content, .email-content * { color: #e4e4e7 !important; }
   .email-footer { color: #a1a1aa !important; }
+  .email-divider { border-color: #3f3f46 !important; }
 }
 @media only screen and (max-width: 620px) {
   .email-outer { padding: 16px 8px !important; }
@@ -26,15 +42,15 @@ pub const BASE_LAYOUT: &str = r##"<!DOCTYPE html>
 }
 </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f4f4f5; -webkit-font-smoothing: antialiased;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5;">
+<body class="email-body" style="margin:0;padding:0;width:100%;background-color:#f4f4f5;-webkit-font-smoothing:antialiased;">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="email-body" style="background-color:#f4f4f5;">
 <tr>
-<td class="email-outer" align="center" style="padding: 24px 16px;">
+<td class="email-outer" align="center" style="padding:24px 16px;">
 <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
-<table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%;">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="width:100%;max-width:600px;">
 {{logo_section}}
 <tr>
-<td class="email-card" style="background-color: #ffffff; padding: 32px; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #18181b;">
+<td class="email-card email-content" style="background-color:#ffffff;padding:32px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#18181b;">
 {{content}}
 </td>
 </tr>
@@ -47,9 +63,13 @@ pub const BASE_LAYOUT: &str = r##"<!DOCTYPE html>
 </body>
 </html>"##;
 
-const LOGO_SECTION: &str = r#"<tr><td align="center" style="padding-bottom: 24px;"><img src="{{logo_url}}" alt="Logo" style="max-width: 150px; height: auto;" /></td></tr>"#;
+/// Logo row when `logo_url` is present but `app_url` is not — bare `<img>`.
+const LOGO_SECTION_BARE: &str = r#"<tr><td align="center" style="padding-bottom:24px;"><img src="{{logo_url}}" alt="" style="max-width:150px;height:auto;display:block;border:0;" /></td></tr>"#;
 
-const FOOTER_SECTION: &str = r#"<tr><td class="email-footer" align="center" style="padding-top: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; color: #71717a;">{{footer_text}}</td></tr>"#;
+/// Logo row when both `logo_url` and `app_url` are present — linked `<img>`.
+const LOGO_SECTION_LINKED: &str = r#"<tr><td align="center" style="padding-bottom:24px;"><a href="{{app_url}}" style="text-decoration:none;border:0;"><img src="{{logo_url}}" alt="" style="max-width:150px;height:auto;display:block;border:0;" /></a></td></tr>"#;
+
+const FOOTER_SECTION: &str = r#"<tr><td class="email-footer" align="center" style="padding-top:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;color:#71717a;">{{footer_text}}</td></tr>"#;
 
 /// Load custom layouts from the given directory.
 ///
@@ -101,9 +121,13 @@ pub fn load_layouts(layouts_path: &str) -> Result<HashMap<String, String>> {
 /// and `{{footer_section}}` (when `footer_text` is in `vars`), then performs
 /// full variable substitution over the combined HTML.
 pub fn apply_layout(layout_html: &str, content: &str, vars: &HashMap<String, String>) -> String {
-    // Resolve conditional sections in the base layout
     let logo_section = if vars.contains_key("logo_url") {
-        render::substitute(LOGO_SECTION, vars)
+        let tmpl = if vars.contains_key("app_url") {
+            LOGO_SECTION_LINKED
+        } else {
+            LOGO_SECTION_BARE
+        };
+        render::substitute(tmpl, vars)
     } else {
         String::new()
     };
@@ -114,7 +138,6 @@ pub fn apply_layout(layout_html: &str, content: &str, vars: &HashMap<String, Str
         String::new()
     };
 
-    // Build a vars map that includes the special placeholders
     let mut full_vars = vars.clone();
     full_vars.insert("content".into(), content.into());
     full_vars.insert("logo_section".into(), logo_section);
@@ -163,7 +186,7 @@ mod tests {
 
     #[test]
     fn base_layout_has_max_width() {
-        assert!(BASE_LAYOUT.contains("max-width: 600px"));
+        assert!(BASE_LAYOUT.contains("max-width:600px"));
     }
 
     #[test]
@@ -257,5 +280,62 @@ mod tests {
     fn load_layouts_nonexistent_dir_returns_empty() {
         let layouts = load_layouts("/nonexistent/path/that/does/not/exist").unwrap();
         assert!(layouts.is_empty());
+    }
+
+    #[test]
+    fn base_layout_is_xhtml_transitional() {
+        assert!(BASE_LAYOUT.contains("-//W3C//DTD XHTML 1.0 Transitional"));
+    }
+
+    #[test]
+    fn base_layout_has_table_shell() {
+        // Outer presentation table wraps the content
+        let count = BASE_LAYOUT.matches(r#"role="presentation""#).count();
+        assert!(count >= 2, "expected ≥2 presentation tables in base layout");
+    }
+
+    #[test]
+    fn base_layout_has_inline_light_styles() {
+        // Body background inline on <body>
+        assert!(
+            BASE_LAYOUT.contains(r#"background-color:#f4f4f5"#)
+                || BASE_LAYOUT.contains(r#"background-color: #f4f4f5"#)
+        );
+    }
+
+    #[test]
+    fn base_layout_keeps_dark_mode_in_style() {
+        assert!(BASE_LAYOUT.contains("prefers-color-scheme: dark"));
+    }
+
+    #[test]
+    fn base_layout_keeps_mobile_media_query() {
+        assert!(BASE_LAYOUT.contains("max-width: 620px"));
+    }
+
+    #[test]
+    fn apply_layout_logo_wraps_in_link_when_app_url_present() {
+        let mut vars = HashMap::new();
+        vars.insert("logo_url".into(), "https://cdn.example.com/logo.png".into());
+        vars.insert("app_url".into(), "https://example.com".into());
+        let result = apply_layout(BASE_LAYOUT, "<p>x</p>", &vars);
+        assert!(result.contains("<a href=\"https://example.com\""));
+        assert!(result.contains("https://cdn.example.com/logo.png"));
+    }
+
+    #[test]
+    fn apply_layout_logo_bare_when_only_logo_url_present() {
+        let mut vars = HashMap::new();
+        vars.insert("logo_url".into(), "https://cdn.example.com/logo.png".into());
+        let result = apply_layout(BASE_LAYOUT, "<p>x</p>", &vars);
+        assert!(result.contains("https://cdn.example.com/logo.png"));
+        assert!(!result.contains("<a href=\"https://example.com\""));
+        assert!(!result.contains("{{app_url}}"));
+    }
+
+    #[test]
+    fn apply_layout_no_logo_without_logo_url() {
+        let result = apply_layout(BASE_LAYOUT, "<p>x</p>", &HashMap::new());
+        assert!(!result.contains("<img"));
     }
 }

@@ -28,6 +28,11 @@ pub struct EmailConfig {
     pub cache_templates: bool,
     /// Maximum number of entries in the template LRU cache. Default: `100`.
     pub template_cache_size: usize,
+    /// When `true`, rendered HTML is passed through a CSS inliner that
+    /// resolves rules from `<style>` blocks into per-element `style=""`
+    /// attributes. `<style>` is retained so `@media` rules (dark mode,
+    /// mobile) still apply on clients that honour them. Default: `true`.
+    pub inline_css: bool,
     /// SMTP connection settings.
     pub smtp: SmtpConfig,
 }
@@ -43,6 +48,7 @@ impl Default for EmailConfig {
             default_locale: "en".into(),
             cache_templates: true,
             template_cache_size: 100,
+            inline_css: true,
             smtp: SmtpConfig::default(),
         }
     }
@@ -105,6 +111,7 @@ mod tests {
         assert_eq!(config.default_locale, "en");
         assert!(config.cache_templates);
         assert_eq!(config.template_cache_size, 100);
+        assert!(config.inline_css);
     }
 
     #[test]
@@ -127,6 +134,7 @@ mod tests {
             default_locale: uk
             cache_templates: false
             template_cache_size: 50
+            inline_css: false
             smtp:
               host: smtp.example.com
               port: 465
@@ -145,6 +153,7 @@ mod tests {
         assert_eq!(config.default_locale, "uk");
         assert!(!config.cache_templates);
         assert_eq!(config.template_cache_size, 50);
+        assert!(!config.inline_css);
         assert_eq!(config.smtp.host, "smtp.example.com");
         assert_eq!(config.smtp.port, 465);
         assert_eq!(config.smtp.username.as_deref(), Some("user"));
@@ -169,5 +178,25 @@ mod tests {
         let yaml = r#"security: none"#;
         let config: SmtpConfig = serde_yaml_ng::from_str(yaml).unwrap();
         assert_eq!(config.security, SmtpSecurity::None);
+    }
+
+    #[test]
+    fn email_config_inline_css_default_true() {
+        let config = EmailConfig::default();
+        assert!(config.inline_css);
+    }
+
+    #[test]
+    fn email_config_inline_css_from_yaml() {
+        let yaml = "inline_css: false";
+        let config: EmailConfig = serde_yaml_ng::from_str(yaml).unwrap();
+        assert!(!config.inline_css);
+    }
+
+    #[test]
+    fn email_config_inline_css_omitted_uses_default() {
+        let yaml = "default_from_email: noreply@app.com";
+        let config: EmailConfig = serde_yaml_ng::from_str(yaml).unwrap();
+        assert!(config.inline_css);
     }
 }

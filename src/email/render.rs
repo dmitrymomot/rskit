@@ -4,6 +4,13 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+static CSS_INLINER: LazyLock<css_inline::CSSInliner<'static>> = LazyLock::new(|| {
+    css_inline::CSSInliner::options()
+        .keep_style_tags(true)
+        .load_remote_stylesheets(false)
+        .build()
+});
+
 /// Parsed YAML frontmatter from an email template.
 #[derive(Debug, Deserialize)]
 pub struct Frontmatter {
@@ -31,13 +38,39 @@ pub fn substitute(input: &str, vars: &HashMap<String, String>) -> String {
         .into_owned()
 }
 
-/// Escape HTML special characters for safe interpolation into HTML attributes and text.
+/// Escape `&`, `<`, `>`, and `"` for safe interpolation into HTML text
+/// content or double-quoted attribute values.
+///
+/// Does **not** escape `'` — so this is unsafe for single-quoted attribute
+/// values. All in-tree callers interpolate into text content or
+/// double-quoted attributes, so this is adequate today; new callers that
+/// emit single-quoted attributes must escape `'` separately.
 pub(crate) fn escape_html(input: &str) -> String {
     input
         .replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+/// Inline CSS declarations from `<style>` blocks into element `style=""`
+/// attributes while preserving the original `<style>` block so `@media`
+/// rules (dark mode, mobile) still apply on clients that honour them.
+///
+/// Existing inline `style=""` on an element wins over rules from `<style>`
+/// per standard CSS specificity.
+///
+/// # Errors
+///
+/// Returns [`Error::internal`] when the HTML cannot be parsed. Generated
+/// layouts are well-formed; callers surfacing this error are almost always
+/// looking at a malformed custom layout. Setting `email.inline_css: false`
+/// in config is the supported opt-out if a problematic custom layout cannot
+/// be fixed immediately.
+pub fn inline_css_pass(html: &str) -> Result<String> {
+    CSS_INLINER
+        .inline(html)
+        .map_err(|e| Error::internal(format!("css inline failed: {e}")).chain(e))
 }
 
 /// Split a template string into frontmatter and body.
@@ -222,5 +255,44 @@ mod tests {
         let (fm, body) = parse_frontmatter(template).unwrap();
         assert_eq!(fm.subject, "Hello");
         assert_eq!(body, "Before\n---\nAfter");
+    }
+
+    #[test]
+    fn inline_css_inlines_style_rules() {
+        let html =
+            r#"<html><head><style>h1 { color: red; }</style></head><body><h1>X</h1></body></html>"#;
+        let inlined = inline_css_pass(html).unwrap();
+        assert!(
+            inlined.contains("style=\"color: red") || inlined.contains("style=\"color:red"),
+            "expected inlined h1 style, got: {inlined}"
+        );
+    }
+
+    #[test]
+    fn inline_css_preserves_media_queries() {
+        let html = r#"<html><head><style>@media (prefers-color-scheme: dark) { body { color: white; } }</style></head><body>x</body></html>"#;
+        let inlined = inline_css_pass(html).unwrap();
+        assert!(inlined.contains("prefers-color-scheme: dark"));
+    }
+
+    #[test]
+    fn inline_css_inline_attr_wins_over_style() {
+        let html = r#"<html><head><style>p { color: red; }</style></head><body><p style="color: blue;">x</p></body></html>"#;
+        let inlined = inline_css_pass(html).unwrap();
+        // Inline `blue` must still be present; `red` must NOT appear as an applied color.
+        assert!(inlined.contains("color: blue") || inlined.contains("color:blue"));
+        // The inliner should not emit `red` in the element's style attribute.
+        // Note: `red` remains inside the <style> block (that's fine), so we check
+        // only the portion after </style>.
+        let style_end = inlined.find("</style>").expect("style retained");
+        let after_style = &inlined[style_end..];
+        assert!(
+            !after_style.contains("color: red"),
+            "red leaked into element style, got: {after_style:.500}"
+        );
+        assert!(
+            !after_style.contains("color:red"),
+            "red leaked into element style (no space), got: {after_style:.500}"
+        );
     }
 }

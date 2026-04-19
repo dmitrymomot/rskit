@@ -21,6 +21,18 @@
 //! - [`ButtonType`] — colour variants rendered by the `[button|…]` Markdown
 //!   syntax.
 //!
+//! ## Custom elements
+//!
+//! Two custom Markdown elements extend the standard syntax:
+//!
+//! - `[button|Label](url)` / `[button:TYPE|Label](url)` — styled
+//!   call-to-action button (`TYPE`: `danger`, `warning`, `info`, `success`).
+//! - `[otp|CODE]` — styled one-time-code pill (monospace, letter-spaced,
+//!   rounded background). `CODE` must match `[A-Za-z0-9-]{1,32}`.
+//!
+//! Both elements are inert inside code spans, fenced code blocks, and after a
+//! backslash escape.
+//!
 //! ## Quick start
 //!
 //! ```rust,no_run
@@ -50,6 +62,10 @@
 //!
 //! Hi {{name}},
 //!
+//! Your verification code:
+//!
+//! [otp|{{code}}]
+//!
 //! [button|Get started](https://example.com/start)
 //! ```
 
@@ -60,6 +76,7 @@ mod layout;
 mod mailer;
 mod markdown;
 mod message;
+mod otp;
 mod render;
 mod source;
 

@@ -209,7 +209,14 @@ impl Mailer {
         let layout_html = layout::resolve_layout(&frontmatter.layout, &self.inner.layouts)?;
         let html = layout::apply_layout(&layout_html, &html_body, &email.vars);
 
-        // Stage 5: Plain text
+        // Stage 5: optional CSS-inliner pass.
+        let html = if self.inner.config.inline_css {
+            render::inline_css_pass(&html)?
+        } else {
+            html
+        };
+
+        // Stage 6: Plain text
         let text = markdown::markdown_to_text(&body);
 
         Ok(RenderedEmail {
@@ -329,6 +336,7 @@ impl Mailer {
 mod tests {
     use super::*;
     use crate::email::config::SmtpConfig;
+    use crate::email::source::TemplateSource;
 
     fn test_email_config(smtp: SmtpConfig) -> EmailConfig {
         EmailConfig {
@@ -340,6 +348,7 @@ mod tests {
             default_locale: "en".into(),
             cache_templates: false,
             template_cache_size: 10,
+            inline_css: true,
             smtp,
         }
     }
@@ -392,5 +401,66 @@ mod tests {
         let email = SendEmail::new("any", "user@example.com");
         let rendered = mailer.render(&email).unwrap();
         assert_eq!(rendered.subject, "Test");
+    }
+
+    #[test]
+    fn render_inlines_css_by_default() {
+        struct Src;
+        impl TemplateSource for Src {
+            fn load(&self, _: &str, _: &str, _: &str) -> Result<String> {
+                Ok("---\nsubject: T\n---\n# Heading".into())
+            }
+        }
+        let config = test_email_config(SmtpConfig {
+            host: "localhost".into(),
+            port: 25,
+            username: None,
+            password: None,
+            security: SmtpSecurity::None,
+        });
+        let mailer = Mailer::with_source(&config, Arc::new(Src)).unwrap();
+        let rendered = mailer.render(&SendEmail::new("x", "a@b.c")).unwrap();
+        // Style block retained (dark-mode lives there).
+        assert!(rendered.html.contains("prefers-color-scheme: dark"));
+        // Inliner ran: `-webkit-text-size-adjust` from the <style> block was
+        // copied as an inline style attribute on elements it targets (e.g. <body>).
+        // We detect this by looking for the property *outside* the <style> block —
+        // i.e. in an inline style="" attribute.
+        let style_end = rendered.html.find("</style>").expect("has <style>");
+        let after_style = &rendered.html[style_end..];
+        assert!(
+            after_style.contains("-webkit-text-size-adjust"),
+            "inliner should copy -webkit-text-size-adjust into inline style, got: {after_style:.500}"
+        );
+    }
+
+    #[test]
+    fn render_skips_inliner_when_disabled() {
+        struct Src;
+        impl TemplateSource for Src {
+            fn load(&self, _: &str, _: &str, _: &str) -> Result<String> {
+                Ok("---\nsubject: T\n---\nBody".into())
+            }
+        }
+        let mut config = test_email_config(SmtpConfig {
+            host: "localhost".into(),
+            port: 25,
+            username: None,
+            password: None,
+            security: SmtpSecurity::None,
+        });
+        config.inline_css = false;
+        let mailer = Mailer::with_source(&config, Arc::new(Src)).unwrap();
+        let rendered = mailer.render(&SendEmail::new("x", "a@b.c")).unwrap();
+        assert!(!rendered.html.is_empty());
+        assert!(rendered.html.contains("prefers-color-scheme: dark"));
+        // Inliner was NOT run: -webkit-text-size-adjust appears ONLY inside <style>,
+        // not in inline attributes anywhere past </style>.
+        let style_end = rendered.html.find("</style>").expect("has <style>");
+        let after_style = &rendered.html[style_end..];
+        assert!(
+            !after_style.contains("-webkit-text-size-adjust"),
+            "inliner should not run when disabled, got: {after_style:.500}"
+        );
     }
 }
