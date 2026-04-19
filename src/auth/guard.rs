@@ -28,20 +28,22 @@ use crate::auth::session::Session;
 /// For htmx requests (`hx-request: true`), returns `200 OK` with the
 /// `HX-Redirect: <path>` header so htmx performs the client-side navigation.
 /// For all other requests, returns `303 See Other` with `Location: <path>`.
-fn redirect_response(path: &str, headers: &http::HeaderMap) -> http::Response<Body> {
+///
+/// The caller must pass a pre-validated `HeaderValue` (built at layer
+/// construction) so every emitted redirect carries a valid header — no silent
+/// drops at request time.
+fn redirect_response(path: &http::HeaderValue, headers: &http::HeaderMap) -> http::Response<Body> {
     let is_htmx = headers.get("hx-request").and_then(|v| v.to_str().ok()) == Some("true");
 
     let mut response = http::Response::new(Body::empty());
     if is_htmx {
         *response.status_mut() = http::StatusCode::OK;
-        if let Ok(value) = http::HeaderValue::from_str(path) {
-            response.headers_mut().insert("hx-redirect", value);
-        }
+        response.headers_mut().insert("hx-redirect", path.clone());
     } else {
         *response.status_mut() = http::StatusCode::SEE_OTHER;
-        if let Ok(value) = http::HeaderValue::from_str(path) {
-            response.headers_mut().insert(http::header::LOCATION, value);
-        }
+        response
+            .headers_mut()
+            .insert(http::header::LOCATION, path.clone());
     }
     response
 }
@@ -195,15 +197,25 @@ where
 ///     .route_layer(require_authenticated("/auth"));
 /// # }
 /// ```
+///
+/// # Panics
+///
+/// Panics at construction if `redirect_to` is not a valid HTTP header value
+/// (e.g. contains a newline or non-visible bytes). Since `redirect_to` is
+/// typically a compile-time constant like `"/auth"`, this surfaces
+/// misconfiguration at startup rather than silently at request time.
 pub fn require_authenticated(redirect_to: impl Into<String>) -> RequireAuthenticatedLayer {
+    let raw = redirect_to.into();
+    let value = http::HeaderValue::from_str(&raw)
+        .expect("require_authenticated: redirect_to must be a valid HTTP header value");
     RequireAuthenticatedLayer {
-        redirect_to: Arc::new(redirect_to.into()),
+        redirect_to: Arc::new(value),
     }
 }
 
 /// Tower layer produced by [`require_authenticated()`].
 pub struct RequireAuthenticatedLayer {
-    redirect_to: Arc<String>,
+    redirect_to: Arc<http::HeaderValue>,
 }
 
 impl Clone for RequireAuthenticatedLayer {
@@ -228,7 +240,7 @@ impl<S> Layer<S> for RequireAuthenticatedLayer {
 /// Tower service produced by [`RequireAuthenticatedLayer`].
 pub struct RequireAuthenticatedService<S> {
     inner: S,
-    redirect_to: Arc<String>,
+    redirect_to: Arc<http::HeaderValue>,
 }
 
 impl<S: Clone> Clone for RequireAuthenticatedService<S> {
@@ -303,15 +315,25 @@ where
 ///     .route_layer(require_unauthenticated("/app"));
 /// # }
 /// ```
+///
+/// # Panics
+///
+/// Panics at construction if `redirect_to` is not a valid HTTP header value
+/// (e.g. contains a newline or non-visible bytes). Since `redirect_to` is
+/// typically a compile-time constant like `"/app"`, this surfaces
+/// misconfiguration at startup rather than silently at request time.
 pub fn require_unauthenticated(redirect_to: impl Into<String>) -> RequireUnauthenticatedLayer {
+    let raw = redirect_to.into();
+    let value = http::HeaderValue::from_str(&raw)
+        .expect("require_unauthenticated: redirect_to must be a valid HTTP header value");
     RequireUnauthenticatedLayer {
-        redirect_to: Arc::new(redirect_to.into()),
+        redirect_to: Arc::new(value),
     }
 }
 
 /// Tower layer produced by [`require_unauthenticated()`].
 pub struct RequireUnauthenticatedLayer {
-    redirect_to: Arc<String>,
+    redirect_to: Arc<http::HeaderValue>,
 }
 
 impl Clone for RequireUnauthenticatedLayer {
@@ -336,7 +358,7 @@ impl<S> Layer<S> for RequireUnauthenticatedLayer {
 /// Tower service produced by [`RequireUnauthenticatedLayer`].
 pub struct RequireUnauthenticatedService<S> {
     inner: S,
-    redirect_to: Arc<String>,
+    redirect_to: Arc<http::HeaderValue>,
 }
 
 impl<S: Clone> Clone for RequireUnauthenticatedService<S> {
@@ -508,7 +530,8 @@ mod tests {
     #[test]
     fn redirect_response_non_htmx_returns_303_with_location() {
         let headers = http::HeaderMap::new();
-        let resp = redirect_response("/auth", &headers);
+        let path = http::HeaderValue::from_static("/auth");
+        let resp = redirect_response(&path, &headers);
         assert_eq!(resp.status(), StatusCode::SEE_OTHER);
         assert_eq!(resp.headers().get(http::header::LOCATION).unwrap(), "/auth");
         assert!(resp.headers().get("hx-redirect").is_none());
@@ -518,7 +541,8 @@ mod tests {
     fn redirect_response_htmx_returns_200_with_hx_redirect() {
         let mut headers = http::HeaderMap::new();
         headers.insert("hx-request", http::HeaderValue::from_static("true"));
-        let resp = redirect_response("/app", &headers);
+        let path = http::HeaderValue::from_static("/app");
+        let resp = redirect_response(&path, &headers);
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(resp.headers().get("hx-redirect").unwrap(), "/app");
         assert!(resp.headers().get(http::header::LOCATION).is_none());
@@ -528,8 +552,21 @@ mod tests {
     fn redirect_response_hx_request_false_uses_303() {
         let mut headers = http::HeaderMap::new();
         headers.insert("hx-request", http::HeaderValue::from_static("false"));
-        let resp = redirect_response("/x", &headers);
+        let path = http::HeaderValue::from_static("/x");
+        let resp = redirect_response(&path, &headers);
         assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    }
+
+    #[test]
+    #[should_panic(expected = "valid HTTP header value")]
+    fn require_authenticated_panics_on_invalid_redirect() {
+        let _ = require_authenticated("bad\npath");
+    }
+
+    #[test]
+    #[should_panic(expected = "valid HTTP header value")]
+    fn require_unauthenticated_panics_on_invalid_redirect() {
+        let _ = require_unauthenticated("bad\npath");
     }
 
     // --- require_role tests ---
