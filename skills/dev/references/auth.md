@@ -10,8 +10,8 @@ Companion references:
 - Sessions: see [`sessions.md`](sessions.md) — `modo::auth::session`.
 - API keys: see [`apikey.md`](apikey.md) — `modo::auth::apikey`.
 
-The route-level guards (`require_authenticated`, `require_role`,
-`require_scope`) are also re-exported from the flat
+The route-level guards (`require_authenticated`, `require_unauthenticated`,
+`require_role`, `require_scope`) are also re-exported from the flat
 [`modo::guards`](../../../src/guards.rs) index alongside tier guards
 (`require_feature`, `require_limit`).
 
@@ -604,7 +604,7 @@ Also available via the flat aggregators:
 
 - `modo::middlewares::role` — alias for `modo::auth::role::middleware`.
 - `modo::middlewares::ApiKey` — alias for `modo::auth::apikey::ApiKeyLayer`.
-- `modo::guards::{require_role, require_authenticated, require_scope}` —
+- `modo::guards::{require_role, require_authenticated, require_unauthenticated, require_scope}` —
   flat re-exports of the route-level guards in `modo::auth::guard`.
 
 `Role` is preluded as `modo::prelude::Role` and also available via
@@ -663,7 +663,8 @@ Apply with `.layer()` on the outer router. Also re-exported as
 ```rust
 // in modo::auth::guard, also re-exported from modo::guards
 pub fn require_role(roles: impl IntoIterator<Item = impl Into<String>>) -> RequireRoleLayer
-pub fn require_authenticated() -> RequireAuthenticatedLayer
+pub fn require_authenticated(redirect_to: impl Into<String>) -> RequireAuthenticatedLayer
+pub fn require_unauthenticated(redirect_to: impl Into<String>) -> RequireUnauthenticatedLayer
 pub fn require_scope(scope: &str) -> ScopeLayer
 ```
 
@@ -679,13 +680,26 @@ allow-list. Exact string match; no hierarchy.
 | 401 Unauthorized | No `Role` in request extensions (role middleware never ran) |
 | 403 Forbidden    | `Role` present but not in the allow-list (an empty `roles` iterator always 403s) |
 
-**`require_authenticated()`** — passes through whenever any [`Role`] is
-present. The role's value is not inspected.
+**`require_authenticated(redirect_to)`** — passes through whenever a [`Session`]
+is present in request extensions. When absent, redirects to `redirect_to`:
+`303 See Other` with `Location` for non-htmx requests, `200 OK` with
+`HX-Redirect` for htmx requests (`hx-request: true`). The session middleware
+(`CookieSessionLayer` or the JWT session middleware) must run earlier via
+`.layer()`.
 
-| Status | Condition |
-|--------|-----------|
-| 200    | Any `Role` in extensions |
-| 401 Unauthorized | No `Role` in extensions |
+| Status | Condition                                  |
+|--------|--------------------------------------------|
+| 200    | Session present, inner handler dispatched (or htmx redirect) |
+| 303    | Session absent, non-htmx: `Location: <redirect_to>` |
+
+**`require_unauthenticated(redirect_to)`** — mirror image. Passes through when
+no `Session` is present. When one is, redirects to `redirect_to` with the same
+303/200 + HX-Redirect logic. Use on guest-only routes such as `/auth`.
+
+| Status | Condition                                  |
+|--------|--------------------------------------------|
+| 200    | Session absent, inner handler dispatched (or htmx redirect) |
+| 303    | Session present, non-htmx: `Location: <redirect_to>` |
 
 **`require_scope(scope)`** — checks the verified API key's scope list
 for the required scope (exact string match; no wildcards). Reads
@@ -698,25 +712,27 @@ for the required scope (exact string match; no wildcards). Reads
 | 500 Internal Server Error | No `ApiKeyMeta` in extensions — `ApiKeyLayer` is missing upstream. The guard logs `tracing::error!` and responds with a generic "server misconfigured" message. Missing-layer is treated as a server wiring bug, not a client auth failure (do **not** expect 401). |
 
 The opaque return types (`RequireRoleLayer`, `RequireAuthenticatedLayer`,
-`ScopeLayer`) are not re-exported — name them as `impl Layer<S>` or
-just chain them directly into `.route_layer(...)`.
+`RequireUnauthenticatedLayer`, `ScopeLayer`) are not re-exported — name them
+as `impl Layer<S>` or just chain them directly into `.route_layer(...)`.
 
 ### Wiring order
 
 ```rust
 use axum::{Router, routing::get};
 use modo::auth::{apikey::ApiKeyLayer, role};
-use modo::guards::{require_authenticated, require_role, require_scope};
+use modo::guards::{require_authenticated, require_role, require_scope, require_unauthenticated};
 
 let app: Router = Router::new()
     .route("/admin", get(admin_handler))
-    .route_layer(require_role(["admin", "owner"]))   // 401 if no Role, 403 if not allowed
+    .route_layer(require_role(["admin", "owner"]))       // 401 if no Role, 403 if not allowed
     .route("/dashboard", get(dashboard_handler))
-    .route_layer(require_authenticated())             // 401 if no Role
+    .route_layer(require_authenticated("/auth"))          // 303 (or 200 + HX-Redirect) if no Session
+    .route("/login", get(login_handler))
+    .route_layer(require_unauthenticated("/app"))         // 303 (or 200 + HX-Redirect) if Session present
     .route("/orders", get(orders_handler))
-    .route_layer(require_scope("read:orders"))         // 500 if no ApiKeyLayer, 403 if scope absent
-    .layer(role::middleware(MyExtractor))              // populates Role
-    .layer(ApiKeyLayer::new(api_key_store));           // populates ApiKeyMeta
+    .route_layer(require_scope("read:orders"))            // 500 if no ApiKeyLayer, 403 if scope absent
+    .layer(role::middleware(MyExtractor))                 // populates Role
+    .layer(ApiKeyLayer::new(api_key_store));              // populates ApiKeyMeta
 ```
 
 Apply role/apikey middleware with `.layer()` on the outer router so
@@ -754,7 +770,7 @@ The JWT module follows this pattern consistently -- all `JwtError` variants prod
 - `RoleExtractor` is RPITIT (not object-safe). Never use `dyn RoleExtractor`; pass concrete types into `modo::auth::role::middleware(...)`.
 - `TokenSource` and `TokenVerifier`/`TokenSigner` are object-safe -- use `Arc<dyn TokenSource>`, `Arc<dyn TokenVerifier>`, `Arc<dyn TokenSigner>`.
 - All auth modules are always compiled — only `test-helpers` exists as a cargo feature, and it gates none of these modules.
-- The role middleware must apply via `.layer()` on the outer router. `ApiKeyLayer` likewise applies via `.layer()`. Guards (`require_authenticated`, `require_role`, `require_scope`) must apply via `.route_layer()` after route matching.
+- The session middleware (`CookieSessionLayer` or the JWT session middleware), the role middleware, and `ApiKeyLayer` all apply via `.layer()` on the outer router. Guards (`require_authenticated`, `require_unauthenticated`, `require_role`, `require_scope`) must apply via `.route_layer()` after route matching.
 - `require_scope` returns **500** (not 401) when `ApiKeyLayer` is missing — missing middleware is a server wiring bug, not a client auth failure. The guard logs the misconfiguration via `tracing::error!`.
 - `Role` extractor returns **500** when `auth::role::middleware()` is not applied — same rationale (server wiring bug, not a client failure).
 - `JwtDecoder::decode()` always requires `exp` -- tokens without `exp` are rejected as expired (`jwt:expired`).
@@ -769,5 +785,5 @@ The JWT module follows this pattern consistently -- all `JwtError` variants prod
 - The `Revocation` trait and `with_revocation()` no longer exist. Stateful row lookup in `JwtLayer::from_service` replaces revocation: the session row absent = revoked. The `Revoked` and `RevocationCheckFailed` `JwtError` variants no longer exist.
 - `PasswordConfig`, `TotpConfig`, `JwtSessionsConfig`, `ValidationConfig`, `OAuthConfig`, `OAuthProviderConfig`, `CallbackParams`, and `UserProfile` are all `#[non_exhaustive]` -- never construct with struct literals (no `..Default::default()` either). Use the provided constructors (`::new(...)`, `Default::default()`) and override fields by direct assignment.
 - `JwtSessionsConfig` and `OAuthConfig` have `#[serde(default)]` at struct level -- all fields are optional in YAML (fall back to defaults).
-- `RequireRoleLayer`, `RequireAuthenticatedLayer`, and `ScopeLayer` are the return types of `require_role()`, `require_authenticated()`, and `require_scope()`. They are not re-exported -- chain them directly into `.route_layer(...)` rather than naming them.
+- `RequireRoleLayer`, `RequireAuthenticatedLayer`, `RequireUnauthenticatedLayer`, and `ScopeLayer` are the return types of `require_role()`, `require_authenticated()`, `require_unauthenticated()`, and `require_scope()`. They are not re-exported — chain them directly into `.route_layer(...)` rather than naming them.
 - `TokenSourceConfig::Body` variants are read in session-handler logic (by `JwtSession`), not inside `JwtLayer`. When `JwtLayer` encounters a Body source, it falls back to `BearerSource`.
