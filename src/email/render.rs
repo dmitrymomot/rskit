@@ -4,6 +4,13 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+static CSS_INLINER: LazyLock<css_inline::CSSInliner<'static>> = LazyLock::new(|| {
+    css_inline::CSSInliner::options()
+        .keep_style_tags(true)
+        .load_remote_stylesheets(false)
+        .build()
+});
+
 /// Parsed YAML frontmatter from an email template.
 #[derive(Debug, Deserialize)]
 pub struct Frontmatter {
@@ -38,6 +45,24 @@ pub(crate) fn escape_html(input: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+/// Inline CSS declarations from `<style>` blocks into element `style=""`
+/// attributes while preserving the original `<style>` block so `@media`
+/// rules (dark mode, mobile) still apply on clients that honour them.
+///
+/// Existing inline `style=""` on an element wins over rules from `<style>`
+/// per standard CSS specificity.
+///
+/// # Errors
+///
+/// Returns [`Error::internal`] when the HTML cannot be parsed. Generated
+/// layouts are well-formed; callers surfacing this error are almost always
+/// looking at a malformed custom layout.
+pub fn inline_css_pass(html: &str) -> Result<String> {
+    CSS_INLINER
+        .inline(html)
+        .map_err(|e| Error::internal(format!("css inline failed: {e}")))
 }
 
 /// Split a template string into frontmatter and body.
@@ -222,5 +247,31 @@ mod tests {
         let (fm, body) = parse_frontmatter(template).unwrap();
         assert_eq!(fm.subject, "Hello");
         assert_eq!(body, "Before\n---\nAfter");
+    }
+
+    #[test]
+    fn inline_css_inlines_style_rules() {
+        let html =
+            r#"<html><head><style>h1 { color: red; }</style></head><body><h1>X</h1></body></html>"#;
+        let inlined = inline_css_pass(html).unwrap();
+        assert!(
+            inlined.contains("style=\"color: red") || inlined.contains("style=\"color:red"),
+            "expected inlined h1 style, got: {inlined}"
+        );
+    }
+
+    #[test]
+    fn inline_css_preserves_media_queries() {
+        let html = r#"<html><head><style>@media (prefers-color-scheme: dark) { body { color: white; } }</style></head><body>x</body></html>"#;
+        let inlined = inline_css_pass(html).unwrap();
+        assert!(inlined.contains("prefers-color-scheme: dark"));
+    }
+
+    #[test]
+    fn inline_css_inline_attr_wins_over_style() {
+        let html = r#"<html><head><style>p { color: red; }</style></head><body><p style="color: blue;">x</p></body></html>"#;
+        let inlined = inline_css_pass(html).unwrap();
+        // Inline `blue` must still be present; `red` must not override it.
+        assert!(inlined.contains("color: blue") || inlined.contains("color:blue"));
     }
 }

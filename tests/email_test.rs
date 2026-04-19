@@ -40,7 +40,9 @@ fn render_basic_template() {
     let rendered = mailer.render(&email).unwrap();
     assert_eq!(rendered.subject, "Welcome Dmytro!");
     assert!(rendered.html.contains("<strong>Dmytro</strong>"));
-    assert!(rendered.html.contains("max-width:600px")); // base layout applied
+    assert!(
+        rendered.html.contains("max-width:600px") || rendered.html.contains("max-width: 600px")
+    ); // base layout applied (inliner may normalise spacing)
     assert!(rendered.text.contains("Hi Dmytro, welcome!"));
 }
 

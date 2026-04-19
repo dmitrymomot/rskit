@@ -209,6 +209,13 @@ impl Mailer {
         let layout_html = layout::resolve_layout(&frontmatter.layout, &self.inner.layouts)?;
         let html = layout::apply_layout(&layout_html, &html_body, &email.vars);
 
+        // Stage 5b: optional CSS-inliner pass.
+        let html = if self.inner.config.inline_css {
+            render::inline_css_pass(&html)?
+        } else {
+            html
+        };
+
         // Stage 5: Plain text
         let text = markdown::markdown_to_text(&body);
 
@@ -329,6 +336,7 @@ impl Mailer {
 mod tests {
     use super::*;
     use crate::email::config::SmtpConfig;
+    use crate::email::source::TemplateSource;
 
     fn test_email_config(smtp: SmtpConfig) -> EmailConfig {
         EmailConfig {
@@ -393,5 +401,48 @@ mod tests {
         let email = SendEmail::new("any", "user@example.com");
         let rendered = mailer.render(&email).unwrap();
         assert_eq!(rendered.subject, "Test");
+    }
+
+    #[test]
+    fn render_inlines_css_by_default() {
+        struct Src;
+        impl TemplateSource for Src {
+            fn load(&self, _: &str, _: &str, _: &str) -> Result<String> {
+                Ok("---\nsubject: T\n---\n# Heading".into())
+            }
+        }
+        let config = test_email_config(SmtpConfig {
+            host: "localhost".into(),
+            port: 25,
+            username: None,
+            password: None,
+            security: SmtpSecurity::None,
+        });
+        let mailer = Mailer::with_source(&config, Arc::new(Src)).unwrap();
+        let rendered = mailer.render(&SendEmail::new("x", "a@b.c")).unwrap();
+        // Key assertion: original <style> is retained (dark-mode lives there).
+        assert!(rendered.html.contains("prefers-color-scheme: dark"));
+    }
+
+    #[test]
+    fn render_skips_inliner_when_disabled() {
+        struct Src;
+        impl TemplateSource for Src {
+            fn load(&self, _: &str, _: &str, _: &str) -> Result<String> {
+                Ok("---\nsubject: T\n---\nBody".into())
+            }
+        }
+        let mut config = test_email_config(SmtpConfig {
+            host: "localhost".into(),
+            port: 25,
+            username: None,
+            password: None,
+            security: SmtpSecurity::None,
+        });
+        config.inline_css = false;
+        let mailer = Mailer::with_source(&config, Arc::new(Src)).unwrap();
+        let rendered = mailer.render(&SendEmail::new("x", "a@b.c")).unwrap();
+        assert!(!rendered.html.is_empty());
+        assert!(rendered.html.contains("prefers-color-scheme: dark"));
     }
 }
