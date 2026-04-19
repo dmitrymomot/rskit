@@ -1,6 +1,6 @@
 [package]
 name = "modo-rs"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2024"
 description = "Rust web framework for small monolithic apps"
 license = "Apache-2.0"
@@ -94,6 +94,7 @@ lettre = { version = "0.11", default-features = false, features = [
   "webpki-roots",
 ] }
 pulldown-cmark = "0.13"
+css-inline = "0.16"
 # Templates
 minijinja = { version = "2", features = ["loader"] }
 minijinja-contrib = "2"
