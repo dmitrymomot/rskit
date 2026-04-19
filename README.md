@@ -190,10 +190,10 @@ only feature is `test-helpers`, enabled in your `[dev-dependencies]`.
 
 ```toml
 [dependencies]
-modo = { package = "modo-rs", version = "0.9" }
+modo = { package = "modo-rs", version = "0.10" }
 
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.9", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.10", features = ["test-helpers"] }
 ```
 
 > **Trade-off:** modo deliberately keeps every module always-on so the public

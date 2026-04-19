@@ -27,13 +27,13 @@ edition = "2024"
 rust-version = "1.92"
 
 [dependencies]
-modo = { package = "modo-rs", version = "0.9" }
+modo = { package = "modo-rs", version = "0.10" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.9", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.10", features = ["test-helpers"] }
 ```
 
 ### Feature flags

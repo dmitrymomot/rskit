@@ -7,7 +7,7 @@ your crate's dev-dependencies:
 
 ```toml
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.9", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.10", features = ["test-helpers"] }
 ```
 
 Source: `src/testing/` module. Re-exported as `modo::testing`.
