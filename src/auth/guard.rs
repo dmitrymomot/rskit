@@ -1,5 +1,5 @@
-//! Route-level gating layers — `require_authenticated`, `require_role`,
-//! `require_scope`.
+//! Route-level gating layers — `require_authenticated`, `require_unauthenticated`,
+//! `require_role`, `require_scope`.
 //!
 //! Provides guard layers that reject requests based on authentication state,
 //! role membership, or API key scope. All guards run after route matching
