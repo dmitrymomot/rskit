@@ -94,13 +94,14 @@ YAML
 
 # ── src/handlers/home.rs ────────────────────────────────────
 cat > "$PROJECT_DIR/src/handlers/home.rs" << 'RUST'
+use modo::Result;
 use modo::axum::response::Html;
-use modo::{Renderer, Result};
+use modo::template::{Renderer, context};
 
 pub async fn get(renderer: Renderer) -> Result<Html<String>> {
     renderer.html(
         "home.html",
-        modo::template::context! { title => "Welcome" },
+        context! { title => "Welcome" },
     )
 }
 RUST

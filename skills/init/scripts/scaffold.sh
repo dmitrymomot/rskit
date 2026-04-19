@@ -55,20 +55,23 @@ RUST
 # ── migrations/app/001_initial.sql ──────────────────────────
 cat > "$PROJECT_DIR/migrations/app/001_initial.sql" << 'SQL'
 -- Sessions table (required by modo session middleware)
-CREATE TABLE IF NOT EXISTS sessions (
-    token       TEXT PRIMARY KEY,
-    data        TEXT    NOT NULL DEFAULT '{}',
-    user_id     TEXT,
-    ip_address  TEXT,
-    user_agent  TEXT,
-    fingerprint TEXT,
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-    expires_at  TEXT    NOT NULL
+CREATE TABLE IF NOT EXISTS authenticated_sessions (
+    id                 TEXT    NOT NULL PRIMARY KEY,
+    session_token_hash TEXT    NOT NULL UNIQUE,
+    user_id            TEXT    NOT NULL,
+    ip_address         TEXT    NOT NULL DEFAULT '',
+    user_agent         TEXT    NOT NULL DEFAULT '',
+    device_name        TEXT    NOT NULL DEFAULT '',
+    device_type        TEXT    NOT NULL DEFAULT '',
+    fingerprint        TEXT    NOT NULL DEFAULT '',
+    data               TEXT    NOT NULL DEFAULT '{}',
+    created_at         TEXT    NOT NULL,
+    last_active_at     TEXT    NOT NULL,
+    expires_at         TEXT    NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_authenticated_sessions_user_id ON authenticated_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_authenticated_sessions_expires_at ON authenticated_sessions(expires_at);
 SQL
 
 # ── .gitignore ───────────────────────────────────────────────
