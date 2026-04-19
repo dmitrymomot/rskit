@@ -20,6 +20,32 @@ use crate::Error;
 use crate::auth::apikey::ApiKeyMeta;
 use crate::auth::role::Role;
 
+// --- shared redirect helper ---
+
+/// Build a redirect response for guard short-circuits.
+///
+/// For htmx requests (`hx-request: true`), returns `200 OK` with the
+/// `HX-Redirect: <path>` header so htmx performs the client-side navigation.
+/// For all other requests, returns `303 See Other` with `Location: <path>`.
+#[allow(dead_code)] // Used by Tasks 2/3 guards (require_authenticated rewrite, require_guest_only).
+fn redirect_response(path: &str, headers: &http::HeaderMap) -> http::Response<Body> {
+    let is_htmx = headers.get("hx-request").and_then(|v| v.to_str().ok()) == Some("true");
+
+    let mut response = http::Response::new(Body::empty());
+    if is_htmx {
+        *response.status_mut() = http::StatusCode::OK;
+        if let Ok(value) = http::HeaderValue::from_str(path) {
+            response.headers_mut().insert("hx-redirect", value);
+        }
+    } else {
+        *response.status_mut() = http::StatusCode::SEE_OTHER;
+        if let Ok(value) = http::HeaderValue::from_str(path) {
+            response.headers_mut().insert(http::header::LOCATION, value);
+        }
+    }
+    response
+}
+
 // --- require_role ---
 
 /// Creates a guard layer that rejects requests unless the resolved
@@ -350,6 +376,35 @@ mod tests {
 
     async fn ok_handler(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
         Ok(Response::new(Body::from("ok")))
+    }
+
+    // --- redirect_response helper tests ---
+
+    #[test]
+    fn redirect_response_non_htmx_returns_303_with_location() {
+        let headers = http::HeaderMap::new();
+        let resp = redirect_response("/auth", &headers);
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+        assert_eq!(resp.headers().get(http::header::LOCATION).unwrap(), "/auth");
+        assert!(resp.headers().get("hx-redirect").is_none());
+    }
+
+    #[test]
+    fn redirect_response_htmx_returns_200_with_hx_redirect() {
+        let mut headers = http::HeaderMap::new();
+        headers.insert("hx-request", http::HeaderValue::from_static("true"));
+        let resp = redirect_response("/app", &headers);
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.headers().get("hx-redirect").unwrap(), "/app");
+        assert!(resp.headers().get(http::header::LOCATION).is_none());
+    }
+
+    #[test]
+    fn redirect_response_hx_request_false_uses_303() {
+        let mut headers = http::HeaderMap::new();
+        headers.insert("hx-request", http::HeaderValue::from_static("false"));
+        let resp = redirect_response("/x", &headers);
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
     }
 
     // --- require_role tests ---
