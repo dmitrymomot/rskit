@@ -10,8 +10,10 @@ enum ScanCtx {
     Text,
     /// Inside a single- or multi-backtick code span; `ticks` is the run length.
     CodeSpan { ticks: usize },
-    /// Inside a fenced code block; `fence_char` is the opening fence character (`\`` or `~`).
-    Fence { fence_char: u8 },
+    /// Inside a fenced code block; `fence_char` is the opening fence character
+    /// (`\`` or `~`) and `opening_len` is the opening run length — a closing
+    /// fence must match `fence_char` and have `run_len >= opening_len`.
+    Fence { fence_char: u8, opening_len: usize },
 }
 
 /// Walk `src` and, outside code spans / fenced blocks / escapes, replace
@@ -43,7 +45,10 @@ where
                             out.push_str(&line[..nl]);
                             i += nl;
                             at_line_start = true;
-                            ctx = ScanCtx::Fence { fence_char: ch };
+                            ctx = ScanCtx::Fence {
+                                fence_char: ch,
+                                opening_len: run_len,
+                            };
                             continue;
                         }
                     }
@@ -119,12 +124,15 @@ where
                     i += ch.len_utf8();
                 }
             }
-            ScanCtx::Fence { fence_char } => {
+            ScanCtx::Fence {
+                fence_char,
+                opening_len,
+            } => {
                 if at_line_start {
                     let line = &src[i..];
                     let trimmed = line.trim_start_matches(' ');
                     let run_len = trimmed.bytes().take_while(|&b| b == fence_char).count();
-                    if run_len >= 3 {
+                    if run_len >= opening_len {
                         let nl = line.find('\n').map_or(line.len(), |n| n + 1);
                         out.push_str(&line[..nl]);
                         i += nl;
@@ -423,6 +431,24 @@ mod tests {
     fn html_otp_in_fenced_block_is_literal() {
         let html = markdown_to_html("```\n[otp|123]\n```", None);
         assert!(html.contains("[otp|123]"));
+        assert!(!html.contains("font-family:ui-monospace"));
+    }
+
+    #[test]
+    fn html_otp_in_longer_fence_not_closed_by_shorter_run() {
+        // A 4-backtick fence must not be closed by a 3-backtick run — per
+        // CommonMark, the closing fence needs ≥ opening length. The OTP
+        // between the 3-backtick line and the real close must stay literal.
+        let src = "````\n[otp|123]\n```\n[otp|456]\n````";
+        let html = markdown_to_html(src, None);
+        assert!(
+            html.contains("[otp|123]"),
+            "first OTP must stay literal: {html}"
+        );
+        assert!(
+            html.contains("[otp|456]"),
+            "second OTP must stay literal (still inside 4-tick fence): {html}"
+        );
         assert!(!html.contains("font-family:ui-monospace"));
     }
 

@@ -209,14 +209,14 @@ impl Mailer {
         let layout_html = layout::resolve_layout(&frontmatter.layout, &self.inner.layouts)?;
         let html = layout::apply_layout(&layout_html, &html_body, &email.vars);
 
-        // Stage 5b: optional CSS-inliner pass.
+        // Stage 5: optional CSS-inliner pass.
         let html = if self.inner.config.inline_css {
             render::inline_css_pass(&html)?
         } else {
             html
         };
 
-        // Stage 5: Plain text
+        // Stage 6: Plain text
         let text = markdown::markdown_to_text(&body);
 
         Ok(RenderedEmail {

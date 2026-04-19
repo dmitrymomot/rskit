@@ -38,7 +38,13 @@ pub fn substitute(input: &str, vars: &HashMap<String, String>) -> String {
         .into_owned()
 }
 
-/// Escape HTML special characters for safe interpolation into HTML attributes and text.
+/// Escape `&`, `<`, `>`, and `"` for safe interpolation into HTML text
+/// content or double-quoted attribute values.
+///
+/// Does **not** escape `'` — so this is unsafe for single-quoted attribute
+/// values. All in-tree callers interpolate into text content or
+/// double-quoted attributes, so this is adequate today; new callers that
+/// emit single-quoted attributes must escape `'` separately.
 pub(crate) fn escape_html(input: &str) -> String {
     input
         .replace('&', "&amp;")
@@ -58,7 +64,9 @@ pub(crate) fn escape_html(input: &str) -> String {
 ///
 /// Returns [`Error::internal`] when the HTML cannot be parsed. Generated
 /// layouts are well-formed; callers surfacing this error are almost always
-/// looking at a malformed custom layout.
+/// looking at a malformed custom layout. Setting `email.inline_css: false`
+/// in config is the supported opt-out if a problematic custom layout cannot
+/// be fixed immediately.
 pub fn inline_css_pass(html: &str) -> Result<String> {
     CSS_INLINER
         .inline(html)
