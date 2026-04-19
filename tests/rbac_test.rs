@@ -17,14 +17,6 @@ impl RoleExtractor for StaticRoleExtractor {
     }
 }
 
-struct FailExtractor;
-
-impl RoleExtractor for FailExtractor {
-    async fn extract(&self, _parts: &mut http::request::Parts) -> modo::Result<String> {
-        Err(modo::Error::unauthorized("not authenticated"))
-    }
-}
-
 // Module-level handler functions (required for axum Handler bounds)
 async fn ok_handler() -> &'static str {
     "ok"
@@ -80,18 +72,22 @@ async fn rbac_middleware_with_require_role_rejects_wrong_role() {
 }
 
 #[tokio::test]
-async fn rbac_middleware_unauthenticated_returns_401() {
+async fn rbac_middleware_unauthenticated_redirects() {
+    // require_authenticated now checks Session, not Role. With no session
+    // middleware wired here, Session is absent, so the guard redirects.
+    // Note: no role middleware is wired either — require_authenticated is
+    // independent of the role system post-Task 2.
     let app = Router::new()
         .route("/admin", get(ok_handler))
-        .route_layer(guard::require_authenticated())
-        .layer(role::middleware(FailExtractor))
+        .route_layer(guard::require_authenticated("/auth"))
         .with_state(Registry::new().into_state());
 
     let resp = app
         .oneshot(Request::get("/admin").body(Body::empty()).unwrap())
         .await
         .unwrap();
-    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get("location").unwrap(), "/auth");
 }
 
 // ---------------------------------------------------------------------------
