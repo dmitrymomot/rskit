@@ -16,7 +16,7 @@ pub(crate) fn is_valid_code(s: &str) -> bool {
 pub fn render_otp_html(code: &str) -> String {
     let escaped = render::escape_html(code);
     format!(
-        r#"<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:8px 0 24px 0;"><tr><td style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:28px;font-weight:700;letter-spacing:6px;color:#18181b;background-color:#f4f4f5;padding:14px 20px;border-radius:8px;">{escaped}</td></tr></table>"#
+        r#"<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:8px 0 24px 0;"><tr><td class="email-otp-bg" style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:22px;font-weight:700;letter-spacing:4px;color:#18181b;background-color:#f4f4f5;padding:12px 16px;border-radius:8px;">{escaped}</td></tr></table>"#
     )
 }
 
@@ -74,7 +74,7 @@ mod tests {
         assert!(html.contains(">123456<"));
         assert!(html.contains("role=\"presentation\""));
         assert!(html.contains("font-family:ui-monospace"));
-        assert!(html.contains("letter-spacing:6px"));
+        assert!(html.contains("letter-spacing:4px"));
     }
 
     #[test]
@@ -87,5 +87,12 @@ mod tests {
     #[test]
     fn render_text_format() {
         assert_eq!(render_otp_text("123456"), "\n\n123456\n\n");
+    }
+
+    #[test]
+    fn render_html_has_dark_class() {
+        // .email-otp-bg lets the layout's dark-mode @media rule target the pill
+        let html = render_otp_html("123456");
+        assert!(html.contains(r#"class="email-otp-bg""#));
     }
 }
