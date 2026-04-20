@@ -31,10 +31,11 @@ img { -ms-interpolation-mode: bicubic; max-width: 100%; }
 body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
 @media (prefers-color-scheme: dark) {
   .email-body { background-color: #1a1a1a !important; }
-  .email-card { background-color: #2a2a2a !important; }
+  .email-card { background-color: #1a1a1a !important; }
   .email-content, .email-content * { color: #e4e4e7 !important; }
   .email-footer { color: #a1a1aa !important; }
   .email-divider { border-color: #3f3f46 !important; }
+  .email-otp-bg { background-color: #27272a !important; color: #e4e4e7 !important; }
 }
 @media only screen and (max-width: 620px) {
   .email-outer { padding: 16px 8px !important; }
@@ -42,19 +43,21 @@ body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
 }
 </style>
 </head>
-<body class="email-body" style="margin:0;padding:0;width:100%;background-color:#f4f4f5;-webkit-font-smoothing:antialiased;">
-<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="email-body" style="background-color:#f4f4f5;">
+<body class="email-body" style="margin:0;padding:0;width:100%;background-color:#ffffff;-webkit-font-smoothing:antialiased;">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="email-body" style="background-color:#ffffff;">
 <tr>
 <td class="email-outer" align="center" style="padding:24px 16px;">
 <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="width:100%;max-width:600px;">
-{{logo_section}}
 <tr>
-<td class="email-card email-content" style="background-color:#ffffff;padding:32px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#18181b;">
-{{content}}
+<td class="email-card email-content" style="background-color:#ffffff;padding:32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#18181b;">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+{{logo_section}}
+<tr><td>{{content}}</td></tr>
+{{footer_section}}
+</table>
 </td>
 </tr>
-{{footer_section}}
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
 </td>
@@ -64,12 +67,15 @@ body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
 </html>"##;
 
 /// Logo row when `logo_url` is present but `app_url` is not — bare `<img>`.
-const LOGO_SECTION_BARE: &str = r#"<tr><td align="center" style="padding-bottom:24px;"><img src="{{logo_url}}" alt="" style="max-width:150px;height:auto;display:block;border:0;" /></td></tr>"#;
+const LOGO_SECTION_BARE: &str = r#"<tr><td align="left" style="padding-bottom:24px;"><img src="{{logo_url}}" alt="" style="max-width:96px;max-height:48px;height:auto;width:auto;display:block;border:0;" /></td></tr>"#;
 
 /// Logo row when both `logo_url` and `app_url` are present — linked `<img>`.
-const LOGO_SECTION_LINKED: &str = r#"<tr><td align="center" style="padding-bottom:24px;"><a href="{{app_url}}" style="text-decoration:none;border:0;"><img src="{{logo_url}}" alt="" style="max-width:150px;height:auto;display:block;border:0;" /></a></td></tr>"#;
+const LOGO_SECTION_LINKED: &str = r#"<tr><td align="left" style="padding-bottom:24px;"><a href="{{app_url}}" style="text-decoration:none;border:0;"><img src="{{logo_url}}" alt="" style="max-width:96px;max-height:48px;height:auto;width:auto;display:block;border:0;" /></a></td></tr>"#;
 
-const FOOTER_SECTION: &str = r#"<tr><td class="email-footer" align="center" style="padding-top:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;color:#71717a;">{{footer_text}}</td></tr>"#;
+const FOOTER_SECTION: &str = concat!(
+    r#"<tr><td style="padding-top:40px;font-size:0;line-height:0;">&nbsp;</td></tr>"#,
+    r#"<tr><td class="email-footer email-divider" align="left" style="border-top:1px solid #e4e4e7;padding-top:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;color:#71717a;">{{footer_text}}</td></tr>"#,
+);
 
 /// Load custom layouts from the given directory.
 ///
@@ -296,11 +302,35 @@ mod tests {
 
     #[test]
     fn base_layout_has_inline_light_styles() {
-        // Body background inline on <body>
+        // Body background inline on <body> — flat white in light mode
         assert!(
-            BASE_LAYOUT.contains(r#"background-color:#f4f4f5"#)
-                || BASE_LAYOUT.contains(r#"background-color: #f4f4f5"#)
+            BASE_LAYOUT.contains(r#"background-color:#ffffff"#)
+                || BASE_LAYOUT.contains(r#"background-color: #ffffff"#)
         );
+    }
+
+    #[test]
+    fn base_layout_has_otp_dark_override() {
+        // OTP pill gets dark-mode override via .email-otp-bg class
+        assert!(BASE_LAYOUT.contains(".email-otp-bg"));
+    }
+
+    #[test]
+    fn apply_layout_logo_is_left_aligned() {
+        let mut vars = HashMap::new();
+        vars.insert("logo_url".into(), "https://cdn.example.com/logo.png".into());
+        let result = apply_layout(BASE_LAYOUT, "<p>x</p>", &vars);
+        assert!(result.contains(r#"align="left""#));
+        assert!(result.contains("max-width:96px") || result.contains("max-width: 96px"));
+    }
+
+    #[test]
+    fn apply_layout_footer_has_divider() {
+        let mut vars = HashMap::new();
+        vars.insert("footer_text".into(), "© 2026".into());
+        let result = apply_layout(BASE_LAYOUT, "<p>x</p>", &vars);
+        assert!(result.contains("email-divider"));
+        assert!(result.contains("border-top:1px solid"));
     }
 
     #[test]
