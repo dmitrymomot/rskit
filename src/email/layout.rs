@@ -67,10 +67,10 @@ body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
 </html>"##;
 
 /// Logo row when `logo_url` is present but `app_url` is not — bare `<img>`.
-const LOGO_SECTION_BARE: &str = r#"<tr><td align="left" style="padding-bottom:24px;"><img src="{{logo_url}}" alt="" style="max-width:96px;height:auto;display:block;border:0;" /></td></tr>"#;
+const LOGO_SECTION_BARE: &str = r#"<tr><td align="left" style="padding-bottom:24px;"><img src="{{logo_url}}" alt="" style="max-width:96px;max-height:48px;height:auto;width:auto;display:block;border:0;" /></td></tr>"#;
 
 /// Logo row when both `logo_url` and `app_url` are present — linked `<img>`.
-const LOGO_SECTION_LINKED: &str = r#"<tr><td align="left" style="padding-bottom:24px;"><a href="{{app_url}}" style="text-decoration:none;border:0;"><img src="{{logo_url}}" alt="" style="max-width:96px;height:auto;display:block;border:0;" /></a></td></tr>"#;
+const LOGO_SECTION_LINKED: &str = r#"<tr><td align="left" style="padding-bottom:24px;"><a href="{{app_url}}" style="text-decoration:none;border:0;"><img src="{{logo_url}}" alt="" style="max-width:96px;max-height:48px;height:auto;width:auto;display:block;border:0;" /></a></td></tr>"#;
 
 const FOOTER_SECTION: &str = concat!(
     r#"<tr><td style="padding-top:40px;font-size:0;line-height:0;">&nbsp;</td></tr>"#,
