@@ -75,9 +75,12 @@ impl<S> Layer<S> for CsrfLayer {
 
 /// The [`Service`] produced by `CsrfLayer`.
 ///
-/// For exempt methods (GET, HEAD, OPTIONS by default), generates a new CSRF
-/// token, sets a signed cookie, and injects [`CsrfToken`] into both request
-/// and response extensions.
+/// For exempt methods (GET, HEAD, OPTIONS by default), reuses the token from
+/// the request cookie when its signature verifies — only minting a new token
+/// and emitting `Set-Cookie` on first visit or signature failure. In every
+/// case, [`CsrfToken`] is injected into both request and response extensions.
+/// Keeping the token stable across GETs is required for the double-submit
+/// pattern to survive multi-tab sessions and long-lived pages.
 ///
 /// For unsafe methods (POST, PUT, DELETE, PATCH, etc.), reads the signed
 /// cookie, compares the plain token with the value of the configured header,
