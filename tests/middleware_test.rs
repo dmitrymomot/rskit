@@ -595,6 +595,169 @@ async fn test_csrf_skips_exempt_methods() {
     assert_ne!(response.status(), StatusCode::FORBIDDEN);
 }
 
+#[tokio::test]
+async fn test_csrf_reuses_valid_cookie_across_gets() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = test_csrf_config();
+    let key = test_cookie_key();
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::csrf(&config, &key))
+        .with_state(Registry::new().into_state());
+
+    let first = app
+        .clone()
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    let set_cookie = first
+        .headers()
+        .get("set-cookie")
+        .expect("first GET sets cookie")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let cookie_value = set_cookie.split(';').next().unwrap().to_string();
+    let first_token = first
+        .extensions()
+        .get::<modo::middleware::CsrfToken>()
+        .expect("first GET exposes token")
+        .0
+        .clone();
+
+    let second = app
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header("cookie", &cookie_value)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        second.headers().get("set-cookie").is_none(),
+        "second GET with a valid cookie must not rotate the token"
+    );
+    let second_token = second
+        .extensions()
+        .get::<modo::middleware::CsrfToken>()
+        .expect("second GET exposes token")
+        .0
+        .clone();
+    assert_eq!(first_token, second_token);
+}
+
+#[tokio::test]
+async fn test_csrf_mints_new_token_when_cookie_tampered() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = test_csrf_config();
+    let key = test_cookie_key();
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(modo::middleware::csrf(&config, &key))
+        .with_state(Registry::new().into_state());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header("cookie", "_csrf=not-a-valid-signed-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        response.headers().get("set-cookie").is_some(),
+        "tampered cookie must trigger a fresh Set-Cookie"
+    );
+    let token = response
+        .extensions()
+        .get::<modo::middleware::CsrfToken>()
+        .expect("token injected into extensions")
+        .0
+        .clone();
+    assert_ne!(token, "not-a-valid-signed-token");
+}
+
+#[tokio::test]
+async fn test_csrf_multi_tab_post_succeeds_after_second_get() {
+    async fn handler() -> &'static str {
+        "ok"
+    }
+
+    let config = test_csrf_config();
+    let key = test_cookie_key();
+    let app = Router::new()
+        .route("/", get(handler))
+        .route("/submit", axum::routing::post(handler))
+        .layer(modo::middleware::csrf(&config, &key))
+        .with_state(Registry::new().into_state());
+
+    // Tab A loads the page and captures cookie + token.
+    let tab_a = app
+        .clone()
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let cookie_value = tab_a
+        .headers()
+        .get("set-cookie")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_string();
+    let tab_a_token = tab_a
+        .extensions()
+        .get::<modo::middleware::CsrfToken>()
+        .unwrap()
+        .0
+        .clone();
+
+    // Tab B opens the same page with Tab A's cookie. The bug rotated the cookie
+    // here; the fix must leave it unchanged.
+    let tab_b = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header("cookie", &cookie_value)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(tab_b.headers().get("set-cookie").is_none());
+
+    // Tab A's cached token still matches the server cookie → POST succeeds.
+    let post = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/submit")
+                .header("cookie", &cookie_value)
+                .header("x-csrf-token", &tab_a_token)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(post.status(), StatusCode::OK);
+}
+
 // ---------------------------------------------------------------------------
 // Rate Limiting
 // ---------------------------------------------------------------------------

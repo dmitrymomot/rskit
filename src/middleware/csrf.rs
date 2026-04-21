@@ -184,17 +184,32 @@ where
         let is_exempt = self.is_exempt(request.method());
 
         if is_exempt {
-            // Generate a new token, sign it, set cookie, inject into extensions
-            let token = crate::id::ulid();
-            let signed_value = self.sign_token(&token);
-            let set_cookie_value = self.build_set_cookie(&signed_value);
+            // Reuse the existing token when the cookie verifies; only mint +
+            // Set-Cookie on first visit or signature failure. Rotating on every
+            // GET would invalidate tokens already rendered into open tabs and
+            // long-lived pages, breaking the next state-changing request.
+            let existing = self
+                .extract_cookie_value(&request)
+                .and_then(|signed| self.verify_token(&signed));
+
+            let (token, set_cookie_value) = match existing {
+                Some(t) => (t, None),
+                None => {
+                    let t = crate::id::ulid();
+                    let signed = self.sign_token(&t);
+                    let sc = self.build_set_cookie(&signed);
+                    (t, Some(sc))
+                }
+            };
 
             request.extensions_mut().insert(CsrfToken(token.clone()));
 
             Box::pin(async move {
                 let mut response = inner.call(request).await?;
 
-                if let Ok(header_value) = HeaderValue::from_str(&set_cookie_value) {
+                if let Some(sc) = set_cookie_value
+                    && let Ok(header_value) = HeaderValue::from_str(&sc)
+                {
                     response
                         .headers_mut()
                         .append(http::header::SET_COOKIE, header_value);
