@@ -1,6 +1,6 @@
 [package]
 name = "modo-rs"
-version = "0.10.3"
+version = "0.10.4"
 edition = "2024"
 description = "Rust web framework for small monolithic apps"
 license = "Apache-2.0"
@@ -8,7 +8,7 @@ repository = "https://github.com/dmitrymomot/modo"
 readme = "README.md"
 keywords = ["web", "framework", "axum", "sqlite"]
 categories = ["web-programming::http-server"]
-rust-version = "1.92"
+rust-version = "1.95"
 exclude = [".claude", ".claude-plugin", "skills", "docs", ".github", "examples", "CLAUDE.md", "justfile", "tests"]
 
 [lib]
@@ -94,7 +94,7 @@ lettre = { version = "0.11", default-features = false, features = [
   "webpki-roots",
 ] }
 pulldown-cmark = "0.13"
-css-inline = { version = "0.16", default-features = false }
+css-inline = { version = "0.20", default-features = false }
 # Templates
 minijinja = { version = "2", features = ["loader"] }
 minijinja-contrib = "2"
