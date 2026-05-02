@@ -8,6 +8,9 @@ use crate::sanitize::Sanitize;
 ///
 /// `T` must implement both [`serde::de::DeserializeOwned`] and [`crate::sanitize::Sanitize`].
 ///
+/// Repeated query keys deserialize into `Vec<…>` fields — for example `?tag=a&tag=b&tag=c`
+/// populates a `tags: Vec<String>` field with three elements.
+///
 /// Because this extractor implements [`FromRequestParts`] rather than `FromRequest`, it
 /// can be combined with body extractors on the same handler. To make `Query` optional
 /// (i.e. `Option<Query<T>>`), axum 0.8 requires an explicit `OptionalFromRequestParts`
@@ -28,14 +31,14 @@ use crate::sanitize::Sanitize;
 /// use serde::Deserialize;
 ///
 /// #[derive(Deserialize)]
-/// struct SearchParams { q: String, page: Option<u32> }
+/// struct SearchParams { q: String, page: Option<u32>, tags: Vec<String> }
 ///
 /// impl Sanitize for SearchParams {
 ///     fn sanitize(&mut self) { self.q = self.q.trim().to_lowercase(); }
 /// }
 ///
 /// async fn search(Query(params): Query<SearchParams>) {
-///     // params.q is already trimmed and lowercased
+///     // params.q is trimmed; params.tags collects every `?tags=` repeat
 /// }
 /// ```
 pub struct Query<T>(pub T);
@@ -47,11 +50,10 @@ where
 {
     type Rejection = crate::error::Error;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let axum::extract::Query(mut value) =
-            axum::extract::Query::<T>::from_request_parts(parts, state)
-                .await
-                .map_err(|e| crate::error::Error::bad_request(format!("invalid query: {e}")))?;
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let query = parts.uri.query().unwrap_or("");
+        let mut value: T = serde_qs::from_str(query)
+            .map_err(|e| crate::error::Error::bad_request(format!("invalid query: {e}")))?;
         value.sanitize();
         Ok(Query(value))
     }

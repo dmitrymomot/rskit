@@ -142,7 +142,8 @@ impl Files {
 /// file fields (collected into a [`Files`] map). The inner tuple is `(T, Files)`.
 ///
 /// Text fields are re-encoded as `application/x-www-form-urlencoded` and deserialized
-/// via `serde_urlencoded` before [`Sanitize::sanitize`] is called on the result. File
+/// via `serde_html_form` before [`Sanitize::sanitize`] is called on the result. Repeated
+/// text fields populate `Vec<…>` fields just like [`crate::extractor::FormRequest`]. File
 /// fields are fully buffered into memory as [`UploadedFile`] values.
 ///
 /// # Errors
@@ -218,9 +219,12 @@ where
         let encoded = serde_urlencoded::to_string(&text_fields).map_err(|e| {
             Error::bad_request(format!("failed to encode multipart text fields: {e}"))
         })?;
-        let mut value: T = serde_urlencoded::from_str(&encoded).map_err(|e| {
-            Error::bad_request(format!("failed to deserialize multipart text fields: {e}"))
-        })?;
+        let mut value: T = serde_qs::Config::new()
+            .use_form_encoding(true)
+            .deserialize_str(&encoded)
+            .map_err(|e| {
+                Error::bad_request(format!("failed to deserialize multipart text fields: {e}"))
+            })?;
         value.sanitize();
 
         Ok(MultipartRequest(value, Files(file_fields)))
