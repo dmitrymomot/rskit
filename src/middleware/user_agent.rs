@@ -124,15 +124,15 @@ where
 
             if let Some(raw) = raw {
                 match sanitize_user_agent(&raw, max_len) {
-                    Some(clean) if clean != raw => {
+                    Some(clean) => {
                         // Sanitization output is a subset of an already
                         // visible-ASCII input, so `from_str` cannot fail.
                         let value = HeaderValue::from_str(&clean)
                             .expect("sanitized user-agent must be a valid header value");
+                        // `insert` replaces every existing entry, so a request
+                        // arriving with multiple `User-Agent` headers (rare but
+                        // valid HTTP) is normalized down to a single value.
                         request.headers_mut().insert(USER_AGENT, value);
-                    }
-                    Some(_) => {
-                        // Already clean — leave the header untouched.
                     }
                     None => {
                         request.headers_mut().remove(USER_AGENT);
@@ -149,9 +149,12 @@ where
 ///
 /// 1. Truncate to `max_len` bytes, snapping down to the nearest UTF-8 char
 ///    boundary so the result is always valid UTF-8.
-/// 2. Drop ASCII control characters, treating the tab character as a normal
-///    whitespace run member.
-/// 3. Collapse runs of ASCII whitespace into a single space.
+/// 2. Drop ASCII control characters.
+/// 3. Collapse runs of ASCII whitespace into a single space. Note that
+///    [`char::is_ascii_whitespace`] includes tab, newline, carriage return,
+///    and form-feed — those bytes never reach the layer's call site
+///    (`HeaderValue::to_str` rejects all but tab), but they are accepted
+///    here because the function is `pub(crate)` and may be called directly.
 /// 4. Trim leading and trailing whitespace.
 /// 5. Return `None` if the resulting string is empty.
 pub(crate) fn sanitize_user_agent(raw: &str, max_len: usize) -> Option<String> {
@@ -172,6 +175,8 @@ pub(crate) fn sanitize_user_agent(raw: &str, max_len: usize) -> Option<String> {
             continue;
         }
         if c.is_ascii_control() {
+            // Intentionally do not reset `prev_ws`: a control char between
+            // two spaces still collapses to a single space.
             continue;
         }
         out.push(c);
@@ -361,5 +366,34 @@ mod tests {
             run(UserAgentLayer::with_max_length(8), req).await,
             "abcdefgh"
         );
+    }
+
+    #[tokio::test]
+    async fn normalizes_duplicate_user_agent_headers() {
+        // Multiple `User-Agent` headers are rare but valid HTTP. The layer
+        // should always reduce them to a single value so downstream consumers
+        // never see duplicates regardless of whether the first value needed
+        // sanitization.
+        let mut req = Request::builder().body(Body::empty()).unwrap();
+        req.headers_mut()
+            .append(USER_AGENT, "Mozilla/5.0".parse().unwrap());
+        req.headers_mut()
+            .append(USER_AGENT, "Other/1.0".parse().unwrap());
+
+        let svc = UserAgentLayer::new().layer(tower::service_fn(|req: Request<Body>| async move {
+            let count = req.headers().get_all(USER_AGENT).iter().count();
+            let first = req
+                .headers()
+                .get(USER_AGENT)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string();
+            Ok::<_, Infallible>(Response::new(Body::from(format!("{count}|{first}"))))
+        }));
+        let resp = svc.oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(body.as_ref(), b"1|Mozilla/5.0");
     }
 }
