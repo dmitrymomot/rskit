@@ -41,6 +41,7 @@
 //! | [`RateLimitLayer`] | Tower layer produced by `rate_limit` / `rate_limit_with` |
 //! | [`KeyExtractor`] | Trait for custom rate-limit key extraction |
 //! | [`PeerIpKeyExtractor`] / [`GlobalKeyExtractor`] | Built-in key extractors |
+//! | [`UserAgentLayer`] | Sanitize and bound the inbound `User-Agent` header |
 //!
 //! ## Layer composition
 //!
@@ -100,6 +101,7 @@ mod rate_limit;
 mod request_id;
 mod security_headers;
 mod tracing;
+mod user_agent;
 
 pub use self::tracing::tracing;
 pub use catch_panic::catch_panic;
@@ -113,3 +115,4 @@ pub use rate_limit::{
 };
 pub use request_id::request_id;
 pub use security_headers::{SecurityHeadersConfig, security_headers};
+pub use user_agent::UserAgentLayer;
