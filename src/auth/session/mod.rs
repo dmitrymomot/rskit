@@ -24,11 +24,11 @@
 //!   [`cookie::CookieSessionsConfig`]).
 //! - [`jwt`] — JWT-backed session transport ([`jwt::JwtSession`],
 //!   [`jwt::JwtSessionService`], [`jwt::JwtLayer`], [`jwt::JwtSessionsConfig`]).
-//! - [`device`] — `User-Agent` parsing helpers for device classification.
-//! - [`fingerprint`] — browser fingerprinting for session hijacking detection.
-//! - [`meta`] — request metadata ([`meta::SessionMeta`]) and the
-//!   [`meta::header_str`] helper.
 //! - [`token`] — [`SessionToken`] implementation (also re-exported here).
+//!
+//! Client-context types ([`ClientInfo`](crate::client::ClientInfo), device
+//! parsers, fingerprint hashing) live in [`crate::client`] and are the input
+//! type for session creation on both transports.
 //!
 //! Direct re-exports:
 //!
@@ -57,10 +57,7 @@ mod data;
 pub(crate) mod store;
 
 pub mod cookie;
-pub mod device;
-pub mod fingerprint;
 pub mod jwt;
-pub mod meta;
 pub mod token;
 
 // Primary public data type — transport-agnostic session snapshot.

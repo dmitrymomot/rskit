@@ -1,12 +1,12 @@
 #![cfg(feature = "test-helpers")]
 
 use modo::auth::session::jwt::{JwtSessionService, JwtSessionsConfig};
-use modo::auth::session::meta::SessionMeta;
+use modo::client::ClientInfo;
 use modo::db::ConnExt;
 use modo::testing::{TestDb, TestSession};
 
-fn meta() -> SessionMeta {
-    SessionMeta::from_headers("127.0.0.1".to_string(), "test/1.0", "", "")
+fn meta() -> ClientInfo {
+    ClientInfo::from_headers(Some("127.0.0.1".to_string()), "test/1.0", "", "")
 }
 
 async fn setup() -> (TestDb, JwtSessionService) {

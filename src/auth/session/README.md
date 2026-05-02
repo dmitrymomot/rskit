@@ -92,10 +92,11 @@ The module does not ship migrations — end applications own their schemas.
 |--------|---------|
 | `cookie` | Cookie-backed session transport (`CookieSessionService`, `CookieSessionLayer`, `CookieSession`, `CookieSessionsConfig`). See [cookie/README.md](cookie/README.md). |
 | `jwt` | JWT-backed session transport (`JwtSessionService`, `JwtLayer`, `JwtSession`, `JwtSessionsConfig`). See [jwt/README.md](jwt/README.md). |
-| `device` | User-agent parsing helpers (`parse_device_name`, `parse_device_type`) |
-| `fingerprint` | Browser fingerprinting for session hijacking detection (`compute_fingerprint`) |
-| `meta` | Request metadata (`SessionMeta`, `header_str`) derived from headers |
 | `token` | `SessionToken` — opaque 32-byte cryptographic token, redacted in `Debug`/`Display` |
+
+Client-context types — `ClientInfo`, the device parsers, and `compute_fingerprint` —
+live in [`modo::client`](../../client). Both transports take a `&ClientInfo` as
+the input to session creation.
 
 ## Configuration
 

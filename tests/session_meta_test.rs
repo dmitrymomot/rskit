@@ -1,5 +1,5 @@
 use http::HeaderMap;
-use modo::auth::session::meta::{SessionMeta, header_str};
+use modo::client::ClientInfo;
 use modo::ip::extract_client_ip;
 use std::net::IpAddr;
 
@@ -68,28 +68,15 @@ fn trusted_proxy_uses_xff() {
 }
 
 #[test]
-fn header_str_returns_value() {
-    let mut headers = HeaderMap::new();
-    headers.insert("user-agent", "test-ua".parse().unwrap());
-    assert_eq!(header_str(&headers, "user-agent"), "test-ua");
-}
-
-#[test]
-fn header_str_returns_empty_for_missing() {
-    let headers = HeaderMap::new();
-    assert_eq!(header_str(&headers, "user-agent"), "");
-}
-
-#[test]
-fn session_meta_from_headers() {
-    let meta = SessionMeta::from_headers(
-        "10.0.0.1".to_string(),
+fn client_info_from_headers_populates_derived_fields() {
+    let info = ClientInfo::from_headers(
+        Some("10.0.0.1".to_string()),
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0",
         "en-US",
         "gzip",
     );
-    assert_eq!(meta.ip_address, "10.0.0.1");
-    assert_eq!(meta.device_name, "Chrome on macOS");
-    assert_eq!(meta.device_type, "desktop");
-    assert_eq!(meta.fingerprint.len(), 64);
+    assert_eq!(info.ip_value(), Some("10.0.0.1"));
+    assert_eq!(info.device_name_value(), Some("Chrome on macOS"));
+    assert_eq!(info.device_type_value(), Some("desktop"));
+    assert_eq!(info.fingerprint_value().map(str::len), Some(64));
 }

@@ -4,8 +4,9 @@ Explicit audit logging for business-significant actions.
 
 Records structured events with actor, action, resource type, and resource
 ID. Optional metadata (arbitrary JSON), client context (IP, user-agent,
-fingerprint), and tenant ID round out each entry. No automatic middleware
-capture -- callers build an `AuditEntry` and pass it to `AuditLog`.
+parsed device name/type, fingerprint), and tenant ID round out each entry.
+No automatic middleware capture -- callers build an `AuditEntry` and pass
+it to `AuditLog`.
 
 ## Schema
 
@@ -22,6 +23,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
     metadata      TEXT NOT NULL DEFAULT '{}',
     ip            TEXT,
     user_agent    TEXT,
+    device_name   TEXT,
+    device_type   TEXT,
     fingerprint   TEXT,
     tenant_id     TEXT,
     created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -73,7 +76,7 @@ async fn delete_document(db: Database, audit: AuditLog) -> modo::Result<()> {
 
 ```rust,no_run
 use modo::audit::AuditEntry;
-use modo::ip::ClientInfo;
+use modo::client::ClientInfo;
 
 let info = ClientInfo::new()
     .ip("203.0.113.42")

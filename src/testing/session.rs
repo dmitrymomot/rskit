@@ -2,8 +2,8 @@ use cookie::{Cookie, CookieJar};
 
 use crate::auth::session::CookieSessionService;
 use crate::auth::session::CookieSessionsConfig;
-use crate::auth::session::meta::SessionMeta;
 use crate::auth::session::store::SessionStore;
+use crate::client::ClientInfo;
 use crate::cookie::{CookieConfig, Key, key_from_config};
 
 use super::db::TestDb;
@@ -166,11 +166,11 @@ impl TestSession {
     ///
     /// Panics if the session cannot be created in the store.
     pub async fn authenticate_with(&self, user_id: &str, data: serde_json::Value) -> String {
-        let meta = SessionMeta::from_headers("127.0.0.1".to_string(), "", "", "");
+        let info = ClientInfo::from_headers(Some("127.0.0.1".to_string()), "", "", "");
 
         let (_session_data, token): (crate::auth::session::store::SessionData, _) = self
             .store
-            .create(&meta, user_id, Some(data))
+            .create(&info, user_id, Some(data))
             .await
             .expect("failed to create test session");
 

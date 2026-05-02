@@ -1,8 +1,8 @@
 #![cfg(feature = "test-helpers")]
 
 use modo::audit::{AuditEntry, AuditLog, AuditRepo};
+use modo::client::ClientInfo;
 use modo::db::CursorRequest;
-use modo::ip::ClientInfo;
 use modo::testing::TestDb;
 
 const SCHEMA: &str = "\
@@ -15,6 +15,8 @@ CREATE TABLE audit_log (
     metadata        TEXT NOT NULL DEFAULT '{}',
     ip              TEXT,
     user_agent      TEXT,
+    device_name     TEXT,
+    device_type     TEXT,
     fingerprint     TEXT,
     tenant_id       TEXT,
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -56,10 +58,35 @@ async fn record_and_read_back() {
     assert_eq!(record.metadata["source"], "signup");
     assert_eq!(record.ip.as_deref(), Some("1.2.3.4"));
     assert_eq!(record.user_agent.as_deref(), Some("TestBot/1.0"));
+    assert!(record.device_name.is_none());
+    assert!(record.device_type.is_none());
     assert!(record.fingerprint.is_none());
     assert_eq!(record.tenant_id.as_deref(), Some("t_1"));
     assert!(!record.id.is_empty());
     assert!(!record.created_at.is_empty());
+}
+
+#[tokio::test]
+async fn record_persists_device_fields() {
+    let (log, repo) = setup().await;
+
+    let info = ClientInfo::from_headers(
+        Some("9.9.9.9".to_string()),
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0",
+        "en-US",
+        "gzip",
+    );
+
+    log.record(&AuditEntry::new("user_2", "doc.viewed", "doc", "d_1").client_info(info))
+        .await
+        .unwrap();
+
+    let result = repo.list(cursor(10)).await.unwrap();
+    let record = &result.items[0];
+    assert_eq!(record.ip.as_deref(), Some("9.9.9.9"));
+    assert_eq!(record.device_name.as_deref(), Some("Chrome on macOS"));
+    assert_eq!(record.device_type.as_deref(), Some("desktop"));
+    assert!(record.fingerprint.as_deref().is_some_and(|f| f.len() == 64));
 }
 
 #[tokio::test]
@@ -76,6 +103,8 @@ async fn record_without_optional_fields() {
     assert_eq!(record.metadata, serde_json::json!({}));
     assert!(record.ip.is_none());
     assert!(record.user_agent.is_none());
+    assert!(record.device_name.is_none());
+    assert!(record.device_type.is_none());
     assert!(record.fingerprint.is_none());
     assert!(record.tenant_id.is_none());
 }

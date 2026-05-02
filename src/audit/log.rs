@@ -81,21 +81,25 @@ impl AuditLogBackend for SqliteAuditBackend {
                 .map(|v| v.to_string())
                 .unwrap_or_else(|| "{}".to_string());
 
-            let (ip, user_agent, fingerprint) = match entry.client_info_value() {
-                Some(ci) => (
-                    ci.ip_value().map(String::from),
-                    ci.user_agent_value().map(String::from),
-                    ci.fingerprint_value().map(String::from),
-                ),
-                None => (None, None, None),
-            };
+            let (ip, user_agent, device_name, device_type, fingerprint) =
+                match entry.client_info_value() {
+                    Some(ci) => (
+                        ci.ip_value().map(String::from),
+                        ci.user_agent_value().map(String::from),
+                        ci.device_name_value().map(String::from),
+                        ci.device_type_value().map(String::from),
+                        ci.fingerprint_value().map(String::from),
+                    ),
+                    None => (None, None, None, None, None),
+                };
 
             self.db
                 .conn()
                 .execute_raw(
                     "INSERT INTO audit_log \
-                     (id, actor, action, resource_type, resource_id, metadata, ip, user_agent, fingerprint, tenant_id) \
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                     (id, actor, action, resource_type, resource_id, metadata, \
+                     ip, user_agent, device_name, device_type, fingerprint, tenant_id) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                     libsql::params![
                         id,
                         entry.actor(),
@@ -105,6 +109,8 @@ impl AuditLogBackend for SqliteAuditBackend {
                         metadata_json,
                         ip,
                         user_agent,
+                        device_name,
+                        device_type,
                         fingerprint,
                         entry.tenant_id_value(),
                     ],

@@ -13,15 +13,17 @@ request. Handlers read it with the `ClientIp` axum extractor.
 | --------------------- | ------------------------------------------------------------ |
 | [`ClientIpLayer`]     | Tower layer; add to the router with `.layer()`               |
 | [`ClientIp`]          | Axum extractor; wraps `std::net::IpAddr`                     |
-| [`ClientInfo`]        | Axum extractor: IP + user-agent + `x-fingerprint` header     |
 | [`extract_client_ip`] | Low-level resolution function (headers + trusted proxies)    |
 
-Canonical paths: `modo::ip::{ClientIp, ClientInfo, ClientIpLayer}`.
+Canonical paths: `modo::ip::{ClientIp, ClientIpLayer}`.
+
+The richer [`ClientInfo`](../client) extractor — IP, user-agent, parsed device
+fields, and a server-computed fingerprint — lives in `modo::client`.
 
 Re-exported flat indexes:
 
 - `modo::prelude::ClientIp` — in the handler-ambient prelude
-- `modo::extractors::{ClientIp, ClientInfo}` — flat extractor index
+- `modo::extractors::ClientIp` — flat extractor index
 - `modo::middlewares::ClientIp` — alias for `ClientIpLayer` in the layer
   index (call `mw::ClientIp::new()` or `mw::ClientIp::with_trusted_proxies(..)`)
 
@@ -70,36 +72,9 @@ async fn handler(modo::ip::ClientIp(ip): modo::ip::ClientIp) -> String {
 
 ### Extracting full client metadata
 
-`ClientInfo` bundles the resolved IP together with the `User-Agent` header
-and an optional `X-Fingerprint` header. Unlike `ClientIp`, it never fails to
-extract — missing fields are simply `None`. Use it for audit logs, session
-fingerprinting, or analytics.
-
-```rust
-use modo::ip::ClientInfo;
-
-async fn handler(info: ClientInfo) -> String {
-    format!(
-        "ip={:?} ua={:?} fp={:?}",
-        info.ip_value(),
-        info.user_agent_value(),
-        info.fingerprint_value(),
-    )
-}
-```
-
-`ClientInfo::ip_value()` returns `None` if `ClientIpLayer` is not applied.
-For non-HTTP call sites (background jobs, CLI tools), build one with the
-fluent API:
-
-```rust
-use modo::ip::ClientInfo;
-
-let info = ClientInfo::new()
-    .ip("1.2.3.4")
-    .user_agent("worker/1.0")
-    .fingerprint("job-runner");
-```
+For IP plus user-agent, parsed device fields, and a server-computed
+fingerprint, use [`ClientInfo`](../client) from `modo::client` — see that
+module's README for usage.
 
 ### Loading trusted proxies from config
 

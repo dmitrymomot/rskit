@@ -6,7 +6,7 @@ use axum::extract::State;
 use axum::routing::post;
 use modo::Result;
 use modo::auth::session::jwt::{JwtSession, JwtSessionService, JwtSessionsConfig, TokenPair};
-use modo::auth::session::meta::SessionMeta;
+use modo::client::ClientInfo;
 use modo::db::ConnExt;
 use modo::extractor::JsonRequest;
 use modo::sanitize::Sanitize;
@@ -24,8 +24,8 @@ impl Sanitize for LoginReq {
     }
 }
 
-fn meta() -> SessionMeta {
-    SessionMeta::from_headers("1.1.1.1".to_string(), "test/1.0", "", "")
+fn meta() -> ClientInfo {
+    ClientInfo::from_headers(Some("1.1.1.1".to_string()), "test/1.0", "", "")
 }
 
 async fn login(

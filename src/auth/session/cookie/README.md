@@ -74,8 +74,9 @@ async fn login(cookie: CookieSession) -> modo::Result<StatusCode> {
 
 `authenticate` (no initial data) and `authenticate_with` (with initial data)
 both destroy any pre-existing session first, preventing session fixation. The
-session metadata (IP, user-agent, fingerprint) is captured automatically by the
-middleware and does not need to be passed to `authenticate`.
+session metadata (IP, user-agent, parsed device name/type, fingerprint) is
+captured automatically by the middleware and does not need to be passed to
+`authenticate`.
 
 ### Reading session data (read-only handlers)
 

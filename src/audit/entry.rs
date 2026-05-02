@@ -1,4 +1,4 @@
-use crate::ip::ClientInfo;
+use crate::client::ClientInfo;
 
 /// An audit event to be recorded.
 ///
@@ -53,7 +53,7 @@ impl AuditEntry {
         self
     }
 
-    /// Attach client context (IP, user-agent, fingerprint).
+    /// Attach client context (IP, user-agent, parsed device fields, fingerprint).
     pub fn client_info(mut self, info: ClientInfo) -> Self {
         self.client_info = Some(info);
         self
@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn client_info_attached() {
-        use crate::ip::ClientInfo;
+        use crate::client::ClientInfo;
 
         let info = ClientInfo::new().ip("1.2.3.4").user_agent("Bot/1.0");
         let entry = AuditEntry::new("system", "job.ran", "job", "job_1").client_info(info);

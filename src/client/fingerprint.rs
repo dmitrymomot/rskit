@@ -8,8 +8,9 @@ use sha2::{Digest, Sha256};
 /// prevent boundary confusion. Returns the fingerprint as a 64-character
 /// lowercase hex string.
 ///
-/// Used by [`super::cookie::CookieSessionLayer`] to detect potential session
-/// hijacking when the session configuration has fingerprint validation enabled.
+/// Used by [`ClientInfo::from_headers`](super::ClientInfo::from_headers) and by
+/// [`crate::auth::session::cookie::CookieSessionLayer`] to detect potential
+/// session hijacking when fingerprint validation is enabled.
 pub fn compute_fingerprint(
     user_agent: &str,
     accept_language: &str,

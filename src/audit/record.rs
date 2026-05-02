@@ -5,8 +5,9 @@ use crate::error::Result;
 
 /// Stored audit event returned by [`AuditRepo`](super::AuditRepo) queries.
 ///
-/// All fields are flat — [`ClientInfo`](crate::ip::ClientInfo) is
-/// expanded into `ip`, `user_agent`, `fingerprint` columns.
+/// All fields are flat — [`ClientInfo`](crate::client::ClientInfo) is
+/// expanded into `ip`, `user_agent`, `device_name`, `device_type`,
+/// `fingerprint` columns.
 #[derive(Debug, Clone, Serialize)]
 pub struct AuditRecord {
     /// Unique identifier (ULID).
@@ -25,6 +26,10 @@ pub struct AuditRecord {
     pub ip: Option<String>,
     /// Client user-agent string, if provided.
     pub user_agent: Option<String>,
+    /// Parsed human-readable device name (e.g. `"Chrome on macOS"`), if provided.
+    pub device_name: Option<String>,
+    /// Parsed device type (`"desktop"`/`"mobile"`/`"tablet"`), if provided.
+    pub device_type: Option<String>,
     /// Client fingerprint, if provided.
     pub fingerprint: Option<String>,
     /// Tenant identifier for multi-tenant apps.
@@ -50,6 +55,8 @@ impl FromRow for AuditRecord {
             metadata,
             ip: cols.get(row, "ip")?,
             user_agent: cols.get(row, "user_agent")?,
+            device_name: cols.get(row, "device_name")?,
+            device_type: cols.get(row, "device_type")?,
             fingerprint: cols.get(row, "fingerprint")?,
             tenant_id: cols.get(row, "tenant_id")?,
             created_at: cols.get(row, "created_at")?,
