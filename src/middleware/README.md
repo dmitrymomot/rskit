@@ -47,6 +47,12 @@ See also the virtual [`modo::middlewares`](../middlewares.rs) flat index, which 
 | `catch_panic`   | fn   | Convert handler panics into 500 responses |
 | `error_handler` | fn   | Centralised error-response rendering      |
 
+### Header sanitization
+
+| Item             | Kind   | Purpose                                                       |
+| ---------------- | ------ | ------------------------------------------------------------- |
+| `UserAgentLayer` | struct | Bound and clean the inbound `User-Agent` header for consumers |
+
 ## Usage
 
 ### Layer composition
@@ -156,6 +162,26 @@ let layer = rate_limit_with(&config, GlobalKeyExtractor, cancel.clone());
 ```
 
 When `use_headers` is `true` (default), allowed responses carry `x-ratelimit-limit`, `x-ratelimit-remaining`, and `x-ratelimit-reset`; rejected responses carry `retry-after`.
+
+### User-Agent sanitization
+
+`UserAgentLayer` rewrites the inbound `User-Agent` header in place before any downstream layer or handler reads it. The sanitizer truncates the value to a configurable byte cap (default 512) on a UTF-8 char boundary, drops ASCII control characters, collapses runs of ASCII whitespace into a single space, and trims. If the result is empty the header is removed entirely so consumers see the same "missing" state they handle today.
+
+```rust,ignore
+use axum::{Router, routing::get};
+use modo::middleware::UserAgentLayer;
+
+let app: Router = Router::new()
+    .route("/", get(|| async { "ok" }))
+    .layer(UserAgentLayer::new());            // default 512-byte cap
+
+// Or with a custom cap:
+let app: Router = Router::new()
+    .route("/", get(|| async { "ok" }))
+    .layer(UserAgentLayer::with_max_length(256));
+```
+
+Because the layer mutates the request header itself, every downstream consumer — `ClientInfo`, the cookie session middleware, audit logging, fingerprint hashing — observes the sanitized value with no further plumbing. Install it **before** any layer or handler that reads `User-Agent`; in axum's outer-runs-first ordering that means adding it after (i.e. wrapping) the consumer.
 
 ### Custom key extractor
 
