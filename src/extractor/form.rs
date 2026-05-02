@@ -1,4 +1,4 @@
-use axum::body::{Body, to_bytes};
+use axum::body::Body;
 use axum::extract::FromRequest;
 use http::{Request, header};
 use serde::de::DeserializeOwned;
@@ -55,14 +55,14 @@ where
 {
     type Rejection = crate::error::Error;
 
-    async fn from_request(req: Request<Body>, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request(req: Request<Body>, state: &S) -> Result<Self, Self::Rejection> {
         if !has_form_content_type(&req) {
             return Err(crate::error::Error::bad_request(
                 "expected `application/x-www-form-urlencoded` content type",
             ));
         }
 
-        let bytes = to_bytes(req.into_body(), usize::MAX)
+        let bytes = axum::body::Bytes::from_request(req, state)
             .await
             .map_err(|e| crate::error::Error::bad_request(format!("failed to read body: {e}")))?;
 
