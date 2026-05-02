@@ -142,9 +142,11 @@ impl Files {
 /// file fields (collected into a [`Files`] map). The inner tuple is `(T, Files)`.
 ///
 /// Text fields are re-encoded as `application/x-www-form-urlencoded` and deserialized
-/// via `serde_html_form` before [`Sanitize::sanitize`] is called on the result. Repeated
-/// text fields populate `Vec<…>` fields just like [`crate::extractor::FormRequest`]. File
-/// fields are fully buffered into memory as [`UploadedFile`] values.
+/// via `serde_qs` (form-encoding mode) before [`Sanitize::sanitize`] is called on the
+/// result. Repeated text fields, nested structs (`address[city]=…`), and indexed-bracket
+/// `Vec<Struct>` rows (`contacts[0][kind]=…`) all deserialize naturally — same behavior
+/// as [`crate::extractor::FormRequest`]. File fields are fully buffered into memory as
+/// [`UploadedFile`] values.
 ///
 /// # Errors
 ///
