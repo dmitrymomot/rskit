@@ -64,7 +64,9 @@ where
 
         let bytes = axum::body::Bytes::from_request(req, state)
             .await
-            .map_err(|e| crate::error::Error::bad_request(format!("failed to read body: {e}")))?;
+            .map_err(|e| {
+                crate::error::Error::new(e.status(), format!("failed to read body: {e}"))
+            })?;
 
         let mut value: T = serde_qs::Config::new()
             .use_form_encoding(true)

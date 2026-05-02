@@ -826,3 +826,32 @@ async fn test_form_request_vec_of_structs_percent_encoded_brackets() {
         .unwrap();
     assert_eq!(&body[..], b"email=a@b.com;phone=555-0100");
 }
+
+#[tokio::test]
+async fn test_form_request_respects_body_limit() {
+    async fn handler(
+        modo::extractor::FormRequest(item): modo::extractor::FormRequest<CreateItem>,
+    ) -> String {
+        item.title
+    }
+
+    let registry = Registry::new();
+    let app = Router::new()
+        .route("/", axum::routing::post(handler))
+        .layer(axum::extract::DefaultBodyLimit::max(10))
+        .with_state(registry.into_state());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from("title=this+is+definitely+more+than+ten+bytes"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}
