@@ -6,7 +6,8 @@ use crate::error::Result;
 use super::record::AuditRecord;
 
 const COLS: &str = "id, actor, action, resource_type, resource_id, metadata, \
-                    ip, user_agent, fingerprint, tenant_id, created_at";
+                    ip, user_agent, device_name, device_type, fingerprint, \
+                    tenant_id, created_at";
 
 /// Query interface for audit log records.
 ///

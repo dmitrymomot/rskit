@@ -10,10 +10,10 @@ use modo::audit::{
 };
 ```
 
-`ClientInfo` lives in `modo::ip`:
+`ClientInfo` lives in `modo::client`:
 
 ```rust
-use modo::ip::ClientInfo;
+use modo::client::ClientInfo;
 ```
 
 `MemoryAuditBackend` is only available under `#[cfg(test)]` or `feature = "test-helpers"`:
@@ -22,7 +22,7 @@ use modo::ip::ClientInfo;
 use modo::audit::MemoryAuditBackend;
 ```
 
-Source: `src/audit/` (mod.rs, entry.rs, record.rs, backend.rs, log.rs, repo.rs), `src/ip/client_info.rs`.
+Source: `src/audit/` (mod.rs, entry.rs, record.rs, backend.rs, log.rs, repo.rs), `src/client/info.rs`.
 
 ---
 
@@ -32,7 +32,9 @@ Client request context extracted from HTTP requests. Private fields with builder
 
 ```rust
 #[derive(Debug, Clone, Default)]
-pub struct ClientInfo { /* private fields: ip, user_agent, fingerprint */ }
+pub struct ClientInfo {
+    /* private fields: ip, user_agent, device_name, device_type, fingerprint */
+}
 ```
 
 ### Construction
@@ -42,7 +44,17 @@ pub struct ClientInfo { /* private fields: ip, user_agent, fingerprint */ }
 let info = ClientInfo::new()
     .ip("1.2.3.4")
     .user_agent("my-script/1.0")
+    .device_name("my-script on Linux")
+    .device_type("desktop")
     .fingerprint("abc123");
+
+// From a set of headers (used by middleware):
+let info = ClientInfo::from_headers(
+    Some("1.2.3.4".to_string()),
+    "Mozilla/5.0 ... Chrome/120",
+    "en-US",
+    "gzip",
+);
 
 // Automatic extraction in handlers (implements FromRequestParts):
 async fn handler(info: ClientInfo) { /* ... */ }
@@ -54,15 +66,26 @@ async fn handler(info: ClientInfo) { /* ... */ }
 pub fn new() -> Self
 pub fn ip(self, ip: impl Into<String>) -> Self
 pub fn user_agent(self, ua: impl Into<String>) -> Self
+pub fn device_name(self, name: impl Into<String>) -> Self
+pub fn device_type(self, kind: impl Into<String>) -> Self
 pub fn fingerprint(self, fp: impl Into<String>) -> Self
+pub fn from_headers(
+    ip: Option<String>,
+    user_agent: &str,
+    accept_language: &str,
+    accept_encoding: &str,
+) -> Self
 pub fn ip_value(&self) -> Option<&str>
 pub fn user_agent_value(&self) -> Option<&str>
+pub fn device_name_value(&self) -> Option<&str>
+pub fn device_type_value(&self) -> Option<&str>
 pub fn fingerprint_value(&self) -> Option<&str>
 ```
 
 - `new()` returns all fields as `None`.
 - Builder methods consume and return `Self`.
-- `FromRequestParts` impl reads `ClientIp` from extensions (requires `ClientIpLayer`), `User-Agent` header, and `x-fingerprint` header. Missing values become `None` — extraction never fails.
+- `from_headers` parses `device_name` / `device_type` from `user_agent` and computes a SHA-256 `fingerprint` from `user_agent + accept_language + accept_encoding`.
+- `FromRequestParts` impl reads `ClientIp` from extensions (requires `ClientIpLayer`), then derives the user-agent, device fields, and fingerprint from request headers — extraction never fails.
 
 ---
 
@@ -262,6 +285,8 @@ CREATE TABLE audit_log (
     metadata        TEXT NOT NULL DEFAULT '{}',
     ip              TEXT,
     user_agent      TEXT,
+    device_name     TEXT,
+    device_type     TEXT,
     fingerprint     TEXT,
     tenant_id       TEXT,
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -273,7 +298,7 @@ CREATE TABLE audit_log (
 ## Gotchas
 
 - `metadata()` accepts `serde_json::Value`, not `impl Serialize`. Serialize at the callsite with `serde_json::json!()` or `serde_json::to_value()`.
-- `ClientInfo` fields are private. Use `ip_value()`, `user_agent_value()`, `fingerprint_value()` accessors.
+- `ClientInfo` fields are private. Use `ip_value()`, `user_agent_value()`, `device_name_value()`, `device_type_value()`, `fingerprint_value()` accessors.
 - `CursorRequest` does not implement `Default`. Construct explicitly: `CursorRequest { after: None, per_page: 20 }`.
 - `AuditLogBackend` uses `Pin<Box<dyn Future>>` with explicit lifetime `'a` — required for object safety.
 - `record_silent()` logs errors but never returns them — use `record()` when you need to handle write failures.

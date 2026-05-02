@@ -5,7 +5,7 @@ use http::request::Parts;
 use crate::Error;
 use crate::Result;
 use crate::auth::session::Session;
-use crate::auth::session::meta::SessionMeta;
+use crate::client::ClientInfo;
 
 use super::claims::Claims;
 use super::error::JwtError;
@@ -184,8 +184,8 @@ impl JwtSession {
     /// Authenticate a user and issue a new [`TokenPair`].
     ///
     /// Delegates directly to [`JwtSessionService::authenticate`].
-    pub async fn authenticate(&self, user_id: &str, meta: &SessionMeta) -> Result<TokenPair> {
-        self.service.authenticate(user_id, meta).await
+    pub async fn authenticate(&self, user_id: &str, info: &ClientInfo) -> Result<TokenPair> {
+        self.service.authenticate(user_id, info).await
     }
 
     /// Rotate the refresh token and return a fresh [`TokenPair`].

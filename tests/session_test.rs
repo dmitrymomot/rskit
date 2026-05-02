@@ -176,7 +176,7 @@ fn test_session_config_in_modo_config() {
 // ---------------------------------------------------------------------------
 
 use axum::Extension;
-use modo::auth::session::meta::SessionMeta;
+use modo::client::ClientInfo;
 use modo::service::AppState;
 
 /// Build a Router with the session layer.
@@ -204,9 +204,9 @@ fn build_app_with_ext<T: Clone + Send + Sync + 'static>(
         .with_state(Registry::new().into_state())
 }
 
-/// Helper: build a default SessionMeta matching the default test user-agent.
-fn default_meta() -> SessionMeta {
-    SessionMeta::from_headers("127.0.0.1".to_string(), "", "", "")
+/// Helper: build a default `ClientInfo` matching the default test user-agent.
+fn default_meta() -> ClientInfo {
+    ClientInfo::from_headers(Some("127.0.0.1".to_string()), "", "", "")
 }
 
 /// Extract the raw Set-Cookie header value from a response.

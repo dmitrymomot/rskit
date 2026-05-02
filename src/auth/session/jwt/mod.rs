@@ -42,7 +42,7 @@
 //!
 //! ```rust,ignore
 //! use modo::auth::session::jwt::{JwtSessionService, JwtSessionsConfig};
-//! use modo::auth::session::meta::SessionMeta;
+//! use modo::client::ClientInfo;
 //! use axum::Router;
 //! use axum::routing::{get, post};
 //!

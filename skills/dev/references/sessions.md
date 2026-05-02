@@ -230,7 +230,7 @@ The `layer()` free function and `CookieSessionService::layer()` method are equiv
 
 The middleware lifecycle per request:
 1. Extracts client IP from `ClientIp` extension (falls back to `ConnectInfo`)
-2. Builds `SessionMeta` from request headers (user-agent, accept-language, accept-encoding)
+2. Builds `ClientInfo` from request headers (user-agent, accept-language, accept-encoding)
 3. Reads signed session cookie, loads session from DB
 4. Validates browser fingerprint (if `validate_fingerprint` is true); destroys on mismatch
 5. Inserts `Session` snapshot and `Arc<SessionState>` into request extensions
@@ -367,7 +367,7 @@ pub fn new(db: Database, config: JwtSessionsConfig) -> Result<Self>
 | `encoder`           | `(&self) -> &JwtEncoder`                           | Access the JWT encoder                               |
 | `decoder`           | `(&self) -> &JwtDecoder`                           | Access the JWT decoder                               |
 | `config`            | `(&self) -> &JwtSessionsConfig`                    | Access the service config                            |
-| `authenticate`      | `async(&self, &str, &SessionMeta) -> Result<TokenPair>` | Create a session and issue an access+refresh pair |
+| `authenticate`      | `async(&self, &str, &ClientInfo) -> Result<TokenPair>` | Create a session and issue an access+refresh pair |
 | `rotate`            | `async(&self, &str) -> Result<TokenPair>`          | Validate refresh token, rotate stored hash, issue new pair |
 | `logout`            | `async(&self, &str) -> Result<()>`                 | Validate access token, destroy session row           |
 | `list`              | `async(&self, &str) -> Result<Vec<Session>>`       | List active sessions for a user                      |
@@ -381,7 +381,7 @@ Wiring example:
 
 ```rust
 use modo::auth::session::jwt::{JwtSessionService, JwtSessionsConfig};
-use modo::auth::session::meta::SessionMeta;
+use modo::client::ClientInfo;
 use axum::Router;
 use axum::routing::{get, post};
 
@@ -455,7 +455,7 @@ pub struct JwtSession { /* private */ }
 | Method              | Signature                                                 | Description                                    |
 | ------------------- | --------------------------------------------------------- | ---------------------------------------------- |
 | `current`           | `(&self) -> Option<&Session>`                            | Session injected by `JwtLayer`, if present     |
-| `authenticate`      | `async(&self, &str, &SessionMeta) -> Result<TokenPair>`  | Create a session and issue a token pair        |
+| `authenticate`      | `async(&self, &str, &ClientInfo) -> Result<TokenPair>`   | Create a session and issue a token pair        |
 | `rotate`            | `async(&self) -> Result<TokenPair>`                      | Rotate from refresh token per config           |
 | `logout`            | `async(&self) -> Result<()>`                             | Revoke session from access token per config    |
 | `list`              | `async(&self, &str) -> Result<Vec<Session>>`             | List active sessions for user_id               |
@@ -739,47 +739,44 @@ All implement `TokenSource`.
 
 ---
 
-## Session Metadata (`modo::auth::session::meta`)
+## Client Context (`modo::client`)
 
-### SessionMeta
+### ClientInfo
 
-Metadata derived from request headers at session creation time.
+Client metadata derived from request headers — used as the input to session
+creation on both transports and as the audit-log client context.
 
-Derives: `Debug`, `Clone`.
+Derives: `Debug`, `Clone`, `Default`. Fields are private.
 
 ```rust
-pub struct SessionMeta {
-    pub ip_address: String,  // from ClientIp or ConnectInfo
-    pub user_agent: String,  // raw User-Agent header
-    pub device_name: String, // parsed, e.g. "Chrome on macOS"
-    pub device_type: String, // "desktop", "mobile", or "tablet"
-    pub fingerprint: String, // SHA-256 of user-agent + accept-language + accept-encoding
-}
+pub struct ClientInfo { /* ip, user_agent, device_name, device_type, fingerprint */ }
 ```
 
-Constructor:
+Constructors and accessors:
 
 ```rust
+pub fn new() -> Self
+pub fn ip(self, ip: impl Into<String>) -> Self
+pub fn user_agent(self, ua: impl Into<String>) -> Self
+pub fn device_name(self, name: impl Into<String>) -> Self
+pub fn device_type(self, kind: impl Into<String>) -> Self
+pub fn fingerprint(self, fp: impl Into<String>) -> Self
 pub fn from_headers(
-    ip_address: String,
+    ip: Option<String>,
     user_agent: &str,
     accept_language: &str,
     accept_encoding: &str,
-) -> SessionMeta
+) -> ClientInfo
+pub fn ip_value(&self) -> Option<&str>
+pub fn user_agent_value(&self) -> Option<&str>
+pub fn device_name_value(&self) -> Option<&str>
+pub fn device_type_value(&self) -> Option<&str>
+pub fn fingerprint_value(&self) -> Option<&str>
 ```
 
-### header_str
+Implements `FromRequestParts` — handlers can take `info: ClientInfo` directly.
 
-```rust
-pub fn header_str<'a>(headers: &'a HeaderMap, name: &str) -> &'a str
-// Returns "" when header is absent or non-UTF-8.
-```
-
----
-
-## Device and Fingerprint Helpers
-
-### `modo::auth::session::device`
+### Device and Fingerprint Helpers
 
 ```rust
 pub fn parse_device_name(user_agent: &str) -> String
@@ -787,11 +784,7 @@ pub fn parse_device_name(user_agent: &str) -> String
 
 pub fn parse_device_type(user_agent: &str) -> String
 // Returns "tablet", "mobile", or "desktop"
-```
 
-### `modo::auth::session::fingerprint`
-
-```rust
 pub fn compute_fingerprint(
     user_agent: &str,
     accept_language: &str,
@@ -904,10 +897,8 @@ use modo::auth::session::jwt::JwtConfig; // = JwtSessionsConfig
 // Token
 use modo::auth::session::SessionToken;
 
-// Session metadata
-use modo::auth::session::meta::{SessionMeta, header_str};
-use modo::auth::session::device::{parse_device_name, parse_device_type};
-use modo::auth::session::fingerprint::compute_fingerprint;
+// Client context (used for session creation + audit logging)
+use modo::client::{ClientInfo, parse_device_name, parse_device_type, compute_fingerprint};
 
 // Flash
 use modo::flash::{Flash, FlashEntry, FlashLayer, FlashMiddleware};

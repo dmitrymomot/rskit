@@ -376,16 +376,16 @@ Returns `Error::internal` if `ClientIpLayer` is not applied.
 
 ### ClientInfo Extractor
 
-`ClientInfo` aggregates `ip`, `user_agent`, and `fingerprint` (from the `x-fingerprint` header) in one extractor. Implements `FromRequestParts`. The `ip` field falls through to `None` if `ClientIpLayer` is not applied -- `ClientInfo` does not itself fail.
+`ClientInfo` aggregates `ip`, `user_agent`, parsed `device_name` / `device_type`, and a server-computed `fingerprint` (SHA-256 of UA + Accept-Language + Accept-Encoding) in one extractor. Implements `FromRequestParts`. The `ip` field falls through to `None` if `ClientIpLayer` is not applied — `ClientInfo` does not itself fail.
 
 ```rust
-use modo::ip::ClientInfo;
+use modo::client::ClientInfo;
 
 async fn handler(info: ClientInfo) -> String {
     format!(
-        "ip={:?} ua={:?} fp={:?}",
+        "ip={:?} device={:?} fp={:?}",
         info.ip_value(),
-        info.user_agent_value(),
+        info.device_name_value(),
         info.fingerprint_value(),
     )
 }
@@ -397,10 +397,12 @@ Outside an HTTP request (background jobs, CLI tools), build manually with the ch
 let info = ClientInfo::new()
     .ip("1.2.3.4")
     .user_agent("my-script/1.0")
+    .device_name("my-script on Linux")
+    .device_type("desktop")
     .fingerprint("abc123");
 ```
 
-Fields are private; read with `ip_value()` / `user_agent_value()` / `fingerprint_value()` (each returns `Option<&str>`).
+Fields are private; read with `ip_value()` / `user_agent_value()` / `device_name_value()` / `device_type_value()` / `fingerprint_value()` (each returns `Option<&str>`).
 
 ### ClientIpLayer
 

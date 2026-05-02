@@ -3,7 +3,7 @@ use axum::body::Body;
 use axum::http::Request;
 use axum::routing::get;
 use http::StatusCode;
-use modo::ip::ClientInfo;
+use modo::client::ClientInfo;
 use modo::sanitize::Sanitize;
 use modo::service::Registry;
 use serde::Deserialize;
@@ -217,9 +217,10 @@ async fn test_multipart_request_text_fields() {
 async fn test_client_info_extraction() {
     async fn handler(info: ClientInfo) -> String {
         let ua = info.user_agent_value().unwrap_or("none");
-        // ip is None without ClientIpLayer; fingerprint comes from x-fingerprint header.
-        let fp = info.fingerprint_value().unwrap_or("none");
-        format!("{ua}|{fp}")
+        let device = info.device_name_value().unwrap_or("none");
+        // Fingerprint is server-computed from UA + Accept-Language + Accept-Encoding.
+        let fp_len = info.fingerprint_value().map(str::len).unwrap_or(0);
+        format!("{ua}|{device}|{fp_len}")
     }
 
     let app = Router::new().route("/", get(handler));
@@ -229,7 +230,8 @@ async fn test_client_info_extraction() {
             Request::builder()
                 .uri("/")
                 .header("user-agent", "TestBot/2.0")
-                .header("x-fingerprint", "fp_test_123")
+                .header("accept-language", "en-US")
+                .header("accept-encoding", "gzip")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -241,7 +243,7 @@ async fn test_client_info_extraction() {
         .await
         .unwrap();
     let text = String::from_utf8(body.to_vec()).unwrap();
-    assert_eq!(text, "TestBot/2.0|fp_test_123");
+    assert_eq!(text, "TestBot/2.0|Unknown on Unknown|64");
 }
 
 #[test]

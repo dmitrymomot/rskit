@@ -11,8 +11,9 @@ use serde::{Deserialize, Serialize};
 use crate::db::{ColumnMap, ConnExt, ConnQueryExt, Database, FromRow};
 use crate::error::{Error, Result};
 
+use crate::client::ClientInfo;
+
 use super::cookie::CookieSessionsConfig;
-use super::meta::SessionMeta;
 use super::token::SessionToken;
 
 const SESSION_COLUMNS: &str = "id, user_id, ip_address, user_agent, device_name, device_type, \
@@ -156,7 +157,7 @@ impl SessionStore {
     /// database insert/eviction query fails.
     pub async fn create(
         &self,
-        meta: &SessionMeta,
+        info: &ClientInfo,
         user_id: &str,
         data: Option<serde_json::Value>,
     ) -> Result<(SessionData, SessionToken)> {
@@ -170,6 +171,12 @@ impl SessionStore {
             .map_err(|e| Error::internal(format!("serialize session data: {e}")))?;
         let now_str = now.to_rfc3339();
         let expires_str = expires_at.to_rfc3339();
+
+        let ip_address = info.ip_value().unwrap_or("").to_string();
+        let user_agent = info.user_agent_value().unwrap_or("").to_string();
+        let device_name = info.device_name_value().unwrap_or("").to_string();
+        let device_type = info.device_type_value().unwrap_or("").to_string();
+        let fingerprint = info.fingerprint_value().unwrap_or("").to_string();
 
         // Insert session
         self.db
@@ -185,11 +192,11 @@ impl SessionStore {
                     id.as_str(),
                     token_hash.as_str(),
                     user_id,
-                    meta.ip_address.as_str(),
-                    meta.user_agent.as_str(),
-                    meta.device_name.as_str(),
-                    meta.device_type.as_str(),
-                    meta.fingerprint.as_str(),
+                    ip_address.as_str(),
+                    user_agent.as_str(),
+                    device_name.as_str(),
+                    device_type.as_str(),
+                    fingerprint.as_str(),
                     data_str.as_str(),
                     now_str.as_str(),
                     now_str.as_str(),
@@ -221,11 +228,11 @@ impl SessionStore {
         let session_data = SessionData {
             id,
             user_id: user_id.to_string(),
-            ip_address: meta.ip_address.clone(),
-            user_agent: meta.user_agent.clone(),
-            device_name: meta.device_name.clone(),
-            device_type: meta.device_type.clone(),
-            fingerprint: meta.fingerprint.clone(),
+            ip_address,
+            user_agent,
+            device_name,
+            device_type,
+            fingerprint,
             data: data_json,
             created_at: now,
             last_active_at: now,

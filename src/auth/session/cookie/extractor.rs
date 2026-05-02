@@ -9,9 +9,9 @@ use serde::de::DeserializeOwned;
 use crate::error::{Error, HttpError};
 
 use crate::auth::session::data::Session;
-use crate::auth::session::meta::SessionMeta;
 use crate::auth::session::store::SessionData;
 use crate::auth::session::token::SessionToken;
+use crate::client::ClientInfo;
 
 use super::CookieSessionService;
 
@@ -24,7 +24,7 @@ pub(crate) enum SessionAction {
 
 pub(crate) struct SessionState {
     pub service: CookieSessionService,
-    pub meta: SessionMeta,
+    pub info: ClientInfo,
     pub current: Mutex<Option<SessionData>>,
     pub dirty: AtomicBool,
     pub action: Mutex<SessionAction>,
@@ -195,7 +195,7 @@ impl CookieSession {
             .state
             .service
             .store()
-            .create(&self.state.meta, user_id, Some(data))
+            .create(&self.state.info, user_id, Some(data))
             .await?;
 
         *self.state.current.lock().expect("session mutex poisoned") = Some(session_data);

@@ -8,9 +8,9 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::auth::session::Session;
-use crate::auth::session::meta::SessionMeta;
 use crate::auth::session::store::SessionStore;
 use crate::auth::session::token::SessionToken;
+use crate::client::ClientInfo;
 use crate::db::Database;
 use crate::{Error, Result};
 
@@ -54,8 +54,8 @@ fn now_secs() -> u64 {
 /// let svc = JwtSessionService::new(db, config)?;
 ///
 /// // Authenticate a user (e.g. after password check)
-/// let meta = SessionMeta::from_headers(ip, user_agent, accept_language, accept_encoding);
-/// let pair = svc.authenticate("user_123", &meta).await?;
+/// let info = ClientInfo::from_headers(Some(ip), user_agent, accept_language, accept_encoding);
+/// let pair = svc.authenticate("user_123", &info).await?;
 ///
 /// // Rotate (called from the refresh endpoint)
 /// let new_pair = svc.rotate(&pair.refresh_token).await?;
@@ -169,8 +169,8 @@ impl JwtSessionService {
     ///
     /// Returns an error if the session row cannot be created or the tokens
     /// cannot be signed.
-    pub async fn authenticate(&self, user_id: &str, meta: &SessionMeta) -> Result<TokenPair> {
-        let (raw, token) = self.inner.store.create(meta, user_id, None).await?;
+    pub async fn authenticate(&self, user_id: &str, info: &ClientInfo) -> Result<TokenPair> {
+        let (raw, token) = self.inner.store.create(info, user_id, None).await?;
         self.mint_pair(&raw.user_id, &token.expose())
     }
 

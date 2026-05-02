@@ -3,12 +3,12 @@
 use axum::routing::get;
 use modo::auth::session::Session;
 use modo::auth::session::jwt::{JwtSessionService, JwtSessionsConfig};
-use modo::auth::session::meta::SessionMeta;
+use modo::client::ClientInfo;
 use modo::db::ConnExt;
 use modo::testing::{TestApp, TestDb, TestSession};
 
-fn meta() -> SessionMeta {
-    SessionMeta::from_headers("1.1.1.1".to_string(), "test/1.0", "", "")
+fn meta() -> ClientInfo {
+    ClientInfo::from_headers(Some("1.1.1.1".to_string()), "test/1.0", "", "")
 }
 
 async fn whoami(session: Session) -> String {

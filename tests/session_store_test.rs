@@ -1,5 +1,5 @@
-use modo::auth::session::meta::SessionMeta;
 use modo::auth::session::{SessionConfig, SessionStore as Store};
+use modo::client::ClientInfo;
 use modo::db::{self, ConnExt};
 
 const CREATE_TABLE_SQL: &str = "CREATE TABLE authenticated_sessions (
@@ -66,9 +66,9 @@ async fn setup_store_with_config(session_config: SessionConfig) -> (Store, db::D
     (store, db)
 }
 
-fn test_meta() -> SessionMeta {
-    SessionMeta::from_headers(
-        "127.0.0.1".to_string(),
+fn test_meta() -> ClientInfo {
+    ClientInfo::from_headers(
+        Some("127.0.0.1".to_string()),
         "Mozilla/5.0 Chrome/120.0.0.0",
         "en-US",
         "gzip",

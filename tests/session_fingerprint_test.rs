@@ -1,4 +1,4 @@
-use modo::auth::session::fingerprint::compute_fingerprint;
+use modo::client::compute_fingerprint;
 
 #[test]
 fn fingerprint_is_64_hex() {

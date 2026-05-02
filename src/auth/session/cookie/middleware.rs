@@ -10,12 +10,12 @@ use cookie::{Cookie, CookieJar, SameSite};
 use http::{HeaderValue, Request, Response};
 use tower::{Layer, Service};
 
+use crate::client::{ClientInfo, header_str};
 use crate::ip::ClientIp;
 
 use super::CookieSessionService;
 use super::extractor::{SessionAction, SessionState};
 use crate::auth::session::data::Session;
-use crate::auth::session::meta::{SessionMeta, header_str};
 use crate::auth::session::token::SessionToken;
 use crate::cookie::{CookieConfig, Key};
 
@@ -112,7 +112,7 @@ where
             let ua = header_str(headers, "user-agent");
             let accept_lang = header_str(headers, "accept-language");
             let accept_enc = header_str(headers, "accept-encoding");
-            let meta = SessionMeta::from_headers(ip, ua, accept_lang, accept_enc);
+            let info = ClientInfo::from_headers(Some(ip), ua, accept_lang, accept_enc);
 
             let session_token = read_signed_cookie(request.headers(), cookie_name, key);
             let had_cookie = session_token.is_some();
@@ -130,7 +130,9 @@ where
             };
 
             let current_session = if let Some(session) = current_session {
-                if config.validate_fingerprint && meta.fingerprint != session.fingerprint {
+                if config.validate_fingerprint
+                    && info.fingerprint_value().unwrap_or("") != session.fingerprint
+                {
                     tracing::warn!(
                         session_id = session.id,
                         user_id = session.user_id,
@@ -157,7 +159,7 @@ where
 
             let session_state = Arc::new(SessionState {
                 service: svc.clone(),
-                meta,
+                info,
                 current: Mutex::new(current_session.clone()),
                 dirty: AtomicBool::new(false),
                 action: Mutex::new(SessionAction::None),

@@ -77,8 +77,7 @@ need a typed body extractor — `JwtSession` and a body extractor cannot coexist
 use axum::extract::State;
 use axum::Json;
 use modo::auth::session::jwt::{JwtSessionService, TokenPair};
-use modo::auth::session::meta::{SessionMeta, header_str};
-use modo::ip::ClientIp;
+use modo::client::ClientInfo;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -86,20 +85,13 @@ struct LoginReq { username: String, password: String }
 
 async fn login(
     State(svc): State<JwtSessionService>,
-    ClientIp(ip): ClientIp,
-    headers: axum::http::HeaderMap,
+    info: ClientInfo,
     Json(req): Json<LoginReq>,
 ) -> modo::Result<Json<TokenPair>> {
     // ... validate credentials, get user_id ...
     let user_id = "01JQXK5M3N8R4T6V2W9Y0ZABCD";
 
-    let meta = SessionMeta::from_headers(
-        ip.to_string(),
-        header_str(&headers, "user-agent"),
-        header_str(&headers, "accept-language"),
-        header_str(&headers, "accept-encoding"),
-    );
-    let pair = svc.authenticate(user_id, &meta).await?;
+    let pair = svc.authenticate(user_id, &info).await?;
     Ok(Json(pair))
 }
 ```

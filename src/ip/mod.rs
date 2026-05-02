@@ -4,12 +4,14 @@
 //!
 //! Provides:
 //! - [`ClientIp`] — axum extractor wrapping `std::net::IpAddr`
-//! - [`ClientInfo`] — structured client metadata (IP, user-agent, etc.) inserted
-//!   into request extensions by [`ClientIpLayer`]
 //! - [`ClientIpLayer`] — Tower layer that resolves the client IP and inserts
-//!   [`ClientIp`] / [`ClientInfo`] into request extensions
+//!   [`ClientIp`] into request extensions
 //! - [`extract_client_ip`] — low-level resolution function (headers + trusted
 //!   proxies + fallback)
+//!
+//! For the richer [`ClientInfo`](crate::client::ClientInfo) extractor (with
+//! parsed device fields and a server-computed fingerprint), see
+//! [`crate::client`].
 //!
 //! ## Quick start
 //!
@@ -26,12 +28,10 @@
 //! }
 //! ```
 
-mod client_info;
 mod client_ip;
 mod extract;
 mod middleware;
 
-pub use client_info::ClientInfo;
 pub use client_ip::ClientIp;
 pub use extract::extract_client_ip;
 pub use middleware::ClientIpLayer;

@@ -94,6 +94,7 @@ pub mod cache;
 pub mod db;
 pub mod storage;
 
+pub mod client;
 pub mod cookie;
 pub mod extractor;
 pub mod flash;
