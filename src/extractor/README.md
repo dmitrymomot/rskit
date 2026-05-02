@@ -80,6 +80,122 @@ async fn login(FormRequest(form): FormRequest<LoginForm>) {
 }
 ```
 
+#### Repeated keys (multi-select checkboxes / dropdowns)
+
+`FormRequest`, `Query`, and the text-field side of `MultipartRequest` deserialize via
+`serde_qs`, so a repeated form key populates a `Vec<…>` field. A 7-checkbox work-day
+picker that posts `work_days=1&work_days=2&work_days=3&work_days=4&work_days=5`
+arrives as `Vec<u8>` with five elements:
+
+```rust
+use modo::extractor::FormRequest;
+use modo::sanitize::Sanitize;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct NewEmployee {
+    name: String,
+    work_days: Vec<u8>,        // multi-select checkbox group
+    policy_ids: Vec<String>,   // multi-select list
+}
+
+impl Sanitize for NewEmployee {
+    fn sanitize(&mut self) {
+        self.name = self.name.trim().to_string();
+    }
+}
+
+async fn create(FormRequest(form): FormRequest<NewEmployee>) {
+    // form.work_days = [1, 2, 3, 4, 5]
+}
+```
+
+#### Nested structs (bracketed keys)
+
+For grouped fields, use bracket notation in the input names:
+
+```html
+<input name="address[city]" />
+<input name="address[postcode]" />
+```
+
+```rust
+#[derive(Deserialize)]
+struct Address { city: String, postcode: String }
+
+#[derive(Deserialize)]
+struct OrderForm { customer_email: String, address: Address }
+
+impl Sanitize for OrderForm {
+    fn sanitize(&mut self) {
+        self.customer_email = self.customer_email.trim().to_lowercase();
+    }
+}
+
+async fn place_order(FormRequest(o): FormRequest<OrderForm>) {
+    // o.address.city, o.address.postcode
+}
+```
+
+#### `Vec<Struct>` for dynamic rows (htmx, JS-added rows)
+
+For per-row dynamic forms — e.g. a contact list where each row has `kind`, `value`,
+and `comment` — use **indexed** bracket notation. The index disambiguates which
+fields belong to which row:
+
+```html
+<!-- Row 0 -->
+<input name="contacts[0][kind]"    value="email" />
+<input name="contacts[0][value]"   value="a@b.com" />
+<input name="contacts[0][comment]" value="primary" />
+<!-- Row 1 -->
+<input name="contacts[1][kind]"    value="phone" />
+<input name="contacts[1][value]"   value="555-0100" />
+<input name="contacts[1][comment]" value="" />
+```
+
+```rust
+#[derive(Deserialize)]
+struct Contact { kind: String, value: String, comment: String }
+
+#[derive(Deserialize)]
+struct NewClient { name: String, contacts: Vec<Contact> }
+
+impl Sanitize for NewClient {
+    fn sanitize(&mut self) { self.name = self.name.trim().to_string(); }
+}
+
+async fn save(FormRequest(c): FormRequest<NewClient>) {
+    // c.contacts is one entry per submitted row, in index order
+}
+```
+
+> **Indexed names are required for `Vec<Struct>`.** Without indices the
+> deserializer cannot tell which fields belong to which row. For top-level
+> `Vec<scalar>` fields (e.g. `tag=a&tag=b`) the indices are optional.
+
+#### Files alongside nested fields (multipart)
+
+`MultipartRequest<T>` returns `(T, Files)`. Nested-struct deserialization applies to
+the text fields in `T`; uploaded files come back through the `Files` map keyed by
+the multipart field name (which can itself use bracket notation):
+
+```rust
+use modo::extractor::{MultipartRequest, Files};
+
+# use serde::Deserialize;
+# use modo::sanitize::Sanitize;
+#[derive(Deserialize)]
+struct Contact { kind: String, value: String }
+#[derive(Deserialize)]
+struct NewClient { name: String, contacts: Vec<Contact> }
+impl Sanitize for NewClient { fn sanitize(&mut self) {} }
+
+async fn save(MultipartRequest(c, mut files): MultipartRequest<NewClient>) {
+    let avatar = files.file("avatar"); // Option<UploadedFile>
+}
+```
+
 ### Query string
 
 ```rust

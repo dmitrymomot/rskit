@@ -7,6 +7,19 @@
 //! normalization happen automatically. Rejections are [`crate::Error`] values with
 //! `400 Bad Request` status, which render through [`crate::Error::into_response`].
 //!
+//! `FormRequest`, `Query`, and the text-field side of `MultipartRequest` deserialize
+//! through `serde_qs`, so HTML forms can map directly into Rust structs:
+//!
+//! - Repeated keys (`tag=a&tag=b`) populate `Vec<scalar>` fields — multi-select
+//!   checkbox groups and dropdown lists.
+//! - Bracketed keys (`address[city]=…`) populate nested struct fields.
+//! - Indexed brackets (`contacts[0][kind]=…&contacts[0][value]=…`) populate
+//!   `Vec<Struct>` rows — htmx-added dynamic-row groups and per-row contact lists.
+//!
+//! `FormRequest` and `MultipartRequest` use `serde_qs` form-encoding mode so they
+//! accept browser-encoded brackets (`%5B`/`%5D`); `Query<T>` uses default mode so
+//! URL templates can keep bare brackets.
+//!
 //! Provides:
 //!
 //! - [`JsonRequest<T>`] — JSON body (`T: DeserializeOwned + Sanitize`)

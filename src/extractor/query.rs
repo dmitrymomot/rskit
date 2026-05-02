@@ -9,7 +9,9 @@ use crate::sanitize::Sanitize;
 /// `T` must implement both [`serde::de::DeserializeOwned`] and [`crate::sanitize::Sanitize`].
 ///
 /// Repeated query keys deserialize into `Vec<…>` fields — for example `?tag=a&tag=b&tag=c`
-/// populates a `tags: Vec<String>` field with three elements.
+/// populates a `tags: Vec<String>` field with three elements. Nested keys
+/// (`?filter[status]=active`) populate nested struct fields, and indexed brackets
+/// (`?items[0][id]=…`) populate `Vec<Struct>` rows.
 ///
 /// Because this extractor implements [`FromRequestParts`] rather than `FromRequest`, it
 /// can be combined with body extractors on the same handler. To make `Query` optional
@@ -31,14 +33,22 @@ use crate::sanitize::Sanitize;
 /// use serde::Deserialize;
 ///
 /// #[derive(Deserialize)]
-/// struct SearchParams { q: String, page: Option<u32>, tags: Vec<String> }
+/// struct Filter { status: String, role: String }
+///
+/// #[derive(Deserialize)]
+/// struct SearchParams {
+///     q: String,
+///     page: Option<u32>,
+///     tags: Vec<String>,   // ?tags=web&tags=axum
+///     filter: Filter,      // ?filter[status]=active&filter[role]=admin
+/// }
 ///
 /// impl Sanitize for SearchParams {
 ///     fn sanitize(&mut self) { self.q = self.q.trim().to_lowercase(); }
 /// }
 ///
-/// async fn search(Query(params): Query<SearchParams>) {
-///     // params.q is trimmed; params.tags collects every `?tags=` repeat
+/// async fn search(Query(p): Query<SearchParams>) {
+///     // p.filter.status is "active"
 /// }
 /// ```
 pub struct Query<T>(pub T);
