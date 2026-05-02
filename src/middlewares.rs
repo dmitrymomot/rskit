@@ -49,6 +49,7 @@ pub use crate::geolocation::GeoLayer as Geo;
 #[doc(alias = "I18nLayer")]
 pub use crate::i18n::I18nLayer as I18n;
 pub use crate::ip::ClientIpLayer as ClientIp;
+pub use crate::middleware::UserAgentLayer as UserAgent;
 pub use crate::template::TemplateContextLayer as TemplateContext;
 pub use crate::tier::TierLayer as Tier;
 
