@@ -619,3 +619,113 @@ async fn test_multipart_request_with_file_upload() {
         format!("Alice|photo.jpg|image/jpeg|{}", file_data.len())
     );
 }
+
+#[tokio::test]
+async fn test_query_extractor_nested_struct() {
+    #[derive(Deserialize)]
+    struct FilterParams {
+        filter: FilterInner,
+    }
+    #[derive(Deserialize)]
+    struct FilterInner {
+        status: String,
+        role: String,
+    }
+    impl Sanitize for FilterParams {
+        fn sanitize(&mut self) {}
+    }
+
+    async fn handler(modo::extractor::Query(p): modo::extractor::Query<FilterParams>) -> String {
+        format!("{}|{}", p.filter.status, p.filter.role)
+    }
+
+    let registry = Registry::new();
+    let app = Router::new()
+        .route("/", get(handler))
+        .with_state(registry.into_state());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/?filter[status]=active&filter[role]=admin")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(&body[..], b"active|admin");
+}
+
+#[tokio::test]
+async fn test_multipart_request_vec_of_structs() {
+    #[derive(Deserialize)]
+    struct ContactRow {
+        kind: String,
+        value: String,
+    }
+    #[derive(Deserialize)]
+    struct NewClientForm {
+        name: String,
+        contacts: Vec<ContactRow>,
+    }
+    impl Sanitize for NewClientForm {
+        fn sanitize(&mut self) {
+            modo::sanitize::trim(&mut self.name);
+        }
+    }
+
+    async fn handler(
+        modo::extractor::MultipartRequest(form, _): modo::extractor::MultipartRequest<
+            NewClientForm,
+        >,
+    ) -> String {
+        let rows = form
+            .contacts
+            .into_iter()
+            .map(|c| format!("{}={}", c.kind, c.value))
+            .collect::<Vec<_>>()
+            .join(";");
+        format!("{}|{}", form.name, rows)
+    }
+
+    let registry = Registry::new();
+    let app = Router::new()
+        .route("/", axum::routing::post(handler))
+        .with_state(registry.into_state());
+
+    let boundary = "----TestNestedBoundary";
+    let body = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"name\"\r\n\r\nAcme\r\n\
+         --{boundary}\r\nContent-Disposition: form-data; name=\"contacts[0][kind]\"\r\n\r\nemail\r\n\
+         --{boundary}\r\nContent-Disposition: form-data; name=\"contacts[0][value]\"\r\n\r\na@b.com\r\n\
+         --{boundary}\r\nContent-Disposition: form-data; name=\"contacts[1][kind]\"\r\n\r\nphone\r\n\
+         --{boundary}\r\nContent-Disposition: form-data; name=\"contacts[1][value]\"\r\n\r\n555-0100\r\n\
+         --{boundary}--\r\n"
+    );
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/")
+                .header(
+                    "content-type",
+                    format!("multipart/form-data; boundary={boundary}"),
+                )
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(&body[..], b"Acme|email=a@b.com;phone=555-0100");
+}
