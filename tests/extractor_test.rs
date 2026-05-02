@@ -731,6 +731,50 @@ async fn test_multipart_request_vec_of_structs() {
 }
 
 #[tokio::test]
+async fn test_query_extractor_percent_encoded_brackets() {
+    #[derive(Deserialize)]
+    struct EncodedFilterParams {
+        filter: EncodedFilterInner,
+    }
+    #[derive(Deserialize)]
+    struct EncodedFilterInner {
+        status: String,
+        role: String,
+    }
+    impl Sanitize for EncodedFilterParams {
+        fn sanitize(&mut self) {}
+    }
+
+    async fn handler(
+        modo::extractor::Query(p): modo::extractor::Query<EncodedFilterParams>,
+    ) -> String {
+        format!("{}|{}", p.filter.status, p.filter.role)
+    }
+
+    let registry = Registry::new();
+    let app = Router::new()
+        .route("/", get(handler))
+        .with_state(registry.into_state());
+
+    // %5B = '[', %5D = ']' — what URLSearchParams / axios default emit
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/?filter%5Bstatus%5D=active&filter%5Brole%5D=admin")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(&body[..], b"active|admin");
+}
+
+#[tokio::test]
 async fn test_form_request_vec_of_structs_percent_encoded_brackets() {
     #[derive(Deserialize)]
     struct EncodedContact {

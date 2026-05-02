@@ -16,9 +16,10 @@
 //! - Indexed brackets (`contacts[0][kind]=…&contacts[0][value]=…`) populate
 //!   `Vec<Struct>` rows — htmx-added dynamic-row groups and per-row contact lists.
 //!
-//! `FormRequest` and `MultipartRequest` use `serde_qs` form-encoding mode so they
-//! accept browser-encoded brackets (`%5B`/`%5D`); `Query<T>` uses default mode so
-//! URL templates can keep bare brackets.
+//! All three extractors use `serde_qs` form-encoding mode, so they accept both bare
+//! brackets (`?filter[status]=active`) and browser-percent-encoded brackets
+//! (`?filter%5Bstatus%5D=active`). `+` decodes as space, matching standard form and
+//! query-string conventions.
 //!
 //! Provides:
 //!

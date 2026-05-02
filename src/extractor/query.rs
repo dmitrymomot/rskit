@@ -8,7 +8,7 @@ use crate::sanitize::Sanitize;
 ///
 /// `T` must implement both [`serde::de::DeserializeOwned`] and [`crate::sanitize::Sanitize`].
 ///
-/// Repeated query keys deserialize into `Vec<…>` fields — for example `?tag=a&tag=b&tag=c`
+/// Repeated query keys deserialize into `Vec<…>` fields — for example `?tags=a&tags=b&tags=c`
 /// populates a `tags: Vec<String>` field with three elements. Nested keys
 /// (`?filter[status]=active`) populate nested struct fields, and indexed brackets
 /// (`?items[0][id]=…`) populate `Vec<Struct>` rows.
@@ -62,7 +62,9 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let query = parts.uri.query().unwrap_or("");
-        let mut value: T = serde_qs::from_str(query)
+        let mut value: T = serde_qs::Config::new()
+            .use_form_encoding(true)
+            .deserialize_str(query)
             .map_err(|e| crate::error::Error::bad_request(format!("invalid query: {e}")))?;
         value.sanitize();
         Ok(Query(value))
