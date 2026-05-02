@@ -729,3 +729,56 @@ async fn test_multipart_request_vec_of_structs() {
         .unwrap();
     assert_eq!(&body[..], b"Acme|email=a@b.com;phone=555-0100");
 }
+
+#[tokio::test]
+async fn test_form_request_vec_of_structs_percent_encoded_brackets() {
+    #[derive(Deserialize)]
+    struct EncodedContact {
+        kind: String,
+        value: String,
+    }
+    #[derive(Deserialize)]
+    struct EncodedClientForm {
+        contacts: Vec<EncodedContact>,
+    }
+    impl Sanitize for EncodedClientForm {
+        fn sanitize(&mut self) {}
+    }
+
+    async fn handler(
+        modo::extractor::FormRequest(form): modo::extractor::FormRequest<EncodedClientForm>,
+    ) -> String {
+        form.contacts
+            .into_iter()
+            .map(|c| format!("{}={}", c.kind, c.value))
+            .collect::<Vec<_>>()
+            .join(";")
+    }
+
+    let registry = Registry::new();
+    let app = Router::new()
+        .route("/", axum::routing::post(handler))
+        .with_state(registry.into_state());
+
+    // %5B = '[', %5D = ']'  — what real browsers send
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(
+                    "contacts%5B0%5D%5Bkind%5D=email&contacts%5B0%5D%5Bvalue%5D=a%40b.com\
+                     &contacts%5B1%5D%5Bkind%5D=phone&contacts%5B1%5D%5Bvalue%5D=555-0100",
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(&body[..], b"email=a@b.com;phone=555-0100");
+}
