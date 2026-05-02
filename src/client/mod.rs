@@ -12,6 +12,10 @@
 //! - [`parse_device_name`] / [`parse_device_type`] — `User-Agent` classifiers.
 //! - [`compute_fingerprint`] — SHA-256 hash of UA + Accept-Language +
 //!   Accept-Encoding for session-hijack detection.
+//! - [`header_str`] — small helper that reads a header as `&str`, returning
+//!   `""` when absent or non-UTF-8. Useful for code paths that already hold
+//!   a `&HeaderMap` and need the same defaulting `ClientInfo` uses
+//!   internally.
 //!
 //! Used by [`crate::audit`] (persisted with audit events) and
 //! [`crate::auth::session`] (session creation, fingerprint validation).

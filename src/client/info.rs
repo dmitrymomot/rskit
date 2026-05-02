@@ -130,9 +130,14 @@ impl<S: Send + Sync> FromRequestParts<S> for ClientInfo {
     /// Builds [`ClientInfo`] from request extensions and headers.
     ///
     /// Reads the IP from the [`ClientIp`] extension (inserted by
-    /// [`ClientIpLayer`](crate::ip::ClientIpLayer)), then derives the
-    /// user-agent, device fields, and fingerprint from request headers via
-    /// [`ClientInfo::from_headers`].
+    /// [`ClientIpLayer`](crate::ip::ClientIpLayer)) and the user-agent from
+    /// the `User-Agent` header. Device fields are derived only when the
+    /// user-agent header is present; when it is absent they remain `None`
+    /// so callers can reliably distinguish "no UA was sent" from
+    /// "UA was sent but unrecognized". The fingerprint is server-computed
+    /// from whatever combination of `User-Agent`, `Accept-Language`, and
+    /// `Accept-Encoding` headers were present (each defaulting to `""`)
+    /// and is therefore always populated.
     ///
     /// # Errors
     ///
@@ -140,10 +145,31 @@ impl<S: Send + Sync> FromRequestParts<S> for ClientInfo {
     /// [`FromRequestParts`] but the implementation always returns `Ok`.
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let ip = parts.extensions.get::<ClientIp>().map(|c| c.0.to_string());
-        let ua = header_str(&parts.headers, "user-agent");
+        let user_agent = parts
+            .headers
+            .get(http::header::USER_AGENT)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
         let accept_lang = header_str(&parts.headers, "accept-language");
         let accept_enc = header_str(&parts.headers, "accept-encoding");
-        Ok(Self::from_headers(ip, ua, accept_lang, accept_enc))
+
+        let (device_name, device_type) = match user_agent.as_deref() {
+            Some(ua) => (Some(parse_device_name(ua)), Some(parse_device_type(ua))),
+            None => (None, None),
+        };
+        let fingerprint = Some(compute_fingerprint(
+            user_agent.as_deref().unwrap_or(""),
+            accept_lang,
+            accept_enc,
+        ));
+
+        Ok(Self {
+            ip,
+            user_agent,
+            device_name,
+            device_type,
+            fingerprint,
+        })
     }
 }
 
@@ -238,9 +264,27 @@ mod tests {
             .unwrap();
 
         assert!(info.ip_value().is_none());
-        assert_eq!(info.user_agent_value(), Some(""));
-        assert_eq!(info.device_name_value(), Some("Unknown on Unknown"));
-        assert_eq!(info.device_type_value(), Some("desktop"));
+        assert!(info.user_agent_value().is_none());
+        assert!(info.device_name_value().is_none());
+        assert!(info.device_type_value().is_none());
         assert!(info.fingerprint_value().is_some());
+    }
+
+    #[tokio::test]
+    async fn extracts_with_only_accept_headers() {
+        let req = http::Request::builder()
+            .header("accept-language", "en-US")
+            .header("accept-encoding", "gzip")
+            .body(())
+            .unwrap();
+        let (mut parts, _) = req.into_parts();
+        let info = ClientInfo::from_request_parts(&mut parts, &())
+            .await
+            .unwrap();
+
+        assert!(info.user_agent_value().is_none());
+        assert!(info.device_name_value().is_none());
+        assert!(info.device_type_value().is_none());
+        assert_eq!(info.fingerprint_value().map(str::len), Some(64));
     }
 }

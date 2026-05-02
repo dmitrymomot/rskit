@@ -131,7 +131,7 @@ where
 
             let current_session = if let Some(session) = current_session {
                 if config.validate_fingerprint
-                    && info.fingerprint_value().unwrap_or("") != session.fingerprint
+                    && info.fingerprint_value() != Some(session.fingerprint.as_str())
                 {
                     tracing::warn!(
                         session_id = session.id,

@@ -5,14 +5,15 @@ browser fingerprint — shared across HTTP, audit, and session code paths.
 
 ## Key types
 
-| Type / function       | Description                                                                 |
-| --------------------- | --------------------------------------------------------------------------- |
-| [`ClientInfo`]        | Axum extractor + builder for client metadata                                |
-| [`parse_device_name`] | UA → human-readable device, e.g. `"Chrome on macOS"`                        |
-| [`parse_device_type`] | UA → `"desktop"` / `"mobile"` / `"tablet"`                                  |
+| Type / function         | Description                                                               |
+| ----------------------- | ------------------------------------------------------------------------- |
+| [`ClientInfo`]          | Axum extractor + builder for client metadata                              |
+| [`parse_device_name`]   | UA → human-readable device, e.g. `"Chrome on macOS"`                      |
+| [`parse_device_type`]   | UA → `"desktop"` / `"mobile"` / `"tablet"`                                |
 | [`compute_fingerprint`] | SHA-256 of UA + Accept-Language + Accept-Encoding (64-char hex)           |
+| [`header_str`]          | Read a header as `&str`, defaulting to `""` when absent or non-UTF-8      |
 
-Canonical paths: `modo::client::{ClientInfo, parse_device_name, parse_device_type, compute_fingerprint}`.
+Canonical paths: `modo::client::{ClientInfo, parse_device_name, parse_device_type, compute_fingerprint, header_str}`.
 
 ## Usage
 
@@ -54,13 +55,20 @@ When middleware already holds the request headers, use `from_headers` — it
 parses device fields from the user-agent and computes the fingerprint:
 
 ```rust
+use modo::client::{ClientInfo, header_str};
+
 let info = ClientInfo::from_headers(
     Some("1.2.3.4".into()),
-    headers.get("user-agent").and_then(|v| v.to_str().ok()).unwrap_or(""),
-    headers.get("accept-language").and_then(|v| v.to_str().ok()).unwrap_or(""),
-    headers.get("accept-encoding").and_then(|v| v.to_str().ok()).unwrap_or(""),
+    header_str(&headers, "user-agent"),
+    header_str(&headers, "accept-language"),
+    header_str(&headers, "accept-encoding"),
 );
 ```
+
+Unlike the `FromRequestParts` extractor, `from_headers` always populates the
+device fields and fingerprint — the caller has already collapsed missing
+headers into empty strings, so the distinction between "header absent" and
+"header empty" is no longer available.
 
 ## Consumers
 
