@@ -5,7 +5,7 @@
 [![CI](https://github.com/dmitrymomot/modo/actions/workflows/ci.yml/badge.svg)](https://github.com/dmitrymomot/modo/actions/workflows/ci.yml)
 [![docs.rs](https://img.shields.io/docsrs/modo-rs)](https://docs.rs/modo-rs)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-![Rust](https://img.shields.io/badge/rust-1.92+-orange.svg)
+![Rust](https://img.shields.io/badge/rust-1.95+-orange.svg)
 
 One crate. Zero proc macros. Everything you need to ship a real app — sessions, auth, background jobs, email, storage — without stitching together 15 crates and writing the glue yourself.
 
@@ -190,10 +190,10 @@ only feature is `test-helpers`, enabled in your `[dev-dependencies]`.
 
 ```toml
 [dependencies]
-modo = { package = "modo-rs", version = "0.10" }
+modo = { package = "modo-rs", version = "0.10.4" }
 
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.10", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.10.4", features = ["test-helpers"] }
 ```
 
 > **Trade-off:** modo deliberately keeps every module always-on so the public
@@ -218,6 +218,10 @@ reached through their module path.
 ## Re-exports
 
 modo re-exports `axum`, `serde`, `serde_json`, and `tokio` so you don't need to version-match them yourself.
+
+## Documentation
+
+Full API reference is on [docs.rs/modo-rs](https://docs.rs/modo-rs/0.10.4).
 
 ## Claude Code Plugin
 
