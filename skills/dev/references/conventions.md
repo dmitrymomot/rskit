@@ -88,7 +88,7 @@ Enable in dev-dependencies only:
 
 ```toml
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.10", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.11", features = ["test-helpers"] }
 ```
 
 ---

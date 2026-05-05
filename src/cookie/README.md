@@ -1,7 +1,7 @@
 # modo::cookie
 
 Cookie configuration, HMAC signing-key derivation, and cookie-jar re-exports
-for the `modo` web framework (v0.10). The `CookieConfig` struct and
+for the `modo` web framework (v0.11). The `CookieConfig` struct and
 `key_from_config` helper are consumed by the session and flash middleware;
 the re-exported `axum_extra` jar types are provided for handler-level use.
 

@@ -190,10 +190,10 @@ only feature is `test-helpers`, enabled in your `[dev-dependencies]`.
 
 ```toml
 [dependencies]
-modo = { package = "modo-rs", version = "0.10.4" }
+modo = { package = "modo-rs", version = "0.11.0" }
 
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.10.4", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.11.0", features = ["test-helpers"] }
 ```
 
 > **Trade-off:** modo deliberately keeps every module always-on so the public
@@ -221,7 +221,7 @@ modo re-exports `axum`, `serde`, `serde_json`, and `tokio` so you don't need to 
 
 ## Documentation
 
-Full API reference is on [docs.rs/modo-rs](https://docs.rs/modo-rs/0.10.4).
+Full API reference is on [docs.rs/modo-rs](https://docs.rs/modo-rs/0.11.0).
 
 ## Claude Code Plugin
 

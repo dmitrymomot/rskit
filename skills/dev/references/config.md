@@ -424,7 +424,7 @@ modo has exactly one cargo feature: `test-helpers`. Enable it only under `[dev-d
 
 ```toml
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.10", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.11", features = ["test-helpers"] }
 ```
 
 Every framework module (`db`, `session`, `job`, `auth`, `email`, `template`, `i18n`, `storage`, `dns`, `geolocation`, `apikey`, `jwt`, `sentry`, `tier`, etc.) is compiled unconditionally. To disable a module, simply leave its YAML config section at defaults and skip wiring it into `main`.

@@ -1,7 +1,7 @@
 # modo::extractor
 
 Sanitizing axum extractors for request bodies, query strings, and multipart uploads
-(modo 0.10).
+(modo 0.11).
 
 All sanitizing extractors call [`Sanitize::sanitize`](../sanitize/index.html) on the
 deserialized value before returning it, so whitespace trimming and other normalization

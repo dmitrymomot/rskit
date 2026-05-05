@@ -8,7 +8,7 @@
 //!
 //! ```toml
 //! [dev-dependencies]
-//! modo-rs = { version = "0.10.4", features = ["test-helpers"] }
+//! modo-rs = { version = "0.11.0", features = ["test-helpers"] }
 //! ```
 //!
 //! Integration test files that import from `modo::testing` should guard

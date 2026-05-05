@@ -4,7 +4,7 @@
 //! macros, built on [`axum`] 0.8 with [`libsql`](https://crates.io/crates/libsql)
 //! (SQLite) for persistence. Handlers are plain `async fn`, routes use
 //! [`axum::Router`] directly, services are wired explicitly in `main()`, and
-//! database queries use raw libsql. Current version: **0.10.4**.
+//! database queries use raw libsql. Current version: **0.11.0**.
 //!
 //! ## Modules
 //!
@@ -127,10 +127,10 @@
 //!
 //! ```toml
 //! [dependencies]
-//! modo = { package = "modo-rs", version = "0.10.4" }
+//! modo = { package = "modo-rs", version = "0.11.0" }
 //!
 //! [dev-dependencies]
-//! modo = { package = "modo-rs", version = "0.10.4", features = ["test-helpers"] }
+//! modo = { package = "modo-rs", version = "0.11.0", features = ["test-helpers"] }
 //! ```
 //!
 //! Minimal application:

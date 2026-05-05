@@ -27,13 +27,13 @@ edition = "2024"
 rust-version = "1.92"
 
 [dependencies]
-modo = { package = "modo-rs", version = "0.10.4" }
+modo = { package = "modo-rs", version = "0.11.0" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.10.4", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.11.0", features = ["test-helpers"] }
 ```
 
 ### Feature flags
@@ -359,7 +359,7 @@ Generate dynamically using `Write`. Replace `{{project_name}}` with the actual p
 ````markdown
 # {{project_name}}
 
-**Framework:** [modo](https://github.com/dmitrymomot/modo) v0.10.4 — Rust web framework with SQLite
+**Framework:** [modo](https://github.com/dmitrymomot/modo) v0.11.0 — Rust web framework with SQLite
 
 ## Commands
 

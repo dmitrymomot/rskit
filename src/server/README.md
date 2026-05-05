@@ -1,6 +1,6 @@
 # modo::server
 
-HTTP server startup, host-based routing, and graceful shutdown for modo v0.10.
+HTTP server startup, host-based routing, and graceful shutdown for modo v0.11.
 
 ## Overview
 
