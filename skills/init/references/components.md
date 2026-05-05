@@ -88,6 +88,7 @@ async fn main() -> Result<()> {
         // === COMPONENT MIDDLEWARE LAYERS GO HERE ===
         .layer(session_svc.layer())
         .layer(modo::flash::FlashLayer::new(cookie_config, &cookie_key))
+        .layer(modo::middleware::UserAgentLayer::new())
         .layer(modo::ip::ClientIpLayer::new())
         .layer(rate_limit_layer);
 

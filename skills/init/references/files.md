@@ -27,13 +27,13 @@ edition = "2024"
 rust-version = "1.92"
 
 [dependencies]
-modo = { package = "modo-rs", version = "0.10" }
+modo = { package = "modo-rs", version = "0.10.4" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 
 [dev-dependencies]
-modo = { package = "modo-rs", version = "0.10", features = ["test-helpers"] }
+modo = { package = "modo-rs", version = "0.10.4", features = ["test-helpers"] }
 ```
 
 ### Feature flags
@@ -79,9 +79,9 @@ check:
     set -euo pipefail
     cargo fmt --check &
     pid_fmt=$!
-    cargo clippy -- -D warnings &
+    cargo clippy --features test-helpers --tests -- -D warnings &
     pid_lint=$!
-    cargo test &
+    cargo test --features test-helpers &
     pid_test=$!
     fail=0
     wait $pid_fmt  || { echo "fmt-check failed"; fail=1; }
@@ -91,11 +91,11 @@ check:
 
 # Run tests
 test:
-    cargo test
+    cargo test --features test-helpers
 
 # Run clippy lints
 lint:
-    cargo clippy -- -D warnings
+    cargo clippy --features test-helpers --tests -- -D warnings
 
 # Format code
 fmt:
@@ -359,7 +359,7 @@ Generate dynamically using `Write`. Replace `{{project_name}}` with the actual p
 ````markdown
 # {{project_name}}
 
-**Framework:** [modo](https://github.com/dmitrymomot/modo) v0.10 — Rust web framework with SQLite
+**Framework:** [modo](https://github.com/dmitrymomot/modo) v0.10.4 — Rust web framework with SQLite
 
 ## Commands
 
@@ -479,8 +479,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
-      - run: cargo clippy -- -D warnings
-      - run: cargo test
+      - run: cargo clippy --features test-helpers --tests -- -D warnings
+      - run: cargo test --features test-helpers
 ```
 
 ---
