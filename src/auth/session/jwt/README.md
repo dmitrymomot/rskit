@@ -322,7 +322,9 @@ refresh_source:
 | `jwt:signing_failed` | 500 | HMAC signing operation failed |
 | `jwt:serialization_failed` | 500 | Claims could not be serialized |
 | `auth:aud_mismatch` | 401 | Wrong audience (e.g., access token passed to rotate) |
-| `auth:session_not_found` | 401 | Session row does not exist or has expired |
+| `auth:session_not_found` | 401 / 404 | Session row does not exist or has expired (404 from `revoke(user_id, id)`) |
+| `auth:access_missing` | 401 | `JwtSession` could not find an access token in the configured `access_source` |
+| `auth:refresh_missing` | 400 / 401 | `JwtSession` could not find a refresh token (400 when `refresh_source = Body`, 401 otherwise) |
 
 ## Security checklist
 

@@ -10,7 +10,7 @@ pub enum TenantId {
     /// Tenant slug from [`subdomain()`](super::subdomain),
     /// [`path_prefix()`](super::path_prefix), or [`path_param()`](super::path_param).
     Slug(String),
-    /// Full domain name from [`domain()`](super::domain) or the custom-domain
+    /// Full domain name from [`domain()`](super::domain()) or the custom-domain
     /// branch of [`subdomain_or_domain()`](super::subdomain_or_domain).
     Domain(String),
     /// Opaque identifier from [`header()`](super::header).

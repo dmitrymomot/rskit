@@ -152,8 +152,8 @@ impl Files {
 ///
 /// The [`FromRequest::Rejection`] is [`crate::Error`]. A `400 Bad Request` is returned
 /// if the request is not a valid `multipart/form-data` body, a field cannot be read,
-/// or the collected text fields cannot be deserialized into `T`. The error renders via
-/// [`crate::Error::into_response`].
+/// or the collected text fields cannot be deserialized into `T`. The error renders via its
+/// [`IntoResponse`](axum::response::IntoResponse) impl.
 ///
 /// # Example
 ///

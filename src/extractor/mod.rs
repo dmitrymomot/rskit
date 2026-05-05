@@ -5,7 +5,7 @@
 //! Every sanitizing extractor calls [`crate::sanitize::Sanitize::sanitize`] on the
 //! deserialized value before returning it, so whitespace trimming and other
 //! normalization happen automatically. Rejections are [`crate::Error`] values with
-//! `400 Bad Request` status, which render through [`crate::Error::into_response`].
+//! `400 Bad Request` status, which render through their [`IntoResponse`](axum::response::IntoResponse) impl.
 //!
 //! `FormRequest`, `Query`, and the text-field side of `MultipartRequest` deserialize
 //! through `serde_qs`, so HTML forms can map directly into Rust structs:

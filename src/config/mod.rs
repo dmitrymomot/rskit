@@ -9,14 +9,17 @@
 //!
 //! Before deserialization, `${VAR}` placeholders are replaced with values from
 //! the process environment. Use `${VAR:default}` to supply a fallback when
-//! `VAR` is not set.
+//! `VAR` is not set. Parsing uses `serde_yaml_ng` and returns
+//! [`modo::Result`](crate::Result) so failures bubble up through `?`.
 //!
 //! Provides:
 //! - [`Config`] — top-level framework configuration struct composing the
-//!   sub-config of every built-in module.
+//!   sub-config of every built-in module (server, database, tracing, cookie,
+//!   security headers, CORS, CSRF, rate limiting, sessions, jobs, OAuth,
+//!   email, templates, i18n, geolocation, storage, DNS, API keys, JWT).
 //! - [`load`] — reads `{dir}/{APP_ENV}.yaml`, substitutes env vars, and
-//!   deserializes into `T`.
-//! - [`env`] — returns the current `APP_ENV` value (default: `"development"`).
+//!   deserializes into any `T: DeserializeOwned`.
+//! - [`env()`] — returns the current `APP_ENV` value (default: `"development"`).
 //! - [`is_dev`], [`is_prod`], [`is_test`] — environment predicates.
 //! - [`substitute`] — submodule exposing [`substitute::substitute_env_vars`] for
 //!   replacing `${VAR}` placeholders in arbitrary strings.

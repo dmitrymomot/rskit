@@ -80,6 +80,8 @@ impl<S> Layer<S> for ApiKeyLayer {
 }
 
 /// Tower [`Service`] that verifies API keys on every request.
+///
+/// Created by [`ApiKeyLayer::layer`]. Not constructed directly by users.
 pub struct ApiKeyMiddleware<S> {
     inner: S,
     store: ApiKeyStore,

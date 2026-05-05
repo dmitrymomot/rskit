@@ -15,11 +15,18 @@ use crate::sanitize::Sanitize;
 /// populate `Vec<Struct>` rows. For per-row dynamic forms, the indexed form is required so
 /// the deserializer can group fields into the correct row.
 ///
+/// The body is read through [`axum::body::Bytes`], so any
+/// [`axum::extract::DefaultBodyLimit`] (or `RequestBodyLimit` middleware) applied to the
+/// router is honored — oversized bodies short-circuit with `413 Payload Too Large`
+/// before deserialization runs.
+///
 /// # Errors
 ///
 /// The [`FromRequest::Rejection`] is [`crate::Error`]. A `400 Bad Request` is returned if
 /// the body is not valid `application/x-www-form-urlencoded` data or cannot be deserialized
-/// into `T`. The error renders via [`crate::Error::into_response`].
+/// into `T`. If the body exceeds the configured limit, the inner `Bytes` extractor
+/// surfaces a `413 Payload Too Large` instead. The error renders via its
+/// [`IntoResponse`](axum::response::IntoResponse) impl.
 ///
 /// # Example
 ///

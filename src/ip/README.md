@@ -116,13 +116,30 @@ trusted_proxies:
 ## Ordering with other layers
 
 `ClientIpLayer` must run **before** any middleware that depends on the
-resolved IP — notably the cookie session layer, which reads `ClientIp` for
-fingerprint validation. In axum, the outermost layer runs first, so
-`ClientIpLayer` must be the last `.layer(..)` call on the router.
+resolved IP — notably [`SessionLayer`](../auth/session) (alias for
+`CookieSessionLayer`), which reads `ClientIp` for fingerprint validation. In
+axum, the outermost layer runs first, so `ClientIpLayer` must be the last
+`.layer(..)` call on the router.
 
 ```text
 Router::new()
     .route(..)
     .layer(session_layer)          // inner — sees ClientIp
     .layer(ClientIpLayer::new());  // outer — resolves IP first
+```
+
+## Resolution function
+
+For non-Tower contexts (e.g., extracting a client IP from a raw
+[`HeaderMap`](http::HeaderMap) inside a job handler), call
+[`extract_client_ip`] directly:
+
+```rust
+use std::net::IpAddr;
+use modo::ip::extract_client_ip;
+
+let proxies: Vec<ipnet::IpNet> = vec!["10.0.0.0/8".parse().unwrap()];
+let headers = http::HeaderMap::new();
+let connect_ip: Option<IpAddr> = None;
+let ip = extract_client_ip(&headers, &proxies, connect_ip);
 ```

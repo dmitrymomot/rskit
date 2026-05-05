@@ -79,7 +79,7 @@ fn build_router(oauth_cfg: &OAuthConfig, cookie_cfg: &CookieConfig, http_client:
 
 ```rust
 use axum::response::{IntoResponse, Response};
-use modo::auth::oauth::Google;
+use modo::auth::oauth::{Google, OAuthProvider};
 use modo::service::Service;
 
 async fn google_login(Service(google): Service<Google>) -> modo::Result<Response> {
@@ -92,7 +92,7 @@ async fn google_login(Service(google): Service<Google>) -> modo::Result<Response
 ```rust
 use axum::extract::Query;
 use axum::response::Redirect;
-use modo::auth::oauth::{CallbackParams, Google, OAuthState, UserProfile};
+use modo::auth::oauth::{CallbackParams, Google, OAuthProvider, OAuthState, UserProfile};
 use modo::service::Service;
 
 async fn google_callback(

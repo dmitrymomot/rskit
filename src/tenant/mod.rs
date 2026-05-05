@@ -18,7 +18,7 @@
 //! - [`TenantMiddleware`] — Tower service that resolves the tenant on every request
 //! - [`middleware()`] — primary entry point that builds a [`TenantLayer`] from a strategy and resolver
 //!
-//! The [`domain`] submodule provides [`DomainService`](domain::DomainService)
+//! The [`mod@domain`] submodule provides [`DomainService`](domain::DomainService)
 //! for registering and DNS-verifying custom per-tenant domains.
 //!
 //! # How it works

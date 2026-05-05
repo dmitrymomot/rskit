@@ -63,6 +63,11 @@ impl WebhookSender {
 
     /// Convenience constructor using a default `reqwest::Client` with a
     /// 30-second timeout.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying `reqwest::Client` cannot be built (e.g. the
+    /// platform TLS backend fails to initialize).
     pub fn default_client() -> Self {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))

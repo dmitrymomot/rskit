@@ -15,6 +15,9 @@ pub struct ValidationError {
 
 impl ValidationError {
     /// Create a new `ValidationError` from a pre-built field-error map.
+    ///
+    /// Most callers should use [`super::Validator`] instead of constructing
+    /// this directly.
     pub fn new(fields: HashMap<String, Vec<String>>) -> Self {
         Self { fields }
     }

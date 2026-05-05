@@ -53,6 +53,8 @@ impl Color {
     ///
     /// Three-digit shorthand is expanded (`"#fff"` becomes `"#ffffff"`).
     ///
+    /// # Errors
+    ///
     /// Returns [`QrError::InvalidColor`] if the hex value is malformed
     /// (missing `#`, wrong length, or non-hex characters).
     pub fn to_hex(&self) -> Result<String, QrError> {

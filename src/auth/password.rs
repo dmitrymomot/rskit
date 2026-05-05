@@ -39,8 +39,6 @@ impl Default for PasswordConfig {
 /// starve the async runtime. Returns a PHC-formatted string that embeds the
 /// algorithm, parameters, salt, and hash — suitable for storage in a database.
 ///
-/// Requires feature `"auth"`.
-///
 /// # Errors
 ///
 /// Returns `Error::internal` if the Argon2id parameters are invalid or the
@@ -58,8 +56,6 @@ pub async fn hash(password: &str, config: &PasswordConfig) -> crate::Result<Stri
 /// Runs on a blocking thread. Returns `true` if the password matches, `false`
 /// otherwise. Never returns an error for a wrong password — only for a
 /// malformed hash string.
-///
-/// Requires feature `"auth"`.
 ///
 /// # Errors
 ///

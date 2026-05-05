@@ -20,6 +20,10 @@ use super::meta::Meta;
 use super::reaper::reaper_loop;
 
 /// Per-handler options controlling retry and timeout behavior.
+///
+/// Pass to [`WorkerBuilder::register_with`] to override defaults for a single
+/// handler. Use [`WorkerBuilder::register`] for the default
+/// `max_attempts = 3` / `timeout_secs = 300`.
 pub struct JobOptions {
     /// Maximum number of execution attempts before the job is marked `Dead`.
     /// Defaults to `3`.

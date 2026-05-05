@@ -51,8 +51,10 @@ pub struct SignedHeaders {
 
 /// Build Standard Webhooks signed content and sign it with every secret in `secrets`.
 ///
-/// Each secret produces one `v1,<base64>` entry; multiple entries are joined with
-/// a space, which supports key rotation on both sender and receiver sides.
+/// The signed content is `<id>.<timestamp>.<body>` (concatenated bytes), per the
+/// Standard Webhooks specification. Each secret produces one `v1,<base64>` entry;
+/// multiple entries are joined with a space, which supports key rotation on both
+/// sender and receiver sides.
 ///
 /// # Panics
 ///

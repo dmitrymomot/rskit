@@ -2,15 +2,21 @@
 //!
 //! Type-map service registry and axum application state.
 //!
-//! Provides:
+//! Services are keyed by their concrete Rust type and stored as
+//! `Arc<dyn Any + Send + Sync>`. Each type can be registered at most once;
+//! registering the same type twice overwrites the previous entry.
+//!
+//! ## Provides
+//!
 //! - [`Registry`] — mutable builder used at startup to register services by type.
 //!   Implements [`Default`].
 //! - [`AppState`] — immutable, cheaply-cloneable snapshot of the registry that axum
 //!   holds as its application state.
 //! - [`Service<T>`](Service) — axum extractor that retrieves a registered service by
-//!   type from the application state.
+//!   type from the application state. Rejects with `500 Internal Server Error` when
+//!   the requested type is absent.
 //!
-//! # Typical startup flow
+//! ## Quick start
 //!
 //! ```
 //! use modo::service::{AppState, Registry};

@@ -31,7 +31,12 @@ impl Clone for ClientIpLayer {
 
 impl ClientIpLayer {
     /// Create a layer with no trusted proxies.
-    /// Headers are trusted unconditionally; `ConnectInfo` is the final fallback.
+    ///
+    /// `X-Forwarded-For` and `X-Real-IP` are trusted unconditionally;
+    /// [`ConnectInfo`](axum::extract::connect_info::ConnectInfo) is the final
+    /// fallback before `127.0.0.1`. Use this only when every request is
+    /// guaranteed to pass through a load balancer you control — otherwise
+    /// clients can spoof their IP by sending these headers directly.
     pub fn new() -> Self {
         Self {
             trusted_proxies: Arc::new(Vec::new()),
@@ -39,6 +44,11 @@ impl ClientIpLayer {
     }
 
     /// Create a layer with pre-parsed trusted proxy CIDR ranges.
+    ///
+    /// `X-Forwarded-For` and `X-Real-IP` are honoured only when the peer
+    /// connection (`ConnectInfo`) originates from one of the supplied CIDR
+    /// ranges. Connections from any other address fall back to the raw
+    /// peer IP, ignoring the proxy headers entirely.
     pub fn with_trusted_proxies(proxies: Vec<ipnet::IpNet>) -> Self {
         Self {
             trusted_proxies: Arc::new(proxies),

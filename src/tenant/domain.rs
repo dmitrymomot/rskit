@@ -13,7 +13,7 @@
 //! Domains can be flagged for email routing (`use_for_email`) or HTTP request
 //! routing (`use_for_routing`).
 //!
-//! Verification uses DNS TXT records via [`DomainVerifier`](crate::dns::DomainVerifier).
+//! Verification uses DNS TXT records via [`crate::dns::DomainVerifier`].
 //! A domain must be verified within 48 hours of registration or it is marked
 //! as failed.
 
@@ -185,7 +185,7 @@ impl FromRow for MatchRow {
 ///
 /// # Errors
 ///
-/// Returns [`Error`](crate::Error) (400 Bad Request) if the domain is
+/// Returns [`crate::Error`] (400 Bad Request) if the domain is
 /// syntactically invalid.
 pub fn validate_domain(domain: &str) -> Result<String> {
     let domain = domain.trim().to_lowercase();
@@ -236,7 +236,7 @@ pub fn validate_domain(domain: &str) -> Result<String> {
 ///
 /// # Errors
 ///
-/// Returns [`Error`](crate::Error) (400 Bad Request) if the email is
+/// Returns [`crate::Error`] (400 Bad Request) if the email is
 /// malformed or the domain portion is invalid.
 pub fn extract_email_domain(email: &str) -> Result<String> {
     let email = email.trim();
@@ -299,7 +299,7 @@ impl DomainService {
     ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the domain is invalid (400) or the
+    /// Returns [`crate::Error`] if the domain is invalid (400) or the
     /// database insert fails (500).
     pub async fn register(&self, tenant_id: &str, domain: &str) -> Result<DomainClaim> {
         let domain = validate_domain(domain)?;
@@ -365,7 +365,7 @@ impl DomainService {
     ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the claim is not found (404),
+    /// Returns [`crate::Error`] if the claim is not found (404),
     /// the verification window has expired (400), the DNS record does not
     /// match (400), or the database/DNS query fails (500).
     pub async fn verify(&self, id: &str) -> Result<DomainClaim> {
@@ -439,7 +439,7 @@ impl DomainService {
     ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the database delete fails.
+    /// Returns [`crate::Error`] if the database delete fails.
     pub async fn remove(&self, id: &str) -> Result<()> {
         self.inner
             .db
@@ -457,7 +457,7 @@ impl DomainService {
     ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the domain is not in `verified`
+    /// Returns [`crate::Error`] if the domain is not in `verified`
     /// status (400) or the database update fails.
     pub async fn enable_email(&self, id: &str) -> Result<()> {
         self.require_verified(id).await?;
@@ -477,7 +477,7 @@ impl DomainService {
     ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the database update fails.
+    /// Returns [`crate::Error`] if the database update fails.
     pub async fn disable_email(&self, id: &str) -> Result<()> {
         self.inner
             .db
@@ -495,7 +495,7 @@ impl DomainService {
     ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the domain is not in `verified`
+    /// Returns [`crate::Error`] if the domain is not in `verified`
     /// status (400) or the database update fails.
     pub async fn enable_routing(&self, id: &str) -> Result<()> {
         self.require_verified(id).await?;
@@ -515,7 +515,7 @@ impl DomainService {
     ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the database update fails.
+    /// Returns [`crate::Error`] if the database update fails.
     pub async fn disable_routing(&self, id: &str) -> Result<()> {
         self.inner
             .db
@@ -537,7 +537,7 @@ impl DomainService {
     ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the email is malformed (400) or the
+    /// Returns [`crate::Error`] if the email is malformed (400) or the
     /// database query fails.
     pub async fn lookup_email_domain(&self, email: &str) -> Result<Option<TenantMatch>> {
         let domain = extract_email_domain(email)?;
@@ -562,7 +562,7 @@ impl DomainService {
     ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the domain is invalid (400) or the
+    /// Returns [`crate::Error`] if the domain is invalid (400) or the
     /// database query fails.
     pub async fn lookup_routing_domain(&self, domain: &str) -> Result<Option<TenantMatch>> {
         let domain = validate_domain(domain)?;
@@ -590,7 +590,7 @@ impl DomainService {
     ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the domain is invalid (400) or the
+    /// Returns [`crate::Error`] if the domain is invalid (400) or the
     /// database query fails.
     pub async fn resolve_tenant(&self, domain: &str) -> Result<Option<String>> {
         Ok(self
@@ -606,7 +606,7 @@ impl DomainService {
     ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the database query fails.
+    /// Returns [`crate::Error`] if the database query fails.
     pub async fn list(&self, tenant_id: &str) -> Result<Vec<DomainClaim>> {
         let rows: Vec<DomainRow> = self
             .inner

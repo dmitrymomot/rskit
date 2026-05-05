@@ -11,7 +11,9 @@ use crate::sanitize::Sanitize;
 /// Repeated query keys deserialize into `Vec<…>` fields — for example `?tags=a&tags=b&tags=c`
 /// populates a `tags: Vec<String>` field with three elements. Nested keys
 /// (`?filter[status]=active`) populate nested struct fields, and indexed brackets
-/// (`?items[0][id]=…`) populate `Vec<Struct>` rows.
+/// (`?items[0][id]=…`) populate `Vec<Struct>` rows. Browsers that percent-encode
+/// brackets (`?filter%5Bstatus%5D=active`, `?items%5B0%5D%5Bid%5D=…`) decode to the
+/// same shape — both forms are accepted.
 ///
 /// Because this extractor implements [`FromRequestParts`] rather than `FromRequest`, it
 /// can be combined with body extractors on the same handler. To make `Query` optional
@@ -22,8 +24,8 @@ use crate::sanitize::Sanitize;
 /// # Errors
 ///
 /// The [`FromRequestParts::Rejection`] is [`crate::Error`]. A `400 Bad Request` is
-/// returned if the query string cannot be deserialized into `T`. The error renders via
-/// [`crate::Error::into_response`].
+/// returned if the query string cannot be deserialized into `T`. The error renders via its
+/// [`IntoResponse`](axum::response::IntoResponse) impl.
 ///
 /// # Example
 ///

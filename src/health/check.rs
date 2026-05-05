@@ -54,13 +54,18 @@ pub struct HealthChecks {
 
 impl HealthChecks {
     /// Creates an empty collection with no registered checks.
+    ///
+    /// When mounted via [`router`](super::router) with no checks registered,
+    /// `/_ready` returns `200 OK`.
     pub fn new() -> Self {
         Self { checks: Vec::new() }
     }
 
     /// Registers a [`HealthCheck`] implementation under the given name.
     ///
-    /// The name is used in error logs when the check fails.
+    /// The name is recorded with the failure in the `check_name` tracing field
+    /// when `/_ready` reports a failure. Names are not required to be unique,
+    /// but uniqueness makes log triage easier.
     pub fn check(mut self, name: &str, c: impl HealthCheck) -> Self {
         self.checks.push((name.to_owned(), Arc::new(c)));
         self
@@ -70,7 +75,7 @@ impl HealthChecks {
     ///
     /// The closure must return [`crate::Result<()>`] — `Ok(())` means healthy,
     /// any `Err` marks the service unhealthy and causes `/_ready` to return
-    /// `503`.
+    /// `503 Service Unavailable`.
     pub fn check_fn<F, Fut>(mut self, name: &str, f: F) -> Self
     where
         F: Fn() -> Fut + Send + Sync + 'static,

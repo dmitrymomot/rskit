@@ -3,6 +3,10 @@ use serde::Deserialize;
 /// Configuration for the geolocation module.
 ///
 /// Deserializes from the `geolocation` section of the application YAML config.
+/// `Default` produces an empty `mmdb_path`; constructing a [`GeoLocator`] from
+/// a default config will return an error.
+///
+/// [`GeoLocator`]: super::GeoLocator
 #[non_exhaustive]
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]

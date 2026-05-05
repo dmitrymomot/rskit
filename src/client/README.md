@@ -51,24 +51,43 @@ let info = ClientInfo::new()
 
 ### From a `HeaderMap`
 
-When middleware already holds the request headers, use `from_headers` — it
-parses device fields from the user-agent and computes the fingerprint:
+When middleware already holds a `&HeaderMap` (e.g. inside another Tower
+service), use `from_headers` — it parses device fields from the user-agent
+and computes the fingerprint:
 
 ```rust
+use http::HeaderMap;
 use modo::client::{ClientInfo, header_str};
 
-let info = ClientInfo::from_headers(
-    Some("1.2.3.4".into()),
-    header_str(&headers, "user-agent"),
-    header_str(&headers, "accept-language"),
-    header_str(&headers, "accept-encoding"),
-);
+fn build(headers: &HeaderMap) -> ClientInfo {
+    ClientInfo::from_headers(
+        Some("1.2.3.4".into()),
+        header_str(headers, "user-agent"),
+        header_str(headers, "accept-language"),
+        header_str(headers, "accept-encoding"),
+    )
+}
 ```
 
 Unlike the `FromRequestParts` extractor, `from_headers` always populates the
 device fields and fingerprint — the caller has already collapsed missing
-headers into empty strings, so the distinction between "header absent" and
-"header empty" is no longer available.
+headers into empty strings (typically via `header_str`), so the distinction
+between "header absent" and "header empty" is no longer available.
+
+## API surface
+
+| Item                                | Kind     | Notes                                                               |
+| ----------------------------------- | -------- | ------------------------------------------------------------------- |
+| `ClientInfo`                        | struct   | `Debug + Clone + Default`. All fields private; access via `*_value()`. |
+| `ClientInfo::new`                   | fn       | All fields `None`.                                                  |
+| `ClientInfo::ip` / `user_agent` / `device_name` / `device_type` / `fingerprint` | builder | Set individual fields. |
+| `ClientInfo::from_headers`          | fn       | Populates device + fingerprint from raw header strings.             |
+| `ClientInfo::*_value`               | accessor | Returns `Option<&str>` for each field.                              |
+| `impl FromRequestParts for ClientInfo` | impl  | Never errors. Reads `ClientIp` extension + UA / Accept-* headers.   |
+| `parse_device_name(&str) -> String` | fn       | e.g. `"Chrome on macOS"`. Falls back to `"Unknown on Unknown"`.     |
+| `parse_device_type(&str) -> String` | fn       | `"tablet"` / `"mobile"` / `"desktop"`. Empty UA returns `"desktop"`. |
+| `compute_fingerprint(ua, lang, enc) -> String` | fn | 64-char lowercase hex SHA-256, null-byte separated.        |
+| `header_str(&HeaderMap, &str) -> &str` | fn    | Returns `""` when absent or non-UTF-8.                              |
 
 ## Consumers
 

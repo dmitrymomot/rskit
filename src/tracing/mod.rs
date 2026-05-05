@@ -41,10 +41,14 @@
 //!
 //! This module only handles *subscriber* setup. HTTP request/response
 //! spans are produced by [`crate::middleware::tracing`], which wires a
-//! `tower_http::trace::TraceLayer` with a `ModoMakeSpan` that pre-declares
-//! a `tenant_id` field (initially empty) so the tenant middleware can
-//! later record it via `span.record("tenant_id", ...)`. All tracing field
-//! names use snake_case (`user_id`, `session_id`, `job_id`, etc.).
+//! `tower_http::trace::TraceLayer` with [`crate::middleware::ModoMakeSpan`].
+//! `ModoMakeSpan` pre-declares a `tenant_id = tracing::field::Empty`
+//! field so the tenant middleware can later fill it via
+//! `span.record("tenant_id", ...)`. `tracing` silently drops `record()`
+//! calls for fields that were not declared at span construction — any
+//! new field a middleware needs to fill must therefore be added to
+//! `ModoMakeSpan` first. All tracing field names use snake_case
+//! (`user_id`, `session_id`, `job_id`, etc.).
 //!
 //! ## Quick start
 //!

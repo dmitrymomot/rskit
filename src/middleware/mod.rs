@@ -35,7 +35,8 @@
 //! | [`error_handler`] | Centralised error-response rendering |
 //! | [`default_error_handler`] | Ready-made responder that translates `locale_key` when a [`Translator`](crate::i18n::Translator) is available |
 //! | [`security_headers`] / [`SecurityHeadersConfig`] | Security response headers |
-//! | [`tracing`] | HTTP request/response lifecycle spans |
+//! | [`tracing`] | HTTP request/response lifecycle spans (`http_request`) |
+//! | [`ModoMakeSpan`] | Span maker used by [`tracing`]; pre-declares fields like `tenant_id` |
 //! | [`rate_limit`] / [`rate_limit_with`] | Token-bucket rate limiting |
 //! | [`RateLimitConfig`] | Rate-limit configuration |
 //! | [`RateLimitLayer`] | Tower layer produced by `rate_limit` / `rate_limit_with` |
@@ -50,7 +51,12 @@
 //! path. The idiomatic stack for the always-available layers is:
 //!
 //! 1. `tracing()` — outermost, so every request (including errors produced
-//!    by inner layers) is observed.
+//!    by inner layers) is observed. The span is built by [`ModoMakeSpan`],
+//!    which pre-declares `tenant_id = tracing::field::Empty` so that the
+//!    tenant middleware can fill it later via `tracing::Span::record`.
+//!    Any new field that downstream middleware needs to record **must** be
+//!    added to [`ModoMakeSpan`] first — `tracing` drops fields that were
+//!    not pre-declared at span creation.
 //! 2. `catch_panic()` — converts handler/inner-layer panics into 500s
 //!    before they bubble past the error handler.
 //! 3. `request_id()` — sets / propagates `x-request-id` so it appears on
@@ -103,7 +109,7 @@ mod security_headers;
 mod tracing;
 mod user_agent;
 
-pub use self::tracing::tracing;
+pub use self::tracing::{ModoMakeSpan, tracing};
 pub use catch_panic::catch_panic;
 pub use compression::compression;
 pub use cors::{CorsConfig, cors, cors_with, subdomains, urls};

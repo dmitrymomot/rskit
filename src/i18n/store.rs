@@ -150,6 +150,11 @@ impl TranslationStore {
     ///
     /// Falls back to the default locale and finally to the key itself if no entry
     /// is found.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Ok` in all current code paths; the [`Result`] return type is
+    /// reserved for future expansion (e.g. strict-mode lookups).
     pub fn translate(
         &self,
         locale: &str,
@@ -184,6 +189,11 @@ impl TranslationStore {
     /// against English `one` / `other` forms map to `other`). This keeps
     /// grammatical selection consistent with the user's language even though
     /// the fallback copy is authored for a different one.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Ok` in all current code paths; the [`Result`] return type is
+    /// reserved for future expansion (e.g. strict-mode lookups).
     pub fn translate_plural(
         &self,
         locale: &str,

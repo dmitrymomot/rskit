@@ -36,7 +36,8 @@ impl Validator {
     /// chain rule methods on it. Any rule failures are collected as errors for this field.
     ///
     /// Works with any value type — string rules are available for `T: AsRef<str>`,
-    /// numeric rules for `T: PartialOrd + Display`.
+    /// numeric rules for `T: PartialOrd + Display`. Errors from this call do not
+    /// short-circuit; subsequent `field` calls still execute and accumulate.
     pub fn field<T>(
         mut self,
         name: &str,

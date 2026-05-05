@@ -37,8 +37,9 @@ See also the virtual [`modo::middlewares`](../middlewares.rs) flat index, which 
 
 | Item         | Kind | Purpose                                       |
 | ------------ | ---- | --------------------------------------------- |
-| `request_id` | fn   | Set / propagate `x-request-id` (ULID-based)   |
-| `tracing`    | fn   | HTTP request/response lifecycle tracing spans |
+| `request_id`   | fn     | Set / propagate `x-request-id` (ULID-based)                                                 |
+| `tracing`      | fn     | HTTP request/response lifecycle tracing spans (`http_request`)                              |
+| `ModoMakeSpan` | struct | Span maker used by `tracing`; pre-declares `tenant_id` so middleware can `Span::record` it  |
 
 ### Control flow
 
@@ -89,6 +90,30 @@ let app: Router = Router::new()
 Use `Router::layer(...)` for middleware that should run for every request the router sees, including 404s synthesized by axum. Use `Router::route_layer(...)` when the middleware must only see requests that matched a real route — for example, authorization guards that otherwise would rewrite a 404 into a 401. All middleware in this module is designed for `.layer(...)`; domain guards from `auth`, `tier`, etc. typically want `.route_layer`.
 
 The `Router::layer` bounds require the wrapped `L` and `L::Service` to be `+ Sync`, with errors convertible `Into<Infallible>`. All middleware constructors in this module satisfy those bounds.
+
+### Tracing
+
+```rust,ignore
+use axum::{Router, routing::get};
+use modo::middleware::tracing;
+
+let app: Router = Router::new()
+    .route("/", get(|| async { "ok" }))
+    .layer(tracing());                    // outermost
+```
+
+`tracing()` returns a `TraceLayer` whose span is built by `ModoMakeSpan`. The span is named `http_request` and is pre-populated with these fields:
+
+| Field       | Source                                                              |
+| ----------- | ------------------------------------------------------------------- |
+| `method`    | `request.method()`                                                  |
+| `uri`       | `request.uri()`                                                     |
+| `version`   | `request.version()`                                                 |
+| `tenant_id` | `tracing::field::Empty` — filled later by the tenant middleware via `Span::record("tenant_id", ...)` |
+
+**Important — field reservation**: `tracing` silently drops fields that were not declared when the span was created. If a new middleware needs to write a field into the request span (for example `user_id` or `request_id`), it must first be added to `ModoMakeSpan` so that the field exists in the span definition. Recording an undeclared field is a no-op.
+
+`ModoMakeSpan` is re-exported from `modo::middleware` so callers that need to reference the type (e.g. when writing custom tower stacks) can import it directly.
 
 ### CORS
 

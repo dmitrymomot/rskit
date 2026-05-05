@@ -12,7 +12,7 @@ use crate::sanitize::Sanitize;
 ///
 /// The [`FromRequest::Rejection`] is [`crate::Error`]. A `400 Bad Request` is returned if
 /// the body is missing, has a wrong content-type, is not valid JSON, or cannot be
-/// deserialized into `T`. The error renders via [`crate::Error::into_response`].
+/// deserialized into `T`. The error renders via its [`IntoResponse`](axum::response::IntoResponse) impl.
 ///
 /// # Example
 ///

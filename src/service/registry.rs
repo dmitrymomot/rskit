@@ -27,7 +27,7 @@ pub struct Registry {
 }
 
 impl Registry {
-    /// Creates an empty registry.
+    /// Creates an empty registry with no services registered.
     pub fn new() -> Self {
         Self {
             services: HashMap::new(),

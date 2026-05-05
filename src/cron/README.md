@@ -21,6 +21,28 @@ The following formats are accepted wherever a schedule string is required:
 Invalid expressions or durations return an error at builder time (from
 `SchedulerBuilder::job` / `SchedulerBuilder::job_with`).
 
+### Cron expression cheat sheet
+
+Standard 5-field format is `minute hour day-of-month month day-of-week`. The
+6-field form prepends a seconds field — selected automatically by croner's
+`Seconds::Optional` mode.
+
+| Expression          | Meaning                                  |
+| ------------------- | ---------------------------------------- |
+| `0 * * * *`         | Top of every hour                        |
+| `*/5 * * * *`       | Every 5 minutes                          |
+| `0 9 * * 1`         | Every Monday at 09:00                    |
+| `30 2 * * *`        | Every day at 02:30                       |
+| `0 0 1 * *`         | First of every month at 00:00            |
+| `0 30 9 * * *`      | Every day at 09:30:00 (6-field)          |
+| `*/15 * * * * *`    | Every 15 seconds (6-field)               |
+| `@every 90s`        | Every 90 seconds                         |
+| `@every 2h30m`      | Every 2 hours 30 minutes                 |
+
+Duration units accepted by `@every` are `h`, `m`, and `s` only — `d` (days)
+and `ms` (milliseconds) are rejected, and a bare number without a unit is
+also rejected.
+
 ## Key types
 
 | Type                | Description                                                        |

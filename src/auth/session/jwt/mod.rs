@@ -65,6 +65,11 @@
 //! revoked). The system uses `aud = "access"` for access tokens and
 //! `aud = "refresh"` for refresh tokens.
 //!
+//! In addition to typed [`JwtError`] codes (`jwt:*`), the middleware and
+//! [`JwtSession`] extractor emit the following stable codes: `auth:aud_mismatch`,
+//! `auth:session_not_found`, `auth:access_missing`, `auth:refresh_missing`.
+//! See the README for the full error table.
+//!
 //! ## Low-level / custom payload
 //!
 //! ```rust,ignore

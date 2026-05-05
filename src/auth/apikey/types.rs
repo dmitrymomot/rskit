@@ -11,7 +11,7 @@ pub struct CreateKeyRequest {
     pub name: String,
     /// Scopes this key grants. Framework stores, app defines meaning.
     pub scopes: Vec<String>,
-    /// Expiration timestamp (ISO 8601). `None` for lifetime tokens.
+    /// Expiration timestamp (RFC 3339). `None` for lifetime tokens.
     pub expires_at: Option<String>,
 }
 
@@ -31,9 +31,9 @@ pub struct ApiKeyCreated {
     pub scopes: Vec<String>,
     /// Tenant this key belongs to.
     pub tenant_id: String,
-    /// Expiration timestamp (ISO 8601), or `None` for lifetime.
+    /// Expiration timestamp (RFC 3339), or `None` for lifetime.
     pub expires_at: Option<String>,
-    /// Creation timestamp (ISO 8601).
+    /// Creation timestamp (RFC 3339).
     pub created_at: String,
 }
 
@@ -53,11 +53,11 @@ pub struct ApiKeyMeta {
     pub name: String,
     /// Scopes this key grants.
     pub scopes: Vec<String>,
-    /// Expiration timestamp (ISO 8601), or `None` for lifetime.
+    /// Expiration timestamp (RFC 3339), or `None` for lifetime.
     pub expires_at: Option<String>,
-    /// Last time this key was used (ISO 8601).
+    /// Last time this key was used (RFC 3339).
     pub last_used_at: Option<String>,
-    /// Creation timestamp (ISO 8601).
+    /// Creation timestamp (RFC 3339).
     pub created_at: String,
 }
 
@@ -77,13 +77,13 @@ pub struct ApiKeyRecord {
     pub name: String,
     /// Scopes as `Vec<String>` (serialized as JSON in DB).
     pub scopes: Vec<String>,
-    /// Expiration timestamp (ISO 8601), or `None` for lifetime.
+    /// Expiration timestamp (RFC 3339), or `None` for lifetime.
     pub expires_at: Option<String>,
-    /// Last use timestamp (ISO 8601).
+    /// Last use timestamp (RFC 3339).
     pub last_used_at: Option<String>,
-    /// Creation timestamp (ISO 8601).
+    /// Creation timestamp (RFC 3339).
     pub created_at: String,
-    /// Revocation timestamp (ISO 8601), or `None` if active.
+    /// Revocation timestamp (RFC 3339), or `None` if active.
     pub revoked_at: Option<String>,
 }
 

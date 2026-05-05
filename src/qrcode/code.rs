@@ -52,12 +52,16 @@ pub struct QrCode {
 impl QrCode {
     /// Generate a QR code matrix with default error correction ([`Ecl::Medium`]).
     ///
+    /// # Errors
+    ///
     /// Returns [`QrError::DataTooLong`] if the input exceeds QR capacity.
     pub fn new(data: &str) -> Result<Self, QrError> {
         Self::with_ecl(data, Ecl::Medium)
     }
 
     /// Generate a QR code matrix with the specified error correction level.
+    ///
+    /// # Errors
     ///
     /// Returns [`QrError::DataTooLong`] if the input exceeds QR capacity
     /// for the chosen level.
@@ -72,8 +76,11 @@ impl QrCode {
     /// Render the QR code as an SVG string.
     ///
     /// The SVG uses a `viewBox` (no fixed `width`/`height`) so it scales
-    /// to its container. Returns [`QrError::InvalidColor`] if any color
-    /// in `style` is malformed.
+    /// to its container.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`QrError::InvalidColor`] if any color in `style` is malformed.
     pub fn to_svg(&self, style: &QrStyle) -> Result<String, QrError> {
         render::render_svg(&self.qr, style)
     }

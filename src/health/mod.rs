@@ -19,7 +19,7 @@
 //!   if all pass or `503 Service Unavailable` if any fail; failures are
 //!   logged at `ERROR` level. When no checks are registered, responds `200`.
 //!
-//! # Example
+//! # Quick start
 //!
 //! ```no_run
 //! use modo::health::HealthChecks;

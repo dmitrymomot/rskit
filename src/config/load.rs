@@ -7,15 +7,23 @@ use crate::error::Result;
 
 /// Loads and deserializes a YAML config file for the current environment.
 ///
-/// The file is resolved as `{config_dir}/{APP_ENV}.yaml`. After reading, all
-/// `${VAR}` and `${VAR:default}` placeholders are replaced with values from
-/// the process environment before deserialization.
+/// The file is resolved as `{config_dir}/{APP_ENV}.yaml`, where `APP_ENV` is
+/// read from the process environment via [`super::env()`] (defaults to
+/// `"development"`). After reading, all `${VAR}` and `${VAR:default}`
+/// placeholders are replaced with values from the process environment via
+/// [`substitute_env_vars`] before YAML deserialization with `serde_yaml_ng`.
+///
+/// `T` may be [`crate::Config`] or any application-specific struct — flatten
+/// `Config` with `#[serde(flatten)]` to keep the framework fields alongside
+/// custom ones.
 ///
 /// # Errors
 ///
-/// Returns an error when:
-/// - The config file cannot be read.
-/// - A required `${VAR}` placeholder references an unset environment variable.
+/// Returns [`crate::Error`] when:
+/// - The config file cannot be read (missing file, permission denied, …).
+/// - A required `${VAR}` placeholder references an unset environment variable
+///   and provides no default.
+/// - A `${...` placeholder is unclosed.
 /// - The YAML cannot be deserialized into `T`.
 ///
 /// # Example

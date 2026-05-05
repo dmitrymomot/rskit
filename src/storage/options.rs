@@ -13,7 +13,8 @@ pub enum Acl {
 }
 
 impl Acl {
-    /// S3 `x-amz-acl` header value.
+    /// Return the S3 `x-amz-acl` header value for this ACL
+    /// (`"private"` or `"public-read"`).
     pub fn as_header_value(&self) -> &'static str {
         match self {
             Acl::Private => "private",

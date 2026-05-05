@@ -29,6 +29,9 @@ impl Clone for GeoLayer {
 
 impl GeoLayer {
     /// Create a new `GeoLayer` backed by `locator`.
+    ///
+    /// The layer clones `locator` per-request; cloning is cheap because
+    /// [`GeoLocator`] holds the mmdb reader behind an `Arc`.
     pub fn new(locator: GeoLocator) -> Self {
         Self { locator }
     }

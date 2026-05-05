@@ -78,6 +78,7 @@ async fn health_stream(
 ```rust,ignore
 use modo::sse::{Broadcaster, Event, LagPolicy, LastEventId, SseStreamExt, replay};
 use modo::service::Service;
+use futures_util::StreamExt; // for `.chain()`
 
 async fn notifications(
     LastEventId(last_id): LastEventId,

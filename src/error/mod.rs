@@ -33,19 +33,24 @@
 //! ```rust
 //! use modo::error::{Error, Result};
 //!
-//! fn find_user(id: u64) -> Result<String> {
+//! fn parse_id(raw: &str) -> Result<u64> {
+//!     // `?` propagates any error whose `From` impl maps into [`Error`].
+//!     // For domain checks, return one of the named status constructors.
+//!     let id: u64 = raw
+//!         .parse()
+//!         .map_err(|_| Error::bad_request("invalid id"))?;
 //!     if id == 0 {
 //!         return Err(Error::not_found("user not found"));
 //!     }
-//!     Ok("Alice".to_string())
+//!     Ok(id)
 //! }
 //! ```
 //!
 //! ## Source drops on clone and response — use `error_code` for identity
 //!
 //! The boxed `source` field is `Box<dyn std::error::Error + Send + Sync>`, which
-//! is not `Clone`. Both [`Clone`] and [`Error::into_response`] therefore drop
-//! the source. This means:
+//! is not `Clone`. Both [`Clone`] and the [`IntoResponse`](axum::response::IntoResponse)
+//! impl therefore drop the source. This means:
 //!
 //! - **Pre-response (inside a handler or middleware that still owns the
 //!   `Error`)** — use [`Error::source_as::<T>`](Error::source_as) to downcast

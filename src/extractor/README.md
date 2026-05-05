@@ -80,6 +80,11 @@ async fn login(FormRequest(form): FormRequest<LoginForm>) {
 }
 ```
 
+`FormRequest` reads the body through `axum::body::Bytes`, so any
+`DefaultBodyLimit` (or `RequestBodyLimit` middleware) you apply to the router is
+honored — oversized requests short-circuit with `413 Payload Too Large` before any
+deserialization runs.
+
 #### Repeated keys (multi-select checkboxes / dropdowns)
 
 `FormRequest`, `Query`, and the text-field side of `MultipartRequest` deserialize via
@@ -217,6 +222,41 @@ impl Sanitize for SearchParams {
 
 async fn search(Query(params): Query<SearchParams>) {
     // params.q is trimmed and lowercased
+}
+```
+
+#### Nested filters and percent-encoded brackets
+
+`Query<T>` uses `serde_qs` form-encoding mode, so it accepts both bare brackets and
+the percent-encoded form most browsers emit when JS builds the URL with
+`URLSearchParams`. Both of these decode into the same `Filter` struct:
+
+```text
+GET /clients?filter[status]=active&filter[role]=admin
+GET /clients?filter%5Bstatus%5D=active&filter%5Brole%5D=admin
+```
+
+```rust
+use modo::extractor::Query;
+use modo::sanitize::Sanitize;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct Filter { status: String, role: String }
+
+#[derive(Deserialize)]
+struct ListClients {
+    page: Option<u32>,
+    filter: Filter,           // filter[status]=…&filter[role]=…
+    tags: Vec<String>,        // tags=a&tags=b
+}
+
+impl Sanitize for ListClients {
+    fn sanitize(&mut self) {}
+}
+
+async fn list_clients(Query(p): Query<ListClients>) {
+    // p.filter.status == "active" for either bracket encoding above
 }
 ```
 

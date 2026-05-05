@@ -19,7 +19,8 @@ impl TemplateContext {
     ///
     /// Used by [`TemplateContextLayer`](super::TemplateContextLayer) to populate
     /// request-scoped data, and available to custom middleware that wants to
-    /// expose values to templates.
+    /// expose values to templates. Note that values supplied by a handler at
+    /// render time still override values set here.
     pub fn set(&mut self, key: impl Into<String>, value: minijinja::Value) {
         self.values.insert(key.into(), value);
     }
