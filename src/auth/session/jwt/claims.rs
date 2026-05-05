@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 /// serialized token.
 ///
 /// Custom auth flows that need extra payload fields should define their own
-/// struct and pass it directly to [`JwtEncoder::encode<T>`] /
-/// [`JwtDecoder::decode<T>`].
+/// struct and pass it directly to [`JwtEncoder::encode`](super::JwtEncoder::encode) /
+/// [`JwtDecoder::decode`](super::JwtDecoder::decode).
 ///
 /// # Example
 ///

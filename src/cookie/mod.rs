@@ -15,7 +15,7 @@
 //!   the `axum_extra` jar extractors, provided for handler-level use.
 //!
 //! modo's built-in middleware (session, flash, CSRF, OAuth state) works
-//! directly with the raw [`cookie::CookieJar`](::cookie::CookieJar) type and
+//! directly with the raw [`cookie::CookieJar`] type and
 //! does not use the signed or private jar extractors.
 //!
 //! This module is always compiled; no feature flag is required.

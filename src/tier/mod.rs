@@ -16,7 +16,7 @@
 //!   (also re-exported as `modo::guards::require_feature`)
 //! - [`require_limit()`] — route guard for usage-limit gates
 //!   (also re-exported as `modo::guards::require_limit`)
-//! - [`test`] — test helpers ([`test::StaticTierBackend`] and
+//! - [`mod@test`] — test helpers ([`test::StaticTierBackend`] and
 //!   [`test::FailingTierBackend`])
 //!
 //! ## Quick start

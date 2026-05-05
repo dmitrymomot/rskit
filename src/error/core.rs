@@ -134,7 +134,7 @@ impl Error {
     /// inside a custom handler passed to
     /// [`error_handler`](crate::middleware::error_handler).
     ///
-    /// Also note that [`Debug`] and [`Display`] print the raw key (because the
+    /// Also note that [`Debug`] and [`Display`](std::fmt::Display) print the raw key (because the
     /// fallback message _is_ the key), which makes structured logs look like
     /// `errors.user.not_found` rather than human text. Prefer
     /// [`Error::with_locale_key`] when you want log-friendly output alongside
