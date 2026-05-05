@@ -12,3 +12,4 @@ Cargo.lock
 .claire/
 experiments/
 *.lock
+docs/superpowers/
