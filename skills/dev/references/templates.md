@@ -45,7 +45,7 @@ Locale knobs live in `modo::i18n::I18nConfig` (the `i18n:` top-level YAML key):
 
 ## Engine and EngineBuilder
 
-`Engine` derives `Clone`. Wraps a MiniJinja `Environment` behind `Arc<RwLock>`. Cheaply cloneable.
+`Engine` derives `Clone`. Wraps an `Arc<EngineInner>` whose `env` field is a `std::sync::RwLock<minijinja::Environment<'static>>`. Cheaply cloneable.
 
 ### Building
 
@@ -348,18 +348,29 @@ missing.
 ### TranslationStore
 
 In-memory store of translation entries. Derives `Clone` and a manual `Debug`
-impl that omits the inner `PluralRules`. Wraps `Arc<Inner>` — cheaply
-cloneable.
+impl that lists the loaded plural-rule locales without dumping the
+`PluralRules` themselves. Wraps `Arc<Inner>` — cheaply cloneable.
 
-Construction is internal — obtain via `I18n::store()`. Public methods:
+Most callers obtain the store via [`I18n::store()`](#i18n-factory).
+[`TranslationStore::load`] is also `pub` for callers wiring the store
+directly (e.g. when constructing a MiniJinja `Environment` outside of
+`Engine`).
 
-- `translate(locale, key, kwargs) -> modo::Result<String>` — looks up
-  `key` for `locale`, falls back to the default locale, then to the key
-  itself.
-- `translate_plural(locale, key, count, kwargs) -> modo::Result<String>` —
-  same fallback rules, with plural-category selection. When the requested
-  locale is missing the entry, the **default locale's** copy is used but
-  plural-rule selection still uses the **requesting** locale's rules.
+Public methods:
+
+- `load(path: &Path, default_locale: &str) -> modo::Result<Self>` — walks
+  `path`, treating each subdirectory as a locale and each `.yaml` / `.yml`
+  file as a namespace. Builds an English-cardinal `PluralRules` fallback
+  used whenever the requested locale has no rules of its own.
+- `translate(locale, key, kwargs: &[(&str, &str)]) -> modo::Result<String>`
+  — looks up `key` for `locale`, falls back to the default locale, then to
+  the key itself. The `Result` is reserved for future strict-mode lookups
+  — current code paths always return `Ok`.
+- `translate_plural(locale, key, count: i64, kwargs: &[(&str, &str)]) -> modo::Result<String>`
+  — same fallback rules, with plural-category selection. When the
+  requested locale is missing the entry, the **default locale's** copy is
+  used but plural-rule selection still uses the **requesting** locale's
+  rules.
 - `available_locales() -> Vec<String>` — locales discovered on disk
   (unordered).
 - `default_locale() -> &str` — configured default locale.
@@ -439,9 +450,14 @@ Built-in resolvers:
 ```rust
 pub fn make_t_function(
     store: TranslationStore,
-) -> impl Fn(&minijinja::State, &[minijinja::Value], minijinja::value::Kwargs)
-    -> Result<String, minijinja::Error>
-+ Send + Sync + 'static
+) -> impl Fn(
+    &minijinja::State,
+    &[minijinja::Value],
+    minijinja::value::Kwargs,
+) -> Result<String, minijinja::Error>
++ Send
++ Sync
++ 'static
 ```
 
 Builds the MiniJinja `t()` function used by the template engine. Reads the

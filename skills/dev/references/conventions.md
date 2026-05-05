@@ -132,7 +132,9 @@ Error::too_many_requests(msg: impl Into<String>) -> Self // 429
 Error::internal(msg: impl Into<String>) -> Self          // 500
 Error::bad_gateway(msg: impl Into<String>) -> Self       // 502
 Error::gateway_timeout(msg: impl Into<String>) -> Self   // 504
-Error::lagged(skipped: u64) -> Self                      // 500, SSE-specific
+
+// SSE-specific
+Error::lagged(skipped: u64) -> Self                      // 500; sets is_lagged() = true
 ```
 
 **Builder methods:**

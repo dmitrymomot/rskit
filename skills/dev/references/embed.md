@@ -296,10 +296,8 @@ use modo::embed::{EmbeddingProvider, OpenAIEmbedding, OpenAIConfig};
 
 // In main() or service factory:
 let http_client = reqwest::Client::new();
-let embed_config = OpenAIConfig {
-    api_key: config.openai_api_key.clone(),
-    ..Default::default()
-};
+let mut embed_config = OpenAIConfig::default();
+embed_config.api_key = config.openai_api_key.clone();
 let embedder = EmbeddingProvider::new(
     OpenAIEmbedding::new(http_client, &embed_config)?,
 );

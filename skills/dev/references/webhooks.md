@@ -51,9 +51,9 @@ pub fn with_user_agent(mut self, user_agent: impl Into<String>) -> Self
 ```
 
 - `new()` takes a `reqwest::Client` instance.
-- `default_client()` creates a sender with a default `reqwest::Client` using a 30-second timeout.
-- Default User-Agent: `modo-webhooks/<version>`.
-- `with_user_agent()` consumes and returns `Self` (builder pattern). Panics if called after the sender has been cloned (uses `Arc::get_mut`). Invalid header values are silently ignored.
+- `default_client()` creates a sender with a default `reqwest::Client` using a 30-second timeout. Panics if the underlying `reqwest::Client` cannot be built (e.g. platform TLS backend fails to initialize).
+- Default User-Agent: `modo-webhooks/<version>` (where `<version>` is `CARGO_PKG_VERSION`).
+- `with_user_agent()` consumes and returns `Self` (builder pattern). Panics if called after the sender has been cloned (uses `Arc::get_mut`). Invalid header values are silently ignored (returns `self` unchanged).
 
 ### Sending
 
@@ -75,13 +75,13 @@ pub async fn send(
 
 Behavior:
 
-- Validates that `secrets` is non-empty and `id` is non-empty.
-- Validates `url` parses as `http::Uri`.
-- Gets current UTC timestamp.
+- Validates that `secrets` is non-empty and `id` is non-empty (both return `Error::bad_request`).
+- Validates `url` parses as `http::Uri` (returns `Error::bad_request` with the parse error).
+- Gets current UTC timestamp via `chrono::Utc::now().timestamp()`.
 - Calls `sign_headers()` to produce Standard Webhooks headers.
 - Sets headers: `content-type: application/json`, `user-agent`, `webhook-id`, `webhook-timestamp`, `webhook-signature`.
 - Returns `Error::bad_request` if `id` contains characters that are invalid as an HTTP header value.
-- Delegates to internal `client::post()` which uses `reqwest::Client`.
+- Delegates to internal `client::post()` which uses `reqwest::Client`. Network/timeout failures surface as `Error::internal` chained with the underlying `reqwest` error.
 - Empty body is accepted.
 
 ---
@@ -188,9 +188,9 @@ pub fn verify_headers(
 For verifying incoming webhooks:
 
 - Reads `webhook-id`, `webhook-timestamp`, `webhook-signature` from headers.
-- Checks timestamp is within `tolerance` of current time (replay-attack protection).
-- Tries every `v1,` signature entry against every secret. Returns `Ok(())` on first match. Non-`v1,` entries are skipped.
-- Returns `Error::bad_request` if any required header is missing, header value is not valid UTF-8, `webhook-timestamp` is not a valid integer, the timestamp is outside `tolerance`, or no signature entry matches any secret.
+- Checks timestamp is within `tolerance` of current time, in either direction (replay-attack protection — uses `unsigned_abs()` of the diff).
+- Tries every `v1,` signature entry against every secret. Returns `Ok(())` on first match. Non-`v1,` entries are skipped (forward compatibility with future signature versions).
+- Returns `Error::bad_request` if any required header is missing, header value is not valid ASCII (not convertible via `HeaderValue::to_str`), `webhook-timestamp` is not a valid `i64`, the timestamp is outside `tolerance`, or no signature entry matches any secret.
 
 ---
 

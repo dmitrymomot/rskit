@@ -149,6 +149,8 @@ pub struct AuditRecord {
     pub metadata: serde_json::Value,
     pub ip: Option<String>,
     pub user_agent: Option<String>,
+    pub device_name: Option<String>,
+    pub device_type: Option<String>,
     pub fingerprint: Option<String>,
     pub tenant_id: Option<String>,
     pub created_at: String,

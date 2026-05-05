@@ -121,6 +121,7 @@ All middleware functions return Tower-compatible layers. Apply them with `.layer
     - `mw::Geo::new(...)` (aliases `geolocation::GeoLayer`)
     - `mw::I18n` (aliases `i18n::I18nLayer`) -- typically constructed via `i18n.layer()` on a built `I18n` factory, not by calling `I18n::new` directly
     - `mw::ClientIp::new(trusted_proxies)` (aliases `ip::ClientIpLayer`)
+    - `mw::UserAgent::new()` / `mw::UserAgent::with_max_length(n)` (aliases `middleware::UserAgentLayer`)
     - `mw::TemplateContext::new(...)` (aliases `template::TemplateContextLayer`)
     - `mw::Tier::new(...)` (aliases `tier::TierLayer`)
 
@@ -128,7 +129,7 @@ All middleware functions return Tower-compatible layers. Apply them with `.layer
 
 > **Note:** The `session` free function (`mw::session(...)`) is not exposed. Session middleware is constructed via `CookieSessionService::layer()` -- see `modo::auth::session::cookie::CookieSessionService`. The session layer is not re-exported from `modo::middlewares`.
 
-The underlying `modo::middleware` module (singular) ships only the universal always-available layers (CORS, CSRF, compression, request-id, tracing, catch-panic, error-handler, security-headers, rate-limit) along with their configs and supporting types (`CorsConfig`, `CsrfConfig`, `CsrfToken`, `RateLimitConfig`, `RateLimitLayer`, `SecurityHeadersConfig`, `KeyExtractor`, `PeerIpKeyExtractor`, `GlobalKeyExtractor`, `default_error_handler`, predicates `subdomains`/`urls`).
+The underlying `modo::middleware` module (singular) ships only the universal always-available layers (CORS, CSRF, compression, request-id, tracing, catch-panic, error-handler, security-headers, rate-limit, user-agent sanitization) along with their configs and supporting types (`CorsConfig`, `CsrfConfig`, `CsrfToken`, `RateLimitConfig`, `RateLimitLayer`, `SecurityHeadersConfig`, `KeyExtractor`, `PeerIpKeyExtractor`, `GlobalKeyExtractor`, `UserAgentLayer`, `ModoMakeSpan`, `default_error_handler`, predicates `subdomains`/`urls`).
 
 ### Recommended Layer Order
 
@@ -358,6 +359,81 @@ let layer = csrf(&config, &key);
 
 Note: `field_name` is retained for configuration compatibility but is **not currently validated** by the middleware -- token validation is header-only. Form-field-based token submission is not supported.
 
+### User-Agent Sanitization
+
+`UserAgentLayer` rewrites the inbound `User-Agent` header in place: caps length at a UTF-8 char boundary (default 512 bytes), strips ASCII control characters, collapses whitespace runs, trims, and removes the header entirely if the result is empty. Multiple `User-Agent` headers (rare but valid HTTP) are normalized to a single value. Install it before any consumer of `User-Agent` (`ClientInfo`, session middleware, audit logging, fingerprint hashing) so they all see the cleaned value with no further plumbing.
+
+```rust
+use modo::middleware::UserAgentLayer;
+
+let layer = UserAgentLayer::new();                 // 512-byte cap (default)
+let layer = UserAgentLayer::with_max_length(256);  // custom cap
+```
+
+`UserAgentLayer` derives `Debug`, `Clone`, `Copy`, and implements `Default`. Also exposed at the wiring index as `mw::UserAgent`.
+
+## Client Module
+
+`modo::client` ships client-context types and helpers shared across HTTP, audit, and session code paths. Re-exports:
+
+- `ClientInfo` — the rich extractor (see below)
+- `parse_device_name(user_agent: &str) -> String` — returns `"Browser on OS"` (e.g. `"Chrome on macOS"`, `"Safari on iPhone"`)
+- `parse_device_type(user_agent: &str) -> String` — returns `"desktop"`, `"mobile"`, or `"tablet"`
+- `compute_fingerprint(user_agent: &str, accept_language: &str, accept_encoding: &str) -> String` — SHA-256 hex digest (64 chars), null-byte separated to avoid boundary confusion. Used by `auth::session::cookie::CookieSessionLayer` for hijack detection.
+- `header_str<'a>(headers: &'a HeaderMap, name: &str) -> &'a str` — read a header as `&str`, returning `""` when absent or non-UTF-8
+
+### ClientInfo
+
+`ClientInfo` aggregates `ip`, `user_agent`, parsed `device_name` / `device_type`, and a server-computed `fingerprint` (SHA-256 of `user_agent + accept_language + accept_encoding`). Implements `FromRequestParts<S>` and never fails — the `ip` field is `None` when `ClientIpLayer` is not applied. Device fields are populated only when the `User-Agent` header is present, so callers can distinguish "no UA was sent" from "UA was sent but unrecognized". The fingerprint is always populated (it hashes whatever combination of headers were present, each defaulting to `""`).
+
+```rust
+use modo::client::ClientInfo;
+
+async fn handler(info: ClientInfo) -> String {
+    format!(
+        "ip={:?} device={:?} fp={:?}",
+        info.ip_value(),
+        info.device_name_value(),
+        info.fingerprint_value(),
+    )
+}
+```
+
+Outside an HTTP request (background jobs, CLI tools), build manually via the chainable setters:
+
+```rust
+let info = ClientInfo::new()
+    .ip("1.2.3.4")
+    .user_agent("my-script/1.0")
+    .device_name("my-script on Linux")
+    .device_type("desktop")
+    .fingerprint("abc123");
+```
+
+For middleware that already holds a `&HeaderMap`, populate every field at once via `ClientInfo::from_headers`:
+
+```rust
+use modo::client::ClientInfo;
+
+let info = ClientInfo::from_headers(
+    Some("10.0.0.1".to_string()),
+    "Mozilla/5.0 ...",
+    "en-US",
+    "gzip",
+);
+// device_name, device_type, and fingerprint are all derived from user_agent +
+// accept_language + accept_encoding.
+```
+
+**Signatures:**
+
+- `pub fn new() -> Self`
+- `pub fn from_headers(ip: Option<String>, user_agent: &str, accept_language: &str, accept_encoding: &str) -> Self`
+- `pub fn ip(self, ip: impl Into<String>) -> Self` (and analogous chainable setters for `user_agent`, `device_name`, `device_type`, `fingerprint`)
+- `pub fn ip_value(&self) -> Option<&str>` (and analogous getters for the other fields)
+
+Fields are private; `ClientInfo` derives `Debug`, `Clone`, `Default`. Re-exported through `modo::extractors::ClientInfo`.
+
 ## ClientIp Extraction
 
 ### ClientIp Extractor
@@ -374,35 +450,7 @@ async fn handler(ClientIp(ip): ClientIp) -> String {
 
 Returns `Error::internal` if `ClientIpLayer` is not applied.
 
-### ClientInfo Extractor
-
-`ClientInfo` aggregates `ip`, `user_agent`, parsed `device_name` / `device_type`, and a server-computed `fingerprint` (SHA-256 of UA + Accept-Language + Accept-Encoding) in one extractor. Implements `FromRequestParts`. The `ip` field falls through to `None` if `ClientIpLayer` is not applied — `ClientInfo` does not itself fail.
-
-```rust
-use modo::client::ClientInfo;
-
-async fn handler(info: ClientInfo) -> String {
-    format!(
-        "ip={:?} device={:?} fp={:?}",
-        info.ip_value(),
-        info.device_name_value(),
-        info.fingerprint_value(),
-    )
-}
-```
-
-Outside an HTTP request (background jobs, CLI tools), build manually with the chainable setters:
-
-```rust
-let info = ClientInfo::new()
-    .ip("1.2.3.4")
-    .user_agent("my-script/1.0")
-    .device_name("my-script on Linux")
-    .device_type("desktop")
-    .fingerprint("abc123");
-```
-
-Fields are private; read with `ip_value()` / `user_agent_value()` / `device_name_value()` / `device_type_value()` / `fingerprint_value()` (each returns `Option<&str>`).
+> See the **Client Module** section above for `ClientInfo` (the richer per-request metadata extractor) and the standalone `parse_device_name` / `parse_device_type` / `compute_fingerprint` / `header_str` helpers.
 
 ### ClientIpLayer
 

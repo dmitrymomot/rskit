@@ -419,18 +419,12 @@ HmacSigner::new(secret: impl AsRef<[u8]>) -> Self
 
 ### JwtLayer
 
-Tower middleware layer. Decodes JWT, validates claims, optionally performs a stateful
-database row lookup, and inserts `Claims` into request extensions.
-Also re-exported as `modo::middlewares::Jwt`.
+Tower middleware layer. Decodes JWT, validates claims, and inserts `Claims` into
+request extensions. Also re-exported as `modo::middlewares::Jwt`.
 
 ```rust
 JwtLayer::new(decoder: JwtDecoder) -> Self
     // Stateless JWT validation only (signature + claims). No DB lookup.
-
-JwtLayer::from_service(service: JwtSessionService) -> Self
-    // Stateful: after JWT validation, hashes the jti claim and loads the session row.
-    // Inserts Session into extensions. Returns 401 (auth:session_not_found) when row is absent.
-    // Preferred entry-point: JwtSessionService::layer() (calls this internally).
 
     .with_sources(self, sources: Vec<Arc<dyn TokenSource>>) -> Self
     // Override token sources (tried in order; first Some wins).
@@ -444,11 +438,9 @@ Middleware flow (`JwtLayer::new`):
 2. Decode and validate with `JwtDecoder`; 401 on failure.
 3. Insert `Claims` into request extensions.
 
-Additional steps when constructed via `JwtLayer::from_service` (stateful):
-
-4. Hash `jti` claim; load session row from `authenticated_sessions`. Return 401 with
-   `auth:session_not_found` when row is absent (logged-out / revoked).
-5. Insert transport-agnostic `Session` into request extensions.
+For stateful JWT sessions backed by an `authenticated_sessions` table (token rotation,
+logout, revocation), see `JwtSessionService` and `JwtLayer::from_service` documented in
+[`sessions.md`](sessions.md).
 
 ### TokenSource trait
 
@@ -783,7 +775,7 @@ The JWT module follows this pattern consistently -- all `JwtError` variants prod
 - `JwtConfig` is a back-compat alias for `JwtSessionsConfig`. Prefer `JwtSessionsConfig` in new code.
 - `Claims` is **non-generic**. There is no `Claims<T>`. Custom payload fields: define your own struct and pass it to `encoder.encode(&my_payload)` / `decoder.decode::<MyPayload>(&token)`.
 - `JwtLayer` has no generic parameter (`JwtLayer`, not `JwtLayer<T>`). It always decodes into `Claims`.
-- The `Revocation` trait and `with_revocation()` no longer exist. Stateful row lookup in `JwtLayer::from_service` replaces revocation: the session row absent = revoked. The `Revoked` and `RevocationCheckFailed` `JwtError` variants no longer exist.
+- For stateful JWT sessions (token rotation, logout, the `authenticated_sessions` row lookup, the `Session` extension), see [`sessions.md`](sessions.md). The `JwtSessionService`, `TokenPair`, `JwtSession` extractor, and `JwtLayer::from_service` all live there.
 - `PasswordConfig`, `TotpConfig`, `JwtSessionsConfig`, `ValidationConfig`, `OAuthConfig`, `OAuthProviderConfig`, `CallbackParams`, and `UserProfile` are all `#[non_exhaustive]` -- never construct with struct literals (no `..Default::default()` either). Use the provided constructors (`::new(...)`, `Default::default()`) and override fields by direct assignment.
 - `JwtSessionsConfig` and `OAuthConfig` have `#[serde(default)]` at struct level -- all fields are optional in YAML (fall back to defaults).
 - `RequireRoleLayer`, `RequireAuthenticatedLayer`, `RequireUnauthenticatedLayer`, and `ScopeLayer` are the return types of `require_role()`, `require_authenticated()`, `require_unauthenticated()`, and `require_scope()`. They are not re-exported — chain them directly into `.route_layer(...)` rather than naming them.

@@ -50,7 +50,7 @@ Takes `&mut Parts` because some strategies rewrite the URI (e.g. `PathPrefixStra
 
 | Constructor                        | Struct                      | Produces           | Notes                                                                          |
 | ---------------------------------- | --------------------------- | ------------------ | ------------------------------------------------------------------------------ |
-| `subdomain(base_domain)`           | `SubdomainStrategy`         | `TenantId::Slug`   | Single-level only; multi-level is rejected                                     |
+| `subdomain(base_domain)`           | `SubdomainStrategy`         | `TenantId::Slug`   | Single-level only; multi-level and bare base domain are rejected               |
 | `domain()`                         | `DomainStrategy`            | `TenantId::Domain` | Full host as identifier                                                        |
 | `subdomain_or_domain(base_domain)` | `SubdomainOrDomainStrategy` | `Slug` or `Domain` | Subdomain of base -> Slug; unrelated host -> Domain; bare base domain -> error |
 | `header(name)`                     | `HeaderStrategy`            | `TenantId::Id`     | Reads a named request header                                                   |
@@ -58,7 +58,7 @@ Takes `&mut Parts` because some strategies rewrite the URI (e.g. `PathPrefixStra
 | `path_prefix(prefix)`              | `PathPrefixStrategy`        | `TenantId::Slug`   | Strips prefix + slug from URI, preserves query string                          |
 | `path_param(name)`                 | `PathParamStrategy`         | `TenantId::Slug`   | Reads axum path parameter; **must use `.route_layer()` not `.layer()`**        |
 
-All constructors are free functions in `modo::tenant` (also re-exported from `modo::tenant::*`).
+All constructors are free functions in `modo::tenant`. Host-based strategies read the `Host` header (case-insensitive, port stripped) and return 400 if the header is missing or non-UTF-8. Header-based strategies panic at construction if the header name is not a valid HTTP header name.
 
 ## TenantResolver trait
 
@@ -209,8 +209,8 @@ impl DomainService {
 
 Method details:
 
-- `register` -- validates domain, returns existing pending claim if one exists (deduplication), generates a verification token, inserts a pending claim. Caller instructs user to create DNS TXT record at `_modo-verify.{domain}`.
-- `verify` -- fetches claim by ID, returns already-verified claims immediately, checks 48-hour expiry (marks `failed` if expired), queries DNS TXT via `DomainVerifier::check_txt`, updates status to `verified` on success.
+- `register` -- validates domain, returns existing non-expired pending claim if one exists for the same `(tenant_id, domain)` (deduplication); otherwise generates a verification token and inserts a fresh pending claim. Caller instructs user to create a DNS TXT record at `_modo-verify.{domain}` containing the token.
+- `verify` -- fetches the claim by ID, returns already-verified claims immediately, checks the 48-hour expiry (persists `failed` status and returns 400 if expired), queries DNS TXT via `DomainVerifier::check_txt` and rejects with 400 if the record is missing or does not match, updates status to `verified` on success.
 - `remove` -- deletes the claim row by ID.
 - `enable_email` / `disable_email` -- toggles `use_for_email` flag. Enable requires verified status.
 - `enable_routing` / `disable_routing` -- toggles `use_for_routing` flag. Enable requires verified status.

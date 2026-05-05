@@ -85,7 +85,7 @@ pub struct BucketConfig {
 
 `path_style: true` produces `https://endpoint/bucket/key`. `false` produces `https://bucket.endpoint/key` (virtual-hosted).
 
-Implements `Default` and `Deserialize` (`#[serde(default)]`). Loaded from YAML config.
+Derives `Debug, Clone, Deserialize` (`#[serde(default)]`); manual `Default` impl. Loaded from YAML config.
 
 ## Buckets
 
@@ -148,7 +148,7 @@ input.filename = Some("photo.jpg".into());
 
 ## PutOptions
 
-`#[non_exhaustive]` — use `..Default::default()` for forward compatibility.
+`#[non_exhaustive]`, derives `Debug, Clone, Default`. Use `..Default::default()` (or `let mut opts = PutOptions::default();`) for forward compatibility.
 
 ```rust
 pub struct PutOptions {
@@ -163,13 +163,17 @@ All fields default to `None`. Used with `put_with()` and `put_from_url_with()`.
 
 ## Acl
 
-`#[non_exhaustive]`, derives `Default` (`Private` is `#[default]`).
+`#[non_exhaustive]`, derives `Debug, Clone, Copy, PartialEq, Eq, Default` (`Private` is `#[default]`).
 
 ```rust
 pub enum Acl {
     #[default]
     Private,     // "private"
     PublicRead,  // "public-read"
+}
+
+impl Acl {
+    pub fn as_header_value(&self) -> &'static str; // "private" | "public-read"
 }
 ```
 

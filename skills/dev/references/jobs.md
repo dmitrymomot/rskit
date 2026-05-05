@@ -92,7 +92,15 @@ Only cancels jobs still in `pending` status. Returns `false` if the job was not 
 
 ### Worker Configuration
 
-`JobConfig` (`#[non_exhaustive]`) deserializes from YAML under the `job` key. All fields have defaults. Because the struct is `#[non_exhaustive]`, construct via `JobConfig { field: val, ..Default::default() }`:
+`JobConfig` (`#[non_exhaustive]`) deserializes from YAML under the `job` key. All fields have defaults. Because the struct is `#[non_exhaustive]`, construct via `let mut cfg = JobConfig::default();` and mutate fields:
+
+```rust
+use modo::job::JobConfig;
+
+let mut cfg = JobConfig::default();
+cfg.poll_interval_secs = 2;
+cfg.drain_timeout_secs = 60;
+```
 
 | Field                        | Default                              | Description                                                                                     |
 | ---------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------- |
@@ -106,7 +114,15 @@ Only cancels jobs still in `pending` status. Returns `false` if the job was not 
 
 #### Queue Config (`#[non_exhaustive]`)
 
-`QueueConfig` is `#[non_exhaustive]` -- construct via `QueueConfig { name: ..., concurrency: ..., ..Default::default() }` or rely on YAML deserialization.
+`QueueConfig` is `#[non_exhaustive]` -- construct via `let mut q = QueueConfig::default();` and mutate fields, or rely on YAML deserialization. `Default` returns name `"default"` and concurrency `4`.
+
+```rust
+use modo::job::QueueConfig;
+
+let mut q = QueueConfig::default();
+q.name = "emails".into();
+q.concurrency = 8;
+```
 
 ```yaml
 job:
@@ -123,7 +139,15 @@ Each queue gets its own `Semaphore` with the specified concurrency limit. **Prio
 
 #### Cleanup Config (`#[non_exhaustive]`)
 
-`CleanupConfig` is `#[non_exhaustive]` -- construct via `CleanupConfig { ..Default::default() }` or YAML deserialization.
+`CleanupConfig` is `#[non_exhaustive]` -- construct via `let mut c = CleanupConfig::default();` and mutate fields, or rely on YAML deserialization.
+
+```rust
+use modo::job::CleanupConfig;
+
+let mut c = CleanupConfig::default();
+c.interval_secs = 1800;
+c.retention_secs = 86_400;
+```
 
 ```yaml
 job:

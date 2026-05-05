@@ -14,7 +14,7 @@ Two transports are available: cookie-backed (`auth::session::cookie`) and JWT-ba
 
 Deserialized from the `cookie` key in YAML config. Marked `#[non_exhaustive]` — cannot be constructed with struct literal syntax outside the crate; use `CookieConfig::new()` or `CookieConfig::default()` and then mutate fields.
 
-Derives: `Debug`, `Clone`, `Deserialize`.
+Derives: `Debug`, `Clone`, `Deserialize`. Implements `Default`. Each non-secret field has its own `#[serde(default = ...)]` so YAML may omit them.
 
 ```rust
 #[non_exhaustive]
@@ -195,6 +195,8 @@ pub fn new(db: Database, config: CookieSessionsConfig) -> Result<Self>
 | `cleanup_expired`   | `async(&self) -> Result<u64>`                      | Delete expired sessions, returns count         |
 | `store`             | `(&self) -> &SessionStore` (test-helpers only)     | Access underlying store (test use only)        |
 
+`config()` and `cookie_key()` are `pub(crate)` — not part of the external API.
+
 Wiring example:
 
 ```rust
@@ -216,7 +218,7 @@ let app: Router = Router::new()
 
 ### CookieSessionLayer and `layer()`
 
-`CookieSessionLayer` is the Tower `Layer` that installs the session middleware.
+`CookieSessionLayer` is the Tower `Layer` that installs the session middleware. Derives `Clone`.
 
 ```rust
 pub struct CookieSessionLayer { /* private */ }
@@ -405,15 +407,19 @@ Error codes from `logout`:
 - `auth:aud_mismatch` — refresh token passed instead of access token
 - `jwt:*` — expired, tampered, etc.
 
+Error codes from the `JwtSession` extractor when the configured token source yields nothing:
+- `auth:access_missing` — access token absent for `access_source`
+- `auth:refresh_missing` — refresh token absent for `refresh_source`
+
 ---
 
 ### JwtLayer
 
-Tower `Layer` that installs JWT authentication on routes. For each request:
+Tower `Layer` that installs JWT authentication on routes. Derives `Clone`. For each request:
 1. Tries each `TokenSource` in order; returns `401 jwt:missing_token` if none yields a token.
 2. Decodes and validates the token with `JwtDecoder`; returns `401 jwt:*` on failure.
 3. Inserts `Claims` into request extensions.
-4. When constructed via `JwtLayer::from_service` (stateful): hashes the `jti` claim, loads the session row, and inserts the transport-agnostic `Session` into extensions. Returns `401 auth:session_not_found` when the session row is absent.
+4. When constructed via `JwtLayer::from_service` (stateful): rejects tokens whose `aud` is not `"access"` with `401 auth:aud_mismatch`. When `config.stateful_validation` is `true`, also hashes the `jti` claim, loads the session row, and inserts the transport-agnostic `Session` into extensions. Returns `401 auth:session_not_found` when the session row is absent or the `jti` is missing/invalid.
 
 ```rust
 pub struct JwtLayer { /* private */ }
@@ -648,7 +654,7 @@ pub struct ValidationConfig {
 }
 ```
 
-Builder methods:
+Builder methods (both `#[must_use]`):
 
 ```rust
 pub fn with_audience(self, aud: impl Into<String>) -> Self
@@ -791,6 +797,9 @@ pub fn compute_fingerprint(
     accept_encoding: &str,
 ) -> String
 // SHA-256 hex string (64 chars) from three headers with null-byte separators
+
+pub fn header_str<'a>(headers: &'a HeaderMap, name: &str) -> &'a str
+// Read a header as &str, returning "" when absent or non-UTF-8.
 ```
 
 ---
@@ -898,7 +907,7 @@ use modo::auth::session::jwt::JwtConfig; // = JwtSessionsConfig
 use modo::auth::session::SessionToken;
 
 // Client context (used for session creation + audit logging)
-use modo::client::{ClientInfo, parse_device_name, parse_device_type, compute_fingerprint};
+use modo::client::{ClientInfo, header_str, parse_device_name, parse_device_type, compute_fingerprint};
 
 // Flash
 use modo::flash::{Flash, FlashEntry, FlashLayer, FlashMiddleware};

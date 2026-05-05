@@ -158,7 +158,7 @@ let event_stream = bc.subscribe(&key)
     });
 ```
 
-- The closure is `FnMut(T) -> Result<Event, Error>` — called for each `Ok(T)`.
+- The closure is `FnMut(T) -> Result<Event, Error> + Send` — called for each `Ok(T)`.
 - Source stream errors pass through converted via `Into<Error>`.
 - Closure errors also propagate.
 

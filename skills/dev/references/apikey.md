@@ -141,16 +141,16 @@ async fn handler(meta: Option<ApiKeyMeta>) { /* ... */ }
 
 ## ApiKeyRecord
 
-Full stored record used by backend implementations. Contains hash and revocation fields not exposed in `ApiKeyMeta`.
+Full stored record used by backend implementations. Contains hash and revocation fields not exposed in `ApiKeyMeta`. No `Debug` derive — handle manually if logging is needed.
 
 ```rust
 #[derive(Clone)]
 pub struct ApiKeyRecord {
-    pub id: String,
-    pub key_hash: String,
+    pub id: String,             // ULID primary key
+    pub key_hash: String,       // hex(sha256(secret))
     pub tenant_id: String,
     pub name: String,
-    pub scopes: Vec<String>,
+    pub scopes: Vec<String>,    // serialized as JSON in DB
     pub expires_at: Option<String>,
     pub last_used_at: Option<String>,
     pub created_at: String,
@@ -222,6 +222,8 @@ Returns `bad_request` if `tenant_id` or `name` is empty, or if `expires_at` is n
 Verify a raw token. All failure cases return the same `unauthorized` error to prevent enumeration.
 
 Checks: parse token → lookup by ULID → check revoked → check expired → constant-time hash comparison → fire-and-forget touch update.
+
+A dummy hash is compared when the record is missing/revoked/expired so timing does not distinguish "id unknown" from "wrong secret". Malformed tokens (no `_` separator, wrong prefix, body shorter than 26 chars) skip the DB round-trip and remain timing-distinguishable.
 
 ### async revoke(&self, key_id: &str) -> Result<()>
 
@@ -314,7 +316,15 @@ let app: Router = Router::new()
 
 ## InMemoryBackend (test helper)
 
-In-memory `ApiKeyBackend` for unit tests. Available under `#[cfg(test)]` or `feature = "test-helpers"`.
+In-memory `ApiKeyBackend` for unit tests. Available under `#[cfg(test)]` or `feature = "test-helpers"`. Implements `Default`.
+
+```rust
+pub struct InMemoryBackend { /* private */ }
+
+impl InMemoryBackend {
+    pub fn new() -> Self;
+}
+```
 
 ```rust
 use modo::auth::apikey::test::InMemoryBackend;
@@ -324,6 +334,8 @@ use std::sync::Arc;
 let backend = Arc::new(InMemoryBackend::new());
 let store = ApiKeyStore::from_backend(backend, ApiKeyConfig::default()).unwrap();
 ```
+
+The in-memory `list` filters out revoked records (matches the SQLite backend).
 
 ---
 

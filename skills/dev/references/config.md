@@ -139,21 +139,29 @@ cfg.server.port = 3000;
 
 ### `db::Config`
 
-Single-connection libsql config. No connection pool — `connect()` opens one connection with PRAGMA defaults.
+Single-connection libsql config. `connect()` opens one connection with PRAGMA defaults. When `pool` is set, [`DatabasePool::new`](super::DatabasePool::new) can manage lazily-opened shard databases that share these PRAGMAs and migrations.
 
-| Field          | Type              | Default         | Description                                                     |
-| -------------- | ----------------- | --------------- | --------------------------------------------------------------- |
-| `path`         | `String`          | `"data/app.db"` | Database file path. `":memory:"` for in-memory                  |
-| `migrations`   | `Option<String>`  | `None`          | Migration directory. If set, migrations run on connect          |
-| `busy_timeout` | `u64`             | `5000`          | PRAGMA busy_timeout (ms)                                        |
-| `cache_size`   | `i64`             | `16384`         | PRAGMA cache_size in KB (applied as `cache_size = -N`)          |
-| `mmap_size`    | `u64`             | `268435456`     | PRAGMA mmap_size (bytes, default 256 MB)                        |
-| `journal_mode` | `JournalMode`     | `wal`           | PRAGMA journal_mode                                             |
-| `synchronous`  | `SynchronousMode` | `normal`        | PRAGMA synchronous                                              |
-| `foreign_keys` | `bool`            | `true`          | PRAGMA foreign_keys                                             |
-| `temp_store`   | `TempStore`       | `memory`        | PRAGMA temp_store                                               |
+| Field          | Type                | Default         | Description                                                     |
+| -------------- | ------------------- | --------------- | --------------------------------------------------------------- |
+| `path`         | `String`            | `"data/app.db"` | Database file path. `":memory:"` for in-memory                  |
+| `migrations`   | `Option<String>`    | `None`          | Migration directory. If set, migrations run on connect          |
+| `busy_timeout` | `u64`               | `5000`          | PRAGMA busy_timeout (ms)                                        |
+| `cache_size`   | `i64`               | `16384`         | PRAGMA cache_size in KB (applied as `cache_size = -N`)          |
+| `mmap_size`    | `u64`               | `268435456`     | PRAGMA mmap_size (bytes, default 256 MB)                        |
+| `journal_mode` | `JournalMode`       | `wal`           | PRAGMA journal_mode                                             |
+| `synchronous`  | `SynchronousMode`   | `normal`        | PRAGMA synchronous                                              |
+| `foreign_keys` | `bool`              | `true`          | PRAGMA foreign_keys                                             |
+| `temp_store`   | `TempStore`         | `memory`        | PRAGMA temp_store                                               |
+| `pool`         | `Option<PoolConfig>`| `None`          | When set, enables `DatabasePool` for multi-database sharding    |
 
 **Enums:** `JournalMode` values: `wal`, `delete`, `truncate`, `memory`, `off`. `SynchronousMode` values: `off`, `normal`, `full`, `extra`. `TempStore` values: `default`, `file`, `memory`. All serialize as **lowercase** in YAML (`#[serde(rename_all = "lowercase")]`).
+
+**`PoolConfig`** — nested under `db::Config.pool`. Fields:
+
+| Field         | Type     | Default          | Description                                                                            |
+| ------------- | -------- | ---------------- | -------------------------------------------------------------------------------------- |
+| `base_path`   | `String` | `"data/shards"`  | Directory for shard databases. Each shard creates `{base_path}/{shard_name}.db`        |
+| `lock_shards` | `usize`  | `16`             | Number of internal lock shards for the connection map (lock-contention parallelism)    |
 
 ### `tracing::Config`
 
@@ -264,6 +272,7 @@ cfg.cookie.secret = "a-64-character-or-longer-secret-for-signing-cookies..".to_s
 | `drain_timeout_secs`         | `u64`                   | `30`                                | Shutdown drain timeout              |
 | `queues`                     | `Vec<QueueConfig>`      | `[{name:"default", concurrency:4}]` | Queue definitions                   |
 | `cleanup`                    | `Option<CleanupConfig>` | enabled                             | Periodic cleanup. `None` to disable |
+| `database`                   | `Option<db::Config>`    | `None`                              | Separate SQLite database for the job queue. Keeps job-queue writes from contending with app queries |
 
 **`QueueConfig`:** `name: String`, `concurrency: u32` (default `4`).
 **`CleanupConfig`:** `interval_secs: u64` (default `3600`), `retention_secs: u64` (default `259200` / 72h).
@@ -289,6 +298,7 @@ cfg.cookie.secret = "a-64-character-or-longer-secret-for-signing-cookies..".to_s
 | `default_locale`      | `String`         | `"en"`             | Fallback locale             |
 | `cache_templates`     | `bool`           | `true`             | LRU cache for templates     |
 | `template_cache_size` | `usize`          | `100`              | Cache capacity              |
+| `inline_css`          | `bool`           | `true`             | Pass rendered HTML through a CSS inliner that resolves `<style>` rules into per-element `style=""` attributes. `<style>` is retained so `@media` rules still apply |
 | `smtp`                | `SmtpConfig`     | see below          | SMTP settings               |
 
 **`SmtpConfig`:** `host: String` (`"localhost"`), `port: u16` (`587`), `username: Option<String>`, `password: Option<String>`, `security: SmtpSecurity` (`starttls`). Security values: `starttls`, `tls`, `none` (lowercase in YAML).

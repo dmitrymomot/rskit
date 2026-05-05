@@ -180,6 +180,8 @@ All paths are relative to the `references/` directory inside this skill folder.
 | API keys (issuance, verification, scoping, middleware, touch throttling)                             | `references/apikey.md`      |
 | Text-to-vector embeddings (OpenAI, Gemini, Mistral, Voyage providers, f32 blob conversion)         | `references/embed.md`       |
 | Tier-based feature gating (plan-based feature toggles, usage limits, guards)                       | `references/tier.md`        |
+| HTTP client (shared connection pool, ClientInfo, device + fingerprint helpers)                     | `references/handlers.md`    |
+| i18n: locale resolution, translation store, ICU plural rules, layer/extractor                     | `references/templates.md`   |
 
 ## Common Multi-Module Workflows
 
